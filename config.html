@@ -1,0 +1,115 @@
+<!doctype html><html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Tesla Nav — Configuración</title>
+<style>
+  :root{--bg:#0a0e17;--card:#12161f;--bd:#26303f;--txt:#e7eaf0;--dim:#9aa3b2;--ok:#39d98a;--accent:#4c8dff;}
+  *{box-sizing:border-box;} body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,Segoe UI,Roboto,system-ui,sans-serif;padding:16px;max-width:560px;margin:0 auto;}
+  h1{font-size:20px;margin:0 0 4px;} .sub{color:var(--dim);font-size:13px;margin-bottom:16px;}
+  .card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:14px;}
+  .card h2{font-size:14px;margin:0 0 10px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;}
+  label{display:block;font-size:13px;margin:10px 0 4px;color:var(--txt);}
+  input[type=text],input[type=number],select{width:100%;background:#0c1017;border:1px solid var(--bd);color:var(--txt);border-radius:10px;padding:11px;font-size:15px;}
+  .row{display:flex;gap:8px;align-items:center;} .row>*{flex:1;}
+  .toggle{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #1b222e;}
+  .toggle:last-child{border-bottom:0;} .toggle span{font-size:14px;}
+  .sw{position:relative;width:46px;height:26px;flex:0 0 auto;} .sw input{display:none;}
+  .sw i{position:absolute;inset:0;background:#2a333f;border-radius:20px;transition:.2s;} .sw i:before{content:"";position:absolute;width:20px;height:20px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;}
+  .sw input:checked+i{background:var(--ok);} .sw input:checked+i:before{transform:translateX(20px);}
+  .segs{display:flex;gap:8px;margin-top:6px;} .seg{flex:1;background:#0c1017;border:1px solid var(--bd);color:var(--txt);border-radius:10px;padding:10px;text-align:center;font-weight:700;cursor:pointer;font-size:13px;}
+  .seg.on{background:#123322;color:var(--ok);border-color:var(--ok);}
+  button.big{width:100%;border:0;border-radius:12px;padding:14px;font-weight:800;font-size:16px;cursor:pointer;}
+  .save{background:var(--ok);color:#04130c;} .load{background:#1b2130;color:var(--txt);margin-top:8px;}
+  .hint{font-size:12px;color:var(--dim);margin-top:6px;} .found{font-size:13px;color:var(--ok);margin-top:6px;min-height:16px;}
+  #msg{text-align:center;font-weight:700;margin-top:10px;min-height:20px;}
+</style></head>
+<body>
+<h1>Tesla Nav · Configuración</h1>
+<div class="sub">Prepara el viaje aquí. En el coche, mete el mismo PIN en ⚙️ → Aplicar.</div>
+
+<div class="card">
+  <h2>PIN</h2>
+  <input id="pin" type="text" placeholder="Tu PIN (largo y no obvio)" autocomplete="off">
+  <div class="hint">Usa el mismo PIN en el coche. Cualquiera con tu PIN puede leer/escribir esta config.</div>
+</div>
+
+<div class="card">
+  <h2>Destino / ruta</h2>
+  <label>Dirección o lugar</label>
+  <div class="row"><input id="destq" type="text" placeholder="Ej: Aeropuerto de Bilbao"><button class="seg" style="flex:0 0 auto;width:90px" id="geoBtn">Buscar</button></div>
+  <div class="found" id="found"></div>
+  <div class="toggle"><span>Arrancar la ruta al abrir en el coche</span><label class="sw"><input type="checkbox" id="startRoute"><i></i></label></div>
+</div>
+
+<div class="card">
+  <h2>Mapa</h2>
+  <label>Base</label>
+  <select id="base"><option value="sat">Satélite</option><option value="street">Calle</option></select>
+  <div class="toggle"><span>Inclinación 3D (off = menos negros)</span><label class="sw"><input type="checkbox" id="tilt"><i></i></label></div>
+  <div class="toggle"><span>Modo noche</span><label class="sw"><input type="checkbox" id="mapNite"><i></i></label></div>
+  <div class="toggle"><span>Tráfico</span><label class="sw"><input type="checkbox" id="trafficOn"><i></i></label></div>
+</div>
+
+<div class="card">
+  <h2>Cargadores y POIs</h2>
+  <label>Potencia mínima</label>
+  <div class="segs"><div class="seg on" data-kw="0">Todos</div><div class="seg" data-kw="50">50+ kW</div><div class="seg" data-kw="150">150+ kW</div></div>
+  <div class="toggle"><span>Mostrar radares</span><label class="sw"><input type="checkbox" id="showRadars" checked><i></i></label></div>
+  <div class="toggle"><span>Mostrar cargadores</span><label class="sw"><input type="checkbox" id="showChargers" checked><i></i></label></div>
+  <div class="toggle"><span>Mostrar lista de 5 cargadores</span><label class="sw"><input type="checkbox" id="evList" checked><i></i></label></div>
+</div>
+
+<div class="card">
+  <h2>Ruta</h2>
+  <label>Tipo de ruta</label>
+  <select id="routeType"><option value="fastest">Más rápida (tráfico)</option><option value="shortest">Más corta</option><option value="eco">Ecológica</option></select>
+  <div class="toggle"><span>Evitar peajes</span><label class="sw"><input type="checkbox" id="avoidTolls"><i></i></label></div>
+  <div class="toggle"><span>Evitar autovías</span><label class="sw"><input type="checkbox" id="avoidMotorways"><i></i></label></div>
+  <div class="toggle"><span>Evitar ferris</span><label class="sw"><input type="checkbox" id="avoidFerries"><i></i></label></div>
+</div>
+
+<button class="big save" id="saveBtn">Guardar en la nube</button>
+<button class="big load" id="loadBtn">Cargar config guardada</button>
+<div id="msg"></div>
+
+<script>
+const SUPA_URL="https://ncsofomyyjrtlgyxxelz.supabase.co/rest/v1/", SUPA_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5jc29mb215eWpydGxneXh4ZWx6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxNDM3ODUsImV4cCI6MjEwMjcxOTc4NX0.jzmhzq0dpI4CoHSSEFjoiUSUxZGqgwtuF2BGY4RprW0";
+const $=id=>document.getElementById(id);
+let dest=null, minKw=0;
+$('pin').value=localStorage.getItem('cfgpin')||'';
+
+document.querySelectorAll('.seg[data-kw]').forEach(b=>b.onclick=()=>{ minKw=+b.dataset.kw; document.querySelectorAll('.seg[data-kw]').forEach(x=>x.classList.toggle('on',x===b)); });
+
+$('geoBtn').onclick=async ()=>{ const q=$('destq').value.trim(); if(!q)return; $('found').textContent='Buscando…';
+  try{ const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(q)); const j=await r.json();
+    if(j&&j[0]){ dest={lat:+j[0].lat,lon:+j[0].lon,name:j[0].display_name.split(',').slice(0,2).join(',')}; $('found').textContent='✓ '+dest.name; }
+    else { dest=null; $('found').textContent='No encontrado'; }
+  }catch(e){ $('found').textContent='Error buscando'; } };
+
+function collect(){ return {
+  dest, startRoute:$('startRoute').checked,
+  baseSat:$('base').value==='sat', tilt:$('tilt').checked, mapNite:$('mapNite').checked, trafficOn:$('trafficOn').checked,
+  minKw, showRadars:$('showRadars').checked, showChargers:$('showChargers').checked, evListHidden:!$('evList').checked,
+  avoidTolls:$('avoidTolls').checked, avoidMotorways:$('avoidMotorways').checked, avoidFerries:$('avoidFerries').checked, routeType:$('routeType').value
+}; }
+function fill(c){ if(!c)return;
+  if(c.dest){ dest=c.dest; $('destq').value=c.dest.name||''; $('found').textContent='✓ '+(c.dest.name||''); }
+  $('startRoute').checked=!!c.startRoute; $('base').value=c.baseSat===false?'street':'sat';
+  $('tilt').checked=!!c.tilt; $('mapNite').checked=!!c.mapNite; $('trafficOn').checked=!!c.trafficOn;
+  minKw=c.minKw||0; document.querySelectorAll('.seg[data-kw]').forEach(x=>x.classList.toggle('on',+x.dataset.kw===minKw));
+  $('showRadars').checked=c.showRadars!==false; $('showChargers').checked=c.showChargers!==false; $('evList').checked=!c.evListHidden;
+  $('avoidTolls').checked=!!c.avoidTolls; $('avoidMotorways').checked=!!c.avoidMotorways; $('avoidFerries').checked=!!c.avoidFerries; if(c.routeType)$('routeType').value=c.routeType;
+}
+
+$('saveBtn').onclick=async ()=>{ const pin=$('pin').value.trim(); if(!pin){ $('msg').textContent='Escribe un PIN'; return; }
+  localStorage.setItem('cfgpin',pin); $('msg').textContent='Guardando…';
+  try{ const r=await fetch(SUPA_URL+'configs',{method:'POST',headers:{apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({pin,data:collect(),updated_at:new Date().toISOString()})});
+    $('msg').textContent = r.ok ? '✓ Guardado. En el coche: ⚙️ → PIN → Aplicar' : ('Error '+r.status);
+  }catch(e){ $('msg').textContent='Error de red'; } };
+
+$('loadBtn').onclick=async ()=>{ const pin=$('pin').value.trim(); if(!pin){ $('msg').textContent='Escribe un PIN'; return; }
+  $('msg').textContent='Cargando…';
+  try{ const r=await fetch(SUPA_URL+'configs?pin=eq.'+encodeURIComponent(pin)+'&select=data',{headers:{apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY}}); const j=await r.json();
+    if(j&&j[0]){ fill(j[0].data); $('msg').textContent='✓ Cargada'; } else $('msg').textContent='No hay config para ese PIN';
+  }catch(e){ $('msg').textContent='Error de red'; } };
+</script>
+</body></html>
