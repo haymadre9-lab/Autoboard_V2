@@ -646,10 +646,12 @@ document.addEventListener('pointerdown',firstGesture,{once:true});
 document.addEventListener('touchstart',firstGesture,{once:true,passive:true});
 function updateRadar(){
   const edge=$('radaredge');
+  window.hudRadar={active:false,max:null,dist:null};
   if(!disp||!showRadars){$('radarsign').classList.remove('show','hot'); if(edge)edge.classList.remove('show'); return;} let best=null;
   for(const p of radars){ p.dist=dist([disp.lat,disp.lon],p.ll); const ah=Math.abs(((bearing([disp.lat,disp.lon],p.ll)-disp.head+540)%360)-180)<95; if(!ah)continue;
     if(p.dist<800&&(!best||p.dist<best.dist))best=p; }
   // aviso por EXCESO de velocidad a <500 m: borde rojo lento + un solo pitido
+  window.hudRadar = { active: !!(best && best.dist<600 && best.max), max: best?best.max:null, dist: best?Math.round(best.dist):null }; // para el modo Faro
   const over = !!(best && best.dist<500 && best.max && speedKmh > best.max+2);
   if(edge) edge.classList.toggle('show', over);
   if(over){ if(!radarAlerted){ radarAlerted=true; radarBeep(); } } 
@@ -667,8 +669,8 @@ function clearRouteLayers(){ if(routeCasing){map.removeLayer(routeCasing);routeC
 function drawRouteTT(route){
   const pts=[]; (route.legs||[]).forEach(l=>(l.points||[]).forEach(p=>pts.push([p.latitude,p.longitude])));
   routeCoordsLL=pts; routeProgIdx=0; clearRouteLayers();
-  routeCasing=L.polyline(pts,{color:'#0a3fb0',weight:11,opacity:.5}).addTo(map);
-  routeLine=L.polyline(pts,{color:'#4c8dff',weight:6}).addTo(map);
+  routeCasing=L.polyline(pts,{color:'#0b3d91',weight:12,opacity:.9}).addTo(map);
+  routeLine=L.polyline(pts,{color:'#1a73e8',weight:7}).addTo(map);   // azul de navegación clásico
   (route.sections||[]).forEach(sec=>{ if(sec.sectionType!=='TRAFFIC')return; const a=sec.startPointIndex,b=sec.endPointIndex; if(a==null||b==null||b<=a)return;
     const seg=pts.slice(a,b+1); if(seg.length<2)return; const mag=sec.magnitudeOfDelay||0; let col=null;
     if(sec.simpleCategory==='ROAD_CLOSURE'||sec.effectiveSpeedInKmh===0)col='#ff2d2d'; else if(mag>=3)col='#ff2d2d'; else if(mag>=1)col='#ff9a1f';
@@ -907,7 +909,7 @@ if('serviceWorker' in navigator){
   const oldModes=document.querySelector('.ovl.modes'); if(oldModes) oldModes.style.display='none';
 
   const bar=document.createElement('div'); bar.className='ab-modes';
-  bar.innerHTML='<button data-m="hud">HUD</button><button data-m="split" class="on">Split</button><button data-m="map">Mapa</button>';
+  bar.innerHTML='<button data-m="hud">HUD</button><button data-m="split" class="on">Split</button><button data-m="map">Mapa</button><button data-m="faro">Faro</button>';
   app.appendChild(bar);
 
   function relayout(){
@@ -917,11 +919,12 @@ if('serviceWorker' in navigator){
   }
   function savedSplitPct(){ const sp=parseFloat(LS.get('abSplit')); return (sp>=22&&sp<=78)?sp:40; }
   function setMode(m){
-    document.body.classList.remove('solo-map','solo-hud');
+    document.body.classList.remove('solo-map','solo-hud','faro');
     if(m==='map'){ document.body.classList.add('solo-map'); }
     else if(m==='hud'){ document.body.classList.add('solo-hud'); hudPane.style.flex='1 1 auto'; }
+    else if(m==='faro'){ document.body.classList.add('faro'); }
     else { hudPane.style.flex='0 0 '+savedSplitPct()+'%'; }
-    try{ hudOn = (m!=='map'); if(typeof updateHudCar==='function') updateHudCar(); }catch(e){} // el HUD dibuja en split y solo-HUD
+    try{ hudOn = (m!=='map' && m!=='faro'); if(typeof updateHudCar==='function') updateHudCar(); }catch(e){} // el HUD 3D dibuja en split y solo-HUD
     bar.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
     LS.set('abMode',m);
     requestAnimationFrame(()=>{ relayout(); setTimeout(relayout,70); setTimeout(relayout,220); });
@@ -991,7 +994,7 @@ if('serviceWorker' in navigator){
   if(nav){ document.getElementById('app').appendChild(nav); } // reparent al contenedor global
   function positionNav(){
     if(!nav) return;
-    const solo=document.body.classList.contains('solo-hud')||document.body.classList.contains('solo-map');
+    const solo=document.body.classList.contains('solo-hud')||document.body.classList.contains('solo-map')||document.body.classList.contains('faro');
     if(solo){ nav.style.left='50%'; nav.style.transform='translateX(-50%)'; }
     else { const c=mapPane.offsetLeft+mapPane.offsetWidth/2; nav.style.left=c+'px'; nav.style.transform='translateX(-50%)'; } // split -> centrado sobre el mapa (prioridad al mapa)
   }
@@ -1048,6 +1051,34 @@ if('serviceWorker' in navigator){
 
   function tickClock(){ try{ $('dkClock').textContent=new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}); }catch(e){} }
   tickClock(); setInterval(tickClock,15000);
+
+  // --- Modo FARO: HUD limpio para el móvil en soporte (mismo motor que v2) ---
+  (function(){
+    const st2=document.createElement('style'); st2.textContent=
+      'body.faro #hudPane,body.faro #mapPane,body.faro #divider,body.faro #dock,body.faro .spdmap,body.faro #searchToggle,body.faro #limit2,body.faro #radaredge{display:none!important;}'
+     +'body.faro{background:#000;}'
+     +'#hudclean{position:fixed;inset:0;background:#000;z-index:400;display:none;}'
+     +'body.faro #hudclean{display:block;}'
+     +'#fSpeed{position:absolute;right:6vw;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;justify-content:center;box-sizing:border-box;}'
+     +'#fSpeed .n{font:800 40vh/0.82 system-ui;color:#fff;font-variant-numeric:tabular-nums;}'
+     +'#fSpeed .u{font:700 5vh/1 system-ui;letter-spacing:5px;color:#cfd6e0;margin-top:1.2vh;}'
+     +'#fSpeed.sign{width:52vh;height:52vh;border-radius:50%;background:#fff;border:5vh solid #e01d1d;}'
+     +'#fSpeed.sign .n{color:#111;font-size:26vh;}'
+     +'#fSpeed.sign .u{display:none;}'
+     +'#fSpeed.sign.blink{border-color:#7a0000;}';
+    document.head.appendChild(st2);
+    const hc=document.createElement('div'); hc.id='hudclean';
+    hc.innerHTML='<div id="fSpeed"><div class="n" id="fNum">0</div><div class="u">KM/H</div></div>';
+    app.appendChild(hc);
+    let blink=false;
+    setInterval(()=>{ blink=!blink; try{ const fs=document.getElementById('fSpeed'); if(fs&&fs.classList.contains('sign')) fs.classList.toggle('blink',blink); }catch(e){} }, 450); // parpadeo del borde
+    setInterval(()=>{ try{
+      const fs=document.getElementById('fSpeed'), fn=document.getElementById('fNum'); if(!fs) return;
+      const r=(typeof hudRadar!=='undefined')?hudRadar:null;
+      if(r && r.active && r.max){ fs.classList.add('sign'); fn.textContent=r.max; }
+      else { fs.classList.remove('sign','blink'); fn.textContent=Math.round((typeof speedKmh!=='undefined')?speedKmh:0); }
+    }catch(e){} }, 200);
+  })();
 
   // llegada: reflejar el texto de #trip en el dock (y ocultarla del mapa via CSS)
   setInterval(()=>{ try{ const t=$('trip'); const e=$('dkEta'); if(t&&e){ const txt=(t.textContent||'').trim(); e.textContent=txt||'Sin ruta'; } }catch(e){} },500);
