@@ -511,7 +511,7 @@ function frame(now){
       disp.head=angLerp(disp.head,raw.head,Math.min(1,dt*3));
       carMk.setLatLng([disp.lat,disp.lon]);
       const cr=$('carrot'); if(cr) cr.style.transform='rotate(0deg)';   // MapLibre gira el mapa (bearing); la flecha queda fija arriba
-      if(follow && now-lastCam>50){ lastCam=now;
+      if(follow && !window.__uTouch && now-lastCam>50){ lastCam=now;   // pausa la cámara mientras el usuario toca (pan fluido + clic en marcadores)
         const paneH=(document.getElementById('mapPane')||{}).clientHeight||window.innerHeight;
         const bearing=(typeof disp.head==='number' && isFinite(disp.head))?disp.head:0;   // evita NaN -> que la cámara nunca falle
         const clat=(isFinite(disp.lat)?disp.lat:0), clon=(isFinite(disp.lon)?disp.lon:0);
@@ -1166,6 +1166,17 @@ if('serviceWorker' in navigator){
   try{ if(window.ResizeObserver&&mapPane){ new ResizeObserver(onLayout).observe(mapPane); } }catch(e){}
   try{ new MutationObserver(()=>onLayout()).observe(document.body,{attributes:true,attributeFilter:['class']}); }catch(e){}
   window.addEventListener('resize',onLayout);
+
+  // --- Mientras el usuario toca, pausar la cámara (fluidez + clic en marcadores). Captura para que funcione aun sobre marcadores. ---
+  try{
+    const down=()=>{ window.__uTouch=true; }, up=()=>{ setTimeout(()=>{ window.__uTouch=false; },70); };
+    window.addEventListener('pointerdown',down,{capture:true,passive:true});
+    window.addEventListener('pointerup',up,{capture:true,passive:true});
+    window.addEventListener('pointercancel',up,{capture:true,passive:true});
+    window.addEventListener('touchstart',down,{capture:true,passive:true});
+    window.addEventListener('touchend',up,{capture:true,passive:true});
+    window.addEventListener('touchcancel',up,{capture:true,passive:true});
+  }catch(e){}
 
   // --- Pulsación larga en cualquier punto del mapa -> "Ir aquí" (táctil) ---
   try{
