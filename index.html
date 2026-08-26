@@ -19,7 +19,8 @@
   body.solo-map #hudPane,body.solo-map #divider{display:none;}
   body.solo-hud #mapPane,body.solo-hud #divider{display:none;}
   body.solo-hud #hudPane{flex:1 1 auto;}
-  .ab-modes{position:absolute;z-index:950;top:10px;left:12px;display:flex;gap:4px;background:rgba(10,14,20,.82);backdrop-filter:blur(8px);border:1px solid #1e2836;border-radius:999px;padding:4px;}
+  .ab-modes{position:absolute;z-index:950;top:10px;left:12px;display:flex;flex-wrap:wrap;gap:4px;background:rgba(10,14,20,.82);backdrop-filter:blur(8px);border:1px solid #1e2836;border-radius:20px;padding:4px;justify-content:center;}
+  .ab-modes .faro-btn{flex-basis:100%;margin-top:2px;}
   .ab-modes button{border:0;background:transparent;color:#8b98ad;font-weight:700;font-size:13px;padding:7px 14px;border-radius:999px;cursor:pointer;}
   .ab-modes button.on{background:#22d3ee;color:#04141a;}
   .spdmap{position:absolute;z-index:600;top:10px;right:10px;background:rgba(12,16,22,.88);border:1px solid #1e2836;border-radius:14px;padding:7px 16px;display:none;flex-direction:column;align-items:center;line-height:1;}
@@ -934,7 +935,7 @@ if('serviceWorker' in navigator){
   const oldModes=document.querySelector('.ovl.modes'); if(oldModes) oldModes.style.display='none';
 
   const bar=document.createElement('div'); bar.className='ab-modes';
-  bar.innerHTML='<button data-m="hud">HUD</button><button data-m="split" class="on">Split</button><button data-m="map">Mapa</button>';
+  bar.innerHTML='<button data-m="hud">HUD</button><button data-m="split" class="on">Split</button><button data-m="map">Mapa</button><button data-m="faro" class="faro-btn">Faro</button>';
   app.appendChild(bar);
 
   function relayout(){
@@ -947,8 +948,9 @@ if('serviceWorker' in navigator){
     document.body.classList.remove('solo-map','solo-hud','faro');
     if(m==='map'){ document.body.classList.add('solo-map'); }
     else if(m==='hud'){ document.body.classList.add('solo-hud'); hudPane.style.flex='1 1 auto'; }
+    else if(m==='faro'){ document.body.classList.add('faro'); }
     else { hudPane.style.flex='0 0 '+savedSplitPct()+'%'; }
-    try{ hudOn = (m!=='map'); if(typeof updateHudCar==='function') updateHudCar(); }catch(e){}
+    try{ hudOn = (m!=='map' && m!=='faro'); if(typeof updateHudCar==='function') updateHudCar(); }catch(e){}
     bar.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
     LS.set('abMode',m);
     requestAnimationFrame(()=>{ relayout(); setTimeout(relayout,70); setTimeout(relayout,220); });
