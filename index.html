@@ -736,6 +736,7 @@ async function buildRoute(pts){ if(pts.length<2)return;
     const r=await fetch(url); const j=await r.json();
     if(!j.routes||!j.routes.length){ $('status').textContent='Sin ruta'; return; }
     destLL=pts[pts.length-1]; routeOn=true; offAcc=0;
+    try{ publishRoute(destLL, ($('dest')&&$('dest').value)||''); }catch(e){} // compartir destino con el otro dispositivo
     const routes=j.routes; applyRoute(routes[0]);
     let bestAlt=null; for(let i=1;i<routes.length;i++){ if(!bestAlt||routes[i].summary.travelTimeInSeconds<bestAlt.summary.travelTimeInSeconds)bestAlt=routes[i]; }
     const rr=$('reroute');
@@ -891,6 +892,26 @@ $('syncBtn').onclick=async ()=>{ const pin=$('syncpin').value.trim(); if(!pin){ 
 $('syncpin').value=localStorage.getItem('syncpin')||'';
 (async()=>{ const pin=localStorage.getItem('syncpin'); if(pin){ const c=await fetchConfig(pin); if(c)applyRemoteConfig(c); } })();
 setInterval(()=>{ if(pendingRoute&&raw){ const d=pendingRoute; pendingRoute=null; routeTo(d); } },1500);
+
+// ---------- Sincronización de RUTA en vivo entre dispositivos (mismo PIN) ----------
+const SYNC_ID='dev_'+Math.random().toString(36).slice(2)+'_'+Date.now();
+let lastRouteTs=Date.now();   // solo reacciona a rutas puestas DESPUÉS de abrir
+let applyingRemote=false;
+function _syncPin(){ try{ return (localStorage.getItem('syncpin')||'').trim(); }catch(e){ return ''; } }
+function publishRoute(dest,name){
+  if(applyingRemote){ applyingRemote=false; return; }   // no re-publicar una ruta que vino del otro (evita eco)
+  const pin=_syncPin(); if(!pin||!dest) return; const ts=Date.now(); lastRouteTs=ts;
+  try{ fetch(SUPA_URL+'configs',{method:'POST',headers:{apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},
+    body:JSON.stringify({pin:pin+'~route', data:{lat:dest[0],lon:dest[1],name:name||'',ts,src:SYNC_ID}, updated_at:new Date(ts).toISOString()})}); }catch(e){}
+}
+async function pollRoute(){
+  const pin=_syncPin(); if(!pin) return;
+  try{ const r=await fetch(SUPA_URL+'configs?pin=eq.'+encodeURIComponent(pin+'~route')+'&select=data',{headers:{apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY}});
+    const j=await r.json(); const d=j&&j[0]&&j[0].data; if(!d||d.lat==null) return;
+    if(d.ts>lastRouteTs && d.src!==SYNC_ID && raw){ lastRouteTs=d.ts; applyingRemote=true; routeTo([d.lat,d.lon]); $('status').textContent='📲 Ruta sincronizada'; if(d.name&&$('dest'))$('dest').value=d.name; }
+  }catch(e){}
+}
+setInterval(pollRoute,4000); setTimeout(pollRoute,2000);
 addEventListener('visibilitychange',saveSettings); addEventListener('pagehide',saveSettings); setInterval(saveSettings,5000);
 setTraffic(true);
 
