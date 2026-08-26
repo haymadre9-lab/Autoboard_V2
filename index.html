@@ -293,9 +293,9 @@ const MT_STYLES={
       const el=document.createElement('div'); el.style.lineHeight='0'; el.style.cursor=(this.opts.interactive===false?'default':'pointer');
       if(spec){ el.innerHTML=spec.html||''; if(spec.size){ el.style.width=spec.size[0]+'px'; el.style.height=spec.size[1]+'px'; } }
       this.el=el; this._icon=el; this._added=false;
-      if(this.opts.interactive!==false){ // que el toque sobre el marcador NO lo capture el gesto del mapa (si no, en táctil no hay clic)
+      if(this.opts.interactive!==false){ // que el toque/clic sobre el marcador NO llegue al mapa (si llega, MapLibre lo trata como clic y cierra la ficha)
         const stop=e=>e.stopPropagation();
-        el.addEventListener('touchstart',stop,{passive:true}); el.addEventListener('pointerdown',stop); el.addEventListener('mousedown',stop);
+        el.addEventListener('touchstart',stop,{passive:true}); el.addEventListener('pointerdown',stop); el.addEventListener('mousedown',stop); el.addEventListener('click',stop);
       }
       this._mk=new maplibregl.Marker({element:el, anchor:'center'}).setLngLat(D2(latlng));
     }
