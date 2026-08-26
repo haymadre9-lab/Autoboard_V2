@@ -244,8 +244,8 @@ const MT_STYLES={
     on(evt,cb){
       const map=this._m;
       if(evt==='contextmenu'){ map.on('contextmenu',e=>cb({latlng:{lat:e.lngLat.lat,lng:e.lngLat.lng}})); }
-      else if(evt==='dragstart'){ map.on('dragstart',()=>cb()); map.on('rotatestart',()=>cb()); }
-      else if(evt==='dragend'){ map.on('dragend',()=>cb()); map.on('moveend',()=>cb()); }
+      else if(evt==='dragstart'){ map.on('dragstart',()=>cb()); } // SOLO arrastre real del usuario (no el giro programático)
+      else if(evt==='dragend'){ map.on('dragend',()=>cb()); }
       else if(evt==='zoomstart'){ map.on('zoomstart',()=>cb()); }
       else if(evt==='zoomend'){ map.on('zoomend',()=>cb()); }
       else { map.on(evt,cb); }
@@ -509,9 +509,10 @@ function frame(now){
       const cr=$('carrot'); if(cr) cr.style.transform='rotate(0deg)';   // MapLibre gira el mapa (bearing); la flecha queda fija arriba
       if(follow && now-lastCam>50){ lastCam=now;
         const paneH=(document.getElementById('mapPane')||{}).clientHeight||window.innerHeight;
-        // MapLibre: giro (heading-up) + inclinación nativos en GPU; padding baja el coche en pantalla
-        try{ map.raw.jumpTo({ center:[disp.lon,disp.lat], zoom:navZoom, bearing:disp.head, pitch:(tilt?55:0),
-              padding:{top:Math.round(paneH*0.34),bottom:0,left:0,right:0} }); }catch(e){}
+        const bearing=(typeof disp.head==='number' && isFinite(disp.head))?disp.head:0;   // evita NaN -> que la cámara nunca falle
+        const clat=(isFinite(disp.lat)?disp.lat:0), clon=(isFinite(disp.lon)?disp.lon:0);
+        try{ map.raw.jumpTo({ center:[clon,clat], zoom:navZoom, bearing:bearing, pitch:(tilt?55:0),
+              padding:{top:Math.round(paneH*0.52),bottom:0,left:0,right:0} }); }catch(e){}   // 0.52 -> coche justo encima del radar
       }
     }
     $('spd').textContent=Math.round(speedKmh);
