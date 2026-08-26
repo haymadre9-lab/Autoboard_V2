@@ -293,6 +293,10 @@ const MT_STYLES={
       const el=document.createElement('div'); el.style.lineHeight='0'; el.style.cursor=(this.opts.interactive===false?'default':'pointer');
       if(spec){ el.innerHTML=spec.html||''; if(spec.size){ el.style.width=spec.size[0]+'px'; el.style.height=spec.size[1]+'px'; } }
       this.el=el; this._icon=el; this._added=false;
+      if(this.opts.interactive!==false){ // que el toque sobre el marcador NO lo capture el gesto del mapa (si no, en táctil no hay clic)
+        const stop=e=>e.stopPropagation();
+        el.addEventListener('touchstart',stop,{passive:true}); el.addEventListener('pointerdown',stop); el.addEventListener('mousedown',stop);
+      }
       this._mk=new maplibregl.Marker({element:el, anchor:'center'}).setLngLat(D2(latlng));
     }
     _attach(map){ if(!this._added){ this._map=map; this._mk.addTo(map._m); this._added=true; } }
@@ -909,7 +913,7 @@ if('serviceWorker' in navigator){
   const oldModes=document.querySelector('.ovl.modes'); if(oldModes) oldModes.style.display='none';
 
   const bar=document.createElement('div'); bar.className='ab-modes';
-  bar.innerHTML='<button data-m="hud">HUD</button><button data-m="split" class="on">Split</button><button data-m="map">Mapa</button><button data-m="faro">Faro</button>';
+  bar.innerHTML='<button data-m="hud">HUD</button><button data-m="split" class="on">Split</button><button data-m="map">Mapa</button>';
   app.appendChild(bar);
 
   function relayout(){
@@ -922,9 +926,8 @@ if('serviceWorker' in navigator){
     document.body.classList.remove('solo-map','solo-hud','faro');
     if(m==='map'){ document.body.classList.add('solo-map'); }
     else if(m==='hud'){ document.body.classList.add('solo-hud'); hudPane.style.flex='1 1 auto'; }
-    else if(m==='faro'){ document.body.classList.add('faro'); }
     else { hudPane.style.flex='0 0 '+savedSplitPct()+'%'; }
-    try{ hudOn = (m!=='map' && m!=='faro'); if(typeof updateHudCar==='function') updateHudCar(); }catch(e){} // el HUD 3D dibuja en split y solo-HUD
+    try{ hudOn = (m!=='map'); if(typeof updateHudCar==='function') updateHudCar(); }catch(e){}
     bar.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
     LS.set('abMode',m);
     requestAnimationFrame(()=>{ relayout(); setTimeout(relayout,70); setTimeout(relayout,220); });
@@ -1163,6 +1166,19 @@ if('serviceWorker' in navigator){
   try{ if(window.ResizeObserver&&mapPane){ new ResizeObserver(onLayout).observe(mapPane); } }catch(e){}
   try{ new MutationObserver(()=>onLayout()).observe(document.body,{attributes:true,attributeFilter:['class']}); }catch(e){}
   window.addEventListener('resize',onLayout);
+
+  // --- Pulsación larga en cualquier punto del mapa -> "Ir aquí" (táctil) ---
+  try{
+    const cont = map.raw.getCanvasContainer();
+    let lpT=null, moved=false, sx=0, sy=0;
+    const clear=()=>{ if(lpT){clearTimeout(lpT);lpT=null;} };
+    cont.addEventListener('touchstart',e=>{ if(!e.touches||e.touches.length!==1){clear();return;} moved=false; const t=e.touches[0]; sx=t.clientX; sy=t.clientY;
+      clear(); lpT=setTimeout(()=>{ if(moved)return; try{ const r=cont.getBoundingClientRect(); const ll=map.raw.unproject([sx-r.left,sy-r.top]); if(typeof showGoHere==='function') showGoHere(ll.lat,ll.lng); }catch(e){} }, 550);
+    },{passive:true});
+    cont.addEventListener('touchmove',e=>{ const t=e.touches&&e.touches[0]; if(t&&(Math.abs(t.clientX-sx)>10||Math.abs(t.clientY-sy)>10)){ moved=true; clear(); } },{passive:true});
+    cont.addEventListener('touchend',clear,{passive:true});
+    cont.addEventListener('touchcancel',clear,{passive:true});
+  }catch(e){}
   try{ const t=$('setTilt'); if(t) t.addEventListener('click',()=>setTimeout(onLayout,60)); }catch(e){} // al cambiar inclinación, re-dimensiona el mapa
   setTimeout(()=>{ sizeMapSquare(); positionNav(); fixMap(); },600);
 })();
