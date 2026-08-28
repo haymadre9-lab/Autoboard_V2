@@ -599,7 +599,29 @@ async function fetchPois(ll){
       for(const c of conns){ if(c.PowerKW&&c.PowerKW>kw)kw=c.PowerKW; const t=c.ConnectionType&&c.ConnectionType.Title; if(t){ let n=t.replace('CCS (Type 2)','CCS').replace('Type 2','Tipo 2'); if(socks.indexOf(n)<0)socks.push(n); } connsDetail.push({t:(c.ConnectionType&&c.ConnectionType.Title)||'?', kw:c.PowerKW||0, n:c.Quantity||1, st:(c.StatusType&&c.StatusType.Title)||''}); }
       arr.push({type:'charge',ll:[ai.Latitude,ai.Longitude],name:ai.Title||'Punto de carga',op:(function(){var t=(poi.OperatorInfo&&poi.OperatorInfo.Title)||'';return /unknown|desconoc/i.test(t)?'':t;})(),kw:kw?Math.round(kw):0,socks:socks,pts:poi.NumberOfPoints||0,usage:(poi.UsageType&&poi.UsageType.Title)||'',cost:(poi.UsageCost||''),photos:((poi.MediaItems||[]).map(m=>m.ItemThumbnailURL||m.ItemURL).filter(Boolean).slice(0,8)),conns:connsDetail,addr:[ai.AddressLine1,ai.Town].filter(Boolean).join(', '),tel:ai.ContactTelephone1||'',url:ai.RelatedURL||''});
     }
-    pois=arr; drawChargers();
+    pois=arr; drawChargers(); mergeGoingElectric(ll);
+  }catch(e){}
+}
+function geKey(){ try{ return (localStorage.getItem('geKey')||'').trim(); }catch(e){ return ''; } }
+// GoingElectric como 2ª fuente (se fusiona con OCM). Mapeo tentativo: se ajustará al ver datos reales con la key.
+async function mergeGoingElectric(ll){
+  const key=geKey(); if(!key) return;
+  try{
+    const url='https://api.goingelectric.de/chargepoints/?key='+encodeURIComponent(key)+'&lat='+ll[0]+'&lng='+ll[1]+'&radius=6';
+    const r=await fetch(url); if(!r.ok) return; const j=await r.json();
+    const list=(j&&(j.chargelocations||j.result||j.chargepoints))||[]; if(!list.length) return;
+    const extra=[];
+    for(const c of list){
+      const co=c.coordinates||{}; const la=(co.lat!=null?co.lat:c.lat), lo=(co.lng!=null?co.lng:c.lng); if(la==null) continue;
+      if(pois.some(x=>x.type==='charge' && Math.abs(x.ll[0]-la)<0.0004 && Math.abs(x.ll[1]-lo)<0.0004)) continue; // evita duplicar los de OCM
+      const cps=c.chargepoints||[]; let kw=0; const socks=[]; const connsDetail=[]; let pts=0;
+      for(const cp of cps){ const pw=+cp.power||0; if(pw>kw)kw=pw; const t=cp.type||''; if(t&&socks.indexOf(t)<0)socks.push(t); const n=+cp.count||1; pts+=n; connsDetail.push({t:t||'?',kw:pw,n:n,st:''}); }
+      const addr=c.address||{}; const address=[addr.street,addr.city].filter(Boolean).join(', ');
+      let cost=''; if(c.cost){ if(c.cost.freecharging===true)cost='Gratis'; else cost=(c.cost.descriptionshort||c.cost.description||''); }
+      const photos=((c.photos||[]).map(ph=>(ph&&ph.id)?('https://api.goingelectric.de/photo/'+ph.id+'?size=300&key='+encodeURIComponent(key)):null).filter(Boolean).slice(0,8));
+      extra.push({type:'charge', ll:[la,lo], name:c.name||'Punto de carga', op:c.network||'', kw:kw?Math.round(kw):0, socks:socks, pts:pts, usage:'', cost:cost, photos:photos, conns:connsDetail, addr:address, tel:'', url:c.url||'', src:'GE'});
+    }
+    if(extra.length){ pois=pois.concat(extra); drawChargers(); }
   }catch(e){}
 }
 function nearRoute(ll,maxM){ if(!routeCoordsLL.length)return false; let best=1e9; for(let i=1;i<routeCoordsLL.length;i+=2){ const d=segDistM(ll,{lat:routeCoordsLL[i-1][0],lon:routeCoordsLL[i-1][1]},{lat:routeCoordsLL[i][0],lon:routeCoordsLL[i][1]}); if(d<best)best=d; if(best<maxM)return true; } return best<maxM; }
@@ -1192,6 +1214,19 @@ if('serviceWorker' in navigator){
       sg.appendChild(b);
     }
   }catch(e){}
+
+  // --- Campo para la clave de GoingElectric (2ª fuente de cargadores) ---
+  try{
+    const st=$('settings');
+    if(st && !$('geKeyIn')){
+      const row=document.createElement('div'); row.className='srow';
+      row.innerHTML='<span>Clave GoingElectric (cargadores)</span><div style="display:flex;gap:6px"><input id="geKeyIn" placeholder="pega tu key cuando la tengas" autocomplete="off" style="flex:1;background:#12161f;border:1px solid #263244;color:#eef3fb;border-radius:9px;padding:9px 10px;font-size:13px"><button class="setbtn" id="geKeySave" style="flex:0 0 auto">Guardar</button></div>';
+      st.appendChild(row);
+      try{ $('geKeyIn').value=localStorage.getItem('geKey')||''; }catch(e){}
+      $('geKeySave').onclick=()=>{ try{ localStorage.setItem('geKey',$('geKeyIn').value.trim()); }catch(e){} try{ if($('status'))$('status').textContent='Clave GoingElectric guardada'; }catch(e){} try{ if(typeof disp!=='undefined'&&disp&&typeof fetchPois==='function') fetchPois([disp.lat,disp.lon]); }catch(e){} };
+    }
+  }catch(e){}
+
   async function loadParking(force){
     try{ if(!parkOn||typeof disp==='undefined'||!disp||!parkGroup) return;
       const now=Date.now(); if(!force && now-_parkAt<45000) return;
