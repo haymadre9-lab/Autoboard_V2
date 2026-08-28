@@ -595,9 +595,9 @@ async function fetchPois(ll){
     const url='https://api.openchargemap.io/v3/poi/?output=json&latitude='+ll[0]+'&longitude='+ll[1]+'&distance=6&distanceunit=KM&maxresults=100&compact=false&verbose=false&key='+OCM_KEY;
     const r=await fetch(url); if(!r.ok)return; const j=await r.json(); const arr=[];
     for(const poi of (j||[])){ const ai=poi.AddressInfo; if(!ai)continue;
-      const conns=poi.Connections||[]; let kw=0; const socks=[];
-      for(const c of conns){ if(c.PowerKW&&c.PowerKW>kw)kw=c.PowerKW; const t=c.ConnectionType&&c.ConnectionType.Title; if(t){ let n=t.replace('CCS (Type 2)','CCS').replace('Type 2','Tipo 2'); if(socks.indexOf(n)<0)socks.push(n); } }
-      arr.push({type:'charge',ll:[ai.Latitude,ai.Longitude],name:ai.Title||'Punto de carga',op:(function(){var t=(poi.OperatorInfo&&poi.OperatorInfo.Title)||'';return /unknown|desconoc/i.test(t)?'':t;})(),kw:kw?Math.round(kw):0,socks:socks,pts:poi.NumberOfPoints||0,usage:(poi.UsageType&&poi.UsageType.Title)||''});
+      const conns=poi.Connections||[]; let kw=0; const socks=[]; const connsDetail=[];
+      for(const c of conns){ if(c.PowerKW&&c.PowerKW>kw)kw=c.PowerKW; const t=c.ConnectionType&&c.ConnectionType.Title; if(t){ let n=t.replace('CCS (Type 2)','CCS').replace('Type 2','Tipo 2'); if(socks.indexOf(n)<0)socks.push(n); } connsDetail.push({t:(c.ConnectionType&&c.ConnectionType.Title)||'?', kw:c.PowerKW||0, n:c.Quantity||1, st:(c.StatusType&&c.StatusType.Title)||''}); }
+      arr.push({type:'charge',ll:[ai.Latitude,ai.Longitude],name:ai.Title||'Punto de carga',op:(function(){var t=(poi.OperatorInfo&&poi.OperatorInfo.Title)||'';return /unknown|desconoc/i.test(t)?'':t;})(),kw:kw?Math.round(kw):0,socks:socks,pts:poi.NumberOfPoints||0,usage:(poi.UsageType&&poi.UsageType.Title)||'',cost:(poi.UsageCost||''),photos:((poi.MediaItems||[]).map(m=>m.ItemThumbnailURL||m.ItemURL).filter(Boolean).slice(0,8)),conns:connsDetail,addr:[ai.AddressLine1,ai.Town].filter(Boolean).join(', '),tel:ai.ContactTelephone1||'',url:ai.RelatedURL||''});
     }
     pois=arr; drawChargers();
   }catch(e){}
@@ -616,7 +616,7 @@ function drawChargers(){
 const RADAR_ICON='<svg width="26" height="26" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#e01d1d" stroke="#fff" stroke-width="1.6"/><rect x="6" y="9" width="8" height="6" rx="1" fill="#fff"/><circle cx="10" cy="12" r="1.7" fill="#e01d1d"/><path d="M14 10.3 L18 8.5 L18 15.5 L14 13.7 Z" fill="#fff"/></svg>';
 function drawRadars(){
   radarGroup.clearLayers(); if(!showRadars)return;
-  for(const p of radars){ const ic=L.divIcon({className:'',html:'<div style="filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))">'+RADAR_ICON+'</div>',iconSize:[26,26],iconAnchor:[13,13]}); L.marker([p.ll[0],p.ll[1]],{icon:ic,interactive:false}).addTo(radarGroup); }
+  for(const p of radars){ const col=window.radarColor?window.radarColor(p.t):'#e01d1d'; const svg=RADAR_ICON.split('#e01d1d').join(col); const ic=L.divIcon({className:'',html:'<div style="filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))">'+svg+'</div>',iconSize:[26,26],iconAnchor:[13,13]}); L.marker([p.ll[0],p.ll[1]],{icon:ic,interactive:false}).addTo(radarGroup); }
 }
 
 // ===== límite de vía (OSM, carretera más cercana) =====
@@ -651,12 +651,13 @@ document.addEventListener('pointerdown',firstGesture,{once:true});
 document.addEventListener('touchstart',firstGesture,{once:true,passive:true});
 function updateRadar(){
   const edge=$('radaredge');
-  window.hudRadar={active:false,max:null,dist:null};
+  window.hudRadar={active:false,max:null,dist:null,type:null};
   if(!disp||!showRadars){$('radarsign').classList.remove('show','hot'); if(edge)edge.classList.remove('show'); return;} let best=null;
   for(const p of radars){ p.dist=dist([disp.lat,disp.lon],p.ll); const ah=Math.abs(((bearing([disp.lat,disp.lon],p.ll)-disp.head+540)%360)-180)<95; if(!ah)continue;
     if(p.dist<800&&(!best||p.dist<best.dist))best=p; }
   // aviso por EXCESO de velocidad a <500 m: borde rojo lento + un solo pitido
-  window.hudRadar = { active: !!(best && best.dist<600 && best.max), max: best?best.max:null, dist: best?Math.round(best.dist):null }; // para el modo Faro
+  window.hudRadar = { active: !!(best && best.dist<600), max: best?best.max:null, dist: best?Math.round(best.dist):null, type: best?best.t:null }; // para el modo Faro
+  window.radarColor = function(t){ return t==='fijo'?'#e01d1d': t==='movil'?'#2f6bff': t==='tramo'?'#ff9a1f': t==='semaforo'?'#f5c518':'#e01d1d'; }; // aro por tipo (global, lo usa Faro tb)
   const over = !!(best && best.dist<500 && best.max && speedKmh > best.max+2);
   if(edge) edge.classList.toggle('show', over);
   if(over){ if(!radarAlerted){ radarAlerted=true; radarBeep(); } } 
@@ -664,7 +665,7 @@ function updateRadar(){
   // señal informativa (sin parpadeo agresivo, sin voz)
   const el=$('radarsign'); if(!best){el.classList.remove('show','hot');return;}
   el.style.left='50%'; el.style.top='84%'; el.style.transform='translate(-50%,-50%) scale(1.4)'; el.classList.add('nopole'); // centro, justo sobre la barra inferior, parpadea (CSS)
-  $('rsmax').textContent=best.max||'⚠'; $('rsdist').textContent=fmtDist(Math.max(0,best.dist)); el.classList.add('show'); el.classList.remove('hot');
+  $('rsmax').textContent=best.max||'⚠'; $('rsdist').textContent=fmtDist(Math.max(0,best.dist)); { const _rsc=el.querySelector('.rs-c'); if(_rsc)_rsc.style.borderColor=window.radarColor(best.t); } el.classList.add('show'); el.classList.remove('hot');
 }
 
 // ===== navegación (Nominatim + TomTom routing con tráfico) =====
@@ -777,6 +778,7 @@ function openPopup(lat,lon,title,btns,info){
   div.appendChild(row); pop.setContent(div).openOn(map); return pop;
 }
 function chargerPopup(p){
+  if(window.openChargerSheet){ window.openChargerSheet(p); return; } // hoja inferior tipo EVMap
   const parts=[]; if(p.op)parts.push(p.op); if(p.kw)parts.push(p.kw+' kW'); if(p.socks&&p.socks.length)parts.push(p.socks.slice(0,3).join(', ')); if(p.pts)parts.push(p.pts+' plazas');
   const info=parts.join(' · ')||'Sin datos de potencia/compañía';
   openPopup(p.ll[0],p.ll[1], p.name||'Punto de carga', [ {label:'Ir', fn:()=>routeTo(p.ll)}, routeOn?{label:'Añadir parada', fn:()=>addWaypoint(p.ll), bg:'#4c8dff', fg:'#fff'}:null, {label:'⭐ Guardar', fn:()=>{ const nm=prompt('Nombre del favorito:', p.name||(p.op||'Cargador')); if(nm) saveFav(nm,p.ll[0],p.ll[1]); }, bg:'#1b2130', fg:'#ffd54a'} ], info);
@@ -1069,6 +1071,71 @@ if('serviceWorker' in navigator){
     +'<button class="dbtn" id="dGear" title="Ajustes">⚙️</button>';
   app.appendChild(dock);
 
+  // ---------- Hoja inferior de cargador (tipo EVMap): tocar = resumen, deslizar = fotos + precios + datos ----------
+  (function(){
+    const cs=document.createElement('style'); cs.textContent=
+      '#csheet{position:fixed;left:0;right:0;bottom:0;z-index:1200;background:#0e131d;border-top:1px solid #263244;border-radius:16px 16px 0 0;transform:translateY(101%);transition:transform .25s ease,height .25s ease;height:172px;box-shadow:0 -10px 34px rgba(0,0,0,.55);display:flex;flex-direction:column;color:#eef3fb;}'
+     +'#csheet.open{transform:translateY(0);} #csheet.expanded{height:80vh;}'
+     +'#csheet .cs-grab{padding:8px 0 4px;display:flex;justify-content:center;cursor:grab;touch-action:none;}'
+     +'#csheet .cs-grab span{width:44px;height:5px;border-radius:3px;background:#3a4658;}'
+     +'#csheet .cs-head{display:flex;align-items:flex-start;gap:8px;padding:0 16px;}'
+     +'#csheet .cs-title{font-size:18px;font-weight:800;flex:1;line-height:1.15;}'
+     +'#csheet .cs-x{background:#1b2130;border:1px solid #263244;color:#c3ccda;border-radius:10px;width:32px;height:32px;font-size:15px;cursor:pointer;flex:0 0 auto;}'
+     +'#csheet .cs-sum{padding:4px 16px 0;color:#9fb0c6;font-size:13px;line-height:1.4;}'
+     +'#csheet .cs-btns{display:flex;gap:8px;padding:12px 16px;}'
+     +'#csheet .cs-btns button{flex:1;border:0;border-radius:12px;padding:12px;font-weight:800;font-size:14px;cursor:pointer;}'
+     +'#csheet #csGo{background:#38f5a0;color:#04130c;} #csheet #csAdd{background:#4c8dff;color:#fff;} #csheet #csFav{background:#2a3242;color:#fff;}'
+     +'#csheet .cs-body{overflow-y:auto;padding:0 16px 20px;display:none;-webkit-overflow-scrolling:touch;}'
+     +'#csheet.expanded .cs-body{display:block;}'
+     +'#csheet .cs-photos{display:flex;gap:8px;overflow-x:auto;padding:4px 0 10px;}'
+     +'#csheet .cs-photos img{height:130px;border-radius:10px;object-fit:cover;flex:0 0 auto;background:#1b2130;}'
+     +'#csheet .cs-row{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-top:1px solid #1b2534;font-size:14px;}'
+     +'#csheet .cs-row .k{color:#8b98ad;} #csheet .cs-conn{display:flex;justify-content:space-between;padding:7px 0;border-top:1px solid #1b2534;font-size:14px;}'
+     +'#csheet .cs-conn .kw{color:#38f5a0;font-weight:700;} #csheet h5{margin:14px 0 2px;font-size:12px;letter-spacing:1px;color:#8b98ad;text-transform:uppercase;}';
+    document.head.appendChild(cs);
+    const sheet=document.createElement('div'); sheet.id='csheet';
+    sheet.innerHTML='<div class="cs-grab" id="csGrab"><span></span></div>'
+      +'<div class="cs-head"><div class="cs-title" id="csTitle"></div><button class="cs-x" id="csX">✕</button></div>'
+      +'<div class="cs-sum" id="csSum"></div>'
+      +'<div class="cs-btns"><button id="csGo">Ir</button><button id="csAdd">Añadir parada</button><button id="csFav">⭐ Guardar</button></div>'
+      +'<div class="cs-body" id="csBody"></div>';
+    app.appendChild(sheet);
+    let cur=null;
+    function esc(s){ return (s==null?'':(''+s)).replace(/[<>&]/g,x=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[x])); }
+    function expand(on){ sheet.classList.toggle('expanded',on); }
+    function close(){ sheet.classList.remove('open','expanded'); cur=null; }
+    window.openChargerSheet=function(p){ cur=p;
+      $('csTitle').textContent=p.name||'Punto de carga';
+      const sum=[]; if(p.op)sum.push(p.op); if(p.kw)sum.push('⚡ '+p.kw+' kW'); if(p.socks&&p.socks.length)sum.push(p.socks.slice(0,3).join(', ')); if(p.pts)sum.push(p.pts+' plazas');
+      $('csSum').textContent=sum.join('  ·  ')||'Sin datos';
+      // cuerpo (fotos + detalle)
+      let h='';
+      if(p.photos&&p.photos.length){ h+='<div class="cs-photos">'+p.photos.map(u=>'<img src="'+esc(u)+'" loading="lazy" onerror="this.style.display=\'none\'">').join('')+'</div>'; }
+      if(p.cost){ h+='<div class="cs-row"><span class="k">Precio</span><span>'+esc(p.cost)+'</span></div>'; }
+      if(p.usage){ h+='<div class="cs-row"><span class="k">Acceso</span><span>'+esc(p.usage)+'</span></div>'; }
+      if(p.addr){ h+='<div class="cs-row"><span class="k">Dirección</span><span style="text-align:right">'+esc(p.addr)+'</span></div>'; }
+      if(p.tel){ h+='<div class="cs-row"><span class="k">Teléfono</span><span><a href="tel:'+esc(p.tel)+'" style="color:#4c8dff">'+esc(p.tel)+'</a></span></div>'; }
+      if(p.conns&&p.conns.length){ h+='<h5>Conectores</h5>'+p.conns.map(c=>'<div class="cs-conn"><span>'+esc(c.t)+(c.n>1?' ×'+c.n:'')+(c.st?' · '+esc(c.st):'')+'</span><span class="kw">'+(c.kw?c.kw+' kW':'')+'</span></div>').join(''); }
+      if(p.url){ h+='<div class="cs-row"><span class="k">Web</span><span><a href="'+esc(p.url)+'" target="_blank" style="color:#4c8dff">abrir</a></span></div>'; }
+      if(!h) h='<div class="cs-row"><span class="k">Sin datos adicionales</span><span></span></div>';
+      $('csBody').innerHTML=h;
+      sheet.classList.add('open'); expand(false);
+    };
+    $('csX').onclick=close;
+    $('csGo').onclick=()=>{ if(cur){ close(); routeTo(cur.ll); } };
+    $('csAdd').onclick=()=>{ if(cur){ close(); if(typeof addWaypoint==='function') addWaypoint(cur.ll); } };
+    $('csFav').onclick=()=>{ if(cur&&typeof saveFav==='function'){ saveFav(cur.name||'Cargador',cur.ll[0],cur.ll[1]); } };
+    // deslizar el asa: arriba = expandir, abajo = colapsar/cerrar
+    let sy=0, dragging=false;
+    const g=$('csGrab');
+    const down=y=>{dragging=true; sy=y;}; const move=y=>{ if(!dragging)return; const dy=y-sy; if(dy<-30){ expand(true); dragging=false; } else if(dy>30){ if(sheet.classList.contains('expanded')){ expand(false); } else { close(); } dragging=false; } };
+    g.addEventListener('touchstart',e=>down(e.touches[0].clientY),{passive:true});
+    g.addEventListener('touchmove',e=>move(e.touches[0].clientY),{passive:true});
+    g.addEventListener('touchend',()=>{dragging=false;});
+    g.addEventListener('click',()=>expand(!sheet.classList.contains('expanded')));
+    g.addEventListener('mousedown',e=>down(e.clientY)); window.addEventListener('mousemove',e=>move(e.clientY)); window.addEventListener('mouseup',()=>dragging=false);
+  })();
+
   $('dCenter').onclick=()=>{ const r=$('recenter'); if(r) r.click(); };
   $('dRefresh').onclick=()=>{ const r=$('refresh'); if(r) r.click(); };
   $('dSat').onclick=()=>{ try{ if(typeof setBase==='function'){ setBase(!baseSat); if(typeof saveSettings==='function') saveSettings(); } $('dSat').classList.toggle('on', !!baseSat); const s=$('setSat'); if(s&&s.textContent!==undefined){ s.textContent=baseSat?'🛰️ Satélite':'🗺️ Normal'; s.classList.toggle('on',!!baseSat); } }catch(e){} };
@@ -1091,7 +1158,7 @@ if('serviceWorker' in navigator){
      +'#fSpeed.sign{width:52vh;height:52vh;border-radius:50%;background:#fff;border:5vh solid #e01d1d;}'
      +'#fSpeed.sign .n{color:#111;font-size:26vh;}'
      +'#fSpeed.sign .u{display:none;}'
-     +'#fSpeed.sign.blink{border-color:#7a0000;}';
+     +'#fSpeed.sign.blink{filter:brightness(.5);}';   /* parpadeo por brillo -> respeta el color del aro por tipo */
     document.head.appendChild(st2);
     const hc=document.createElement('div'); hc.id='hudclean';
     hc.innerHTML='<div id="fSpeed"><div class="n" id="fNum">0</div><div class="u">KM/H</div></div>';
@@ -1101,8 +1168,10 @@ if('serviceWorker' in navigator){
     setInterval(()=>{ try{
       const fs=document.getElementById('fSpeed'), fn=document.getElementById('fNum'); if(!fs) return;
       const r=(typeof hudRadar!=='undefined')?hudRadar:null;
-      if(r && r.active && r.max){ fs.classList.add('sign'); fn.textContent=r.max; }
-      else { fs.classList.remove('sign','blink'); fn.textContent=Math.round((typeof speedKmh!=='undefined')?speedKmh:0); }
+      const spd=Math.round((typeof speedKmh!=='undefined')?speedKmh:0);
+      if(r && r.active){ fs.classList.add('sign'); fn.textContent=spd; // TU velocidad dentro de la señal
+        try{ fs.style.borderColor=window.radarColor?window.radarColor(r.type):'#e01d1d'; }catch(e){} }
+      else { fs.classList.remove('sign','blink'); fs.style.borderColor=''; fn.textContent=spd; }
     }catch(e){} }, 200);
   })();
 
