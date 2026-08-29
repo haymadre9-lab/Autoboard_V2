@@ -113,6 +113,7 @@ function createHud2(canvas, opts = {}){
     lookAhead: 55,          // look-ahead base de la cámara
     camHeight: 2.6,
     camBack: 7.5,
+    horizon: 0.50,          // centro vertical del encuadre: <0.5 sube la escena
     posts: true,            // farolas y quitamiedos
     carColor: '#cdd3d9',
     maxFps: 0,              // 0 = libre
@@ -134,7 +135,7 @@ function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
-  api.version = '2026.08.29-5';   // sube al cambiar: sirve para saber qué está corriendo
+  api.version = '2026.08.29-6';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
   let manList = [], limList = [], radList = [];
@@ -432,7 +433,7 @@ function createHud2(canvas, opts = {}){
     const zc = dx*fwd.x + dy*fwd.y + dz*fwd.z;
     if (zc < 0.45){ P0.ok = false; return P0; }
     P0.x = W/2 + (dx*rgt.x + dy*rgt.y + dz*rgt.z)*focal/zc;
-    P0.y = H/2 - (dx*upv.x + dy*upv.y + dz*upv.z)*focal/zc;
+    P0.y = H*cfgOpt.horizon - (dx*upv.x + dy*upv.y + dz*upv.z)*focal/zc;
     P0.d = zc; P0.ok = true;
     return P0;
   }
@@ -462,7 +463,7 @@ function createHud2(canvas, opts = {}){
     g.addColorStop(0, pal.skyTop); g.addColorStop(1, pal.skyBot);
     ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
     const hz = projCopy({ x: cam.x + fwd.x*4000, y: 0, z: cam.z + fwd.z*4000 });
-    const y = hz.ok ? hz.y : H*0.45;
+    const y = hz.ok ? hz.y : H*cfgOpt.horizon*0.9;
     ctx.fillStyle = pal.ground; ctx.fillRect(0, y, W, H-y);
   }
 
@@ -1004,7 +1005,7 @@ const HUD2_KEY = 'hud2.cfg';
 const HUD2_DEF = { theme:'auto', maxFps:0, beamReach:34, fogEnd:260,
                    lookAhead:55, camHeight:2.6, camBack:7.5, posts:true,
                    rain:false, spray:true, traffic:'off',
-                   rbRadius:45, rbArc:18, rbSmooth:1, hud:true };
+                   rbRadius:45, rbArc:18, rbSmooth:1, hud:true, horizon:0.50 };
 function hud2LoadCfg(){
   try { return Object.assign({}, HUD2_DEF, JSON.parse(localStorage.getItem(HUD2_KEY) || '{}')); }
   catch(e){ return Object.assign({}, HUD2_DEF); }
@@ -1060,7 +1061,8 @@ function hud2SaveCfg(c){ try { localStorage.setItem(HUD2_KEY, JSON.stringify(c))
     ['lookAhead', 'Look-ahead cámara',  10, 120, 1,  'm'],
     ['camHeight', 'Altura de cámara',   10,  90, 1,  'm', 10],
     ['camBack',   'Distancia detrás',   20, 200, 1,  'm', 10],
-    ['fogEnd',    'Niebla',             60, 500, 10, 'm']
+    ['fogEnd',    'Niebla',             60, 500, 10, 'm'],
+    ['horizon',   'Encuadre vertical',  30,  70,  1, '%', 100]
   ];
   const FPSOPT = [[0,'Libre'],[30,'30'],[24,'24'],[20,'20']];
 

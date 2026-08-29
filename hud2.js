@@ -48,6 +48,7 @@ export function createHud2(canvas, opts = {}){
     lookAhead: 55,          // look-ahead base de la cámara
     camHeight: 2.6,
     camBack: 7.5,
+    horizon: 0.50,          // centro vertical del encuadre: <0.5 sube la escena
     posts: true,            // farolas y quitamiedos
     carColor: '#cdd3d9',
     maxFps: 0,              // 0 = libre
@@ -69,7 +70,7 @@ export function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
-  api.version = '2026.08.29-5';   // sube al cambiar: sirve para saber qué está corriendo
+  api.version = '2026.08.29-6';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
   let manList = [], limList = [], radList = [];
@@ -367,7 +368,7 @@ export function createHud2(canvas, opts = {}){
     const zc = dx*fwd.x + dy*fwd.y + dz*fwd.z;
     if (zc < 0.45){ P0.ok = false; return P0; }
     P0.x = W/2 + (dx*rgt.x + dy*rgt.y + dz*rgt.z)*focal/zc;
-    P0.y = H/2 - (dx*upv.x + dy*upv.y + dz*upv.z)*focal/zc;
+    P0.y = H*cfgOpt.horizon - (dx*upv.x + dy*upv.y + dz*upv.z)*focal/zc;
     P0.d = zc; P0.ok = true;
     return P0;
   }
@@ -397,7 +398,7 @@ export function createHud2(canvas, opts = {}){
     g.addColorStop(0, pal.skyTop); g.addColorStop(1, pal.skyBot);
     ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
     const hz = projCopy({ x: cam.x + fwd.x*4000, y: 0, z: cam.z + fwd.z*4000 });
-    const y = hz.ok ? hz.y : H*0.45;
+    const y = hz.ok ? hz.y : H*cfgOpt.horizon*0.9;
     ctx.fillStyle = pal.ground; ctx.fillRect(0, y, W, H-y);
   }
 

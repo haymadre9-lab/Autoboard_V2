@@ -109,7 +109,7 @@ function boot(){
   const HUD2_DEF = { theme:'auto', maxFps:0, beamReach:34, fogEnd:260,
                      lookAhead:55, camHeight:2.6, camBack:7.5, posts:true,
                      rain:false, spray:true, traffic:'off',
-                     rbRadius:45, rbArc:18, rbSmooth:1, hud:true };
+                     rbRadius:45, rbArc:18, rbSmooth:1, hud:true, horizon:0.50 };
   let cfg;
   try { cfg = Object.assign({}, HUD2_DEF, JSON.parse(localStorage.getItem(HUD2_KEY) || '{}')); }
   catch(e){ cfg = Object.assign({}, HUD2_DEF); }
@@ -117,7 +117,13 @@ function boot(){
   const hud = createHud2(cv, cfg);
   console.log('[hud2] módulo versión', hud.version);
   // foto del coche guardada desde hud2.html (mismo origen, mismo almacen)
-  try { const f = localStorage.getItem('hud2.foto'); if (f) hud.setCarPhoto(f); } catch(e){}
+  try {
+    const f = localStorage.getItem('hud2.foto');
+    if (f) hud.setCarPhoto(f);
+  } catch(e){}
+  // rescate: si la foto guardada resultara invisible, se descarta sola
+  window.hud2SinFoto = () => { try { localStorage.removeItem('hud2.foto'); } catch(e){}
+    fotoOrig = null; hud.setCarPhoto(null); console.log('[hud2] foto descartada'); };
   hud.onError = e => { err.style.display = 'block'; err.textContent = 'hud2: ' + e.message; };
 
   // ruta de ejemplo, solo hasta que tu app llame a setRoute
@@ -312,7 +318,8 @@ function boot(){
     ['lookAhead','Look-ahead cámara',10,120,1,'m',1],
     ['camHeight','Altura de cámara',10,90,1,'m',10],
     ['camBack','Distancia detrás',20,200,1,'m',10],
-    ['fogEnd','Niebla',60,500,10,'m',1]
+    ['fogEnd','Niebla',60,500,10,'m',1],
+    ['horizon','Encuadre vertical',30,70,1,'%',100]
   ];
   const guardar = () => { hud.set(cfg); try { localStorage.setItem(HUD2_KEY, JSON.stringify(cfg)); } catch(e){} };
   const seg = (id, opts, val) => '<div class="sg" id="'+id+'">' + opts.map(o =>
@@ -343,7 +350,8 @@ function boot(){
             + '<input type="range" id="h2r_tol" min="6" max="90" value="28"></label>'
             + '<button class="done" id="h2_cut" style="margin:0 0 8px">Quitar fondo</button>';
     if (hayFoto()) html += '<button class="done" id="h2_nofoto" style="background:transparent;border:1px solid #232c33;color:#7b8b96;margin:0 0 8px">Sin foto</button>';
-    html += '<button class="done" id="h2_done">Hecho</button>';
+    html += '<button class="done" id="h2_done">Hecho</button>'
+          + '<button class="done" id="h2_reset" style="background:transparent;border:1px solid #232c33;color:#7b8b96">Valores por defecto</button>';
     sheet.innerHTML = html;
 
     // Si algún control no existiera, se devuelve un objeto vacío: un panel
@@ -363,6 +371,7 @@ function boot(){
     if (g('h2_nofoto')) g('h2_nofoto').onclick = () => { fotoOrig = null;
       try { localStorage.removeItem('hud2.foto'); } catch(e){} hud.setCarPhoto(null); pintarAjustes(); };
     g('h2_done').onclick = () => sheet.classList.remove('on');
+    g('h2_reset').onclick = () => { Object.assign(cfg, HUD2_DEF); guardar(); pintarAjustes(); };
   }
   gear.onclick = () => { pintarAjustes(); sheet.classList.add('on'); };
 
@@ -426,7 +435,19 @@ function boot(){
       const s4 = A[p-1]+A[p+1]+A[p-w]+A[p+w];
       if (s4 < 1020) D[p*4+3] = Math.round((A[p]*2 + s4/2)/4);
     }
+    // Salvaguarda: si el recorte deja menos del 8% de píxeles opacos, se ha
+    // comido el coche. Se descarta y se avisa, en vez de dejar un sprite invisible.
+    let opacos = 0;
+    for (let p = 0; p < w*h; p++) if (D[p*4+3] > 40) opacos++;
+    const pct = opacos/(w*h);
+    const st = document.getElementById('h2_stat');
+    if (pct < 0.08){
+      if (st) st.innerHTML = '<b style="color:#ff5a4d">Tolerancia demasiado alta:</b> el recorte se ha '
+        + 'comido el coche (' + Math.round(pct*100) + '% visible). Bájala y vuelve a probar.';
+      return;
+    }
     c2.putImageData(img,0,0); aplicarFoto(cn);
+    if (st) st.textContent = 'Fondo recortado · ' + Math.round(pct*100) + '% del cuadro visible.';
   }
   try { const f = localStorage.getItem('hud2.foto'); if (f) hud.setCarPhoto(f); } catch(e){}
 
