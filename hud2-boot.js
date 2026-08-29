@@ -59,12 +59,21 @@ function boot(){
 
   // ruta de ejemplo, solo hasta que tu app llame a setRoute
   let rutaPropia = false;
-  const R = 6378137, LAT0 = 43.30, LNG0 = -3.05, c0 = Math.cos(LAT0*Math.PI/180);
+  // Ruta de prueba incorporada: 3,4 km con DOS rotondas (16 m y 22 m de radio),
+  // curvas suaves, dos cerradas y rectas. No hay que pegar nada para usarla.
+  const R = 6378137, LAT0 = 43.3320, LNG0 = -3.1090, c0 = Math.cos(LAT0*Math.PI/180);
   const toLL = (x,z) => [LAT0 + z/R*180/Math.PI, LNG0 + x/(R*c0)*180/Math.PI];
-  const demo = []; let x = 0, z = 0, h = 0;
-  for (let i=0;i<500;i++){ z += 2; demo.push(toLL(x,z)); }
-  for (let i=0;i<44;i++){ h -= 2/16; x += Math.sin(h)*2; z += Math.cos(h)*2; demo.push(toLL(x,z)); }
-  for (let i=0;i<700;i++){ h += 0.0018*Math.sin(i/40)*2; x += Math.sin(h)*2; z += Math.cos(h)*2; demo.push(toLL(x,z)); }
+  const demo = []; let _x = 0, _z = 0, _h = 0;
+  const tramo = (dist, k) => { const n = Math.round(dist/4);
+    for (let i = 0; i < n; i++){ _h += k*4; _x += Math.sin(_h)*4; _z += Math.cos(_h)*4; demo.push(toLL(_x,_z)); } };
+  demo.push(toLL(0,0));
+  tramo(320, 0);        tramo(180,  0.0035);  tramo(260, 0);
+  tramo(140,-0.0045);   tramo(200,  0);
+  tramo(16*4.0, -1/16); tramo(240,  0);          // rotonda 1: R=16 m, ~230 grados
+  tramo(300, 0.0018);   tramo(420,  0);
+  tramo(120,-0.0060);   tramo(260,  0);
+  tramo(22*3.14,-1/22); tramo(380,  0);          // rotonda 2: R=22 m, 180 grados
+  tramo(200, 0.0026);   tramo(300,  0);
   // Si ya cargaste un trazado en hud2.html, se reutiliza: mismo origen, mismo
   // localStorage. Así el botón HUD 2 muestra tu ruta y no la de ejemplo.
   let inicial = demo;
