@@ -134,9 +134,10 @@ function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
-  api.version = '2026.08.29-4';   // sube al cambiar: sirve para saber qué está corriendo
+  api.version = '2026.08.29-5';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
+  let manList = [], limList = [], radList = [];
 
   /** Foto del coche ya recortada (dataURL PNG con alfa). null vuelve al dibujado. */
   api.setCarPhoto = function(url){
@@ -146,11 +147,56 @@ function createHud2(canvas, opts = {}){
     im.onerror = () => { carImg = null; if (api.onError) api.onError(new Error('foto no válida')); };
     im.src = url; cfgOpt.carPhoto = url;
   };
-  /** Maniobra desde tu app: {tipo:'left'|'right'|'straight'|'roundabout', dist, calle} */
-  api.setManeuver = m => { manOver = m; };
+  /**
+   * Lista completa de maniobras, UNA llamada por ruta. Cada una:
+   *   { metro, tipo:'left'|'right'|'straight'|'roundabout', calle, salida }
+   * 'metro' es la distancia desde el inicio de la ruta. El HUD hace la cuenta
+   * atrás solo, así que no hay que refrescar nada en cada posición.
+   * Desde OSRM: acumula step.distance y usa step.maneuver.modifier / .type.
+   */
+  api.setManeuvers = function(list){
+    manList = (list || []).filter(m => m && isFinite(m.metro)).sort((a,b) => a.metro - b.metro);
+    return manList.length;
+  };
+  /** Maniobra suelta. Con 'metro' cuenta atrás sola; con 'dist' se fija ahora. */
+  api.setManeuver = m => {
+    if (!m){ manList = []; manOver = null; return; }
+    manOver = null;
+    manList = [Object.assign({}, m, { metro: m.metro !== undefined ? m.metro : s + (m.dist||0) })];
+  };
+  /** Límites por tramo: [{metro, kmh}, ...]. Vale el de la última entrada pasada. */
+  api.setLimits = l => { limList = (l||[]).filter(x => isFinite(x.metro)).sort((a,b)=>a.metro-b.metro); };
   api.setLimit = k => { limitOver = k; };
+  api.setStreet = s2 => { streetOver = s2; };
   api.setRadar = m => { radarOver = m; };
-  api.setStreet = s => { streetOver = s; };
+
+  /**
+   * Radares en coordenadas, tal cual los tienes en radares.json. Se proyectan
+   * sobre la ruta y solo se quedan los que caen a menos de `margen` metros:
+   * el resto están en otras carreteras y no te afectan.
+   */
+  api.setRadars = function(puntos, margen){
+    margen = margen || 45;
+    radList = [];
+    if (!pts || !origin || !puntos) return 0;
+    const lat0 = origin[0]*Math.PI/180, RT = 6378137;
+    for (const p of puntos){
+      const lat = p.lat !== undefined ? p.lat : (Array.isArray(p) ? p[0] : p.latitude);
+      const lng = p.lng !== undefined ? p.lng : (Array.isArray(p) ? p[1] : p.longitude);
+      if (!isFinite(lat) || !isFinite(lng)) continue;
+      const px = RT*(lng-origin[1])*Math.PI/180*Math.cos(lat0);
+      const pz = RT*(lat-origin[0])*Math.PI/180;
+      let best = -1, bd = Infinity;
+      for (let i = 0; i < N; i++){
+        const d = (pts[i*3]-px)**2 + (pts[i*3+1]-pz)**2;
+        if (d < bd){ bd = d; best = i; }
+      }
+      if (best >= 0 && Math.sqrt(bd) <= margen)
+        radList.push({ metro: best*STEP, kmh: p.kmh || p.speed || null });
+    }
+    radList.sort((a,b) => a.metro - b.metro);
+    return radList.length;
+  };
 
   /* ---------------- geometría de la ruta ---------------- */
 
@@ -261,6 +307,7 @@ function createHud2(canvas, opts = {}){
 
     MW = o.motorway || [];
     RB = detectRoundabouts();
+    manList = []; limList = []; radList = [];   // van referidas a metros de la ruta vieja
     s = 0;
     return { metros: Math.round(routeLen), puntos: N, rotondas: RB.length };
   };
@@ -796,7 +843,14 @@ function createHud2(canvas, opts = {}){
   function drawHUD(){
     const k = Math.min(W, H) / 420;                       // escala con el tamaño real
     const pad = Math.round(14*k);
-    const m = manOver || maniobraGeom();
+    // la maniobra de la lista manda mientras no la hayas pasado
+    let m = manOver;
+    if (!m && manList.length){
+      const sig = manList.find(x => x.metro > s - 12);
+      if (sig) m = { tipo: sig.tipo, dist: Math.max(0, sig.metro - s),
+                     calle: sig.calle, salida: sig.salida };
+    }
+    if (!m) m = maniobraGeom();
 
     // panel de maniobra
     if (m && m.tipo !== 'straight'){
@@ -817,7 +871,8 @@ function createHud2(canvas, opts = {}){
       ctx.font = `600 ${Math.round(26*k)}px ui-sans-serif,system-ui,sans-serif`;
       ctx.textBaseline = 'alphabetic';
       ctx.fillText(fmtDist(m.dist), pad + 62*k, pad + 30*k);
-      const calle = m.calle || streetOver;
+      let calle = m.calle || streetOver;
+      if (m.tipo === 'roundabout' && m.salida) calle = m.salida + 'ª salida' + (calle ? ' · ' + calle : '');
       if (calle){
         ctx.fillStyle = '#7b8b96';
         ctx.font = `${Math.round(11*k)}px ui-sans-serif,system-ui,sans-serif`;
@@ -840,7 +895,13 @@ function createHud2(canvas, opts = {}){
     ctx.restore();
 
     // límite de velocidad
-    const lim = limitOver !== null ? limitOver : (xsec(s).f > 0.5 ? 120 : null);
+    let lim = limitOver;
+    if (lim === null && limList.length){
+      let v = null;
+      for (const x of limList){ if (x.metro <= s + 5) v = x.kmh; else break; }
+      lim = v;
+    }
+    if (lim === null) lim = xsec(s).f > 0.5 ? 120 : null;
     if (lim){
       const r = 30*k, cx = W - pad - r, cy = H - pad - r;
       ctx.save();
@@ -855,7 +916,12 @@ function createHud2(canvas, opts = {}){
     }
 
     // aviso de radar
-    if (radarOver !== null && radarOver < 600){
+    let rad = radarOver;
+    if (rad === null && radList.length){
+      const sig = radList.find(x => x.metro > s - 20);
+      if (sig) rad = sig.metro - s;
+    }
+    if (rad !== null && rad < 600){
       ctx.save();
       const bw = Math.round(150*k), bh = Math.round(32*k), bx = W - pad - bw;
       ctx.fillStyle = 'rgba(255,90,77,.18)'; ctx.fillRect(bx, pad, bw, bh);
@@ -863,7 +929,7 @@ function createHud2(canvas, opts = {}){
       ctx.fillStyle = '#ff5a4d';
       ctx.font = `${Math.round(12*k)}px ui-sans-serif,system-ui,sans-serif`;
       ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-      ctx.fillText('RADAR · ' + fmtDist(radarOver), bx + 12*k, pad + bh/2);
+      ctx.fillText('RADAR · ' + fmtDist(rad), bx + 12*k, pad + bh/2);
       ctx.restore();
     }
   }
