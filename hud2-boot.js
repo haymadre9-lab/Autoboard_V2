@@ -117,7 +117,37 @@ function boot(){
     const g = JSON.parse(localStorage.getItem('hud2.ruta') || 'null');
     if (g && g.length > 3) inicial = g;
   } catch(e){}
-  try { hud.setRoute(inicial); hud.setSpeed(22); } catch(e){ hud.onError(e); }
+  try { hud.setRoute(inicial); } catch(e){ hud.onError(e); }
+
+  /* ------------------------------------------------------------------
+     GPS. La velocidad mueve la cinta a 60 fps entre posiciones; syncPosition
+     corrige la deriva con cada fix. Si el receptor no da coords.speed, se
+     calcula por diferencia de posiciones, que es lo normal en muchos equipos.
+     ------------------------------------------------------------------ */
+  let watch = null, ultPos = null, vCalc = 0;
+  function gpsOn(){
+    if (watch !== null || !navigator.geolocation) return;
+    watch = navigator.geolocation.watchPosition(p => {
+      const c = p.coords, t = p.timestamp || Date.now();
+      let v = (c.speed !== null && !isNaN(c.speed) && c.speed >= 0) ? c.speed : null;
+      if (v === null && ultPos){
+        const dt = (t - ultPos.t)/1000;
+        if (dt > 0.2 && dt < 10){
+          const RT = 6378137, la = c.latitude*Math.PI/180;
+          const dx = RT*(c.longitude-ultPos.lng)*Math.PI/180*Math.cos(la);
+          const dz = RT*(c.latitude-ultPos.lat)*Math.PI/180;
+          const raw = Math.hypot(dx,dz)/dt;
+          if (raw < 70) vCalc += (raw - vCalc)*0.5;      // suavizado: el GPS salta
+          v = vCalc;
+        }
+      }
+      ultPos = { lat:c.latitude, lng:c.longitude, t };
+      if (v !== null) hud.setSpeed(v);
+      hud.syncPosition(c.latitude, c.longitude);
+    }, e => console.warn('[hud2] GPS:', e.message),
+       { enableHighAccuracy:true, maximumAge:1000, timeout:15000 });
+  }
+  function gpsOff(){ if (watch !== null){ navigator.geolocation.clearWatch(watch); watch = null; } }
 
   // API pública, envolviendo setRoute para saber si ya hay ruta real
   window.hud2 = Object.assign(Object.create(hud), {
@@ -128,6 +158,7 @@ function boot(){
     get demoActiva(){ return !rutaPropia; },
     // ajustes persistentes, compartidos con hud2.html
     ajustes(){ return Object.assign({}, cfg); },
+    gps(v){ if (v === false) gpsOff(); else gpsOn(); return watch !== null; },
     auto(v){ autoOn = v !== false; return autoOn; },
     // coloca el botón junto al elemento que le pases: window.hud2.junto('#miBotonFaro')
     junto(sel){
@@ -267,7 +298,7 @@ function boot(){
       if (m && m.stop && m.resize){ if (on) m.stop(); else setTimeout(() => m.resize(), 50); }
     } catch(e){}
     fps.style.display = on ? 'block' : 'none';
-    if (on){ hud.resize(); hud.start(); } else hud.stop();
+    if (on){ hud.resize(); hud.start(); gpsOn(); } else { hud.stop(); gpsOff(); }
   }
   btn.onclick = () => activar(!wrap.classList.contains('on'));
   window.addEventListener('orientationchange', () => setTimeout(hud.resize, 250));
