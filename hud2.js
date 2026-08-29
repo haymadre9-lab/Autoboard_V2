@@ -50,7 +50,13 @@ export function createHud2(canvas, opts = {}){
     camBack: 7.5,
     posts: true,            // farolas y quitamiedos
     carColor: '#cdd3d9',
-    maxFps: 0               // 0 = libre
+    maxFps: 0,              // 0 = libre
+    rbRadius: 45,           // radio maximo para considerar rotonda, en metros
+    rbArc: 18,              // metros minimos de curva sostenida
+    rbSmooth: 1,            // pasadas de suavizado del rumbo (mas = aplana rotondas)
+    rain: false,            // lluvia en pantalla
+    spray: true,            // agua levantada por las ruedas (solo con lluvia)
+    traffic: 'off'          // 'off' | 'poca' | 'normal' | 'mucha'
   }, opts);
 
   let W = 0, H = 0, dpr = 1;
@@ -72,7 +78,9 @@ export function createHud2(canvas, opts = {}){
     return { x: ax + (pts[j*3]-ax)*f, z: az + (pts[j*3+1]-az)*f, h: ah + (pts[j*3+2]-ah)*f };
   }
   const normalAt = t => { const h = at(t).h; return { x: Math.cos(h), z: -Math.sin(h) }; };
-  const curv = t => (at(t+6).h - at(t-6).h) / 12;
+  // Ventana corta: con +-6 m una rotonda de 15 m de radio se promediaba
+  // hasta desaparecer. Con +-3.5 m se conserva.
+  const curv = t => (at(t+3.5).h - at(t-3.5).h) / 7;
 
   // Una polilínea desplazada se pliega si el desplazamiento hacia el interior
   // supera el radio. Aquí se limita al 72% para que nunca se cruce sobre sí misma.
@@ -161,7 +169,9 @@ export function createHud2(canvas, opts = {}){
       }
       pts[i*3] = samp[i].x; pts[i*3+1] = samp[i].z; pts[i*3+2] = h;
     }
-    for (let p = 0; p < 3; p++)                    // suavizado del rumbo
+    // Suavizado del rumbo. Quita el temblor de los vertices de OSM, pero cada
+    // pasada tambien aplana las rotondas: por eso es configurable.
+    for (let p = 0; p < cfgOpt.rbSmooth; p++)
       for (let i = 1; i < N-1; i++)
         pts[i*3+2] = pts[i*3+2]*0.5 + (pts[(i-1)*3+2] + pts[(i+1)*3+2])*0.25;
 
@@ -171,25 +181,46 @@ export function createHud2(canvas, opts = {}){
     return { metros: Math.round(routeLen), puntos: N, rotondas: RB.length };
   };
 
-  // Rotonda = curvatura sostenida con radio < 30 m durante más de 25 m.
-  // Da algún falso positivo en horquillas cerradas; para un HUD decorativo da
-  // igual, porque el efecto visual es adecuado en ambos casos. Si quieres cero
-  // falsos positivos, pásalas tú desde maneuver.type de OSRM.
+  // Rotonda = curvatura sostenida con radio pequeño. Dos criterios, basta uno:
+  //   a) arco largo con radio bajo (rotonda grande recorrida a medias)
+  //   b) cambio de rumbo acumulado grande (rotonda pequeña, pocos metros)
+  // Los tramos con huecos cortos se fusionan: la geometría simplificada del
+  // router parte una rotonda en dos trozos con un vértice recto en medio.
   function detectRoundabouts(){
+    const KMIN = 1/cfgOpt.rbRadius, ARC = cfgOpt.rbArc;
     const runs = []; let run = null;
-    for (let x = 8; x < routeLen - 8; x += 4){
+    for (let x = 4; x < routeLen - 4; x += 2){
       const k = curv(x);
-      if (Math.abs(k) > 1/30){
-        if (!run || Math.sign(k) !== run.sign){ run = { s0:x, sign:Math.sign(k), ks:[] }; runs.push(run); }
+      if (Math.abs(k) > KMIN){
+        if (!run || Math.sign(k) !== run.sign || x - run.s1 > 20){
+          run = { s0:x, sign:Math.sign(k), ks:[] }; runs.push(run);
+        }
         run.s1 = x; run.ks.push(Math.abs(k));
-      } else if (run && x - run.s1 > 12) run = null;
+      }
     }
-    return runs.filter(r => r.s1 - r.s0 >= 25).map(r => {
-      const R = 1 / (r.ks.reduce((a,b)=>a+b,0)/r.ks.length);
+    const out = [];
+    for (const r of runs){
+      const arc = r.s1 - r.s0;
+      if (arc < 6) continue;
+      const kAvg = r.ks.reduce((a,b)=>a+b,0)/r.ks.length;
+      const giro = Math.abs(at(r.s1).h - at(r.s0).h);        // rumbo acumulado, rad
+      if (!(arc >= ARC || giro > 1.6)) continue;
+      if (giro < 0.9) continue;                              // una curva suave no lo es
+      const R = 1/kAvg;
       const mid = (r.s0+r.s1)/2, p = at(mid), n = normalAt(mid);
-      return { s0:r.s0, s1:r.s1, R, cx: p.x + n.x*R*r.sign, cz: p.z + n.z*R*r.sign };
-    });
+      out.push({ s0:r.s0, s1:r.s1, R, giro,
+                 cx: p.x + n.x*R*r.sign, cz: p.z + n.z*R*r.sign });
+    }
+    return out;
   }
+
+  /** Lista de rotondas detectadas, para comparar con el mapa. */
+  api.rotondas = () => RB.map(r => ({
+    metro: Math.round(r.s0), largo: Math.round(r.s1-r.s0),
+    radio: Math.round(r.R), grados: Math.round(r.giro*180/Math.PI) }));
+
+  /** Vuelve a detectar tras cambiar rbRadius / rbArc. */
+  api.redetectar = () => { if (pts) RB = detectRoundabouts(); return api.rotondas(); };
 
   /** Añade rotondas explícitas en metros de ruta, si las sacas de los steps. */
   api.setRoundabouts = function(ranges){
@@ -396,11 +427,18 @@ export function createHud2(canvas, opts = {}){
     return mixc([Math.min(base[0]*k+sp,255), Math.min(base[1]*k+sp,255), Math.min(base[2]*k+sp,255)], fogRGB, fog);
   }
 
-  function drawCar(pal, tail, head){
-    const fogRGB = hexToRgb(pal.skyBot), fog = 0;
-    const base = hexToRgb(cfgOpt.carColor), glass = [22,26,31];
-    const off = myOffset(s);
-    const P = (z,x,y) => ptOff(s + z, off + x, y);
+  function drawCar(pal, tail, head, sPos, offIn, colorIn, opp){
+    sPos = sPos === undefined ? s : sPos;
+    const fogRGB = hexToRgb(pal.skyBot);
+    const rel = sPos - s;
+    const fog = clamp((rel - cfgOpt.fogEnd*0.25)/(cfgOpt.fogEnd*0.9), 0, 1);
+    if (fog > 0.96) return;
+    const base = hexToRgb(colorIn || cfgOpt.carColor), glass = [22,26,31];
+    const off = offIn === undefined ? myOffset(s) : offIn;
+    // un coche de frente es el mismo modelo girado 180 grados: se invierten
+    // a la vez el eje longitudinal y el transversal
+    const fl = opp ? -1 : 1;
+    const P = (z,x,y) => ptOff(sPos + z*fl, off + x*fl, y);
     const face = (p, col, boost) => { const c = shade(col, p[0], p[1], p[2], fog, fogRGB, boost); if (c) poly(p, c); };
     const glow = (p3, col, rad, al) => {
       const lp = projCopy(p3); if (!lp.ok) return;
@@ -411,7 +449,8 @@ export function createHud2(canvas, opts = {}){
       ctx.fillStyle = g; ctx.beginPath(); ctx.arc(lp.x, lp.y, r, 0, 6.29); ctx.fill(); ctx.restore();
     };
 
-    poly([P(-2.4,-1.05,0.008), P(2.4,-1.05,0.008), P(2.4,1.05,0.008), P(-2.4,1.05,0.008)], 'rgba(0,0,0,.34)');
+    poly([P(-2.4,-1.05,0.008), P(2.4,-1.05,0.008), P(2.4,1.05,0.008), P(-2.4,1.05,0.008)],
+         `rgba(0,0,0,${0.34*(1-fog)})`);
 
     for (const wz of [-1.42, 1.46]) for (const wx of [-0.93, 0.93]){
       const r = 0.335, a1 = [], a2 = [];
@@ -495,6 +534,106 @@ export function createHud2(canvas, opts = {}){
     ctx.restore();
   }
 
+  /* ---------------- efectos opcionales ---------------- */
+
+  const rainDrops = Array.from({length:260}, () => ({x:Math.random(), y:Math.random(), l:Math.random()}));
+  function drawRain(dt){
+    ctx.strokeStyle = 'rgba(190,215,235,.5)'; ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    for (const r of rainDrops){
+      r.y += (0.55 + r.l*0.8) * dt * (1 + speed/26);
+      if (r.y > 1){ r.y = -0.05; r.x = Math.random(); }
+      const px = r.x*W, py = r.y*H, len = 10 + r.l*26 + speed*0.9;
+      ctx.moveTo(px, py); ctx.lineTo(px - (px - W/2)*0.035, py - len);
+    }
+    ctx.stroke();
+  }
+
+  // Agua de las ruedas. Cada gota guarda su estado: no "sale hacia atras",
+  // se queda quieta y es el coche el que se va.
+  const spray = [], WHEELS = [[-1.42,-0.93],[-1.42,0.93],[1.46,-0.93],[1.46,0.93]];
+  const BODY_REAR = -2.34;
+  let sprayAcc = 0;
+  function updateSpray(dt){
+    if (!(cfgOpt.rain && cfgOpt.spray) || speed < 4){ spray.length = 0; return; }
+    sprayAcc += Math.min(speed*9, 170) * dt;
+    while (sprayAcc > 1 && spray.length < 320){
+      sprayAcc--;
+      const w = WHEELS[(Math.random()*4)|0];
+      const p = { ds: w[0]-0.30, off: w[1] + Math.sign(w[1])*(0.06+Math.random()*0.10), y: 0.02,
+        vs: speed*(0.30+Math.random()*0.35), vo: Math.sign(w[1])*(0.25+Math.random()*0.85)+(Math.random()-0.5)*0.4,
+        vy: 0.55+Math.random()*1.5, r: 0.035+Math.random()*0.05,
+        life: (w[0] < 0 ? 0.42 : 0.30) + Math.random()*0.30 };
+      p.max = p.life; spray.push(p);
+    }
+    for (let i = spray.length-1; i >= 0; i--){
+      const p = spray[i];
+      p.ds -= p.vs*dt; p.off += p.vo*dt; p.vo *= (1-2.2*dt);
+      p.y += p.vy*dt; p.vy -= 5.4*dt; if (p.y < 0.01){ p.y = 0.01; p.vy = 0; }
+      p.vs *= (1-1.1*dt); p.r += 0.55*dt; p.life -= dt;
+      if (p.life <= 0) spray.splice(i,1);
+    }
+  }
+  // Dos pasadas: la camara va detras, asi que las gotas por delante del
+  // paragolpes trasero las tapa la chapa y las de atras van por encima.
+  function drawSpray(pal, phase){
+    if (!spray.length) return;
+    const off = myOffset(s);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (const p of spray){
+      if (p.ds > BODY_REAR && p.ds < 2.34 && Math.abs(p.off) < 1.00 && p.y < 1.05) continue;
+      const behind = p.ds <= BODY_REAR;
+      if (phase === 'far' ? behind : !behind) continue;
+      const a = p.life/p.max, al = a*a*0.19*(pal.glow > 0 ? 1.5 : 1), r = p.r;
+      poly([ptOff(s+p.ds-r, off+p.off-r, p.y), ptOff(s+p.ds-r, off+p.off+r, p.y),
+            ptOff(s+p.ds+r, off+p.off+r, p.y+r*1.6), ptOff(s+p.ds+r, off+p.off-r, p.y+r*1.6)],
+           `rgba(228,238,246,${al})`);
+    }
+    ctx.restore();
+  }
+
+  // Trafico esporadico en los dos sentidos. El de mi carril nunca se deja
+  // atropellar: a 18 m copia mi velocidad.
+  const CAR_COLORS = ['#8d99a4','#b06d4a','#4a545e','#c9ced4','#5a6b52','#7a4550','#2f3540'];
+  const DENSITY = { poca:[16,34], normal:[7,16], mucha:[2.5,6] };
+  let cars = [], spawnTimer = 5;
+  function updateTraffic(dt){
+    const dens = DENSITY[cfgOpt.traffic];
+    if (!dens){ cars.length = 0; return; }
+    if ((spawnTimer -= dt) <= 0){
+      const col = CAR_COLORS[(Math.random()*CAR_COLORS.length)|0];
+      const mwHere = xsec(Math.min(s+300, routeLen-1)).f;
+      if (Math.random() < 0.55)
+        cars.push({ pos: s + 420 + Math.random()*420, v: 14 + Math.random()*13, dir:-1, lane:'opp', color:col });
+      else {
+        const adj = mwHere > 0.5 && Math.random() < 0.6;
+        cars.push({ pos: s + 220 + Math.random()*300,
+                    v: Math.max(9, speed*(adj?0.70:0.84) + (Math.random()-0.5)*4),
+                    dir:1, lane: adj?'adj':'same', color:col });
+      }
+      spawnTimer = dens[0] + Math.random()*(dens[1]-dens[0]);
+    }
+    for (let i = cars.length-1; i >= 0; i--){
+      const c = cars[i];
+      c.pos += c.dir*c.v*dt;
+      const rel = c.pos - s;
+      if (c.lane === 'same'){
+        if (rel < 18){ c.pos = s + 18; c.v = speed; }
+        else if (rel > 26 && c.v > speed) c.v = Math.max(9, speed*0.84);
+      }
+      if (rel < -90 || rel > 1100 || c.pos > routeLen-2 || c.pos < 2) cars.splice(i,1);
+    }
+  }
+  function drawTraffic(pal){
+    if (!cars.length) return;
+    const on = pal.glow;
+    for (const c of [...cars].sort((a,b) => (b.pos-s) - (a.pos-s))){
+      const cc = xsec(c.pos);
+      const off = c.lane === 'opp' ? -cc.mine : c.lane === 'adj' ? cc.mine - LANE*cc.f : cc.mine;
+      drawCar(pal, c.dir < 0 ? 0 : 0.30*on, c.dir < 0 ? on : 0, c.pos, off, c.color, c.dir < 0);
+    }
+  }
+
   /* ---------------- bucle ---------------- */
 
   function resize(){
@@ -523,7 +662,13 @@ export function createHud2(canvas, opts = {}){
     drawSky(pal);
     drawRoad(pal);
     drawBeams(pal, pal.glow);
+    updateTraffic(dt);
+    drawTraffic(pal);
+    updateSpray(dt);
+    drawSpray(pal, 'far');
     drawCar(pal, Math.max(0.30*pal.glow, brake), pal.glow);
+    drawSpray(pal, 'near');
+    if (cfgOpt.rain) drawRain(dt);
   }
 
   function loop(now){
@@ -537,7 +682,11 @@ export function createHud2(canvas, opts = {}){
   api.start = () => { if (running) return; running = true; resize(); last = performance.now(); raf = requestAnimationFrame(loop); };
   api.stop  = () => { running = false; cancelAnimationFrame(raf); };
   api.resize = resize;
-  api.set = o => Object.assign(cfgOpt, o);
+  api.set = o => {
+    const redo = ('rbRadius' in o) || ('rbArc' in o);
+    Object.assign(cfgOpt, o);
+    if (redo && pts) RB = detectRoundabouts();
+  };
   api.state = () => ({ s, speed, routeLen, rotondas: RB.length, running });
   api.destroy = () => { api.stop(); pts = null; RB = []; MW = []; };
 

@@ -116,6 +116,9 @@ function createHud2(canvas, opts = {}){
     posts: true,            // farolas y quitamiedos
     carColor: '#cdd3d9',
     maxFps: 0,              // 0 = libre
+    rbRadius: 45,           // radio maximo para considerar rotonda, en metros
+    rbArc: 18,              // metros minimos de curva sostenida
+    rbSmooth: 1,            // pasadas de suavizado del rumbo (mas = aplana rotondas)
     rain: false,            // lluvia en pantalla
     spray: true,            // agua levantada por las ruedas (solo con lluvia)
     traffic: 'off'          // 'off' | 'poca' | 'normal' | 'mucha'
@@ -140,7 +143,9 @@ function createHud2(canvas, opts = {}){
     return { x: ax + (pts[j*3]-ax)*f, z: az + (pts[j*3+1]-az)*f, h: ah + (pts[j*3+2]-ah)*f };
   }
   const normalAt = t => { const h = at(t).h; return { x: Math.cos(h), z: -Math.sin(h) }; };
-  const curv = t => (at(t+6).h - at(t-6).h) / 12;
+  // Ventana corta: con +-6 m una rotonda de 15 m de radio se promediaba
+  // hasta desaparecer. Con +-3.5 m se conserva.
+  const curv = t => (at(t+3.5).h - at(t-3.5).h) / 7;
 
   // Una polilínea desplazada se pliega si el desplazamiento hacia el interior
   // supera el radio. Aquí se limita al 72% para que nunca se cruce sobre sí misma.
@@ -229,7 +234,9 @@ function createHud2(canvas, opts = {}){
       }
       pts[i*3] = samp[i].x; pts[i*3+1] = samp[i].z; pts[i*3+2] = h;
     }
-    for (let p = 0; p < 3; p++)                    // suavizado del rumbo
+    // Suavizado del rumbo. Quita el temblor de los vertices de OSM, pero cada
+    // pasada tambien aplana las rotondas: por eso es configurable.
+    for (let p = 0; p < cfgOpt.rbSmooth; p++)
       for (let i = 1; i < N-1; i++)
         pts[i*3+2] = pts[i*3+2]*0.5 + (pts[(i-1)*3+2] + pts[(i+1)*3+2])*0.25;
 
@@ -239,25 +246,46 @@ function createHud2(canvas, opts = {}){
     return { metros: Math.round(routeLen), puntos: N, rotondas: RB.length };
   };
 
-  // Rotonda = curvatura sostenida con radio < 30 m durante más de 25 m.
-  // Da algún falso positivo en horquillas cerradas; para un HUD decorativo da
-  // igual, porque el efecto visual es adecuado en ambos casos. Si quieres cero
-  // falsos positivos, pásalas tú desde maneuver.type de OSRM.
+  // Rotonda = curvatura sostenida con radio pequeño. Dos criterios, basta uno:
+  //   a) arco largo con radio bajo (rotonda grande recorrida a medias)
+  //   b) cambio de rumbo acumulado grande (rotonda pequeña, pocos metros)
+  // Los tramos con huecos cortos se fusionan: la geometría simplificada del
+  // router parte una rotonda en dos trozos con un vértice recto en medio.
   function detectRoundabouts(){
+    const KMIN = 1/cfgOpt.rbRadius, ARC = cfgOpt.rbArc;
     const runs = []; let run = null;
-    for (let x = 8; x < routeLen - 8; x += 4){
+    for (let x = 4; x < routeLen - 4; x += 2){
       const k = curv(x);
-      if (Math.abs(k) > 1/30){
-        if (!run || Math.sign(k) !== run.sign){ run = { s0:x, sign:Math.sign(k), ks:[] }; runs.push(run); }
+      if (Math.abs(k) > KMIN){
+        if (!run || Math.sign(k) !== run.sign || x - run.s1 > 20){
+          run = { s0:x, sign:Math.sign(k), ks:[] }; runs.push(run);
+        }
         run.s1 = x; run.ks.push(Math.abs(k));
-      } else if (run && x - run.s1 > 12) run = null;
+      }
     }
-    return runs.filter(r => r.s1 - r.s0 >= 25).map(r => {
-      const R = 1 / (r.ks.reduce((a,b)=>a+b,0)/r.ks.length);
+    const out = [];
+    for (const r of runs){
+      const arc = r.s1 - r.s0;
+      if (arc < 6) continue;
+      const kAvg = r.ks.reduce((a,b)=>a+b,0)/r.ks.length;
+      const giro = Math.abs(at(r.s1).h - at(r.s0).h);        // rumbo acumulado, rad
+      if (!(arc >= ARC || giro > 1.6)) continue;
+      if (giro < 0.9) continue;                              // una curva suave no lo es
+      const R = 1/kAvg;
       const mid = (r.s0+r.s1)/2, p = at(mid), n = normalAt(mid);
-      return { s0:r.s0, s1:r.s1, R, cx: p.x + n.x*R*r.sign, cz: p.z + n.z*R*r.sign };
-    });
+      out.push({ s0:r.s0, s1:r.s1, R, giro,
+                 cx: p.x + n.x*R*r.sign, cz: p.z + n.z*R*r.sign });
+    }
+    return out;
   }
+
+  /** Lista de rotondas detectadas, para comparar con el mapa. */
+  api.rotondas = () => RB.map(r => ({
+    metro: Math.round(r.s0), largo: Math.round(r.s1-r.s0),
+    radio: Math.round(r.R), grados: Math.round(r.giro*180/Math.PI) }));
+
+  /** Vuelve a detectar tras cambiar rbRadius / rbArc. */
+  api.redetectar = () => { if (pts) RB = detectRoundabouts(); return api.rotondas(); };
 
   /** Añade rotondas explícitas en metros de ruta, si las sacas de los steps. */
   api.setRoundabouts = function(ranges){
@@ -719,7 +747,11 @@ function createHud2(canvas, opts = {}){
   api.start = () => { if (running) return; running = true; resize(); last = performance.now(); raf = requestAnimationFrame(loop); };
   api.stop  = () => { running = false; cancelAnimationFrame(raf); };
   api.resize = resize;
-  api.set = o => Object.assign(cfgOpt, o);
+  api.set = o => {
+    const redo = ('rbRadius' in o) || ('rbArc' in o);
+    Object.assign(cfgOpt, o);
+    if (redo && pts) RB = detectRoundabouts();
+  };
   api.state = () => ({ s, speed, routeLen, rotondas: RB.length, running });
   api.destroy = () => { api.stop(); pts = null; RB = []; MW = []; };
 
@@ -735,7 +767,8 @@ function createHud2(canvas, opts = {}){
 const HUD2_KEY = 'hud2.cfg';
 const HUD2_DEF = { theme:'auto', maxFps:0, beamReach:34, fogEnd:260,
                    lookAhead:55, camHeight:2.6, camBack:7.5, posts:true,
-                   rain:false, spray:true, traffic:'off' };
+                   rain:false, spray:true, traffic:'off',
+                   rbRadius:45, rbArc:18, rbSmooth:1 };
 function hud2LoadCfg(){
   try { return Object.assign({}, HUD2_DEF, JSON.parse(localStorage.getItem(HUD2_KEY) || '{}')); }
   catch(e){ return Object.assign({}, HUD2_DEF); }

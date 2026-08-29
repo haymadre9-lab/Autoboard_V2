@@ -50,7 +50,8 @@ function boot(){
   const HUD2_KEY = 'hud2.cfg';
   const HUD2_DEF = { theme:'auto', maxFps:0, beamReach:34, fogEnd:260,
                      lookAhead:55, camHeight:2.6, camBack:7.5, posts:true,
-                     rain:false, spray:true, traffic:'off' };
+                     rain:false, spray:true, traffic:'off',
+                     rbRadius:45, rbArc:18, rbSmooth:1 };
   let cfg;
   try { cfg = Object.assign({}, HUD2_DEF, JSON.parse(localStorage.getItem(HUD2_KEY) || '{}')); }
   catch(e){ cfg = Object.assign({}, HUD2_DEF); }
