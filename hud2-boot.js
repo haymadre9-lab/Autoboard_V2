@@ -49,7 +49,8 @@ function boot(){
   // MISMA clave que hud2.html: los ajustes que afinaste en el coche se heredan aquí.
   const HUD2_KEY = 'hud2.cfg';
   const HUD2_DEF = { theme:'auto', maxFps:0, beamReach:34, fogEnd:260,
-                     lookAhead:55, camHeight:2.6, camBack:7.5, posts:true };
+                     lookAhead:55, camHeight:2.6, camBack:7.5, posts:true,
+                     rain:false, spray:true, traffic:'off' };
   let cfg;
   try { cfg = Object.assign({}, HUD2_DEF, JSON.parse(localStorage.getItem(HUD2_KEY) || '{}')); }
   catch(e){ cfg = Object.assign({}, HUD2_DEF); }
@@ -92,9 +93,117 @@ function boot(){
     get demoActiva(){ return !rutaPropia; },
     // ajustes persistentes, compartidos con hud2.html
     ajustes(){ return Object.assign({}, cfg); },
+    auto(v){ autoOn = v !== false; return autoOn; },
+    ruta(){ return { propia: rutaPropia, metros: Math.round(hud.state().routeLen),
+                     rotondas: hud.state().rotondas }; },
     ajustar(o){ Object.assign(cfg, o); hud.set(cfg);
       try { localStorage.setItem(HUD2_KEY, JSON.stringify(cfg)); } catch(e){} }
   });
+
+  /* ------------------------------------------------------------------
+     Detección automática de la ruta. En vez de buscar dónde la calculas,
+     se escucha por los dos sitios por los que pasa siempre:
+       1) la respuesta del router (OSRM, Valhalla, MapTiler Directions)
+       2) el setData de la fuente GeoJSON con la que MapLibre pinta la línea
+     Si ninguno dispara, queda la llamada explícita window.hud2.setRoute().
+     ------------------------------------------------------------------ */
+  let autoOn = true;
+  function aceptar(ll, origen){
+    if (!autoOn || !ll || ll.length < 8) return false;
+    try {
+      const r = hud.setRoute(ll);
+      rutaPropia = true;
+      try { localStorage.setItem('hud2.ruta', JSON.stringify(ll)); } catch(e){}
+      console.log('[hud2] ruta detectada por ' + origen + ':', r);
+      return true;
+    } catch(e){ console.warn('[hud2] ruta descartada (' + origen + '):', e.message); return false; }
+  }
+
+  function decodePoly(str, prec){
+    const f = Math.pow(10, prec); let i = 0, lat = 0, lng = 0; const out = [];
+    while (i < str.length){
+      let b, sh = 0, res = 0;
+      do { b = str.charCodeAt(i++) - 63; res |= (b & 31) << sh; sh += 5; } while (b >= 32);
+      lat += (res & 1) ? ~(res >> 1) : (res >> 1);
+      sh = 0; res = 0;
+      do { b = str.charCodeAt(i++) - 63; res |= (b & 31) << sh; sh += 5; } while (b >= 32);
+      lng += (res & 1) ? ~(res >> 1) : (res >> 1);
+      out.push([lat/f, lng/f]);
+    }
+    return out;
+  }
+
+  // saca [[lat,lng],...] de casi cualquier forma en que venga una ruta
+  function extraer(obj){
+    if (!obj) return null;
+    const g = obj.routes && obj.routes[0] && obj.routes[0].geometry;
+    if (typeof g === 'string'){
+      let ll = decodePoly(g, 5);
+      if (!ll.length || Math.abs(ll[0][0]) > 90) ll = decodePoly(g, 6);
+      return ll;
+    }
+    const coords = (g && g.coordinates)
+      || (obj.geometry && obj.geometry.coordinates)
+      || obj.coordinates
+      || (obj.features && obj.features[0] && obj.features[0].geometry
+          && obj.features[0].geometry.coordinates)
+      || (obj.trip && obj.trip.legs && obj.trip.legs[0] && obj.trip.legs[0].shape);
+    if (typeof coords === 'string'){                       // Valhalla: precisión 6
+      const ll = decodePoly(coords, 6);
+      return (ll.length && Math.abs(ll[0][0]) <= 90) ? ll : null;
+    }
+    if (!Array.isArray(coords) || coords.length < 8) return null;
+    let c = coords;
+    if (Array.isArray(c[0][0])) c = c.flat(1);             // MultiLineString
+    if (typeof c[0][0] !== 'number') return null;
+    // GeoJSON viene [lng,lat]; se comprueba que los rangos cuadren
+    const ok = c.every(p => Math.abs(p[1]) <= 90 && Math.abs(p[0]) <= 180);
+    return ok ? c.map(p => [p[1], p[0]]) : null;
+  }
+
+  // 1) respuestas del router
+  if (window.fetch){
+    const f0 = window.fetch;
+    window.fetch = function(...a){
+      return f0.apply(this, a).then(res => {
+        try {
+          const u = String((a[0] && a[0].url) || a[0] || '');
+          if (/route|directions|navigation|valhalla|osrm/i.test(u) && res.ok){
+            res.clone().json().then(j => { const ll = extraer(j); if (ll) aceptar(ll, 'red'); }).catch(()=>{});
+          }
+        } catch(e){}
+        return res;
+      });
+    };
+  }
+
+  // 2) la fuente GeoJSON con la que MapLibre pinta la línea
+  function engancharMapLibre(){
+    const ml = window.maplibregl || window.mapboxgl;
+    if (!ml || !ml.Map || ml.__hud2) return false;
+    ml.__hud2 = true;
+    const proto = ml.Map.prototype;
+    const addS = proto.addSource;
+    proto.addSource = function(id, src){
+      try { if (src && src.type === 'geojson'){ const ll = extraer(src.data); if (ll) aceptar(ll, 'addSource:'+id); } } catch(e){}
+      return addS.apply(this, arguments);
+    };
+    const getS = proto.getSource;
+    proto.getSource = function(id){
+      const src = getS.apply(this, arguments);
+      if (src && src.setData && !src.__hud2){
+        src.__hud2 = true;
+        const sd = src.setData.bind(src);
+        src.setData = d => { try { const ll = extraer(d); if (ll) aceptar(ll, 'setData:'+id); } catch(e){} return sd(d); };
+      }
+      return src;
+    };
+    return true;
+  }
+  if (!engancharMapLibre()){
+    let intentos = 0;
+    const t = setInterval(() => { if (engancharMapLibre() || ++intentos > 40) clearInterval(t); }, 500);
+  }
 
   // contador de fps: la cifra que decide si esto aguanta en la pantalla del coche
   let n = 0, t0 = performance.now();
