@@ -27,6 +27,31 @@ const CSS = `
 #hud2-err{position:fixed;left:14px;right:14px;top:14px;z-index:9200;display:none;
   background:rgba(255,90,77,.16);border:1px solid #ff5a4d;color:#ffd9d5;
   padding:10px 12px;border-radius:5px;font:12px/1.5 ui-monospace,monospace}
+#hud2-gear{position:fixed;right:14px;top:14px;z-index:9150;display:none;
+  background:rgba(10,13,16,.8);border:1px solid #2c3942;color:#5fd0e0;border-radius:6px;
+  font:600 11px/1 ui-sans-serif,sans-serif;letter-spacing:.12em;text-transform:uppercase;
+  padding:10px 13px;cursor:pointer}
+#hud2-wrap.on ~ #hud2-gear{display:block}
+#hud2-set{position:fixed;inset:0;z-index:9300;display:none;flex-direction:column;
+  background:rgba(6,9,12,.96);padding:18px 16px;gap:8px;overflow-y:auto;
+  font:12px/1.5 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;color:#e8eef2}
+#hud2-set.on{display:flex}
+#hud2-set h2{margin:0 0 4px;font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#7b8b96}
+#hud2-set h3{margin:14px 0 6px;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#ffab3d}
+#hud2-set label{display:block;margin:0 0 13px}
+#hud2-set .r{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
+#hud2-set .r em{font-style:normal;color:#5fd0e0;font-size:11px}
+#hud2-set input[type=range]{width:100%;accent-color:#5fd0e0;height:22px}
+#hud2-set .ck{display:flex;align-items:center;gap:10px;margin-bottom:11px}
+#hud2-set input[type=checkbox]{accent-color:#5fd0e0;width:18px;height:18px}
+#hud2-set .sg{display:flex;border:1px solid #232c33;border-radius:5px;overflow:hidden;margin-bottom:8px}
+#hud2-set .sg button{flex:1;background:transparent;border:0;color:#7b8b96;font:11px/1 inherit;
+  padding:11px 0;cursor:pointer}
+#hud2-set .sg button.on{background:#5fd0e0;color:#06131a;font-weight:600}
+#hud2-set .done{background:#5fd0e0;color:#06131a;border:0;border-radius:6px;padding:14px;
+  font:600 12px/1 inherit;cursor:pointer;margin-top:8px}
+#hud2-set .drop{border:1px dashed #232c33;border-radius:5px;padding:14px;text-align:center;
+  color:#5fd0e0;font-weight:600;cursor:pointer}
 #hud2-fps{position:fixed;left:14px;top:14px;z-index:9100;display:none;
   color:#7b8b96;font:11px/1 ui-sans-serif,sans-serif;letter-spacing:.16em;text-transform:uppercase}
 #hud2-wrap.on ~ #hud2-fps{display:block}
@@ -74,7 +99,9 @@ function boot(){
   }
   const err = document.createElement('div'); err.id = 'hud2-err';
   const fps = document.createElement('div'); fps.id = 'hud2-fps';
-  document.body.append(wrap, err, fps);
+  const gear = document.createElement('button'); gear.id = 'hud2-gear'; gear.textContent = 'Ajustes';
+  const sheet = document.createElement('div'); sheet.id = 'hud2-set';
+  document.body.append(wrap, err, fps, gear, sheet);
   if (btn.id === 'hud2-btn') document.body.append(btn);
 
   // MISMA clave que hud2.html: los ajustes que afinaste en el coche se heredan aquí.
@@ -279,6 +306,130 @@ function boot(){
     const t = setInterval(() => { if (engancharMapLibre() || ++intentos > 40) clearInterval(t); }, 500);
   }
 
+  /* ---- panel de ajustes, mismos valores persistentes que hud2.html ---- */
+  const SLD = [
+    ['beamReach','Alcance de faros',16,70,1,'m',1],
+    ['lookAhead','Look-ahead cámara',10,120,1,'m',1],
+    ['camHeight','Altura de cámara',10,90,1,'m',10],
+    ['camBack','Distancia detrás',20,200,1,'m',10],
+    ['fogEnd','Niebla',60,500,10,'m',1]
+  ];
+  const guardar = () => { hud.set(cfg); try { localStorage.setItem(HUD2_KEY, JSON.stringify(cfg)); } catch(e){} };
+  const seg = (id, opts, val) => '<div class="sg" id="'+id+'">' + opts.map(o =>
+    '<button data-v="'+o[0]+'" class="'+(String(val)===String(o[0])?'on':'')+'">'+o[1]+'</button>').join('') + '</div>';
+
+  function pintarAjustes(){
+    let html = '<h2>Ajustes HUD 2</h2><h3>Tema</h3>'
+      + seg('h2_tema', [['auto','Auto'],['day','Día'],['dusk','Tarde'],['night','Noche']], cfg.theme)
+      + '<h3>Límite de frames</h3>'
+      + seg('h2_fps', [[0,'Libre'],[30,'30'],[24,'24'],[20,'20']], cfg.maxFps);
+    for (const [k,lab,mn,mx,st,u,dv] of SLD)
+      html += '<label><span class="r"><span>'+lab+'</span><em id="h2o_'+k+'">'+cfg[k]+u+'</em></span>'
+            + '<input type="range" id="h2r_'+k+'" min="'+mn+'" max="'+mx+'" step="'+st+'" value="'+(cfg[k]*dv)+'"></label>';
+    html += '<label class="ck"><input type="checkbox" id="h2_posts"'+(cfg.posts?' checked':'')+'> Farolas y quitamiedos</label>'
+          + '<label class="ck"><input type="checkbox" id="h2_hud"'+(cfg.hud?' checked':'')+'> Maniobra, velocidad y límite</label>'
+          + '<h3>Efectos</h3>'
+          + '<label class="ck"><input type="checkbox" id="h2_rain"'+(cfg.rain?' checked':'')+'> Lluvia</label>'
+          + '<label class="ck"><input type="checkbox" id="h2_spray"'+(cfg.spray?' checked':'')+'> Agua de las ruedas</label>'
+          + '<h3>Tráfico</h3>'
+          + seg('h2_traf', [['off','Ninguno'],['poca','Poco'],['normal','Normal'],['mucha','Denso']], cfg.traffic)
+          + '<h3>Tu coche</h3>'
+          + '<input type="file" id="h2_file" accept="image/*" style="display:none">'
+          + '<div class="drop" id="h2_drop">' + (hayFoto() ? 'Cambiar foto' : 'Cargar foto de tu coche') + '</div>'
+          + '<div id="h2_stat" style="color:#7b8b96;margin:8px 0 10px">'
+          + (hayFoto() ? 'Foto en uso.' : 'Sin foto · se usa el coche dibujado') + '</div>';
+    if (fotoOrig)
+      html += '<label><span class="r"><span>Tolerancia del recorte</span><em id="h2o_tol">28</em></span>'
+            + '<input type="range" id="h2r_tol" min="6" max="90" value="28"></label>'
+            + '<button class="done" id="h2_cut" style="margin:0 0 8px">Quitar fondo</button>';
+    if (hayFoto()) html += '<button class="done" id="h2_nofoto" style="background:transparent;border:1px solid #232c33;color:#7b8b96;margin:0 0 8px">Sin foto</button>';
+    html += '<button class="done" id="h2_done">Hecho</button>';
+    sheet.innerHTML = html;
+
+    // Si algún control no existiera, se devuelve un objeto vacío: un panel
+    // incompleto no debe tirar abajo el HUD entero.
+    const g = id => document.getElementById(id) || {};
+    g('h2_tema').onclick = e => { if(!e.target.dataset.v) return; cfg.theme = e.target.dataset.v; guardar(); pintarAjustes(); };
+    g('h2_fps').onclick  = e => { if(!e.target.dataset.v) return; cfg.maxFps = +e.target.dataset.v; guardar(); pintarAjustes(); };
+    g('h2_traf').onclick = e => { if(!e.target.dataset.v) return; cfg.traffic = e.target.dataset.v; guardar(); pintarAjustes(); };
+    for (const [k,,,,,u,dv] of SLD)
+      g('h2r_'+k).oninput = e => { cfg[k] = +e.target.value/dv; g('h2o_'+k).textContent = cfg[k]+u; guardar(); };
+    for (const k of ['posts','hud','rain','spray'])
+      g('h2_'+k).onchange = e => { cfg[k] = e.target.checked; guardar(); };
+    g('h2_drop').onclick = () => g('h2_file').click();
+    g('h2_file').onchange = e => { if (e.target.files[0]) cargarFoto(e.target.files[0]); };
+    if (g('h2_cut')){ g('h2r_tol').oninput = e => g('h2o_tol').textContent = e.target.value;
+      g('h2_cut').onclick = () => recortarFondo(+g('h2r_tol').value); }
+    if (g('h2_nofoto')) g('h2_nofoto').onclick = () => { fotoOrig = null;
+      try { localStorage.removeItem('hud2.foto'); } catch(e){} hud.setCarPhoto(null); pintarAjustes(); };
+    g('h2_done').onclick = () => sheet.classList.remove('on');
+  }
+  gear.onclick = () => { pintarAjustes(); sheet.classList.add('on'); };
+
+  /* ---- foto del coche ---- */
+  let fotoOrig = null;
+  const hayFoto = () => { try { return !!localStorage.getItem('hud2.foto'); } catch(e){ return false; } };
+  async function cargarFoto(f){
+    const st = document.getElementById('h2_stat');
+    const adopta = (bmp, w, h) => {
+      const sc = Math.min(1, 560/w), cn = document.createElement('canvas');
+      cn.width = Math.round(w*sc); cn.height = Math.round(h*sc);
+      cn.getContext('2d').drawImage(bmp, 0, 0, cn.width, cn.height);
+      fotoOrig = cn; aplicarFoto(cn); pintarAjustes();
+    };
+    try { const b = await createImageBitmap(f); adopta(b, b.width, b.height); }
+    catch(e){
+      const u = URL.createObjectURL(f), im = new Image();
+      im.onload = () => { adopta(im, im.naturalWidth, im.naturalHeight); URL.revokeObjectURL(u); };
+      im.onerror = () => { URL.revokeObjectURL(u); if (st) st.innerHTML =
+        '<b style="color:#ff5a4d">Formato no soportado.</b> Usa PNG o JPG (el HEIC del iPhone no vale).'; };
+      im.src = u;
+    }
+  }
+  function aplicarFoto(cn){
+    let url; try { url = cn.toDataURL('image/png'); } catch(e){ return; }
+    hud.setCarPhoto(url);
+    try { localStorage.setItem('hud2.foto', url); }
+    catch(e){ const st = document.getElementById('h2_stat');
+      if (st) st.innerHTML = '<b style="color:#ff5a4d">Aplicada pero no guardada:</b> ocupa demasiado.'; }
+  }
+  function recortarFondo(tol){
+    if (!fotoOrig) return;
+    const w = fotoOrig.width, h = fotoOrig.height;
+    const cn = document.createElement('canvas'); cn.width = w; cn.height = h;
+    const c2 = cn.getContext('2d', {willReadFrequently:true});
+    c2.drawImage(fotoOrig, 0, 0);
+    const img = c2.getImageData(0,0,w,h), D = img.data;
+    let sr=0,sg=0,sb=0,cn2=0;
+    const smp=(x,y)=>{const i=(y*w+x)*4; sr+=D[i]; sg+=D[i+1]; sb+=D[i+2]; cn2++;};
+    for (let x=0;x<w;x+=3){ smp(x,0); smp(x,h-1); }
+    for (let y=0;y<h;y+=3){ smp(0,y); smp(w-1,y); }
+    sr/=cn2; sg/=cn2; sb/=cn2;
+    const seen = new Uint8Array(w*h), q = new Int32Array(w*h);
+    let hd=0, tl=0; const push2 = p => { if (!seen[p]){ seen[p]=1; q[tl++]=p; } };
+    for (let x=0;x<w;x++){ push2(x); push2((h-1)*w+x); }
+    for (let y=0;y<h;y++){ push2(y*w); push2(y*w+w-1); }
+    while (hd < tl){
+      const p = q[hd++], i = p*4, r=D[i], g=D[i+1], b=D[i+2];
+      if (Math.abs(r-sr)+Math.abs(g-sg)+Math.abs(b-sb) > tol*7.8) continue;
+      D[i+3] = 0;
+      const x = p % w, y = (p/w)|0;
+      const nb = (nx,ny) => { if (nx<0||ny<0||nx>=w||ny>=h) return;
+        const np = ny*w+nx; if (seen[np]) return; const j = np*4;
+        if (Math.abs(D[j]-r)+Math.abs(D[j+1]-g)+Math.abs(D[j+2]-b) <= tol*3) push2(np); };
+      nb(x+1,y); nb(x-1,y); nb(x,y+1); nb(x,y-1);
+    }
+    const A = new Uint8ClampedArray(w*h);
+    for (let p=0;p<w*h;p++) A[p] = D[p*4+3];
+    for (let y=1;y<h-1;y++) for (let x=1;x<w-1;x++){
+      const p=y*w+x; if (!A[p]) continue;
+      const s4 = A[p-1]+A[p+1]+A[p-w]+A[p+w];
+      if (s4 < 1020) D[p*4+3] = Math.round((A[p]*2 + s4/2)/4);
+    }
+    c2.putImageData(img,0,0); aplicarFoto(cn);
+  }
+  try { const f = localStorage.getItem('hud2.foto'); if (f) hud.setCarPhoto(f); } catch(e){}
+
   // contador de fps: la cifra que decide si esto aguanta en la pantalla del coche
   let n = 0, t0 = performance.now();
   (function tick(){
@@ -298,6 +449,8 @@ function boot(){
       if (m && m.stop && m.resize){ if (on) m.stop(); else setTimeout(() => m.resize(), 50); }
     } catch(e){}
     fps.style.display = on ? 'block' : 'none';
+    gear.style.display = on ? 'block' : 'none';
+    if (!on) sheet.classList.remove('on');
     if (on){ hud.resize(); hud.start(); gpsOn(); } else { hud.stop(); gpsOff(); }
   }
   btn.onclick = () => activar(!wrap.classList.contains('on'));
