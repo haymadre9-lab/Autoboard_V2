@@ -70,7 +70,7 @@ export function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
-  api.version = '2026.08.29-6';   // sube al cambiar: sirve para saber qué está corriendo
+  api.version = '2026.08.29-7';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
   let manList = [], limList = [], radList = [];
@@ -136,9 +136,20 @@ export function createHud2(canvas, opts = {}){
 
   /* ---------------- geometría de la ruta ---------------- */
 
+  // Fuera de los extremos se EXTRAPOLA en línea recta, no se recorta. Recortando,
+  // en el metro 0 la cámara (que va detrás) caía dentro del coche y este
+  // desaparecía tras el plano de recorte: sólo se veían los faros.
   function at(t){
     if (!pts) return { x:0, z:0, h:0 };
-    t = clamp(t, 0, routeLen - 1);
+    if (t < 0){
+      const h = pts[2];
+      return { x: pts[0] + Math.sin(h)*t, z: pts[1] + Math.cos(h)*t, h };
+    }
+    const fin = routeLen - 1;
+    if (t > fin){
+      const k = (N-1)*3, h = pts[k+2], d = t - fin;
+      return { x: pts[k] + Math.sin(h)*d, z: pts[k+1] + Math.cos(h)*d, h };
+    }
     const i = (t/STEP)|0, f = (t - i*STEP)/STEP, j = Math.min(i+1, N-1);
     const ax=pts[i*3], az=pts[i*3+1], ah=pts[i*3+2];
     return { x: ax + (pts[j*3]-ax)*f, z: az + (pts[j*3+1]-az)*f, h: ah + (pts[j*3+2]-ah)*f };
@@ -244,7 +255,7 @@ export function createHud2(canvas, opts = {}){
     MW = o.motorway || [];
     RB = detectRoundabouts();
     manList = []; limList = []; radList = [];   // van referidas a metros de la ruta vieja
-    s = 0;
+    s = Math.min(6, routeLen*0.02);
     return { metros: Math.round(routeLen), puntos: N, rotondas: RB.length };
   };
 
