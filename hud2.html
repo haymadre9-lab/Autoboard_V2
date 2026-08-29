@@ -115,7 +115,10 @@ function createHud2(canvas, opts = {}){
     camBack: 7.5,
     posts: true,            // farolas y quitamiedos
     carColor: '#cdd3d9',
-    maxFps: 0               // 0 = libre
+    maxFps: 0,              // 0 = libre
+    rain: false,            // lluvia en pantalla
+    spray: true,            // agua levantada por las ruedas (solo con lluvia)
+    traffic: 'off'          // 'off' | 'poca' | 'normal' | 'mucha'
   }, opts);
 
   let W = 0, H = 0, dpr = 1;
@@ -461,11 +464,18 @@ function createHud2(canvas, opts = {}){
     return mixc([Math.min(base[0]*k+sp,255), Math.min(base[1]*k+sp,255), Math.min(base[2]*k+sp,255)], fogRGB, fog);
   }
 
-  function drawCar(pal, tail, head){
-    const fogRGB = hexToRgb(pal.skyBot), fog = 0;
-    const base = hexToRgb(cfgOpt.carColor), glass = [22,26,31];
-    const off = myOffset(s);
-    const P = (z,x,y) => ptOff(s + z, off + x, y);
+  function drawCar(pal, tail, head, sPos, offIn, colorIn, opp){
+    sPos = sPos === undefined ? s : sPos;
+    const fogRGB = hexToRgb(pal.skyBot);
+    const rel = sPos - s;
+    const fog = clamp((rel - cfgOpt.fogEnd*0.25)/(cfgOpt.fogEnd*0.9), 0, 1);
+    if (fog > 0.96) return;
+    const base = hexToRgb(colorIn || cfgOpt.carColor), glass = [22,26,31];
+    const off = offIn === undefined ? myOffset(s) : offIn;
+    // un coche de frente es el mismo modelo girado 180 grados: se invierten
+    // a la vez el eje longitudinal y el transversal
+    const fl = opp ? -1 : 1;
+    const P = (z,x,y) => ptOff(sPos + z*fl, off + x*fl, y);
     const face = (p, col, boost) => { const c = shade(col, p[0], p[1], p[2], fog, fogRGB, boost); if (c) poly(p, c); };
     const glow = (p3, col, rad, al) => {
       const lp = projCopy(p3); if (!lp.ok) return;
@@ -476,7 +486,8 @@ function createHud2(canvas, opts = {}){
       ctx.fillStyle = g; ctx.beginPath(); ctx.arc(lp.x, lp.y, r, 0, 6.29); ctx.fill(); ctx.restore();
     };
 
-    poly([P(-2.4,-1.05,0.008), P(2.4,-1.05,0.008), P(2.4,1.05,0.008), P(-2.4,1.05,0.008)], 'rgba(0,0,0,.34)');
+    poly([P(-2.4,-1.05,0.008), P(2.4,-1.05,0.008), P(2.4,1.05,0.008), P(-2.4,1.05,0.008)],
+         `rgba(0,0,0,${0.34*(1-fog)})`);
 
     for (const wz of [-1.42, 1.46]) for (const wx of [-0.93, 0.93]){
       const r = 0.335, a1 = [], a2 = [];
@@ -560,6 +571,106 @@ function createHud2(canvas, opts = {}){
     ctx.restore();
   }
 
+  /* ---------------- efectos opcionales ---------------- */
+
+  const rainDrops = Array.from({length:260}, () => ({x:Math.random(), y:Math.random(), l:Math.random()}));
+  function drawRain(dt){
+    ctx.strokeStyle = 'rgba(190,215,235,.5)'; ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    for (const r of rainDrops){
+      r.y += (0.55 + r.l*0.8) * dt * (1 + speed/26);
+      if (r.y > 1){ r.y = -0.05; r.x = Math.random(); }
+      const px = r.x*W, py = r.y*H, len = 10 + r.l*26 + speed*0.9;
+      ctx.moveTo(px, py); ctx.lineTo(px - (px - W/2)*0.035, py - len);
+    }
+    ctx.stroke();
+  }
+
+  // Agua de las ruedas. Cada gota guarda su estado: no "sale hacia atras",
+  // se queda quieta y es el coche el que se va.
+  const spray = [], WHEELS = [[-1.42,-0.93],[-1.42,0.93],[1.46,-0.93],[1.46,0.93]];
+  const BODY_REAR = -2.34;
+  let sprayAcc = 0;
+  function updateSpray(dt){
+    if (!(cfgOpt.rain && cfgOpt.spray) || speed < 4){ spray.length = 0; return; }
+    sprayAcc += Math.min(speed*9, 170) * dt;
+    while (sprayAcc > 1 && spray.length < 320){
+      sprayAcc--;
+      const w = WHEELS[(Math.random()*4)|0];
+      const p = { ds: w[0]-0.30, off: w[1] + Math.sign(w[1])*(0.06+Math.random()*0.10), y: 0.02,
+        vs: speed*(0.30+Math.random()*0.35), vo: Math.sign(w[1])*(0.25+Math.random()*0.85)+(Math.random()-0.5)*0.4,
+        vy: 0.55+Math.random()*1.5, r: 0.035+Math.random()*0.05,
+        life: (w[0] < 0 ? 0.42 : 0.30) + Math.random()*0.30 };
+      p.max = p.life; spray.push(p);
+    }
+    for (let i = spray.length-1; i >= 0; i--){
+      const p = spray[i];
+      p.ds -= p.vs*dt; p.off += p.vo*dt; p.vo *= (1-2.2*dt);
+      p.y += p.vy*dt; p.vy -= 5.4*dt; if (p.y < 0.01){ p.y = 0.01; p.vy = 0; }
+      p.vs *= (1-1.1*dt); p.r += 0.55*dt; p.life -= dt;
+      if (p.life <= 0) spray.splice(i,1);
+    }
+  }
+  // Dos pasadas: la camara va detras, asi que las gotas por delante del
+  // paragolpes trasero las tapa la chapa y las de atras van por encima.
+  function drawSpray(pal, phase){
+    if (!spray.length) return;
+    const off = myOffset(s);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (const p of spray){
+      if (p.ds > BODY_REAR && p.ds < 2.34 && Math.abs(p.off) < 1.00 && p.y < 1.05) continue;
+      const behind = p.ds <= BODY_REAR;
+      if (phase === 'far' ? behind : !behind) continue;
+      const a = p.life/p.max, al = a*a*0.19*(pal.glow > 0 ? 1.5 : 1), r = p.r;
+      poly([ptOff(s+p.ds-r, off+p.off-r, p.y), ptOff(s+p.ds-r, off+p.off+r, p.y),
+            ptOff(s+p.ds+r, off+p.off+r, p.y+r*1.6), ptOff(s+p.ds+r, off+p.off-r, p.y+r*1.6)],
+           `rgba(228,238,246,${al})`);
+    }
+    ctx.restore();
+  }
+
+  // Trafico esporadico en los dos sentidos. El de mi carril nunca se deja
+  // atropellar: a 18 m copia mi velocidad.
+  const CAR_COLORS = ['#8d99a4','#b06d4a','#4a545e','#c9ced4','#5a6b52','#7a4550','#2f3540'];
+  const DENSITY = { poca:[16,34], normal:[7,16], mucha:[2.5,6] };
+  let cars = [], spawnTimer = 5;
+  function updateTraffic(dt){
+    const dens = DENSITY[cfgOpt.traffic];
+    if (!dens){ cars.length = 0; return; }
+    if ((spawnTimer -= dt) <= 0){
+      const col = CAR_COLORS[(Math.random()*CAR_COLORS.length)|0];
+      const mwHere = xsec(Math.min(s+300, routeLen-1)).f;
+      if (Math.random() < 0.55)
+        cars.push({ pos: s + 420 + Math.random()*420, v: 14 + Math.random()*13, dir:-1, lane:'opp', color:col });
+      else {
+        const adj = mwHere > 0.5 && Math.random() < 0.6;
+        cars.push({ pos: s + 220 + Math.random()*300,
+                    v: Math.max(9, speed*(adj?0.70:0.84) + (Math.random()-0.5)*4),
+                    dir:1, lane: adj?'adj':'same', color:col });
+      }
+      spawnTimer = dens[0] + Math.random()*(dens[1]-dens[0]);
+    }
+    for (let i = cars.length-1; i >= 0; i--){
+      const c = cars[i];
+      c.pos += c.dir*c.v*dt;
+      const rel = c.pos - s;
+      if (c.lane === 'same'){
+        if (rel < 18){ c.pos = s + 18; c.v = speed; }
+        else if (rel > 26 && c.v > speed) c.v = Math.max(9, speed*0.84);
+      }
+      if (rel < -90 || rel > 1100 || c.pos > routeLen-2 || c.pos < 2) cars.splice(i,1);
+    }
+  }
+  function drawTraffic(pal){
+    if (!cars.length) return;
+    const on = pal.glow;
+    for (const c of [...cars].sort((a,b) => (b.pos-s) - (a.pos-s))){
+      const cc = xsec(c.pos);
+      const off = c.lane === 'opp' ? -cc.mine : c.lane === 'adj' ? cc.mine - LANE*cc.f : cc.mine;
+      drawCar(pal, c.dir < 0 ? 0 : 0.30*on, c.dir < 0 ? on : 0, c.pos, off, c.color, c.dir < 0);
+    }
+  }
+
   /* ---------------- bucle ---------------- */
 
   function resize(){
@@ -588,7 +699,13 @@ function createHud2(canvas, opts = {}){
     drawSky(pal);
     drawRoad(pal);
     drawBeams(pal, pal.glow);
+    updateTraffic(dt);
+    drawTraffic(pal);
+    updateSpray(dt);
+    drawSpray(pal, 'far');
     drawCar(pal, Math.max(0.30*pal.glow, brake), pal.glow);
+    drawSpray(pal, 'near');
+    if (cfgOpt.rain) drawRain(dt);
   }
 
   function loop(now){
@@ -617,7 +734,8 @@ function createHud2(canvas, opts = {}){
    ------------------------------------------------------------------ */
 const HUD2_KEY = 'hud2.cfg';
 const HUD2_DEF = { theme:'auto', maxFps:0, beamReach:34, fogEnd:260,
-                   lookAhead:55, camHeight:2.6, camBack:7.5, posts:true };
+                   lookAhead:55, camHeight:2.6, camBack:7.5, posts:true,
+                   rain:false, spray:true, traffic:'off' };
 function hud2LoadCfg(){
   try { return Object.assign({}, HUD2_DEF, JSON.parse(localStorage.getItem(HUD2_KEY) || '{}')); }
   catch(e){ return Object.assign({}, HUD2_DEF); }
@@ -697,6 +815,13 @@ function hud2SaveCfg(c){ try { localStorage.setItem(HUD2_KEY, JSON.stringify(c))
     }
     box.insertAdjacentHTML('beforeend',
       `<label class="chk"><input type="checkbox" id="r_posts" ${cfg.posts?'checked':''}> Farolas y quitamiedos</label>`);
+    box.insertAdjacentHTML('beforeend', '<h3>Efectos</h3>'
+      + `<label class="chk"><input type="checkbox" id="r_rain" ${cfg.rain?'checked':''}> Lluvia</label>`
+      + `<label class="chk"><input type="checkbox" id="r_spray" ${cfg.spray?'checked':''}> Agua de las ruedas</label>`);
+    box.insertAdjacentHTML('beforeend', '<h3>Tráfico</h3><div class="seg" id="g_traf">'
+      + [['off','Ninguno'],['poca','Poco'],['normal','Normal'],['mucha','Denso']].map(([v,l]) =>
+          `<button data-v="${v}" class="${cfg.traffic===v?'on':''}">${l}</button>`).join('')
+      + '</div>');
 
     el('g_theme').onclick = e => { if(!e.target.dataset.v) return;
       [...e.currentTarget.children].forEach(b=>b.classList.remove('on')); e.target.classList.add('on');
@@ -711,6 +836,11 @@ function hud2SaveCfg(c){ try { localStorage.setItem(HUD2_KEY, JSON.stringify(c))
       };
     }
     el('r_posts').onchange = e => { cfg.posts = e.target.checked; push(); };
+    el('r_rain').onchange  = e => { cfg.rain  = e.target.checked; push(); };
+    el('r_spray').onchange = e => { cfg.spray = e.target.checked; push(); };
+    el('g_traf').onclick = e => { if(!e.target.dataset.v) return;
+      [...e.currentTarget.children].forEach(b=>b.classList.remove('on')); e.target.classList.add('on');
+      cfg.traffic = e.target.dataset.v; push(); };
   }
   function push(){ hud.set(cfg); hud2SaveCfg(cfg); }
 
