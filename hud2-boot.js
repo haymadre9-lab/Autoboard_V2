@@ -65,11 +65,20 @@ function boot(){
   for (let i=0;i<500;i++){ z += 2; demo.push(toLL(x,z)); }
   for (let i=0;i<44;i++){ h -= 2/16; x += Math.sin(h)*2; z += Math.cos(h)*2; demo.push(toLL(x,z)); }
   for (let i=0;i<700;i++){ h += 0.0018*Math.sin(i/40)*2; x += Math.sin(h)*2; z += Math.cos(h)*2; demo.push(toLL(x,z)); }
-  try { hud.setRoute(demo); hud.setSpeed(22); } catch(e){ hud.onError(e); }
+  // Si ya cargaste un trazado en hud2.html, se reutiliza: mismo origen, mismo
+  // localStorage. Así el botón HUD 2 muestra tu ruta y no la de ejemplo.
+  let inicial = demo;
+  try {
+    const g = JSON.parse(localStorage.getItem('hud2.ruta') || 'null');
+    if (g && g.length > 3) inicial = g;
+  } catch(e){}
+  try { hud.setRoute(inicial); hud.setSpeed(22); } catch(e){ hud.onError(e); }
 
   // API pública, envolviendo setRoute para saber si ya hay ruta real
   window.hud2 = Object.assign(Object.create(hud), {
-    setRoute(ll, o){ rutaPropia = true; return hud.setRoute(ll, o); },
+    setRoute(ll, o){ rutaPropia = true;
+      try { localStorage.setItem('hud2.ruta', JSON.stringify(ll)); } catch(e){}
+      return hud.setRoute(ll, o); },
     abrir(){ activar(true); }, cerrar(){ activar(false); },
     get demoActiva(){ return !rutaPropia; },
     // ajustes persistentes, compartidos con hud2.html
