@@ -69,6 +69,7 @@ export function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
+  api.version = '2026.08.29-4';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
 

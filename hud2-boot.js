@@ -88,6 +88,7 @@ function boot(){
   catch(e){ cfg = Object.assign({}, HUD2_DEF); }
 
   const hud = createHud2(cv, cfg);
+  console.log('[hud2] módulo versión', hud.version);
   // foto del coche guardada desde hud2.html (mismo origen, mismo almacen)
   try { const f = localStorage.getItem('hud2.foto'); if (f) hud.setCarPhoto(f); } catch(e){}
   hud.onError = e => { err.style.display = 'block'; err.textContent = 'hud2: ' + e.message; };
