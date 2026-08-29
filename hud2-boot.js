@@ -109,7 +109,7 @@ function boot(){
   const HUD2_DEF = { theme:'auto', maxFps:0, beamReach:34, fogEnd:260,
                      lookAhead:55, camHeight:2.6, camBack:7.5, posts:true,
                      rain:false, spray:true, traffic:'off',
-                     rbRadius:45, rbArc:18, rbSmooth:1, hud:true, horizon:0.50 };
+                     rbRadius:45, rbArc:18, rbSmooth:1, hud:true, horizon:0.50, carScale:1 };
   let cfg;
   try { cfg = Object.assign({}, HUD2_DEF, JSON.parse(localStorage.getItem(HUD2_KEY) || '{}')); }
   catch(e){ cfg = Object.assign({}, HUD2_DEF); }
@@ -319,7 +319,8 @@ function boot(){
     ['camHeight','Altura de cámara',10,90,1,'m',10],
     ['camBack','Distancia detrás',20,200,1,'m',10],
     ['fogEnd','Niebla',60,500,10,'m',1],
-    ['horizon','Encuadre vertical',30,70,1,'%',100]
+    ['horizon','Encuadre vertical',30,70,1,'%',100],
+    ['carScale','Tamaño del coche',60,160,1,'%',100]
   ];
   const guardar = () => { hud.set(cfg); try { localStorage.setItem(HUD2_KEY, JSON.stringify(cfg)); } catch(e){} };
   const seg = (id, opts, val) => '<div class="sg" id="'+id+'">' + opts.map(o =>

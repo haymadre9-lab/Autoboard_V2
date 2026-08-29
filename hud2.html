@@ -92,10 +92,23 @@ const PAL = {
 // Perfil de la carrocería: z_local (+ = hacia delante), semiancho, altura de
 // cintura, semiancho de techo, altura de techo. Ajústalo a tu coche si quieres.
 const PROF = [
-  [-2.34,0.80,0.88,0.00,0.94], [-2.05,0.90,0.93,0.00,1.00], [-1.62,0.93,0.95,0.44,1.20],
-  [-1.05,0.94,0.96,0.74,1.42], [-0.30,0.95,0.97,0.78,1.475],[ 0.45,0.95,0.97,0.76,1.46],
-  [ 1.15,0.94,0.96,0.66,1.36], [ 1.70,0.92,0.94,0.30,1.12], [ 2.10,0.87,0.90,0.00,0.96],
-  [ 2.34,0.78,0.84,0.00,0.88]
+  // z_local (+ = hacia delante), semiancho, altura de cintura, semiancho de techo, altura de techo
+  [-2.38, 0.735, 0.815, 0.00, 0.865],
+  [-2.20, 0.845, 0.880, 0.00, 0.930],
+  [-1.95, 0.910, 0.915, 0.00, 0.965],
+  [-1.66, 0.935, 0.935, 0.400, 1.155],
+  [-1.32, 0.947, 0.948, 0.635, 1.315],
+  [-0.92, 0.954, 0.957, 0.735, 1.418],
+  [-0.46, 0.958, 0.963, 0.775, 1.468],
+  [ 0.02, 0.958, 0.965, 0.782, 1.482],
+  [ 0.48, 0.955, 0.963, 0.770, 1.470],
+  [ 0.94, 0.949, 0.958, 0.723, 1.425],
+  [ 1.34, 0.940, 0.950, 0.628, 1.345],
+  [ 1.68, 0.928, 0.938, 0.470, 1.215],
+  [ 1.96, 0.905, 0.921, 0.235, 1.075],
+  [ 2.16, 0.868, 0.898, 0.00, 0.985],
+  [ 2.30, 0.812, 0.868, 0.00, 0.930],
+  [ 2.38, 0.730, 0.826, 0.00, 0.880]
 ];
 const LIGHT = (() => { const v=[0.32,0.86,-0.40], L=Math.hypot(v[0],v[1],v[2]); return v.map(k=>k/L); })();
 
@@ -116,6 +129,7 @@ function createHud2(canvas, opts = {}){
     horizon: 0.50,          // centro vertical del encuadre: <0.5 sube la escena
     posts: true,            // farolas y quitamiedos
     carColor: '#cdd3d9',
+    carScale: 1.0,          // tamaño del coche, 0.6 a 1.6
     maxFps: 0,              // 0 = libre
     hud: true,              // superponer maniobra, velocidad y limite
     carPhoto: null,         // dataURL de tu coche recortado; null = coche dibujado
@@ -135,7 +149,7 @@ function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
-  api.version = '2026.08.29-7';   // sube al cambiar: sirve para saber qué está corriendo
+  api.version = '2026.08.29-8';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
   let manList = [], limList = [], radList = [];
@@ -573,8 +587,12 @@ function createHud2(canvas, opts = {}){
     let nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx;
     const L = Math.hypot(nx,ny,nz) || 1; nx/=L; ny/=L; nz/=L;
     if ((cam.x-p0.x)*nx + (cam.y-p0.y)*ny + (cam.z-p0.z)*nz < 0) return null;   // culling
-    const k = (0.40 + 0.60*Math.abs(nx*LIGHT[0]+ny*LIGHT[1]+nz*LIGHT[2])) * (boost||1);
-    const sp = Math.pow(Math.max(ny,0), 12) * 55;
+    let k = (0.38 + 0.62*Math.abs(nx*LIGHT[0]+ny*LIGHT[1]+nz*LIGHT[2])) * (boost||1);
+    // oclusión ambiente: los bajos reciben menos luz del cielo
+    const alt = (p0.y + p1.y + p2.y)/3;
+    if (alt < 0.75) k *= 0.62 + 0.38*(alt/0.75);
+    // reflejo del cielo en horizontales + brillo rasante en los flancos
+    const sp = Math.pow(Math.max(ny,0), 10)*62 + Math.pow(Math.max(1-Math.abs(ny),0), 6)*10;
     return mixc([Math.min(base[0]*k+sp,255), Math.min(base[1]*k+sp,255), Math.min(base[2]*k+sp,255)], fogRGB, fog);
   }
 
@@ -589,7 +607,8 @@ function createHud2(canvas, opts = {}){
     // un coche de frente es el mismo modelo girado 180 grados: se invierten
     // a la vez el eje longitudinal y el transversal
     const fl = opp ? -1 : 1;
-    const P = (z,x,y) => ptOff(sPos + z*fl, off + x*fl, y);
+    const sc = cfgOpt.carScale || 1;
+    const P = (z,x,y) => ptOff(sPos + z*fl*sc, off + x*fl*sc, y*sc);
 
     // Foto del propio coche: billboard anclado al eje trasero. La camara va
     // siempre detras, asi que un sprite plano funciona; en giro cerrado se nota.
@@ -597,8 +616,8 @@ function createHud2(canvas, opts = {}){
       const pl = projCopy(ptOff(s-1.2, off-0.95, 0)), pr = projCopy(ptOff(s-1.2, off+0.95, 0));
       const pa = projCopy(ptOff(s-1.2, off, 0));
       if (pa.ok){
-        let wpx = Math.abs(pr.x-pl.x) * 1.32;
-        if (!isFinite(wpx) || wpx < 8) wpx = W*0.34;
+        let wpx = Math.abs(pr.x-pl.x) * 1.32 * (cfgOpt.carScale || 1);
+        if (!isFinite(wpx) || wpx < 8) wpx = W*0.34*(cfgOpt.carScale || 1);
         const hpx = wpx*carAR;
         ctx.save(); ctx.globalAlpha = 0.45;
         const sg2 = ctx.createRadialGradient(pa.x,pa.y,0,pa.x,pa.y,wpx*0.55);
@@ -655,6 +674,34 @@ function createHud2(canvas, opts = {}){
       else
         face([P(A[0],-A[1]*.98,A[2]), P(B[0],-B[1]*.98,B[2]), P(B[0],B[1]*.98,B[2]), P(A[0],A[1]*.98,A[2])], base);
     }
+    // zócalo oscuro bajo la cintura: rompe la masa y hace el coche menos "bloque"
+    for (const sg of [-1,1])
+      for (let i = 2; i < PROF.length-3; i++){
+        const A = PROF[i], B = PROF[i+1];
+        poly([P(A[0], sg*(A[1]+0.004), 0.335), P(B[0], sg*(B[1]+0.004), 0.335),
+              P(B[0], sg*(B[1]+0.004), 0.50),  P(A[0], sg*(A[1]+0.004), 0.50)],
+             mixc([base[0]*0.42, base[1]*0.42, base[2]*0.44], fogRGB, fog));
+      }
+    // pasos de rueda
+    for (const wz of [-1.42, 1.46]) for (const sg of [-1,1]){
+      const arc = [];
+      for (let a = 0; a <= 8; a++){ const an = Math.PI*a/8;
+        arc.push(P(wz - Math.cos(an)*0.60, sg*0.962, 0.345 + Math.sin(an)*0.56)); }
+      for (let a = 8; a >= 0; a--){ const an = Math.PI*a/8;
+        arc.push(P(wz - Math.cos(an)*0.50, sg*0.962, 0.345 + Math.sin(an)*0.46)); }
+      poly(arc, mixc([26,28,32], fogRGB, fog));
+    }
+    // retrovisores
+    for (const sg of [-1,1])
+      poly([P(0.98, sg*0.96, 1.02), P(1.10, sg*1.20, 1.06),
+            P(1.02, sg*1.20, 1.16), P(0.90, sg*0.96, 1.12)],
+           mixc([base[0]*0.72, base[1]*0.72, base[2]*0.75], fogRGB, fog));
+    // montante trasero: separa luna de carrocería y da lectura de volumen
+    for (const sg of [-1,1])
+      poly([P(1.30, sg*0.640, 1.345), P(1.70, sg*0.478, 1.215),
+            P(1.70, sg*0.430, 1.180), P(1.30, sg*0.590, 1.300)],
+           mixc([base[0]*0.55, base[1]*0.55, base[2]*0.58], fogRGB, fog));
+
     // ópticas: son geometría permanente, apagadas son cristal oscuro
     for (const sg of [-1,1]){
       poly([P(-2.325,sg*0.30,0.855), P(-2.325,sg*0.86,0.855), P(-2.325,sg*0.86,1.005), P(-2.325,sg*0.30,1.005)],
@@ -1016,7 +1063,7 @@ const HUD2_KEY = 'hud2.cfg';
 const HUD2_DEF = { theme:'auto', maxFps:0, beamReach:34, fogEnd:260,
                    lookAhead:55, camHeight:2.6, camBack:7.5, posts:true,
                    rain:false, spray:true, traffic:'off',
-                   rbRadius:45, rbArc:18, rbSmooth:1, hud:true, horizon:0.50 };
+                   rbRadius:45, rbArc:18, rbSmooth:1, hud:true, horizon:0.50, carScale:1 };
 function hud2LoadCfg(){
   try { return Object.assign({}, HUD2_DEF, JSON.parse(localStorage.getItem(HUD2_KEY) || '{}')); }
   catch(e){ return Object.assign({}, HUD2_DEF); }
@@ -1073,7 +1120,8 @@ function hud2SaveCfg(c){ try { localStorage.setItem(HUD2_KEY, JSON.stringify(c))
     ['camHeight', 'Altura de cámara',   10,  90, 1,  'm', 10],
     ['camBack',   'Distancia detrás',   20, 200, 1,  'm', 10],
     ['fogEnd',    'Niebla',             60, 500, 10, 'm'],
-    ['horizon',   'Encuadre vertical',  30,  70,  1, '%', 100]
+    ['horizon',   'Encuadre vertical',  30,  70,  1, '%', 100],
+    ['carScale',  'Tamaño del coche',   60, 160,  1, '%', 100]
   ];
   const FPSOPT = [[0,'Libre'],[30,'30'],[24,'24'],[20,'20']];
 
