@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TeslaHUD · Simulador de cinta 3D</title>
+<style>
+  :root{
+    --void:#0a0d10;
+    --panel:#12171c;
+    --line:#232c33;
+    --ink:#e8eef2;
+    --mute:#7b8b96;
+    --sodium:#ffab3d;
+    --data:#5fd0e0;
+    --data:#5fd0e0;
+    --alert:#ff5a4d;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--void);color:var(--ink);
+    font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;overflow:hidden}
+  #wrap{display:flex;height:100%;width:100%}
+  #stage{position:relative;flex:1;min-width:0;background:#000}
+  canvas{display:block;width:100%;height:100%}
+
+  /* ---- HUD overlay ---- */
+  .hud{position:absolute;inset:0;pointer-events:none;
+       font-variant-numeric:tabular-nums;letter-spacing:.02em}
+  .maneuver{position:absolute;top:22px;left:22px;display:flex;gap:14px;align-items:center;
+    background:rgba(10,13,16,.72);border:1px solid var(--line);border-left:3px solid var(--data);
+    padding:12px 18px 12px 14px;border-radius:4px;backdrop-filter:blur(6px)}
+  .arrow{width:38px;height:38px;flex:none}
+  .arrow path{fill:var(--data)}
+  .m-dist{font-size:26px;font-weight:600;line-height:1}
+  .m-street{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.14em;margin-top:5px}
+
+  .speed{position:absolute;left:22px;bottom:22px;display:flex;align-items:baseline;gap:8px}
+  .speed b{font-size:76px;font-weight:200;line-height:.85;letter-spacing:-.03em}
+  .speed span{font-size:13px;color:var(--mute);text-transform:uppercase;letter-spacing:.2em}
+
+  .limit{position:absolute;right:22px;bottom:22px;width:62px;height:62px;border-radius:50%;
+    background:#f3f3f0;border:6px solid #d8352a;color:#111;display:flex;align-items:center;
+    justify-content:center;font-size:24px;font-weight:700}
+
+  .lanebar{position:absolute;left:50%;transform:translateX(-50%);bottom:26px;display:flex;gap:5px}
+  .lanebar i{width:34px;height:4px;background:#2b353c;border-radius:2px;display:block}
+  .lanebar i.on{background:var(--data)}
+
+  .radar{position:absolute;top:22px;right:22px;background:rgba(255,90,77,.14);
+    border:1px solid var(--alert);color:var(--alert);padding:9px 14px;border-radius:4px;
+    font-size:12px;text-transform:uppercase;letter-spacing:.16em;opacity:0;transition:opacity .25s}
+  .radar.on{opacity:1}
+
+  .fps{position:absolute;top:22px;left:50%;transform:translateX(-50%);
+    font-size:11px;color:var(--mute);letter-spacing:.18em;text-transform:uppercase}
+  .fps b{color:var(--ink);font-weight:600}
+
+  /* ---- control panel ---- */
+  #panel{width:308px;flex:none;background:var(--panel);border-left:1px solid var(--line);
+    overflow-y:auto;padding:18px 18px 44px}
+  #panel h1{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--mute);
+    margin:0 0 4px;font-weight:600}
+  #panel .sub{font-size:12px;color:var(--mute);line-height:1.5;margin:0 0 20px}
+  fieldset{border:0;border-top:1px solid var(--line);margin:0 0 6px;padding:16px 0 4px}
+  legend{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--sodium);
+    padding:0 8px 0 0}
+  label{display:block;font-size:12px;margin:0 0 13px}
+  .row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
+  .row em{font-style:normal;color:var(--data);font-variant-numeric:tabular-nums;font-size:11px}
+  input[type=range]{width:100%;accent-color:var(--data);height:16px}
+  .chk{display:flex;align-items:center;gap:9px;font-size:12px;margin-bottom:11px;cursor:pointer}
+  input[type=checkbox]{accent-color:var(--data);width:15px;height:15px;cursor:pointer}
+  .seg{display:flex;gap:0;margin-bottom:14px;border:1px solid var(--line);border-radius:3px;overflow:hidden}
+  .seg button{flex:1;background:transparent;border:0;color:var(--mute);font-size:11px;
+    padding:7px 0;cursor:pointer;font-family:inherit;letter-spacing:.06em}
+  .seg button.on{background:var(--data);color:#06131a;font-weight:600}
+  .note{font-size:11px;color:var(--mute);line-height:1.55;border-left:2px solid var(--sodium);
+    padding-left:10px;margin-top:14px}
+  @media (max-width:820px){
+    #wrap{flex-direction:column}
+    #panel{width:100%;height:44%;border-left:0;border-top:1px solid var(--line)}
+    #stage{height:56%}
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="stage">
+    <canvas id="c"></canvas>
+    <div class="hud">
+      <div class="maneuver">
+        <svg class="arrow" id="arrow" viewBox="0 0 40 40"><path d="M20 4 L32 20 L24 20 L24 36 L16 36 L16 20 L8 20 Z"/></svg>
+        <div>
+          <div class="m-dist" id="mdist">—</div>
+          <div class="m-street" id="mstreet">BI-3739</div>
+        </div>
+      </div>
+      <div class="fps">Frames <b id="fps">—</b> fps</div>
+      <div class="radar" id="radar">Radar fijo · 300 m</div>
+      <div class="speed"><b id="spd">0</b><span>km/h</span></div>
+      <div class="lanebar" id="lanebar"><i></i><i class="on"></i><i></i></div>
+      <div class="limit" id="limit">90</div>
+    </div>
+  </div>
+
+  <div id="panel">
+    <h1>Cinta 3D · banco de pruebas</h1>
+    <p class="sub">Malla de carretera generada desde el polyline de la ruta, con UV que avanza con la velocidad. Lo mismo que propuse para TeslaHUD, aquí en pequeño.</p>
+
+    <fieldset>
+      <legend>Conducción</legend>
+      <label><span class="row"><span>Velocidad</span><em id="v_spd">90 km/h</em></span>
+        <input type="range" id="s_spd" min="0" max="150" value="90"></label>
+      <label class="chk"><input type="checkbox" id="c_auto" checked> Acelerar y frenar en curva</label>
+      <label class="chk"><input type="checkbox" id="c_traffic" checked> Tráfico</label>
+      <div class="seg" id="seg_dens">
+        <button data-v="poca" class="on">Poco</button>
+        <button data-v="normal">Normal</button>
+        <button data-v="mucha">Denso</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Tu coche</legend>
+      <input type="file" id="f_car" accept="image/*,.png,.jpg,.jpeg,.webp" style="display:none">
+      <div id="drop" style="border:1px dashed var(--line);border-radius:4px;padding:16px 12px;
+        text-align:center;cursor:pointer;margin-bottom:10px;transition:border-color .15s">
+        <div style="color:var(--data);font-size:12px;font-weight:600">Cargar foto de tu coche</div>
+        <div style="color:var(--mute);font-size:11px;margin-top:5px">o arrastra el archivo aquí</div>
+      </div>
+      <div id="carstat" style="font-size:11px;color:var(--mute);line-height:1.5;margin-bottom:10px;
+        font-variant-numeric:tabular-nums">Sin foto · se usa el coche dibujado</div>
+      <p class="note" style="border-color:var(--data);margin:-4px 0 14px">
+        Desde detrás, cámara a la altura del techo. PNG con transparencia o JPG con fondo liso (luego lo recortas abajo).</p>
+      <div id="bgtools" style="display:none">
+        <label><span class="row"><span>Tolerancia del recorte</span><em id="v_tol">28</em></span>
+          <input type="range" id="s_tol" min="6" max="90" value="28"></label>
+        <div style="display:flex;gap:8px;margin-bottom:14px">
+          <button id="b_cut" style="flex:2;background:var(--data);border:0;color:#06131a;font-family:inherit;
+            font-size:12px;font-weight:600;padding:9px;border-radius:3px;cursor:pointer">Quitar fondo</button>
+          <button id="b_undo" style="flex:1;background:transparent;border:1px solid var(--line);color:var(--mute);
+            font-family:inherit;font-size:12px;padding:9px;border-radius:3px;cursor:pointer">Original</button>
+        </div>
+      </div>
+      <label><span class="row"><span>Tamaño del sprite</span><em id="v_csz">100 %</em></span>
+        <input type="range" id="s_csz" min="50" max="180" value="100"></label>
+      <label class="chk"><input type="checkbox" id="c_brake" checked> Luces de freno al decelerar</label>
+      <label class="chk"><input type="checkbox" id="c_beam" checked> Haz de faros sobre el asfalto</label>
+      <label style="margin-top:10px"><span class="row"><span>Alcance del haz</span><em id="v_beam">34 m</em></span>
+        <input type="range" id="s_beam" min="16" max="70" value="34"></label>
+      <div class="seg" id="seg_lights" style="margin-top:6px">
+        <button data-v="auto" class="on">Luces auto</button>
+        <button data-v="on">Siempre</button>
+        <button data-v="off">Apagadas</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Cámara</legend>
+      <label class="chk"><input type="checkbox" id="c_couple" checked> Acoplada a la velocidad</label>
+      <label><span class="row"><span>Look-ahead base</span><em id="v_look">55 m</em></span>
+        <input type="range" id="s_look" min="5" max="120" value="55"></label>
+      <label><span class="row"><span>Altura</span><em id="v_hgt">2.6 m</em></span>
+        <input type="range" id="s_hgt" min="10" max="90" value="26"></label>
+      <label><span class="row"><span>Distancia detrás</span><em id="v_back">7.5 m</em></span>
+        <input type="range" id="s_back" min="20" max="200" value="75"></label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Trazado</legend>
+      <textarea id="ta_route" placeholder="Pega un polyline codificado de OSRM, o un GeoJSON con coordinates [[lng,lat],…]"
+        style="width:100%;height:74px;background:#0d1216;border:1px solid var(--line);border-radius:3px;
+        color:var(--ink);font-family:ui-monospace,monospace;font-size:10px;padding:8px;resize:vertical"></textarea>
+      <div style="display:flex;gap:8px;margin:8px 0 10px">
+        <button id="b_route" style="flex:2;background:var(--data);border:0;color:#06131a;font-family:inherit;
+          font-size:12px;font-weight:600;padding:9px;border-radius:3px;cursor:pointer">Cargar trazado</button>
+        <button id="b_demo" style="flex:1;background:transparent;border:1px solid var(--line);color:var(--mute);
+          font-family:inherit;font-size:12px;padding:9px;border-radius:3px;cursor:pointer">Demo</button>
+      </div>
+      <div id="routestat" style="font-size:11px;color:var(--mute);line-height:1.5;margin-bottom:6px">
+        Trazado de demostración · 32 km generados · 4 rotondas</div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Tipo de via</legend>
+      <div class="seg" id="seg_road">
+        <button data-v="auto" class="on">Segun GPS</button>
+        <button data-v="mw">Autovia</button>
+        <button data-v="sec">Convencional</button>
+      </div>
+      <p class="note" style="margin:-6px 0 4px">En Segun GPS la ruta alterna tramos de autovia y convencional. La transicion se interpola en 160 m: la mediana crece y el eje discontinuo se desvanece.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Escena</legend>
+      <div class="seg" id="seg_time">
+        <button data-v="day" class="on">Día</button>
+        <button data-v="dusk">Atardecer</button>
+        <button data-v="night">Noche</button>
+      </div>
+      <label><span class="row"><span>Niebla · alcance</span><em id="v_fog">260 m</em></span>
+        <input type="range" id="s_fog" min="60" max="500" value="260"></label>
+      <label class="chk"><input type="checkbox" id="c_rain"> Lluvia</label>
+      <label class="chk"><input type="checkbox" id="c_posts" checked> Postes y quitamiedos</label>
+      <label class="chk"><input type="checkbox" id="c_wire"> Ver la malla (wireframe)</label>
+      <label class="chk"><input type="checkbox" id="c_dbg"> Depurar geometría de calzada</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Límite de frames</legend>
+      <div class="seg" id="seg_fps">
+        <button data-v="0" class="on">Libre</button>
+        <button data-v="30">30</button>
+        <button data-v="20">20</button>
+        <button data-v="12">12</button>
+      </div>
+      <p class="note">Baja a 20 y luego a 12. Esto es lo que te decía: el 3D no se rompe por las texturas, se rompe por el frame time. Si tu espejado al Tesla no sostiene 30 fps, no compensa.</p>
+    </fieldset>
+  </div>
+</div>
+
+<script>
+(() => {
+  const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+  let W = 0, H = 0, DPR = 1;
+  function resize(){
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    const r = cv.getBoundingClientRect();
+    W = Math.max(320, r.width|0); H = Math.max(240, r.height|0);
+    cv.width = W*DPR; cv.height = H*DPR;
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener('resize', resize);
+
+  /* ---------- 1. RUTA: lo que en TeslaHUD sería el polyline de OSRM ---------- */
+  const STEP = 2;                    // muestreo cada 2 m
+  let N = 16000;                     // 32 km en modo demo
+  let pts = new Float32Array(N*3);   // x, z, heading
+  // Rotondas: R = radio, TURN = angulo recorrido dentro del anillo (rad).
+  // Se hornean en la ruta como arco de curvatura constante -1/R (sentido antihorario,
+  // que es el que se circula en Espana). El trazado gira de verdad, no es un adorno.
+  const RB_R = 15, RB_TURN = 3.95;                 // ~226 grados: entras y sales por la 3a salida
+  const RB_LEN = RB_R * RB_TURN;
+  const RB_AT = [620, 4300, 9600, 16400];          // solo en tramos convencionales
+  let RB = [];                                    // metadatos con el centro ya calculado
+
+  (function buildRoute(){
+    let x = 0, z = 0, h = 0;
+    for (let i = 0; i < N; i++){
+      const s = i*STEP;
+      let k;
+      const rb = RB_AT.find(a => s >= a && s < a + RB_LEN);
+      if (rb !== undefined){
+        k = -1/RB_R;                                 // arco circular puro
+        if (s - rb < STEP){
+          RB.push({ s0: rb, s1: rb + RB_LEN, R: RB_R,
+                    cx: x - Math.cos(h)*RB_R, cz: z + Math.sin(h)*RB_R });
+        }
+      } else {
+        k = 0.0016*Math.sin(s/260) + 0.0011*Math.sin(s/97 + 1.7) + 0.0022*Math.sin(s/620 + .4);
+      }
+      h += k*STEP;
+      x += Math.sin(h)*STEP; z += Math.cos(h)*STEP;
+      pts[i*3] = x; pts[i*3+1] = z; pts[i*3+2] = h;
+    }
+  })();
+  // ---------------------------------------------------------------
+  // CARGA DE TRAZADO REAL. Este es el unico punto de enganche: todo lo demas
+  // (curvatura, cinta, camara, render) cuelga de at() y no se entera de donde
+  // sale la geometria. En autoboardV2 aqui entra el polyline de tu ruta.
+  // ---------------------------------------------------------------
+  function decodePolyline(str, precision){
+    const f = Math.pow(10, precision || 5);
+    let idx = 0, lat = 0, lng = 0; const out = [];
+    while (idx < str.length){
+      let b, sh = 0, res = 0;
+      do { b = str.charCodeAt(idx++) - 63; res |= (b & 0x1f) << sh; sh += 5; } while (b >= 0x20);
+      lat += (res & 1) ? ~(res >> 1) : (res >> 1);
+      sh = 0; res = 0;
+      do { b = str.charCodeAt(idx++) - 63; res |= (b & 0x1f) << sh; sh += 5; } while (b >= 0x20);
+      lng += (res & 1) ? ~(res >> 1) : (res >> 1);
+      out.push([lat/f, lng/f]);
+    }
+    return out;
+  }
+
+  // lat/lng -> metros locales (equirectangular alrededor del primer punto).
+  // A escala de una ruta el error es despreciable y evita cargar proj4.
+  function toLocal(ll){
+    const lat0 = ll[0][0]*Math.PI/180, R = 6378137;
+    return ll.map(p => ({
+      x: R * (p[1]-ll[0][1])*Math.PI/180 * Math.cos(lat0),
+      z: R * (p[0]-ll[0][0])*Math.PI/180
+    }));
+  }
+
+  function loadRoute(ll){
+    if (!ll || ll.length < 3) throw new Error('hacen falta al menos 3 puntos');
+    const raw = toLocal(ll);
+    // remuestreo uniforme cada STEP metros: los vertices de OSM son irregulares
+    // y sin esto la curvatura da picos donde solo hay vertices juntos.
+    const samp = [raw[0]]; let carry = 0;
+    for (let i = 1; i < raw.length; i++){
+      const dx = raw[i].x - raw[i-1].x, dz = raw[i].z - raw[i-1].z;
+      const seg = Math.hypot(dx, dz);
+      if (seg < 1e-6) continue;
+      let t = STEP - carry;
+      while (t <= seg){ samp.push({ x: raw[i-1].x + dx*t/seg, z: raw[i-1].z + dz*t/seg }); t += STEP; }
+      carry = (seg - (t - STEP));
+    }
+    if (samp.length < 8) throw new Error('trazado demasiado corto');
+
+    N = samp.length; routeLen = (N-1)*STEP;
+    pts = new Float32Array(N*3);
+    for (let i = 0; i < N; i++){
+      const a = samp[Math.max(i-1,0)], b = samp[Math.min(i+1,N-1)];
+      let h = Math.atan2(b.x-a.x, b.z-a.z);
+      if (i > 0){                                  // desenrollar el rumbo
+        const prev = pts[(i-1)*3+2];
+        while (h - prev >  Math.PI) h -= 2*Math.PI;
+        while (h - prev < -Math.PI) h += 2*Math.PI;
+      }
+      pts[i*3] = samp[i].x; pts[i*3+1] = samp[i].z; pts[i*3+2] = h;
+    }
+    // suavizado del rumbo: quita el temblor de los vertices de OSM
+    for (let pass = 0; pass < 3; pass++)
+      for (let i = 1; i < N-1; i++)
+        pts[i*3+2] = pts[i*3+2]*0.5 + (pts[(i-1)*3+2] + pts[(i+1)*3+2])*0.25;
+
+    MW_SEGS = [];                                   // sin etiquetas: se elige a mano
+    RB = detectRoundabouts();
+    s = 20; speed = 0;
+    return { puntos: N, metros: Math.round(routeLen), rotondas: RB.length };
+  }
+
+  // Deteccion de rotonda por curvatura sostenida. Para un HUD decorativo esto basta:
+  // si el radio baja de ~30 m durante mas de 25 m de recorrido, es una rotonda o un
+  // giro muy cerrado, y en ambos casos queremos dibujar el mismo efecto.
+  const RB_KMIN = 1/30, RB_ARCMIN = 25;
+  function detectRoundabouts(){
+    const found = []; let run = null;
+    for (let x = 8; x < routeLen - 8; x += 4){
+      const k = curv(x);
+      if (Math.abs(k) > RB_KMIN){
+        if (!run || Math.sign(k) !== run.sign) run = { s0: x, sign: Math.sign(k), ks: [] };
+        run.s1 = x; run.ks.push(Math.abs(k));
+        if (!found.includes(run)) found.push(run);
+      } else if (run && x - run.s1 > 12) run = null;
+    }
+    return found.filter(r => r.s1 - r.s0 >= RB_ARCMIN).map(r => {
+      const kAvg = r.ks.reduce((a,b)=>a+b,0)/r.ks.length, R = 1/kAvg;
+      const mid = (r.s0 + r.s1)/2, p = at(mid), n = normalAt(mid);
+      return { s0: r.s0, s1: r.s1, R, cx: p.x + n.x*R*r.sign, cz: p.z + n.z*R*r.sign };
+    });
+  }
+
+  function rbFactor(sPos){
+    let f = 0;
+    for (const r of RB){
+      if (sPos > r.s0 - 70 && sPos < r.s1 + 70){
+        const inn = Math.min((sPos-(r.s0-70))/70, ((r.s1+70)-sPos)/70, 1);
+        f = Math.max(f, Math.min(Math.max(inn,0),1));
+      }
+    }
+    return f*f*(3-2*f);
+  }
+  function rbNear(){ return RB.find(r => s > r.s0 - 320 && s < r.s1 + 40); }
+  let routeLen = (N-1)*STEP;
+  function at(s){
+    let t = s; if (t < 0) t = 0; if (t > routeLen-1) t = routeLen-1;
+    const i = (t/STEP)|0, f = (t - i*STEP)/STEP, j = Math.min(i+1, N-1);
+    const ax=pts[i*3], az=pts[i*3+1], ah=pts[i*3+2];
+    const bx=pts[j*3], bz=pts[j*3+1];
+    let bh=pts[j*3+2];
+    return { x: ax+(bx-ax)*f, z: az+(bz-az)*f, h: ah+(bh-ah)*f };
+  }
+  function normalAt(s){ const h = at(s).h; return { x: Math.cos(h), z: -Math.sin(h) }; }
+  // curvatura local con signo: k>0 gira a la derecha, k<0 a la izquierda
+  function curv(s){ return (at(s+6).h - at(s-6).h) / 12; }
+  // Una polilinea desplazada se PLIEGA si el desplazamiento hacia el interior
+  // supera el radio. En rotonda (R=15) con arcen a 4.9 m estas al 33% del radio:
+  // no llega a plegarse, pero la perspectiva lo estrecha. Aqui se limita.
+  function safeOff(s, off){
+    const k = curv(s);
+    if (Math.abs(k) < 1e-5) return off;
+    const R = 1/Math.abs(k), inside = Math.sign(k);   // lado interior de la curva
+    if (Math.sign(off) === inside && Math.abs(off) > R*0.72) return inside*R*0.72;
+    return off;
+  }
+  function ptOff(s, off, y){ const p = at(s), n = normalAt(s), o = safeOff(s, off);
+    return { x: p.x + n.x*o, y: y||0, z: p.z + n.z*o }; }
+
+  /* ---------- 2. ESTADO ---------- */
+  const ui = {}; ['spd','look','hgt','back','fog','csz','beam'].forEach(k=>ui[k]=document.getElementById('s_'+k));
+  const cb = {}; ['auto','traffic','couple','rain','posts','wire','brake','beam','dbg'].forEach(k=>cb[k]=document.getElementById('c_'+k));
+
+  // foto del coche -> billboard
+  let carImg = null, carAR = 1, carOrig = null;
+  const stat = m => document.getElementById('carstat').innerHTML = m;
+  const fileIn = document.getElementById('f_car'), drop = document.getElementById('drop');
+
+  drop.onclick = () => { fileIn.value = ''; fileIn.click(); };   // value='' permite recargar la misma foto
+  drop.ondragover = e => { e.preventDefault(); drop.style.borderColor = 'var(--data)'; };
+  drop.ondragleave = () => drop.style.borderColor = 'var(--line)';
+  drop.ondrop = e => { e.preventDefault(); drop.style.borderColor = 'var(--line)';
+    if (e.dataTransfer.files[0]) loadCar(e.dataTransfer.files[0]); };
+  fileIn.onchange = e => { if (e.target.files[0]) loadCar(e.target.files[0]); };
+
+  function adoptBitmap(bmp, name, w, h){
+    const maxW = 1024, sc = Math.min(1, maxW/w);
+    const cn = document.createElement('canvas');
+    cn.width = Math.round(w*sc); cn.height = Math.round(h*sc);
+    cn.getContext('2d').drawImage(bmp, 0, 0, cn.width, cn.height);
+    carOrig = cn; carImg = cn; carAR = cn.height/cn.width;
+    document.getElementById('bgtools').style.display = 'block';
+    stat(`<b style="color:var(--data)">${name}</b><br>${w}×${h} px → escalada a ${cn.width}×${cn.height}`);
+  }
+
+  async function loadCar(f){
+    stat('Leyendo ' + f.name + ' …');
+    const ext = (f.name.split('.').pop() || '').toLowerCase();
+    // Via 1: createImageBitmap acepta mas formatos y da error real si falla
+    try {
+      const bmp = await createImageBitmap(f);
+      adoptBitmap(bmp, f.name, bmp.width, bmp.height);
+      return;
+    } catch (err) {
+      // Via 2: elemento Image clasico
+      const url = URL.createObjectURL(f);
+      const im = new Image();
+      im.onload = () => { adoptBitmap(im, f.name, im.naturalWidth, im.naturalHeight); URL.revokeObjectURL(url); };
+      im.onerror = () => {
+        URL.revokeObjectURL(url);
+        stat(ext === 'heic' || ext === 'heif'
+          ? '<b style="color:#ff5a4d">HEIC no se puede decodificar aquí.</b><br>En el iPhone: Ajustes → Cámara → Formatos → Más compatible. O comparte la foto por WhatsApp contigo mismo y descárgala: sale en JPG.'
+          : `<b style="color:#ff5a4d">No se pudo decodificar ${f.name}</b><br>Formato .${ext} no soportado por el navegador. Usa PNG, JPG o WebP.`);
+      };
+      im.src = url;
+    }
+  }
+
+  document.getElementById('b_undo').onclick = () => { if (carOrig){ carImg = carOrig; stat('Foto original restaurada.'); } };
+  document.getElementById('s_tol').oninput = e => document.getElementById('v_tol').textContent = e.target.value;
+  document.getElementById('b_cut').onclick = () => {
+    if (!carOrig) return;
+    try {
+      const t0 = performance.now();
+      carImg = cutBackground(carOrig, +document.getElementById('s_tol').value);
+      stat(`Fondo recortado en ${Math.round(performance.now()-t0)} ms. Si queda halo, sube la tolerancia; si se come el coche, bájala.`);
+    } catch (err) { stat('<b style="color:#ff5a4d">El recorte falló:</b> ' + err.message); }
+  };
+
+  // Relleno por inundación desde los cuatro bordes. Region growing: cada píxel se compara
+  // con el vecino del que viene (tolera degradados) y con el color medio del borde (evita fugas).
+  function cutBackground(src, tol){
+    const w = src.width, h = src.height;
+    const cn = document.createElement('canvas'); cn.width = w; cn.height = h;
+    const c2 = cn.getContext('2d', {willReadFrequently:true});
+    c2.drawImage(src, 0, 0);
+    const img = c2.getImageData(0, 0, w, h), D = img.data;
+
+    let sr=0, sg=0, sb=0, n=0;
+    const sample = (x,y) => { const i=(y*w+x)*4; sr+=D[i]; sg+=D[i+1]; sb+=D[i+2]; n++; };
+    for (let x=0;x<w;x+=3){ sample(x,0); sample(x,h-1); }
+    for (let y=0;y<h;y+=3){ sample(0,y); sample(w-1,y); }
+    sr/=n; sg/=n; sb/=n;
+
+    const seen = new Uint8Array(w*h);
+    const q = new Int32Array(w*h);
+    let head = 0, tail = 0;
+    const push = p => { if (!seen[p]){ seen[p]=1; q[tail++]=p; } };
+    for (let x=0;x<w;x++){ push(x); push((h-1)*w+x); }
+    for (let y=0;y<h;y++){ push(y*w); push(y*w+w-1); }
+
+    const globalTol = tol*2.6;
+    while (head < tail){
+      const p = q[head++], i = p*4;
+      const r=D[i], g=D[i+1], b=D[i+2];
+      if (Math.abs(r-sr)+Math.abs(g-sg)+Math.abs(b-sb) > globalTol*3) continue; // demasiado distinto: es el coche
+      D[i+3] = 0;
+      const x = p % w, y = (p/w)|0;
+      const near = (nx, ny) => {
+        if (nx<0||ny<0||nx>=w||ny>=h) return;
+        const np = ny*w+nx; if (seen[np]) return;
+        const j = np*4;
+        if (Math.abs(D[j]-r)+Math.abs(D[j+1]-g)+Math.abs(D[j+2]-b) <= tol*3) push(np);
+      };
+      near(x+1,y); near(x-1,y); near(x,y+1); near(x,y-1);
+    }
+
+    // suavizado de borde: sin esto el recorte se ve dentado sobre el asfalto
+    const A = new Uint8ClampedArray(w*h);
+    for (let p=0;p<w*h;p++) A[p] = D[p*4+3];
+    for (let y=1;y<h-1;y++) for (let x=1;x<w-1;x++){
+      const p = y*w+x; if (A[p] === 0) continue;
+      const s4 = A[p-1]+A[p+1]+A[p-w]+A[p+w];
+      if (s4 < 1020) D[p*4+3] = Math.round((A[p]*2 + s4/4*2)/4);
+    }
+    c2.putImageData(img, 0, 0);
+    return cn;
+  }
+  let timeOfDay = 'day', fpsCap = 0;
+  document.getElementById('seg_time').onclick = e => { if(!e.target.dataset.v) return;
+    [...e.currentTarget.children].forEach(b=>b.classList.remove('on')); e.target.classList.add('on');
+    timeOfDay = e.target.dataset.v; };
+  const rstat = m => document.getElementById('routestat').innerHTML = m;
+  document.getElementById('b_route').onclick = () => {
+    const raw = document.getElementById('ta_route').value.trim();
+    if (!raw) return rstat('<b style="color:#ff5a4d">Pega antes un trazado.</b>');
+    try {
+      let ll = null;
+      if (raw[0] === '{' || raw[0] === '['){
+        const j = JSON.parse(raw);
+        const coords = j.coordinates || (j.geometry && j.geometry.coordinates)
+          || (j.routes && j.routes[0] && j.routes[0].geometry && j.routes[0].geometry.coordinates)
+          || (Array.isArray(j) ? j : null);
+        if (!coords) throw new Error('no encuentro coordinates');
+        ll = coords.map(c => [c[1], c[0]]);          // GeoJSON viene [lng,lat]
+      } else {
+        ll = decodePolyline(raw, 5);
+        if (Math.abs(ll[0][0]) > 90 || Math.abs(ll[0][1]) > 180) ll = decodePolyline(raw, 6);
+      }
+      const r = loadRoute(ll);
+      rstat('<b style="color:var(--data)">Trazado cargado</b><br>' + r.metros + ' m · '
+          + r.puntos + ' puntos · ' + r.rotondas + ' rotonda(s) detectada(s) por curvatura');
+    } catch (err){ rstat('<b style="color:#ff5a4d">No se pudo cargar:</b> ' + err.message); }
+  };
+  document.getElementById('b_demo').onclick = () => location.reload();
+
+  document.getElementById('seg_dens').onclick = e => { if(!e.target.dataset.v) return;
+    [...e.currentTarget.children].forEach(b=>b.classList.remove('on')); e.target.classList.add('on');
+    density = e.target.dataset.v; spawnTimer = Math.min(spawnTimer, 2); };
+
+  let lightsMode = 'auto';
+  document.getElementById('seg_lights').onclick = e => { if(!e.target.dataset.v) return;
+    [...e.currentTarget.children].forEach(b=>b.classList.remove('on')); e.target.classList.add('on');
+    lightsMode = e.target.dataset.v; };
+  const lightsOn = pal => lightsMode === 'on' ? 1 : lightsMode === 'off' ? 0 : (pal.glow > 0 ? 1 : 0);
+
+  document.getElementById('seg_road').onclick = e => { if(!e.target.dataset.v) return;
+    [...e.currentTarget.children].forEach(b=>b.classList.remove('on')); e.target.classList.add('on');
+    roadMode = e.target.dataset.v; };
+  document.getElementById('seg_fps').onclick = e => { if(!e.target.dataset.v) return;
+    [...e.currentTarget.children].forEach(b=>b.classList.remove('on')); e.target.classList.add('on');
+    fpsCap = +e.target.dataset.v; };
+
+  let s = 40;            // distancia recorrida
+  let brakeGlow = 0;     // 0..1 intensidad del piloto de freno
+  let speed = 25;        // m/s reales (suavizado)
+  let fov = 0.86, camY = 2.6, camBack = 7.5, look = 55;
+  const LANE = 3.6;
+  let HALF = 3.5, MYOFF = 1.75, MW = 0;   // se recalculan cada frame segun la clase de via
+
+  // Clase de via a lo largo de la ruta. En TeslaHUD esto sale de la etiqueta
+  // highway=motorway|trunk del tile, o de road_class en el step de OSRM.
+  const smooth = x => x*x*(3-2*x);
+  function mwFactor(sPos){
+    let f = 0;
+    for (const seg of MW_SEGS){
+      if (sPos > seg[0]-160 && sPos < seg[1]+160){
+        const inn = Math.min((sPos-(seg[0]-160))/160, ((seg[1]+160)-sPos)/160, 1);
+        f = Math.max(f, smooth(Math.min(Math.max(inn,0),1)));
+      }
+    }
+    if (roadMode === 'mw') f = 1; else if (roadMode === 'sec') f = 0;
+    return f;
+  }
+  let MW_SEGS = [[900, 3400], [5200, 8600], [11000, 15000], [18000, 24000]];
+  let roadMode = 'auto';
+  // configuracion interpolada: convencional (1 carril/sentido) -> autovia (2 + mediana)
+  function cfg(sPos){
+    const rf = rbFactor(sPos);
+    const f = mwFactor(sPos) * (1 - rf);              // una rotonda nunca es autovia
+    return { f, rf,
+      med:  f*1.7,                                    // media anchura de la mediana
+      half: (3.5 + f*(1.7 + 2*LANE - 3.5))*(1-rf) + 4.9*rf,
+      mine: (1.75 + f*(1.7 + LANE*1.5 - 1.75))*(1-rf) + 2.5*rf };
+  }
+
+  // Trafico esporadico. La carretera esta vacia la mayor parte del tiempo y de vez en
+  // cuando aparece alguien, en un sentido o en el otro.
+  const CAR_COLORS = ['#8d99a4','#b06d4a','#4a545e','#c9ced4','#5a6b52','#7a4550','#2f3540'];
+  let cars = [], spawnTimer = 4;
+  const DENSITY = { poca: [16, 34], normal: [7, 16], mucha: [2.5, 6] };
+  let density = 'poca';
+
+  function spawnCar(){
+    const mwHere = cfg(s + 300).f;
+    const oncoming = Math.random() < 0.55;
+    const col = CAR_COLORS[(Math.random()*CAR_COLORS.length)|0];
+    if (oncoming){
+      // viene de frente por la calzada contraria: se cruza y desaparece
+      cars.push({ pos: s + 420 + Math.random()*420, v: 14 + Math.random()*13,
+                  dir: -1, lane: 'opp', color: col });
+    } else {
+      // mi sentido. En autovia puede ir por el carril interior y lo adelanto;
+      // en convencional va en mi carril y no lo puedo pasar.
+      const adj = mwHere > 0.5 && Math.random() < 0.6;
+      cars.push({ pos: s + 220 + Math.random()*300,
+                  v: Math.max(9, speed*(adj ? 0.70 : 0.84) + (Math.random()-0.5)*4),
+                  dir: 1, lane: adj ? 'adj' : 'same', color: col });
+    }
+  }
+
+  function updateTraffic(dt){
+    if (!cb.traffic.checked){ cars.length = 0; return; }
+    spawnTimer -= dt;
+    if (spawnTimer <= 0){
+      spawnCar();
+      const g = DENSITY[density];
+      spawnTimer = g[0] + Math.random()*(g[1]-g[0]);
+    }
+    for (let i = cars.length-1; i >= 0; i--){
+      const c = cars[i];
+      c.pos += c.dir * c.v * dt;
+      const rel = c.pos - s;
+      if (c.lane === 'same'){
+        // nunca lo atropello: a menos de 18 m copia mi velocidad
+        if (rel < 18){ c.pos = s + 18; c.v = speed; }
+        else if (rel > 26 && c.v > speed) c.v = Math.max(9, speed*0.84);
+      }
+      if (rel < -90 || rel > 1100) cars.splice(i, 1);
+    }
+  }
+
+  const rain = Array.from({length:260}, () => ({x:Math.random(), y:Math.random(), l:Math.random()}));
+
+  /* ---------- 3. CÁMARA + PROYECCIÓN ---------- */
+  const cam = {x:0,y:0,z:0}, fwd={x:0,y:0,z:1}, rgt={x:1,y:0,z:0}, upv={x:0,y:1,z:0};
+  let focal = 500;
+  function setupCamera(){
+    const kmh = speed*3.6, t = Math.min(kmh/130, 1);
+    let fovDeg, height, back, lookM;
+    if (cb.couple.checked){
+      fovDeg = 44 + t*20;                       // 44° -> 64°
+      height = camY * (1 - t*0.22);             // baja al acelerar
+      back   = camBack * (1 + t*0.30);
+      lookM  = 12 + look*t + 8;                 // mira mucho más lejos rápido
+    } else {
+      fovDeg = 48; height = camY; back = camBack; lookM = 6;
+    }
+    const c = ptOff(s - back, MYOFF, height);
+    const tg = ptOff(s + lookM, MYOFF*0.5, height*0.42);
+    cam.x=c.x; cam.y=c.y; cam.z=c.z;
+    let dx=tg.x-cam.x, dy=tg.y-cam.y, dz=tg.z-cam.z;
+    const L=Math.hypot(dx,dy,dz); fwd.x=dx/L; fwd.y=dy/L; fwd.z=dz/L;
+    const rl=Math.hypot(fwd.z,fwd.x); rgt.x=fwd.z/rl; rgt.y=0; rgt.z=-fwd.x/rl;
+    upv.x = fwd.y*rgt.z - fwd.z*rgt.y;
+    upv.y = fwd.z*rgt.x - fwd.x*rgt.z;
+    upv.z = fwd.x*rgt.y - fwd.y*rgt.x;
+    fov = fovDeg*Math.PI/180;
+    focal = (H/2)/Math.tan(fov/2);
+  }
+  const P = {x:0,y:0,d:0,ok:false};
+  function project(p){
+    const dx=p.x-cam.x, dy=p.y-cam.y, dz=p.z-cam.z;
+    const zc = dx*fwd.x + dy*fwd.y + dz*fwd.z;
+    if (zc < 0.45){ P.ok=false; return P; }
+    const xc = dx*rgt.x + dy*rgt.y + dz*rgt.z;
+    const yc = dx*upv.x + dy*upv.y + dz*upv.z;
+    P.x = W/2 + xc*focal/zc; P.y = H/2 - yc*focal/zc; P.d = zc; P.ok = true;
+    return P;
+  }
+  function poly(list, fill, stroke){
+    const sc = []; 
+    for (const p of list){ const q = project(p); if(!q.ok) return false; sc.push(q.x, q.y); }
+    ctx.beginPath(); ctx.moveTo(sc[0], sc[1]);
+    for (let i=2;i<sc.length;i+=2) ctx.lineTo(sc[i], sc[i+1]);
+    ctx.closePath();
+    if (fill){ ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke){ ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
+    return true;
+  }
+
+  /* ---------- 4. PALETA ---------- */
+  const PAL = {
+    day:   { skyTop:'#7fa6c4', skyBot:'#cfdbe2', ground:'#5c6a5a', asphalt:[60,64,68],  line:[228,230,224], glow:0 },
+    dusk:  { skyTop:'#2b3550', skyBot:'#c9764a', ground:'#3a3a38', asphalt:[44,44,48],  line:[214,200,176], glow:.45 },
+    night: { skyTop:'#05070c', skyBot:'#141c28', ground:'#12161a', asphalt:[26,28,32],  line:[190,196,190], glow:1 }
+  };
+  const mix = (c, tgt, f) => `rgb(${Math.round(c[0]+(tgt[0]-c[0])*f)},${Math.round(c[1]+(tgt[1]-c[1])*f)},${Math.round(c[2]+(tgt[2]-c[2])*f)})`;
+
+  /* ---------- 5. DIBUJO ---------- */
+  function drawSky(pal){
+    const g = ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0, pal.skyTop); g.addColorStop(1, pal.skyBot);
+    ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+    // suelo: horizonte proyectado de forma barata
+    const hz = project({x:cam.x+fwd.x*4000, y:0, z:cam.z+fwd.z*4000});
+    const y = hz.ok ? hz.y : H*0.45;
+    ctx.fillStyle = pal.ground; ctx.fillRect(0, y, W, H-y);
+  }
+
+  // Traza los bordes calculados y la huella del coche. Si el coche pisa la linea roja,
+  // el fallo esta en la geometria; si no la pisa, es ilusion de perspectiva.
+  function drawDebug(){
+    ctx.save(); ctx.lineWidth = 2;
+    for (const [off, col] of [[null,'#ff5a4d'], [null,'#5fd0e0']]) {}
+    const line = (getOff, col) => {
+      ctx.strokeStyle = col; ctx.beginPath(); let started = false;
+      for (let d = -8; d < 160; d += 4){
+        const q = project(ptOff(s+d, getOff(s+d), 0.06));
+        if (!q.ok){ started = false; continue; }
+        if (!started){ ctx.moveTo(q.x, q.y); started = true; } else ctx.lineTo(q.x, q.y);
+      }
+      ctx.stroke();
+    };
+    line(x => cfg(x).half, '#ff5a4d');          // borde exterior derecho
+    line(x => -cfg(x).half, '#ff5a4d');         // borde exterior izquierdo
+    line(x => cfg(x).med, '#ffab3d');           // borde interior (mediana)
+    line(x => MYOFF, '#5fd0e0');                // eje que sigue mi coche
+    // huella real del coche
+    ctx.strokeStyle = '#7cff9b';
+    const box = [[-2.34,-0.95],[2.34,-0.95],[2.34,0.95],[-2.34,0.95]];
+    ctx.beginPath();
+    for (let i=0;i<4;i++){ const q = project(ptOff(s+box[i][0], MYOFF+box[i][1], 0.06));
+      if (!q.ok) { ctx.closePath(); break; } i ? ctx.lineTo(q.x,q.y) : ctx.moveTo(q.x,q.y); }
+    ctx.closePath(); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawIsland(r, pal, fogRGB, fogEnd){
+    const gr = hexToRgb(pal.ground);
+    const ring = (rad, y, col) => {
+      const pts = [];
+      for (let k = 0; k < 26; k++){ const a = k/26*6.2832;
+        pts.push({ x: r.cx + Math.cos(a)*rad, y, z: r.cz + Math.sin(a)*rad }); }
+      poly(pts, col);
+    };
+    const RR = r.R || RB_R;
+    ring(RR - 4.4, 0.02, mix([198,200,196], fogRGB, 0.15));   // bordillo
+    ring(RR - 4.9, 0.16, mix(gr, fogRGB, 0.10));               // cesped
+    ring(Math.max(RR - 7.5, 2), 0.55, mix([gr[0]*1.15, gr[1]*1.2, gr[2]*1.1], fogRGB, 0.10)); // monticulo
+    // mastil central, da referencia de altura y de giro
+    poly([{x:r.cx-0.16,y:0.55,z:r.cz}, {x:r.cx+0.16,y:0.55,z:r.cz},
+          {x:r.cx+0.16,y:6.2,z:r.cz},  {x:r.cx-0.16,y:6.2,z:r.cz}],
+         mix([120,126,132], fogRGB, 0.2));
+  }
+
+  function drawRoad(pal, fogEnd){
+    const fogRGB = hexToRgb(pal.skyBot);
+    const rbCur = RB.find(r => s > r.s0 - 200 && s < r.s1 + 60);
+    let islandDone = false;
+    const SEG = 4, FAR = Math.min(fogEnd + 40, 620);
+    const s0 = Math.floor((s - 12)/SEG)*SEG;
+    for (let d = FAR; d >= -12; d -= SEG){
+      const a = s0 + d, b = a + SEG;
+      const A = cfg(a), B = cfg(b);
+      const fog = Math.min(Math.max((d - fogEnd*0.25)/(fogEnd*0.9), 0), 1);
+      const asf = mix(pal.asphalt, fogRGB, fog);
+      const wire = cb.wire.checked ? 'rgba(95,208,224,.35)' : null;
+
+      // calzada derecha (la mia) y calzada izquierda
+      poly([ptOff(a,A.med), ptOff(b,B.med), ptOff(b,B.half), ptOff(a,A.half)], asf, wire);
+      poly([ptOff(a,-A.half), ptOff(b,-B.half), ptOff(b,-B.med), ptOff(a,-A.med)], asf, wire);
+      // hueco central: asfalto cuando es convencional, mediana cuando es autovia
+      if (A.med > 0.02 || B.med > 0.02){
+        poly([ptOff(a,-A.med), ptOff(b,-B.med), ptOff(b,B.med), ptOff(a,A.med)],
+             mix(hexToRgb(pal.ground), fogRGB, fog));
+      }
+      if (fog > .97) continue;
+      const lin = mix(pal.line, fogRGB, fog);
+      const band = (o1, o2, col, alpha) => {
+        ctx.save(); if (alpha !== undefined) ctx.globalAlpha = alpha;
+        poly([ptOff(a,o1,0.012), ptOff(b,o1,0.012), ptOff(b,o2,0.012), ptOff(a,o2,0.012)], col);
+        ctx.restore();
+      };
+      const dash = ((a % 12) + 12) % 12 < 4;
+
+      if (A.f < 0.98){
+        // eje discontinuo de la carretera convencional
+        if (dash) band(-0.09, 0.09, lin, 1 - A.f);
+      }
+      if (A.f > 0.02){
+        // separacion de carriles en cada calzada + barrera de mediana
+        const dv = A.med + LANE;
+        if (dash){ band(dv-0.09, dv+0.09, lin, A.f); band(-dv-0.09, -dv+0.09, lin, A.f); }
+        for (const side of [-1, 1]){
+          const o = side*(A.med - 0.25);
+          ctx.save(); ctx.globalAlpha = A.f;
+          poly([ptOff(a,o,0.45), ptOff(b,o,0.45), ptOff(b,o,0.85), ptOff(a,o,0.85)],
+               mix([158,164,168], fogRGB, fog));
+          ctx.restore();
+        }
+      }
+      // bordes exteriores continuos
+      for (const e of [A.half-0.3, -(A.half-0.3), A.med+0.3, -(A.med+0.3)]){
+        if (Math.abs(e) < 0.4) continue;
+        band(e-0.09, e+0.09, lin);
+      }
+
+      // isla central: se pinta cuando el bucle pasa por su profundidad
+      if (!islandDone && rbCur && ((rbCur.s0 + rbCur.s1)/2) - s > d - SEG){
+        drawIsland(rbCur, pal, fogRGB, fogEnd); islandDone = true;
+      }
+      if (cb.posts.checked && A.rf < 0.5){
+        for (const side of [-1, 1]){
+          const o = side*(A.half+1.7);
+          if (Math.abs(curv(a)) > 0.02) continue;   // en rotonda o giro cerrado, sin farolas
+          poly([ptOff(a,o,0.5), ptOff(b,o,0.5), ptOff(b,o,0.85), ptOff(a,o,0.85)],
+               mix([150,156,160], fogRGB, fog));
+          if (((a % 24)+24) % 24 < SEG){
+            poly([ptOff(a,o-0.08,0), ptOff(a+0.4,o-0.08,0), ptOff(a+0.4,o+0.08,5.6), ptOff(a,o+0.08,5.6)],
+                 mix([92,98,104], fogRGB, fog));
+            if (pal.glow > 0 && side === 1){
+              const lp = projCopy(ptOff(a+0.2, o-1.5, 5.6));
+              if (lp.ok){
+                const r = Math.max(6, 900/lp.d);
+                const g = ctx.createRadialGradient(lp.x, lp.y, 0, lp.x, lp.y, r);
+                g.addColorStop(0, `rgba(255,171,61,${.55*pal.glow*(1-fog)})`);
+                g.addColorStop(1, 'rgba(255,171,61,0)');
+                ctx.fillStyle = g; ctx.beginPath(); ctx.arc(lp.x, lp.y, r, 0, 6.29); ctx.fill();
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // ---- Carroceria por secciones (loft). Cada estacion define cintura y techo;
+  // se cosen quads entre estaciones y se sombrean por normal. Es 3D real, no cajas.
+  const PROF = [
+    // z_local (+ = hacia delante), semiancho, altura cintura, semiancho techo, altura techo
+    [-2.34, 0.80, 0.88, 0.00, 0.94],
+    [-2.05, 0.90, 0.93, 0.00, 1.00],
+    [-1.62, 0.93, 0.95, 0.44, 1.20],
+    [-1.05, 0.94, 0.96, 0.74, 1.42],
+    [-0.30, 0.95, 0.97, 0.78, 1.475],
+    [ 0.45, 0.95, 0.97, 0.76, 1.46],
+    [ 1.15, 0.94, 0.96, 0.66, 1.36],
+    [ 1.70, 0.92, 0.94, 0.30, 1.12],
+    [ 2.10, 0.87, 0.90, 0.00, 0.96],
+    [ 2.34, 0.78, 0.84, 0.00, 0.88]
+  ];
+  const LIGHT = (() => { const v=[0.32,0.86,-0.40], L=Math.hypot(v[0],v[1],v[2]); return v.map(k=>k/L); })();
+
+  function shade(base, p0, p1, p2, fog, fogRGB, boost){
+    const ux=p1.x-p0.x, uy=p1.y-p0.y, uz=p1.z-p0.z;
+    const vx=p2.x-p0.x, vy=p2.y-p0.y, vz=p2.z-p0.z;
+    let nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx;
+    const L=Math.hypot(nx,ny,nz)||1; nx/=L; ny/=L; nz/=L;
+    if ((cam.x-p0.x)*nx + (cam.y-p0.y)*ny + (cam.z-p0.z)*nz < 0) return null;  // culling
+    const d = Math.abs(nx*LIGHT[0] + ny*LIGHT[1] + nz*LIGHT[2]);
+    const k = (0.40 + 0.60*d) * (boost || 1);
+    const spec = Math.pow(Math.max(ny,0), 12) * 55;
+    return mix([Math.min(base[0]*k+spec,255), Math.min(base[1]*k+spec,255), Math.min(base[2]*k+spec,255)], fogRGB, fog);
+  }
+
+  function drawCarMesh(sPos, off, color, fogEnd, pal, opt){
+    const d = sPos - s;
+    if (d > fogEnd + 20 || d < -40) return;
+    const fog = Math.min(Math.max((d - fogEnd*0.25)/(fogEnd*0.9), 0), 1);
+    if (fog > .96) return;
+    const fogRGB = hexToRgb(pal.skyBot);
+    const base = hexToRgb(color), glass = [22, 26, 31];
+    // Un coche de frente es el mismo modelo girado 180 grados: se invierten a la vez
+    // el eje longitudinal y el transversal. Asi sus faros apuntan hacia mi.
+    const flip = (opt && opt.opp) ? -1 : 1;
+    const P = (z, x, y) => ptOff(sPos + z*flip, off + x*flip, y);
+    const face = (pts, col, boost) => {
+      const c = shade(col, pts[0], pts[1], pts[2], fog, fogRGB, boost);
+      if (c) poly(pts, c);
+    };
+
+    poly([P(-2.4,-1.05,0.008), P(2.4,-1.05,0.008), P(2.4,1.05,0.008), P(-2.4,1.05,0.008)],
+         `rgba(0,0,0,${0.34*(1-fog)})`);
+
+    for (const wz of [-1.42, 1.46]) for (const wx of [-0.93, 0.93]){
+      const r = 0.335, a1 = [], a2 = [];
+      for (let k = 0; k < 10; k++){ const a = k/10*6.2832;
+        a1.push(P(wz + Math.cos(a)*r, wx, 0.345 + Math.sin(a)*r));
+        a2.push(P(wz + Math.cos(a)*r*0.55, wx*0.985, 0.345 + Math.sin(a)*r*0.55)); }
+      poly(a1, mix([30,32,36], fogRGB, fog));
+      poly(a2, mix([96,102,110], fogRGB, fog));
+    }
+
+    for (let i = 0; i < PROF.length-1; i++){
+      const A = PROF[i], B = PROF[i+1];
+      const cabin = A[3] > 0.15 && B[3] > 0.15;
+      for (const sg of [-1, 1]){
+        face([P(A[0], sg*A[1], 0.34), P(B[0], sg*B[1], 0.34),
+              P(B[0], sg*B[1], B[2]),  P(A[0], sg*A[1], A[2])], base);
+        face([P(A[0], sg*A[1], A[2]), P(B[0], sg*B[1], B[2]),
+              P(B[0], sg*B[3], B[4]),  P(A[0], sg*A[3], A[4])],
+             cabin ? glass : base, cabin ? 1.5 : 1);
+      }
+      if (A[3] > 0.02 || B[3] > 0.02)
+        face([P(A[0], -A[3], A[4]), P(B[0], -B[3], B[4]),
+              P(B[0],  B[3], B[4]), P(A[0],  A[3], A[4])], cabin ? glass : base, cabin ? 1.7 : 1);
+      else
+        face([P(A[0], -A[1]*0.98, A[2]), P(B[0], -B[1]*0.98, B[2]),
+              P(B[0],  B[1]*0.98, B[2]), P(A[0],  A[1]*0.98, A[2])], base);
+    }
+
+    // ---- Grupos opticos. Existen SIEMPRE como pieza fisica: apagados son cristal
+    // oscuro, encendidos emiten. Antes solo se pintaban de noche, por eso de dia
+    // el coche parecia no tener faros.
+    const tail = (opt && opt.tail !== undefined) ? opt.tail : 0.30*pal.glow;
+    const head = (opt && opt.head !== undefined) ? opt.head : 0;
+    const glow = (p3, col, rad, alpha) => {
+      const lp = projCopy(p3);
+      if (!lp.ok) return;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      const r = Math.max(5, rad/lp.d);
+      const g = ctx.createRadialGradient(lp.x, lp.y, 0, lp.x, lp.y, r);
+      g.addColorStop(0, `rgba(${col},${alpha*(1-fog)})`); g.addColorStop(1, `rgba(${col},0)`);
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(lp.x, lp.y, r, 0, 6.29); ctx.fill(); ctx.restore();
+    };
+
+    // trasera: piloto rojo + banda de union + luz de marcha atras
+    for (const sg of [-1, 1]){
+      const r = Math.round(74 + 181*tail), g2 = Math.round(14 + 42*tail);
+      poly([P(-2.325, sg*0.30, 0.855), P(-2.325, sg*0.86, 0.855),
+            P(-2.325, sg*0.86, 1.005), P(-2.325, sg*0.30, 1.005)],
+           mix([r, g2, 18], fogRGB, fog));
+      // reflector inferior, siempre presente
+      poly([P(-2.325, sg*0.42, 0.60), P(-2.325, sg*0.66, 0.60),
+            P(-2.325, sg*0.66, 0.68), P(-2.325, sg*0.42, 0.68)],
+           mix([96, 20, 18], fogRGB, fog));
+      if (tail > 0.2) glow(P(-2.33, sg*0.58, 0.93), '255,54,32', 300, 0.60*tail);
+    }
+    // banda oscura que une los pilotos (rasgo de portón)
+    poly([P(-2.322, -0.30, 0.90), P(-2.322, 0.30, 0.90),
+          P(-2.322, 0.30, 0.965), P(-2.322, -0.30, 0.965)], mix([38,40,44], fogRGB, fog));
+
+    // matricula + su luz
+    const lit = tail > 0.2 ? tail : 0;
+    // placa: se aclara de verdad cuando los focos la bañan
+    poly([P(-2.318, -0.28, 0.48), P(-2.318, 0.28, 0.48),
+          P(-2.318, 0.28, 0.63), P(-2.318, -0.28, 0.63)],
+         mix([200 + 55*lit, 202 + 53*lit, 196 + 52*lit], fogRGB, fog));
+    poly([P(-2.317, -0.22, 0.505), P(-2.317, -0.145, 0.505),
+          P(-2.317, -0.145, 0.605), P(-2.317, -0.22, 0.605)],
+         mix([28 + 30*lit, 48 + 40*lit, 118 + 60*lit], fogRGB, fog));
+    if (lit){
+      // carcasas de los dos focos, sobre el borde superior de la placa
+      for (const sg of [-1, 1])
+        poly([P(-2.312, sg*0.16, 0.645), P(-2.312, sg*0.245, 0.645),
+              P(-2.312, sg*0.245, 0.685), P(-2.312, sg*0.16, 0.685)],
+             mix([255, 246, 214], fogRGB, fog*0.5));
+      // bano de luz sobre la propia placa, en aditivo
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      poly([P(-2.314, -0.28, 0.48), P(-2.314, 0.28, 0.48),
+            P(-2.314, 0.28, 0.645), P(-2.314, -0.28, 0.645)],
+           `rgba(255,240,205,${0.30*lit*(1-fog)})`);
+      ctx.restore();
+      // halo de cada foco, ahora con el doble de radio y mas intensidad
+      for (const sg of [-1, 1]) glow(P(-2.305, sg*0.20, 0.665), '255,240,203', 260, 0.85*lit);
+      // reflejo calido en el paragolpes bajo la placa
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      poly([P(-2.316, -0.34, 0.36), P(-2.316, 0.34, 0.36),
+            P(-2.316, 0.30, 0.48), P(-2.316, -0.30, 0.48)],
+           `rgba(255,232,186,${0.13*lit*(1-fog)})`);
+      ctx.restore();
+    }
+
+    // delantera: unidad optica siempre visible, encendida o no
+    for (const sg of [-1, 1]){
+      const b = head > 0.2 ? [252, 250, 236] : [58, 62, 70];
+      poly([P(2.325, sg*0.30, 0.775), P(2.325, sg*0.88, 0.775),
+            P(2.325, sg*0.88, 0.945), P(2.325, sg*0.30, 0.945)], mix(b, fogRGB, fog));
+      // intermitente ambar en el extremo
+      poly([P(2.323, sg*0.72, 0.79), P(2.323, sg*0.87, 0.79),
+            P(2.323, sg*0.87, 0.93), P(2.323, sg*0.72, 0.93)],
+           mix([132, 84, 30], fogRGB, fog));
+      if (head > 0.2) glow(P(2.34, sg*0.58, 0.86), '255,246,220', 420, 0.55*head);
+    }
+    // toma de aire / parrilla baja, da apoyo visual al morro
+    poly([P(2.318, -0.62, 0.42), P(2.318, 0.62, 0.42),
+          P(2.318, 0.62, 0.58), P(2.318, -0.62, 0.58)], mix([30,32,36], fogRGB, fog));
+  }
+  function drawCar(sPos, off, color, opp, fogEnd, pal){ drawCarMesh(sPos, off, color, fogEnd, pal); }
+
+  // Faros: cono proyectado y recortado, relleno con gradiente en espacio de pantalla.
+  // Un halo por lampara + zona caliente comun. Mucho mas creible que sumar quads planos.
+  function coneClip(from, spreadNear, spreadFar, z0, len){
+    const pts = [ptOff(s+z0, from-spreadNear, 0.02), ptOff(s+len, from-spreadFar, 0.02),
+                 ptOff(s+len, from+spreadFar, 0.02), ptOff(s+z0, from+spreadNear, 0.02)];
+    const sc = [];
+    for (const p of pts){ const q = project(p); if (!q.ok) return null; sc.push({x:q.x,y:q.y}); }
+    return sc;
+  }
+  function drawBeams(pal){
+    const on = lightsOn(pal);
+    if (!cb.beam.checked || on <= 0) return;
+    // El eje del gradiente va de SUELO a SUELO, sobre la calzada. Antes arrancaba en la
+    // optica (0.85 m de alto) y eso desplazaba la banda brillante hacia arriba en pantalla:
+    // parecia un foco apuntando al cielo en vez de una luz de cruce.
+    const reach = +ui.beam.value;                       // alcance util del cruce, en metros
+    const g0 = projCopy(ptOff(s + 2.6,       MYOFF, 0.02));
+    const g1 = projCopy(ptOff(s + reach*1.1, MYOFF, 0.02));
+    if (!g0.ok || !g1.ok) return;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+
+    const paint = (sc, stops) => {
+      ctx.beginPath(); ctx.moveTo(sc[0].x, sc[0].y);
+      for (let k = 1; k < 4; k++) ctx.lineTo(sc[k].x, sc[k].y);
+      ctx.closePath(); ctx.save(); ctx.clip();
+      const g = ctx.createLinearGradient(g0.x, g0.y, g1.x, g1.y);
+      for (const st of stops) g.addColorStop(st[0], st[1]);
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); ctx.restore();
+    };
+
+    // haz de cruce: casi toda la luz en los primeros 10 m y corte claro antes de 26 m
+    for (const lamp of [MYOFF-0.62, MYOFF+0.62]){
+      // La apertura crece despacio con el alcance: un cono largo Y ancho es lo que
+      // se lee como canon de luz. Largo y estrecho sigue pareciendo luz de cruce.
+      const sc = coneClip(lamp, 0.40, 2.2 + reach*0.045, 2.45, reach);
+      if (sc) paint(sc, [
+        [0,    `rgba(255,247,224,${0.27*on})`],
+        [0.16, `rgba(255,244,212,${0.165*on})`],
+        [0.40, `rgba(248,240,212,${0.070*on})`],
+        [0.66, `rgba(236,236,216,${0.022*on})`],
+        [0.88,  'rgba(230,232,214,0)'],
+        [1,     'rgba(230,232,214,0)']
+      ]);
+    }
+    // charco caliente pegado al morro
+    const hot = coneClip(MYOFF, 0.80, 1.9, 2.45, Math.min(11, reach*0.45));
+    if (hot) paint(hot, [
+      [0,    `rgba(255,251,236,${0.32*on})`],
+      [0.20, `rgba(255,247,220,${0.13*on})`],
+      [0.40,  'rgba(255,247,220,0)'],
+      [1,     'rgba(255,247,220,0)']
+    ]);
+    ctx.restore();
+  }
+
+  // Agua levantada por las ruedas. Particulas con estado propio que nacen en la huella
+  // de cada neumatico y se quedan atras porque pierden velocidad respecto al coche.
+  const spray = [];
+  let sprayAcc = 0;
+  const WHEELS = [[-1.42,-0.93],[-1.42,0.93],[1.46,-0.93],[1.46,0.93]];
+  function updateSpray(dt){
+    if (!cb.rain.checked || speed < 4){ spray.length = 0; return; }
+    sprayAcc += Math.min(speed*9, 170) * dt;
+    while (sprayAcc > 1 && spray.length < 320){
+      sprayAcc--;
+      const w = WHEELS[(Math.random()*4)|0];
+      const rear = w[0] < 0;
+      spray.push({
+        ds: w[0] - 0.30,                              // nace justo detras de la huella
+        off: w[1] + Math.sign(w[1])*(0.06 + Math.random()*0.10),   // por fuera del faldon
+        y: 0.02,
+        vs: speed*(0.30 + Math.random()*0.35),        // se queda atras respecto al coche
+        vo: Math.sign(w[1])*(0.25 + Math.random()*0.85) + (Math.random()-0.5)*0.4,
+        vy: 0.55 + Math.random()*1.5,
+        r: 0.035 + Math.random()*0.05,
+        life: (rear ? 0.42 : 0.30) + Math.random()*0.30,
+        max: 0
+      });
+      const p = spray[spray.length-1]; p.max = p.life;
+    }
+    for (let i = spray.length-1; i >= 0; i--){
+      const p = spray[i];
+      p.ds -= p.vs*dt;
+      p.off += p.vo*dt;  p.vo *= (1 - 2.2*dt);
+      p.y   += p.vy*dt;  p.vy -= 5.4*dt;
+      if (p.y < 0.01){ p.y = 0.01; p.vy = 0; }
+      p.vs *= (1 - 1.1*dt);
+      p.r  += 0.55*dt;                                 // la gota se abre en niebla
+      p.life -= dt;
+      if (p.life <= 0) spray.splice(i, 1);
+    }
+  }
+  // La camara va DETRAS del coche, asi que las gotas por delante del paragolpes trasero
+  // estan mas lejos que la chapa y deben quedar tapadas por ella; las que ya han quedado
+  // atras estan mas cerca de la camara y van por encima. De ahi las dos pasadas.
+  const BODY_REAR = -2.34;
+  function insideBody(p){
+    return p.ds > BODY_REAR && p.ds < 2.34 && Math.abs(p.off) < 1.00 && p.y < 1.05;
+  }
+  function drawSpray(pal, phase){
+    if (!spray.length) return;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (const p of spray){
+      if (insideBody(p)) continue;                       // nunca dentro de la carroceria
+      const behind = p.ds <= BODY_REAR;
+      if (phase === 'far' ? behind : !behind) continue;
+      const a = p.life/p.max;
+      const al = a*a*0.19*(pal.glow > 0 ? 1.5 : 1);
+      const r = p.r;
+      poly([ptOff(s+p.ds-r, MYOFF+p.off-r, p.y),
+            ptOff(s+p.ds-r, MYOFF+p.off+r, p.y),
+            ptOff(s+p.ds+r, MYOFF+p.off+r, p.y+r*1.6),
+            ptOff(s+p.ds+r, MYOFF+p.off-r, p.y+r*1.6)],
+           `rgba(228,238,246,${al})`);
+    }
+    ctx.restore();
+  }
+
+  function projCopy(p){ const q = project(p); return {x:q.x, y:q.y, d:q.d, ok:q.ok}; }
+
+  function drawMyCar(pal){
+    const tail = Math.max(0.30*pal.glow, brakeGlow);
+    const hd = lightsOn(pal);
+    if (!carImg){ drawCarMesh(s, MYOFF, '#cdd3d9', 999, pal, { tail: Math.max(tail, 0.30*hd), head: hd }); return; }
+
+    // sprite: foto anclada al eje trasero
+    const pl = projCopy(ptOff(s - 1.2, MYOFF - 0.95, 0));
+    const pr = projCopy(ptOff(s - 1.2, MYOFF + 0.95, 0));
+    const pa = projCopy(ptOff(s - 1.2, MYOFF, 0));
+    if (!pa.ok){ drawCarMesh(s, MYOFF, '#cdd3d9', 999, pal, { tail: Math.max(tail, 0.30*hd), head: hd }); return; }
+
+    let wpx = Math.abs(pr.x - pl.x) * (+ui.csz.value/100) * 1.32;
+    if (!isFinite(wpx) || wpx < 8) wpx = W*0.34 * (+ui.csz.value/100);
+    const hpx = wpx * carAR;
+
+    ctx.save(); ctx.globalAlpha = 0.45;
+    const sg = ctx.createRadialGradient(pa.x, pa.y, 0, pa.x, pa.y, wpx*0.55);
+    sg.addColorStop(0,'rgba(0,0,0,.75)'); sg.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle = sg; ctx.beginPath();
+    ctx.ellipse(pa.x, pa.y, wpx*0.55, wpx*0.15, 0, 0, 6.29); ctx.fill();
+    ctx.restore();
+
+    ctx.drawImage(carImg, pa.x - wpx/2, pa.y - hpx*0.94, wpx, hpx);
+
+    if (tail > 0.02){
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      for (const fx of [-0.31, 0.31]){
+        const cx = pa.x + wpx*fx, cy = pa.y - hpx*0.44, r = wpx*(0.13 + 0.11*tail);
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+        g.addColorStop(0,   `rgba(255,64,42,${0.92*tail})`);
+        g.addColorStop(0.45,`rgba(228,26,16,${0.45*tail})`);
+        g.addColorStop(1,    'rgba(228,26,16,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.29); ctx.fill();
+      }
+      ctx.restore();
+    }
+    if (brakeGlow > 0.05 && cb.rain.checked){
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      for (let d = 1; d < 9; d += 1.5){
+        const a = s - 2.4 - d;
+        poly([ptOff(a,MYOFF-0.9,0.015), ptOff(a-1.5,MYOFF-0.9,0.015),
+              ptOff(a-1.5,MYOFF+0.9,0.015), ptOff(a,MYOFF+0.9,0.015)],
+             `rgba(255,40,26,${0.10*brakeGlow*(1-d/9)})`);
+      }
+      ctx.restore();
+    }
+  }
+
+  function drawRain(dt){
+    ctx.strokeStyle = 'rgba(190,215,235,.5)'; ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    for (const r of rain){
+      r.y += (0.55 + r.l*0.8) * dt * (1 + speed/26);
+      if (r.y > 1){ r.y = -0.05; r.x = Math.random(); }
+      const px = r.x*W, py = r.y*H, len = 10 + r.l*26 + speed*0.9;
+      ctx.moveTo(px, py); ctx.lineTo(px - (px - W/2)*0.035, py - len);
+    }
+    ctx.stroke();
+  }
+
+  function hexToRgb(h){ const n = parseInt(h.slice(1),16); return [n>>16 & 255, n>>8 & 255, n & 255]; }
+
+  /* ---------- 6. HUD ---------- */
+  const el = id => document.getElementById(id);
+  function turnAhead(){
+    // busca el cambio de rumbo acumulado en los próximos 400 m
+    const h0 = at(s).h;
+    for (let d = 60; d < 400; d += 20){
+      let dh = at(s+d).h - h0;
+      while (dh > Math.PI) dh -= 2*Math.PI; while (dh < -Math.PI) dh += 2*Math.PI;
+      if (Math.abs(dh) > 0.42) return { d, dir: dh > 0 ? 'R' : 'L' };
+    }
+    return null;
+  }
+  const ARROWS = {
+    S:'M20 4 L32 20 L24 20 L24 36 L16 36 L16 20 L8 20 Z',
+    R:'M24 6 L36 18 L24 30 L24 22 L14 22 L14 34 L6 34 L6 14 L24 14 Z',
+    L:'M16 6 L4 18 L16 30 L16 22 L26 22 L26 34 L34 34 L34 14 L16 14 Z',
+    RB:'M18 36 L18 24 A9 9 0 1 1 27 15 L34 15 L27 6 L20 15 L26 15 A5 5 0 1 0 22 22 L22 36 Z'
+  };
+  let lastArrow = 'S', key0 = null;
+  function updateHUD(){
+    const kmh = Math.round(speed*3.6);
+    el('spd').textContent = kmh;
+    el('limit').textContent = MW > 0.5 ? '120' : '90';
+    const rb = rbNear();
+    if (rb){
+      const dd = rb.s0 - s;
+      if (key0 !== 'RB'){ el('arrow').firstElementChild.setAttribute('d', ARROWS.RB); key0 = 'RB'; lastArrow='RB'; }
+      el('mdist').textContent = dd > 5 ? (dd < 100 ? Math.round(dd/10)*10 + ' m' : Math.round(dd/50)*50 + ' m') : 'En la rotonda';
+      el('mstreet').textContent = 'Rotonda · 3ª salida';
+      el('limit').textContent = '40';
+      const bars0 = el('lanebar').children;
+      for (let i=0;i<3;i++) bars0[i].classList.toggle('on', i === 1);
+      el('radar').classList.remove('on');
+      return;
+    }
+    key0 = null;
+    const t = turnAhead();
+    const key = t ? t.dir : 'S';
+    if (key !== lastArrow){ el('arrow').firstElementChild.setAttribute('d', ARROWS[key]); lastArrow = key; }
+    el('mdist').textContent = t ? (t.d < 100 ? Math.round(t.d/10)*10 + ' m' : Math.round(t.d/50)*50 + ' m') : 'Sigue recto';
+    el('mstreet').textContent = t ? (t.dir === 'R' ? 'Salida BI-3739' : 'Desvío a Muskiz') : 'BI-3739';
+    // radar cada ~1500 m de ruta
+    const near = 1500 - (s % 1500);
+    el('radar').classList.toggle('on', near < 320);
+    el('radar').textContent = `Radar fijo · ${Math.round(near/10)*10} m`;
+    // asistente de carril: desplazamiento simulado por curvatura
+    const drift = Math.sin(s/70)*1.1;
+    const bars = el('lanebar').children;
+    for (let i=0;i<3;i++) bars[i].classList.toggle('on', i === Math.max(0,Math.min(2, Math.round(drift)+1)));
+  }
+
+  /* ---------- 7. BUCLE ---------- */
+  let last = performance.now(), acc = 0, frames = 0, fpsT = 0, lastDraw = 0;
+  let crashed = false;
+  function showCrash(err){
+    if (crashed) return; crashed = true;
+    const d = document.createElement('div');
+    d.style.cssText = 'position:absolute;left:14px;right:14px;top:70px;background:rgba(255,90,77,.16);'
+      + 'border:1px solid #ff5a4d;color:#ffd9d5;padding:12px 14px;border-radius:4px;font-size:12px;'
+      + 'line-height:1.5;z-index:9;font-family:ui-monospace,monospace';
+    d.textContent = 'Fallo en el bucle de dibujo: ' + (err && err.message ? err.message : err);
+    document.getElementById('stage').appendChild(d);
+    console.error(err);
+  }
+
+  function loop(now){
+    requestAnimationFrame(loop);
+    try { frame(now); } catch (err) { showCrash(err); }
+  }
+
+  function frame(now){
+    const dt = Math.min((now - last)/1000, 0.05); last = now;
+    if (fpsCap && now - lastDraw < 1000/fpsCap - 1) return;
+    lastDraw = now;
+
+    // sliders
+    let target = +ui.spd.value/3.6;
+    look = +ui.look.value; camY = +ui.hgt.value/10; camBack = +ui.back.value/10;
+    const fogEnd = +ui.fog.value;
+    el('v_spd').textContent = ui.spd.value + ' km/h';
+    el('v_look').textContent = look + ' m';
+    el('v_hgt').textContent = camY.toFixed(1) + ' m';
+    el('v_back').textContent = camBack.toFixed(1) + ' m';
+    el('v_fog').textContent = fogEnd + ' m';
+    el('v_beam').textContent = ui.beam.value + ' m';
+
+    if (rbFactor(s + 45) > 0.1) target = Math.min(target, 11);   // 40 km/h en rotonda
+    if (cb.auto.checked){
+      // frena en curva: curvatura sobre 80 m
+      let dh = at(s+80).h - at(s).h;
+      while (dh > Math.PI) dh -= 2*Math.PI; while (dh < -Math.PI) dh += 2*Math.PI;
+      target *= 1 - Math.min(Math.abs(dh)*0.85, 0.42);
+    }
+    const prev = speed;
+    speed += (target - speed) * Math.min(dt*0.9, 1);
+    // deceleración real en m/s^2 -> intensidad del piloto de freno
+    const accel = dt > 0 ? (speed - prev)/dt : 0;
+    const want = cb.brake.checked ? Math.min(Math.max((-accel - 0.35)/1.8, 0), 1) : 0;
+    brakeGlow += (want - brakeGlow) * Math.min(dt * (want > brakeGlow ? 14 : 5), 1);
+    el('v_csz').textContent = ui.csz.value + ' %';
+    s += speed*dt;
+    if (s > routeLen - 900) s = 40;
+
+    updateTraffic(dt);
+
+    const pal = PAL[timeOfDay];
+    const myCfg = cfg(s);
+    HALF = myCfg.half; MW = myCfg.f;
+    // sujecion de carril: el eje del coche se mantiene siempre dentro del asfalto,
+    // con 1.15 m de guarda (semiancho 0.95 + margen). Asi no puede montar el arcen.
+    MYOFF = Math.min(Math.max(myCfg.mine, myCfg.med + 1.15), myCfg.half - 1.15);
+    setupCamera();
+    drawSky(pal);
+    drawRoad(pal, fogEnd);
+    drawBeams(pal);
+    if (cb.traffic.checked){
+      // de lejos a cerca, para que el mas proximo tape al de detras
+      for (const c of [...cars].sort((a,b) => (b.pos-s) - (a.pos-s))){
+        const cc = cfg(c.pos);
+        const off = c.lane === 'opp' ? -cc.mine
+                  : c.lane === 'adj' ? cc.mine - LANE*cc.f
+                  : cc.mine;
+        drawCarMesh(c.pos, off, c.color, fogEnd, pal, {
+          opp:  c.dir < 0,
+          tail: c.dir < 0 ? 0 : 0.30*lightsOn(pal),
+          head: c.dir < 0 ? lightsOn(pal) : 0
+        });
+      }
+    }
+    updateSpray(dt);
+    drawSpray(pal, 'far');            // gotas junto a las ruedas: las tapa la chapa
+    if (cb.dbg.checked) drawDebug();
+    drawMyCar(pal);
+    drawSpray(pal, 'near');           // estela ya pasada: por delante del coche
+    if (cb.rain.checked) drawRain(dt);
+    updateHUD();
+
+    frames++; acc += dt;
+    if (now - fpsT > 400){ el('fps').textContent = Math.round(frames/acc) || 0; frames = 0; acc = 0; fpsT = now; }
+  }
+
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>HUD 2 · demo</title>
+<style>
+  html,body{margin:0;height:100%;background:#0a0d10;color:#e8eef2;
+    font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+  #hud2{display:block;width:100vw;height:100vh}
+  #bar{position:fixed;left:14px;bottom:14px;right:14px;display:flex;gap:10px;align-items:center;
+    background:rgba(10,13,16,.72);border:1px solid #232c33;border-radius:6px;padding:10px 14px;
+    backdrop-filter:blur(6px);font-size:12px}
+  #bar input{flex:1;accent-color:#5fd0e0}
+  #v{min-width:78px;color:#5fd0e0;font-variant-numeric:tabular-nums}
+  #err{position:fixed;left:14px;right:14px;top:14px;background:rgba(255,90,77,.16);
+    border:1px solid #ff5a4d;color:#ffd9d5;padding:10px 12px;border-radius:5px;
+    font-family:ui-monospace,monospace;font-size:12px;display:none}
+</style>
+</head>
+<body>
+<canvas id="hud2"></canvas>
+<div id="err"></div>
+<div id="bar">
+  <span>Velocidad</span>
+  <input type="range" id="s" min="0" max="140" value="80">
+  <span id="v">80 km/h</span>
+</div>
+<script type="module">
+import { createHud2 } from './hud2.js';
+
+const hud = createHud2(document.getElementById('hud2'), { theme: 'auto' });
+hud.onError = e => {
+  const d = document.getElementById('err');
+  d.style.display = 'block';
+  d.textContent = 'hud2: ' + e.message;
+};
+
+// Ruta de ejemplo: recta, rotonda, recta. Sustitúyela por la de autoboardV2.
+const R = 6378137, LAT0 = 43.30, LNG0 = -3.05, c0 = Math.cos(LAT0*Math.PI/180);
+const toLL = (x,z) => [LAT0 + z/R*180/Math.PI, LNG0 + x/(R*c0)*180/Math.PI];
+const ll = []; let x = 0, z = 0, h = 0;
+for (let i=0;i<500;i++){ z += 2; ll.push(toLL(x,z)); }
+for (let i=0;i<44;i++){ h -= 2/16; x += Math.sin(h)*2; z += Math.cos(h)*2; ll.push(toLL(x,z)); }
+for (let i=0;i<600;i++){ h += 0.0018*Math.sin(i/40)*2; x += Math.sin(h)*2; z += Math.cos(h)*2; ll.push(toLL(x,z)); }
+
+console.log('ruta:', hud.setRoute(ll));
+const sl = document.getElementById('s');
+const apply = () => { hud.setSpeed(+sl.value/3.6); document.getElementById('v').textContent = sl.value + ' km/h'; };
+sl.oninput = apply; apply();
+hud.start();
+</script>
+</body>
+</html>

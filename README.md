@@ -1,41 +1,52 @@
-# AutoBoard v2 (MapLibre)
+# HUD 2 — cinta de carretera 3D para autoboardV2
 
-Mapa VECTORIAL con MapLibre GL + MapTiler: gira e inclina en la GPU (como un navegador real), sin el problema de teselas.
-La clave MapTiler va incrustada en index.html (const MAPTILER_KEY) — restríngela por dominio en tu panel MapTiler.
+Canvas 2D, sin dependencias, un solo módulo ES.
+Es **decorativo**: la fuente de verdad sigue siendo el mapa.
 
-# AutoBoard
+## Archivos
 
-Tablero de coche estilo Android Auto, en el navegador (PWA). Basado en el motor de Tesla Nav.
-
-## Novedad frente a Tesla Nav
-Pantalla partida: **HUD a la izquierda** (coche + velocímetro) y **mapa/navegación a la derecha**, con:
-- **Divisor arrastrable**: mueve la línea central para dar más espacio al HUD o al mapa.
-- **Tres modos** (barra arriba a la izquierda): **HUD** solo, **Split** (partido), **Mapa** solo.
-- Recuerda tu modo y el tamaño del divisor entre sesiones.
-
-Todo lo demás sigue igual: buscador de destino y voz, rutas (TomTom + OSRM), tráfico, radares, cargadores, tiempo y lluvia.
-
-## Publicar (GitHub Pages)
-1. Sube TODOS estos archivos a la raíz de un repo público:
-   index.html, config.html, manifest.webmanifest, sw.js, radares.json, icon-192.png, icon-512.png, icon-180.png
-2. Settings → Pages → rama main, carpeta / (root) → Save.
-3. Abre `https://TU-USUARIO.github.io/TU-REPO/` y acepta el permiso de ubicación.
-
-El GPS necesita HTTPS (GitHub Pages ya lo es). En el móvil/Tesla: "Añadir a pantalla de inicio" para instalarlo como app.
+- `hud2.js` — el módulo. Es lo único que necesita autoboardV2.
+- `demo.html` — página de prueba con una ruta sintética (recta, rotonda, curvas).
+- `hud-sim.html` — banco de pruebas completo con todos los controles
+  (lluvia, agua de ruedas, tráfico, tipo de vía, límite de fps, depuración).
+  No forma parte del módulo; sirve para afinar valores.
 
 ## Uso
-- Barra arriba-izquierda: **HUD / Split / Mapa**.
-- Arrastra el **divisor** central para redimensionar.
-- 🎯 recentrar, ⚙️ ajustes, 🔄 refrescar (en el panel del mapa).
 
-## ⚠️ Seguridad (importante)
-Este proyecto hereda de Tesla Nav las claves API en texto plano dentro del código
-(TomTom en index.html, Supabase en config.html). Si subes el repo como público,
-cualquiera puede verlas y gastar tu cuota. Conviene restringir la clave de TomTom
-por dominio en su panel, o moverla a un proxy propio.
+```js
+import { createHud2 } from './hud2.js';
 
-## App nativa (opcional)
-Es la misma web envuelta en un WebView. Para generar un APK sin programar:
-- **PWABuilder** (pwabuilder.com): pega la URL de tu GitHub Pages y descarga el APK.
-- O **Bubblewrap** (TWA de Google) si quieres línea de comandos.
-No hay una versión "nativa" distinta: es esta misma PWA dentro de una cáscara.
+const hud = createHud2(document.getElementById('hud2-canvas'), { theme: 'auto' });
+hud.onError = e => console.error(e);
+
+hud.setRoute(latlngs);                    // [[lat,lng], ...] al calcular ruta
+hud.setSpeed(mps);                        // en cada posición del GPS
+hud.syncPosition(lat, lng);               // corrige la deriva, opcional
+hud.start();                              // hud.stop() al volver al mapa
+```
+
+## Opciones
+
+| Opción | Por defecto | Qué hace |
+|---|---|---|
+| `theme` | `'auto'` | `day`, `dusk`, `night` o por hora del reloj |
+| `beamReach` | `34` | alcance del haz de faros, en metros |
+| `fogEnd` | `260` | distancia de niebla |
+| `lookAhead` | `55` | a cuánto mira la cámara a velocidad máxima |
+| `camHeight` | `2.6` | altura de la cámara |
+| `camBack` | `7.5` | distancia por detrás del coche |
+| `posts` | `true` | farolas y quitamiedos |
+| `carColor` | `'#cdd3d9'` | color de la carrocería |
+| `maxFps` | `0` | 0 = libre. Pon `20` para simular el peor caso |
+
+Se pueden cambiar en caliente: `hud.set({ lookAhead: 70 })`.
+
+## Notas
+
+- **Módulos ES**: `demo.html` no funciona abriéndolo con `file://`.
+  Súbelo a Pages, o sirve la carpeta con `python3 -m http.server`.
+- Las rotondas se detectan por curvatura sostenida (radio < 30 m durante
+  más de 25 m). Da algún falso positivo en horquillas cerradas. Si tienes
+  los `steps` de OSRM, pásalas exactas con `hud.setRoundabouts([[s0,s1], ...])`.
+- El perfil de la carrocería está en la constante `PROF` de `hud2.js`:
+  diez estaciones con semiancho y alturas en metros. Editable.
