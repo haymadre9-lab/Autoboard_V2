@@ -46,7 +46,15 @@ function boot(){
   const fps = document.createElement('div'); fps.id = 'hud2-fps';
   document.body.append(wrap, btn, err, fps);
 
-  const hud = createHud2(cv, { theme: 'auto' });
+  // MISMA clave que hud2.html: los ajustes que afinaste en el coche se heredan aquí.
+  const HUD2_KEY = 'hud2.cfg';
+  const HUD2_DEF = { theme:'auto', maxFps:0, beamReach:34, fogEnd:260,
+                     lookAhead:55, camHeight:2.6, camBack:7.5, posts:true };
+  let cfg;
+  try { cfg = Object.assign({}, HUD2_DEF, JSON.parse(localStorage.getItem(HUD2_KEY) || '{}')); }
+  catch(e){ cfg = Object.assign({}, HUD2_DEF); }
+
+  const hud = createHud2(cv, cfg);
   hud.onError = e => { err.style.display = 'block'; err.textContent = 'hud2: ' + e.message; };
 
   // ruta de ejemplo, solo hasta que tu app llame a setRoute
@@ -63,7 +71,11 @@ function boot(){
   window.hud2 = Object.assign(Object.create(hud), {
     setRoute(ll, o){ rutaPropia = true; return hud.setRoute(ll, o); },
     abrir(){ activar(true); }, cerrar(){ activar(false); },
-    get demoActiva(){ return !rutaPropia; }
+    get demoActiva(){ return !rutaPropia; },
+    // ajustes persistentes, compartidos con hud2.html
+    ajustes(){ return Object.assign({}, cfg); },
+    ajustar(o){ Object.assign(cfg, o); hud.set(cfg);
+      try { localStorage.setItem(HUD2_KEY, JSON.stringify(cfg)); } catch(e){} }
   });
 
   // contador de fps: la cifra que decide si esto aguanta en la pantalla del coche

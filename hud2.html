@@ -6,8 +6,7 @@
 <meta name="theme-color" content="#0a0d10">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>HUD 2 · autoboardV2</title>
+<title>HUD 2 · Autoboard_V2</title>
 <style>
   :root{--void:#0a0d10;--panel:#12171c;--line:#232c33;--ink:#e8eef2;--mute:#7b8b96;--data:#5fd0e0;--alert:#ff5a4d}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -23,25 +22,36 @@
   #bar{left:12px;right:12px;bottom:12px;display:flex;gap:8px;align-items:center;
     background:rgba(10,13,16,.78);border:1px solid var(--line);border-radius:8px;padding:9px 12px;
     backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);font-size:12px}
-  #bar input[type=range]{flex:1;accent-color:var(--data);min-width:60px}
+  #bar input[type=range]{flex:1;accent-color:var(--data);min-width:50px}
   #bar button{background:transparent;border:1px solid var(--line);color:var(--mute);
-    font:600 11px/1 inherit;letter-spacing:.1em;text-transform:uppercase;padding:9px 11px;
+    font:600 11px/1 inherit;letter-spacing:.08em;text-transform:uppercase;padding:10px;
     border-radius:5px;cursor:pointer;white-space:nowrap}
   #bar button.on{background:var(--data);color:#06131a;border-color:var(--data)}
   #err{left:12px;right:12px;top:44px;display:none;background:rgba(255,90,77,.16);
     border:1px solid var(--alert);color:#ffd9d5;padding:10px 12px;border-radius:6px;
     font:12px/1.5 ui-monospace,monospace}
-  #sheet{position:fixed;inset:0;z-index:40;background:rgba(6,9,12,.94);display:none;
-    flex-direction:column;padding:20px 16px;gap:10px}
-  #sheet.on{display:flex}
-  #sheet h2{margin:0;font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--mute)}
-  #sheet textarea{flex:1;background:#0d1216;border:1px solid var(--line);border-radius:6px;
+  .sheet{position:fixed;inset:0;z-index:40;background:rgba(6,9,12,.96);display:none;
+    flex-direction:column;padding:18px 16px;gap:10px;overflow-y:auto}
+  .sheet.on{display:flex}
+  .sheet h2{margin:0;font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--mute)}
+  .sheet h3{margin:14px 0 6px;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#ffab3d}
+  .sheet textarea{flex:1;min-height:160px;background:#0d1216;border:1px solid var(--line);border-radius:6px;
     color:var(--ink);font:10px/1.4 ui-monospace,monospace;padding:10px;resize:none}
-  #sheet .rowb{display:flex;gap:8px}
-  #sheet .rowb button{flex:1;padding:13px;border-radius:6px;font:600 12px/1 inherit;border:0;cursor:pointer}
-  #ok{background:var(--data);color:#06131a}
-  #cancel{background:transparent;border:1px solid var(--line)!important;color:var(--mute)}
+  .rowb{display:flex;gap:8px;margin-top:6px}
+  .rowb button{flex:1;padding:14px;border-radius:6px;font:600 12px/1 inherit;border:0;cursor:pointer}
+  .prim{background:var(--data);color:#06131a}
+  .sec{background:transparent;border:1px solid var(--line)!important;color:var(--mute)}
   #note{font-size:11px;color:var(--mute);line-height:1.5}
+  #sets label{display:block;font-size:12px;margin:0 0 14px}
+  #sets .row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+  #sets .row em{font-style:normal;color:var(--data);font-size:11px}
+  #sets input[type=range]{width:100%;accent-color:var(--data);height:22px}
+  #sets .chk{display:flex;align-items:center;gap:10px}
+  #sets input[type=checkbox]{accent-color:var(--data);width:18px;height:18px}
+  .seg{display:flex;border:1px solid var(--line);border-radius:5px;overflow:hidden;margin-bottom:6px}
+  .seg button{flex:1;background:transparent;border:0;color:var(--mute);font:11px/1 inherit;
+    padding:11px 0;cursor:pointer;letter-spacing:.06em}
+  .seg button.on{background:var(--data);color:#06131a;font-weight:600}
 </style>
 </head>
 <body>
@@ -53,18 +63,20 @@
   <button id="b_gps">GPS</button>
   <input type="range" id="s_spd" min="0" max="140" value="80">
   <button id="b_route">Ruta</button>
-  <button id="b_night">Noche</button>
+  <button id="b_set">Ajustes</button>
 </div>
 
-<div id="sheet">
+<div class="sheet" id="sheet">
   <h2>Cargar trazado</h2>
-  <p id="note">Pega un polyline codificado de OSRM o un GeoJSON con coordinates [[lng,lat],…].
-     Si lo dejas vacío se usa la ruta de ejemplo con rotonda.</p>
+  <p id="note">Pega un polyline de OSRM o un GeoJSON. Vacío = ruta de ejemplo. Se guarda para la próxima vez.</p>
   <textarea id="ta" placeholder="polyline o GeoJSON…"></textarea>
-  <div class="rowb">
-    <button id="ok">Cargar</button>
-    <button id="cancel">Cerrar</button>
-  </div>
+  <div class="rowb"><button id="ok" class="prim">Cargar</button><button id="cancel" class="sec">Cerrar</button></div>
+</div>
+
+<div class="sheet" id="sheet_set">
+  <h2>Ajustes · se guardan en el navegador</h2>
+  <div id="sets"></div>
+  <div class="rowb"><button id="close_set" class="prim">Hecho</button><button id="reset_set" class="sec">Por defecto</button></div>
 </div>
 
 <script>
@@ -599,31 +611,41 @@ function createHud2(canvas, opts = {}){
   return api;
 }
 
-
 /* ------------------------------------------------------------------
-   Arranque. Página independiente: no toca el index de autoboardV2.
+   Ajustes persistentes. MISMA clave que usa hud2-boot.js, para que lo
+   que ajustes aquí en el coche lo herede el HUD 2 ya integrado.
    ------------------------------------------------------------------ */
+const HUD2_KEY = 'hud2.cfg';
+const HUD2_DEF = { theme:'auto', maxFps:0, beamReach:34, fogEnd:260,
+                   lookAhead:55, camHeight:2.6, camBack:7.5, posts:true };
+function hud2LoadCfg(){
+  try { return Object.assign({}, HUD2_DEF, JSON.parse(localStorage.getItem(HUD2_KEY) || '{}')); }
+  catch(e){ return Object.assign({}, HUD2_DEF); }
+}
+function hud2SaveCfg(c){ try { localStorage.setItem(HUD2_KEY, JSON.stringify(c)); } catch(e){} }
+
 (function(){
   const el = id => document.getElementById(id);
-  const hud = createHud2(el('hud'), { theme: 'auto' });
+  const cfg = hud2LoadCfg();
+  const hud = createHud2(el('hud'), cfg);
   hud.onError = e => { el('err').style.display = 'block'; el('err').textContent = 'hud2: ' + e.message; };
 
-  // ruta de ejemplo: recta, rotonda de 16 m, curvas
   const R = 6378137, LAT0 = 43.30, LNG0 = -3.05, c0 = Math.cos(LAT0*Math.PI/180);
   const toLL = (x,z) => [LAT0 + z/R*180/Math.PI, LNG0 + x/(R*c0)*180/Math.PI];
   const demo = []; let x = 0, z = 0, h = 0;
   for (let i=0;i<500;i++){ z += 2; demo.push(toLL(x,z)); }
   for (let i=0;i<44;i++){ h -= 2/16; x += Math.sin(h)*2; z += Math.cos(h)*2; demo.push(toLL(x,z)); }
   for (let i=0;i<800;i++){ h += 0.0018*Math.sin(i/40)*2; x += Math.sin(h)*2; z += Math.cos(h)*2; demo.push(toLL(x,z)); }
-  try { hud.setRoute(demo); } catch(e){ hud.onError(e); }
+  // última ruta usada, si la hubo
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem('hud2.ruta') || 'null'); } catch(e){}
+  try { hud.setRoute(saved && saved.length > 3 ? saved : demo); } catch(e){ hud.onError(e); }
 
-  // velocidad manual
   const sl = el('s_spd');
   const applySpeed = () => { hud.setSpeed(+sl.value/3.6); el('spd').firstElementChild.textContent = sl.value; };
   sl.oninput = () => { if (!gpsOn) applySpeed(); };
   applySpeed();
 
-  // GPS real: velocidad y corrección de deriva sobre la ruta cargada
   let gpsOn = false, watch = null;
   el('b_gps').onclick = () => {
     if (gpsOn){ navigator.geolocation.clearWatch(watch); gpsOn = false; el('b_gps').classList.remove('on'); return; }
@@ -636,12 +658,58 @@ function createHud2(canvas, opts = {}){
     gpsOn = true; el('b_gps').classList.add('on');
   };
 
-  // tema
-  let night = false;
-  el('b_night').onclick = () => { night = !night; hud.set({ theme: night ? 'night' : 'day' });
-    el('b_night').classList.toggle('on', night); };
+  /* ---- panel de ajustes ---- */
+  const SLIDERS = [
+    ['beamReach', 'Alcance de faros',   16,  70, 1,  'm'],
+    ['lookAhead', 'Look-ahead cámara',  10, 120, 1,  'm'],
+    ['camHeight', 'Altura de cámara',   10,  90, 1,  'm', 10],
+    ['camBack',   'Distancia detrás',   20, 200, 1,  'm', 10],
+    ['fogEnd',    'Niebla',             60, 500, 10, 'm']
+  ];
+  const FPSOPT = [[0,'Libre'],[30,'30'],[24,'24'],[20,'20']];
 
-  // carga de trazado
+  function buildSettings(){
+    const box = el('sets'); box.innerHTML = '';
+    // tema
+    box.insertAdjacentHTML('beforeend', '<h3>Tema</h3><div class="seg" id="g_theme">'
+      + ['auto','day','dusk','night'].map(v =>
+          `<button data-v="${v}" class="${cfg.theme===v?'on':''}">${({auto:'Auto',day:'Día',dusk:'Tarde',night:'Noche'})[v]}</button>`).join('')
+      + '</div>');
+    // fps
+    box.insertAdjacentHTML('beforeend', '<h3>Límite de frames</h3><div class="seg" id="g_fps">'
+      + FPSOPT.map(([v,l]) => `<button data-v="${v}" class="${cfg.maxFps===v?'on':''}">${l}</button>`).join('')
+      + '</div>');
+    // sliders
+    for (const [k, label, min, max, st, unit, div] of SLIDERS){
+      const raw = div ? Math.round(cfg[k]*div) : cfg[k];
+      box.insertAdjacentHTML('beforeend',
+        `<label><span class="row"><span>${label}</span><em id="o_${k}">${cfg[k]}${unit}</em></span>
+         <input type="range" id="r_${k}" min="${min}" max="${max}" step="${st}" value="${raw}"></label>`);
+    }
+    box.insertAdjacentHTML('beforeend',
+      `<label class="chk"><input type="checkbox" id="r_posts" ${cfg.posts?'checked':''}> Farolas y quitamiedos</label>`);
+
+    el('g_theme').onclick = e => { if(!e.target.dataset.v) return;
+      [...e.currentTarget.children].forEach(b=>b.classList.remove('on')); e.target.classList.add('on');
+      cfg.theme = e.target.dataset.v; push(); };
+    el('g_fps').onclick = e => { if(!e.target.dataset.v) return;
+      [...e.currentTarget.children].forEach(b=>b.classList.remove('on')); e.target.classList.add('on');
+      cfg.maxFps = +e.target.dataset.v; push(); };
+    for (const [k,,,,, unit, div] of SLIDERS){
+      el('r_'+k).oninput = e => {
+        cfg[k] = div ? +e.target.value/div : +e.target.value;
+        el('o_'+k).textContent = cfg[k] + unit; push();
+      };
+    }
+    el('r_posts').onchange = e => { cfg.posts = e.target.checked; push(); };
+  }
+  function push(){ hud.set(cfg); hud2SaveCfg(cfg); }
+
+  el('b_set').onclick = () => { buildSettings(); el('sheet_set').classList.add('on'); };
+  el('close_set').onclick = () => el('sheet_set').classList.remove('on');
+  el('reset_set').onclick = () => { Object.assign(cfg, HUD2_DEF); push(); buildSettings(); };
+
+  /* ---- carga de trazado ---- */
   el('b_route').onclick = () => el('sheet').classList.add('on');
   el('cancel').onclick = () => el('sheet').classList.remove('on');
   el('ok').onclick = () => {
@@ -662,9 +730,9 @@ function createHud2(canvas, opts = {}){
         }
       }
       const r = hud.setRoute(ll);
+      try { localStorage.setItem('hud2.ruta', JSON.stringify(ll)); } catch(e){}
       el('note').textContent = r.metros + ' m · ' + r.puntos + ' puntos · ' + r.rotondas + ' rotonda(s)';
-      el('sheet').classList.remove('on');
-      el('err').style.display = 'none';
+      el('sheet').classList.remove('on'); el('err').style.display = 'none';
     } catch(err){ el('note').textContent = 'Error: ' + err.message; }
   };
 
@@ -682,7 +750,6 @@ function createHud2(canvas, opts = {}){
     return out;
   }
 
-  // contador de fps: la cifra que decide si esto aguanta en la pantalla del coche
   let n = 0, t0 = performance.now();
   (function tick(){ requestAnimationFrame(tick); n++;
     const now = performance.now();
@@ -692,6 +759,7 @@ function createHud2(canvas, opts = {}){
   window.addEventListener('orientationchange', () => setTimeout(hud.resize, 300));
   hud.start();
 })();
+
 </script>
 </body>
 </html>
