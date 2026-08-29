@@ -116,6 +116,8 @@ function createHud2(canvas, opts = {}){
     posts: true,            // farolas y quitamiedos
     carColor: '#cdd3d9',
     maxFps: 0,              // 0 = libre
+    hud: true,              // superponer maniobra, velocidad y limite
+    carPhoto: null,         // dataURL de tu coche recortado; null = coche dibujado
     rbRadius: 45,           // radio maximo para considerar rotonda, en metros
     rbArc: 18,              // metros minimos de curva sostenida
     rbSmooth: 1,            // pasadas de suavizado del rumbo (mas = aplana rotondas)
@@ -132,6 +134,22 @@ function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
+  let carImg = null, carAR = 1;
+  let manOver = null, limitOver = null, radarOver = null, streetOver = null;
+
+  /** Foto del coche ya recortada (dataURL PNG con alfa). null vuelve al dibujado. */
+  api.setCarPhoto = function(url){
+    if (!url){ carImg = null; cfgOpt.carPhoto = null; return; }
+    const im = new Image();
+    im.onload = () => { carImg = im; carAR = im.naturalHeight/im.naturalWidth; };
+    im.onerror = () => { carImg = null; if (api.onError) api.onError(new Error('foto no válida')); };
+    im.src = url; cfgOpt.carPhoto = url;
+  };
+  /** Maniobra desde tu app: {tipo:'left'|'right'|'straight'|'roundabout', dist, calle} */
+  api.setManeuver = m => { manOver = m; };
+  api.setLimit = k => { limitOver = k; };
+  api.setRadar = m => { radarOver = m; };
+  api.setStreet = s => { streetOver = s; };
 
   /* ---------------- geometría de la ruta ---------------- */
 
@@ -336,8 +354,16 @@ function createHud2(canvas, opts = {}){
     // más FOV, cámara más baja, y mirando mucho más lejos al acelerar.
     const fovDeg = 44 + t*20;
     const height = cfgOpt.camHeight * (1 - t*0.22);
-    const back   = cfgOpt.camBack * (1 + t*0.30);
-    const lookM  = 20 + cfgOpt.lookAhead*t;
+    let back   = cfgOpt.camBack * (1 + t*0.30);
+    let lookM  = 20 + cfgOpt.lookAhead*t;
+    // En curva cerrada la distancia se recorre girando: en una rotonda de 14 m,
+    // 40 m por delante son 164 grados de arco y la camara acabaria mirando hacia
+    // atras, con el coche fuera del encuadre. Se limita por curvatura.
+    const k = Math.abs(curv(s));
+    if (k > 1e-4){
+      lookM = Math.min(lookM, 0.85/k);     // como mucho ~49 grados de giro al punto de mira
+      back  = Math.min(back,  0.30/k);     // y la camara no se va al otro lado del arco
+    }
     const c = ptOff(s - back, off, height);
     const g = ptOff(s + lookM, off*0.5, height*0.42);
     cam.x=c.x; cam.y=c.y; cam.z=c.z;
@@ -504,6 +530,37 @@ function createHud2(canvas, opts = {}){
     // a la vez el eje longitudinal y el transversal
     const fl = opp ? -1 : 1;
     const P = (z,x,y) => ptOff(sPos + z*fl, off + x*fl, y);
+
+    // Foto del propio coche: billboard anclado al eje trasero. La camara va
+    // siempre detras, asi que un sprite plano funciona; en giro cerrado se nota.
+    if (carImg && sPos === s && !opp){
+      const pl = projCopy(ptOff(s-1.2, off-0.95, 0)), pr = projCopy(ptOff(s-1.2, off+0.95, 0));
+      const pa = projCopy(ptOff(s-1.2, off, 0));
+      if (pa.ok){
+        let wpx = Math.abs(pr.x-pl.x) * 1.32;
+        if (!isFinite(wpx) || wpx < 8) wpx = W*0.34;
+        const hpx = wpx*carAR;
+        ctx.save(); ctx.globalAlpha = 0.45;
+        const sg2 = ctx.createRadialGradient(pa.x,pa.y,0,pa.x,pa.y,wpx*0.55);
+        sg2.addColorStop(0,'rgba(0,0,0,.75)'); sg2.addColorStop(1,'rgba(0,0,0,0)');
+        ctx.fillStyle = sg2; ctx.beginPath();
+        ctx.ellipse(pa.x, pa.y, wpx*0.55, wpx*0.15, 0, 0, 6.29); ctx.fill(); ctx.restore();
+        ctx.drawImage(carImg, pa.x-wpx/2, pa.y-hpx*0.94, wpx, hpx);
+        if (tail > 0.02){
+          ctx.save(); ctx.globalCompositeOperation = 'lighter';
+          for (const fx of [-0.31, 0.31]){
+            const cx = pa.x+wpx*fx, cy = pa.y-hpx*0.44, r = wpx*(0.13+0.11*tail);
+            const g = ctx.createRadialGradient(cx,cy,0,cx,cy,r);
+            g.addColorStop(0,`rgba(255,64,42,${0.92*tail})`);
+            g.addColorStop(0.45,`rgba(228,26,16,${0.45*tail})`);
+            g.addColorStop(1,'rgba(228,26,16,0)');
+            ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx,cy,r,0,6.29); ctx.fill();
+          }
+          ctx.restore();
+        }
+        return;
+      }
+    }
     const face = (p, col, boost) => { const c = shade(col, p[0], p[1], p[2], fog, fogRGB, boost); if (c) poly(p, c); };
     const glow = (p3, col, rad, al) => {
       const lp = projCopy(p3); if (!lp.ok) return;
@@ -699,6 +756,117 @@ function createHud2(canvas, opts = {}){
     }
   }
 
+  /* ---------------- HUD: maniobra, velocidad, límite, radar ---------------- */
+
+  // Si tu app no llama a setManeuver(), la maniobra se deduce de la geometría:
+  // se busca el primer cambio de rumbo acumulado significativo por delante.
+  function maniobraGeom(){
+    for (const r of RB){
+      const d = r.s0 - s;
+      if (d > -6 && d < 420) return { tipo:'roundabout', dist: Math.max(0, d) };
+    }
+    const h0 = at(s).h;
+    for (let d = 50; d < 400; d += 20){
+      let dh = at(s+d).h - h0;
+      while (dh >  Math.PI) dh -= 2*Math.PI;
+      while (dh < -Math.PI) dh += 2*Math.PI;
+      if (Math.abs(dh) > 0.42) return { tipo: dh > 0 ? 'right' : 'left', dist: d };
+    }
+    return { tipo:'straight', dist: 0 };
+  }
+
+  const ARROWS = {
+    straight:  'M20 4 L32 20 L24 20 L24 36 L16 36 L16 20 L8 20 Z',
+    right:     'M24 6 L36 18 L24 30 L24 22 L14 22 L14 34 L6 34 L6 14 L24 14 Z',
+    left:      'M16 6 L4 18 L16 30 L16 22 L26 22 L26 34 L34 34 L34 14 L16 14 Z',
+    roundabout:'M18 36 L18 24 A9 9 0 1 1 27 15 L34 15 L27 6 L20 15 L26 15 A5 5 0 1 0 22 22 L22 36 Z'
+  };
+  const arrowCache = {};
+  function arrowPath(tipo){
+    if (!arrowCache[tipo]) arrowCache[tipo] = new Path2D(ARROWS[tipo] || ARROWS.straight);
+    return arrowCache[tipo];
+  }
+
+  const fmtDist = d => d < 30 ? 'Ahora'
+    : d < 100 ? Math.round(d/10)*10 + ' m'
+    : d < 1000 ? Math.round(d/50)*50 + ' m'
+    : (d/1000).toFixed(1) + ' km';
+
+  function drawHUD(){
+    const k = Math.min(W, H) / 420;                       // escala con el tamaño real
+    const pad = Math.round(14*k);
+    const m = manOver || maniobraGeom();
+
+    // panel de maniobra
+    if (m && m.tipo !== 'straight'){
+      const bw = Math.round(200*k), bh = Math.round(64*k);
+      ctx.save();
+      ctx.fillStyle = 'rgba(10,13,16,.72)';
+      ctx.fillRect(pad, pad, bw, bh);
+      ctx.fillStyle = '#5fd0e0';
+      ctx.fillRect(pad, pad, Math.max(2, 3*k), bh);
+      ctx.translate(pad + 14*k, pad + (bh - 38*k)/2);
+      ctx.scale(k, k);
+      ctx.fillStyle = '#5fd0e0';
+      ctx.fill(arrowPath(m.tipo));
+      ctx.restore();
+
+      ctx.save();
+      ctx.fillStyle = '#e8eef2';
+      ctx.font = `600 ${Math.round(26*k)}px ui-sans-serif,system-ui,sans-serif`;
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(fmtDist(m.dist), pad + 62*k, pad + 30*k);
+      const calle = m.calle || streetOver;
+      if (calle){
+        ctx.fillStyle = '#7b8b96';
+        ctx.font = `${Math.round(11*k)}px ui-sans-serif,system-ui,sans-serif`;
+        ctx.fillText(String(calle).slice(0, 22).toUpperCase(), pad + 62*k, pad + 48*k);
+      }
+      ctx.restore();
+    }
+
+    // velocidad
+    ctx.save();
+    ctx.fillStyle = '#e8eef2';
+    ctx.font = `200 ${Math.round(62*k)}px ui-sans-serif,system-ui,sans-serif`;
+    ctx.textBaseline = 'alphabetic';
+    const kmh = String(Math.round(speed*3.6));
+    ctx.fillText(kmh, pad, H - pad - 8*k);
+    const wkm = ctx.measureText(kmh).width;
+    ctx.fillStyle = '#7b8b96';
+    ctx.font = `${Math.round(12*k)}px ui-sans-serif,system-ui,sans-serif`;
+    ctx.fillText('KM/H', pad + wkm + 8*k, H - pad - 8*k);
+    ctx.restore();
+
+    // límite de velocidad
+    const lim = limitOver !== null ? limitOver : (xsec(s).f > 0.5 ? 120 : null);
+    if (lim){
+      const r = 30*k, cx = W - pad - r, cy = H - pad - r;
+      ctx.save();
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.2832);
+      ctx.fillStyle = '#f3f3f0'; ctx.fill();
+      ctx.lineWidth = 6*k; ctx.strokeStyle = '#d8352a'; ctx.stroke();
+      ctx.fillStyle = '#111';
+      ctx.font = `700 ${Math.round(24*k)}px ui-sans-serif,system-ui,sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(String(lim), cx, cy + 1);
+      ctx.restore();
+    }
+
+    // aviso de radar
+    if (radarOver !== null && radarOver < 600){
+      ctx.save();
+      const bw = Math.round(150*k), bh = Math.round(32*k), bx = W - pad - bw;
+      ctx.fillStyle = 'rgba(255,90,77,.18)'; ctx.fillRect(bx, pad, bw, bh);
+      ctx.strokeStyle = '#ff5a4d'; ctx.lineWidth = 1; ctx.strokeRect(bx+.5, pad+.5, bw-1, bh-1);
+      ctx.fillStyle = '#ff5a4d';
+      ctx.font = `${Math.round(12*k)}px ui-sans-serif,system-ui,sans-serif`;
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText('RADAR · ' + fmtDist(radarOver), bx + 12*k, pad + bh/2);
+      ctx.restore();
+    }
+  }
+
   /* ---------------- bucle ---------------- */
 
   function resize(){
@@ -734,6 +902,7 @@ function createHud2(canvas, opts = {}){
     drawCar(pal, Math.max(0.30*pal.glow, brake), pal.glow);
     drawSpray(pal, 'near');
     if (cfgOpt.rain) drawRain(dt);
+    if (cfgOpt.hud) drawHUD();
   }
 
   function loop(now){
@@ -768,7 +937,7 @@ const HUD2_KEY = 'hud2.cfg';
 const HUD2_DEF = { theme:'auto', maxFps:0, beamReach:34, fogEnd:260,
                    lookAhead:55, camHeight:2.6, camBack:7.5, posts:true,
                    rain:false, spray:true, traffic:'off',
-                   rbRadius:45, rbArc:18, rbSmooth:1 };
+                   rbRadius:45, rbArc:18, rbSmooth:1, hud:true };
 function hud2LoadCfg(){
   try { return Object.assign({}, HUD2_DEF, JSON.parse(localStorage.getItem(HUD2_KEY) || '{}')); }
   catch(e){ return Object.assign({}, HUD2_DEF); }
@@ -851,6 +1020,29 @@ function hud2SaveCfg(c){ try { localStorage.setItem(HUD2_KEY, JSON.stringify(c))
     box.insertAdjacentHTML('beforeend', '<h3>Efectos</h3>'
       + `<label class="chk"><input type="checkbox" id="r_rain" ${cfg.rain?'checked':''}> Lluvia</label>`
       + `<label class="chk"><input type="checkbox" id="r_spray" ${cfg.spray?'checked':''}> Agua de las ruedas</label>`);
+    box.insertAdjacentHTML('beforeend', '<h3>Tu coche</h3>'
+      + '<input type="file" id="f_car" accept="image/*" style="display:none">'
+      + '<div id="drop" style="border:1px dashed var(--line);border-radius:5px;padding:14px;'
+      + 'text-align:center;color:var(--data);font-size:12px;font-weight:600;cursor:pointer">'
+      + (fotoGuardada() ? 'Cambiar foto' : 'Cargar foto de tu coche') + '</div>'
+      + '<div id="carstat" style="font-size:11px;color:var(--mute);line-height:1.5;margin:8px 0 10px">'
+      + (fotoGuardada() ? 'Foto en uso.' : 'Sin foto · se usa el coche dibujado') + '</div>'
+      + '<div id="bgtools" style="display:' + (origCanvas ? 'block' : 'none') + '">'
+      + '<label><span class="row"><span>Tolerancia del recorte</span><em id="o_tol">28</em></span>'
+      + '<input type="range" id="r_tol" min="6" max="90" value="28"></label>'
+      + '<div class="rowb" style="margin-bottom:10px">'
+      + '<button id="b_cut" class="prim" style="padding:10px">Quitar fondo</button>'
+      + '<button id="b_nofoto" class="sec" style="padding:10px">Sin foto</button></div></div>');
+
+    el('drop').onclick = () => el('f_car').click();
+    el('f_car').onchange = e => { if (e.target.files[0]) cargarFoto(e.target.files[0]); };
+    if (el('b_cut')){
+      el('r_tol').oninput = e => el('o_tol').textContent = e.target.value;
+      el('b_cut').onclick = () => recortar(+el('r_tol').value);
+      el('b_nofoto').onclick = () => { origCanvas = null;
+        try { localStorage.removeItem('hud2.foto'); } catch(e){}
+        hud.setCarPhoto(null); buildSettings(); };
+    }
     box.insertAdjacentHTML('beforeend', '<h3>Tráfico</h3><div class="seg" id="g_traf">'
       + [['off','Ninguno'],['poca','Poco'],['normal','Normal'],['mucha','Denso']].map(([v,l]) =>
           `<button data-v="${v}" class="${cfg.traffic===v?'on':''}">${l}</button>`).join('')
@@ -876,6 +1068,85 @@ function hud2SaveCfg(c){ try { localStorage.setItem(HUD2_KEY, JSON.stringify(c))
       cfg.traffic = e.target.dataset.v; push(); };
   }
   function push(){ hud.set(cfg); hud2SaveCfg(cfg); }
+
+  /* ---- foto del coche ---- */
+  let origCanvas = null;
+  const fotoGuardada = () => { try { return !!localStorage.getItem('hud2.foto'); } catch(e){ return false; } };
+  (function(){ const f = (()=>{ try { return localStorage.getItem('hud2.foto'); } catch(e){ return null; } })();
+    if (f) hud.setCarPhoto(f); })();
+
+  async function cargarFoto(f){
+    const st = el('carstat'); if (st) st.textContent = 'Leyendo ' + f.name + '…';
+    const ext = (f.name.split('.').pop()||'').toLowerCase();
+    const adopta = (bmp, w, h) => {
+      const max = 560, sc = Math.min(1, max/w);
+      const cn = document.createElement('canvas');
+      cn.width = Math.round(w*sc); cn.height = Math.round(h*sc);
+      cn.getContext('2d').drawImage(bmp, 0, 0, cn.width, cn.height);
+      origCanvas = cn; aplicar(cn);
+      if (st) st.innerHTML = '<b style="color:var(--data)">' + w + '×' + h + ' px</b><br>'
+        + 'Ahora quita el fondo con el control de abajo.';
+      buildSettings();
+    };
+    try { const b = await createImageBitmap(f); adopta(b, b.width, b.height); }
+    catch(err){
+      const url = URL.createObjectURL(f), im = new Image();
+      im.onload = () => { adopta(im, im.naturalWidth, im.naturalHeight); URL.revokeObjectURL(url); };
+      im.onerror = () => { URL.revokeObjectURL(url); if (st) st.innerHTML =
+        (ext === 'heic' || ext === 'heif')
+        ? '<b style="color:#ff5a4d">HEIC no se decodifica.</b><br>Ajustes → Cámara → Formatos → Más compatible, o pásala por WhatsApp.'
+        : '<b style="color:#ff5a4d">Formato .' + ext + ' no soportado.</b> Usa PNG, JPG o WebP.'; };
+      im.src = url;
+    }
+  }
+  function aplicar(cn){
+    let url;
+    try { url = cn.toDataURL('image/png'); } catch(e){ return; }
+    hud.setCarPhoto(url);
+    try { localStorage.setItem('hud2.foto', url); }
+    catch(e){ const st = el('carstat'); if (st) st.innerHTML =
+      '<b style="color:#ff5a4d">Foto aplicada pero no guardada:</b> ocupa demasiado. Recórtala más pequeña.'; }
+  }
+  // Relleno por inundación desde los cuatro bordes: cada píxel se compara con el
+  // vecino del que viene y con el color medio del borde, para no fugarse al coche.
+  function recortar(tol){
+    if (!origCanvas) return;
+    const w = origCanvas.width, h = origCanvas.height;
+    const cn = document.createElement('canvas'); cn.width = w; cn.height = h;
+    const c2 = cn.getContext('2d', {willReadFrequently:true});
+    c2.drawImage(origCanvas, 0, 0);
+    const img = c2.getImageData(0,0,w,h), D = img.data;
+    let sr=0,sg=0,sb=0,n=0;
+    const smp=(x,y)=>{const i=(y*w+x)*4; sr+=D[i]; sg+=D[i+1]; sb+=D[i+2]; n++;};
+    for (let x=0;x<w;x+=3){ smp(x,0); smp(x,h-1); }
+    for (let y=0;y<h;y+=3){ smp(0,y); smp(w-1,y); }
+    sr/=n; sg/=n; sb/=n;
+    const seen = new Uint8Array(w*h), q = new Int32Array(w*h);
+    let head=0, tail=0;
+    const push2 = p => { if (!seen[p]){ seen[p]=1; q[tail++]=p; } };
+    for (let x=0;x<w;x++){ push2(x); push2((h-1)*w+x); }
+    for (let y=0;y<h;y++){ push2(y*w); push2(y*w+w-1); }
+    while (head < tail){
+      const p = q[head++], i = p*4, r=D[i], g=D[i+1], b=D[i+2];
+      if (Math.abs(r-sr)+Math.abs(g-sg)+Math.abs(b-sb) > tol*7.8) continue;
+      D[i+3] = 0;
+      const x = p % w, y = (p/w)|0;
+      const nb = (nx,ny) => { if (nx<0||ny<0||nx>=w||ny>=h) return;
+        const np = ny*w+nx; if (seen[np]) return; const j = np*4;
+        if (Math.abs(D[j]-r)+Math.abs(D[j+1]-g)+Math.abs(D[j+2]-b) <= tol*3) push2(np); };
+      nb(x+1,y); nb(x-1,y); nb(x,y+1); nb(x,y-1);
+    }
+    const A = new Uint8ClampedArray(w*h);
+    for (let p=0;p<w*h;p++) A[p] = D[p*4+3];
+    for (let y=1;y<h-1;y++) for (let x=1;x<w-1;x++){
+      const p=y*w+x; if (!A[p]) continue;
+      const s4 = A[p-1]+A[p+1]+A[p-w]+A[p+w];
+      if (s4 < 1020) D[p*4+3] = Math.round((A[p]*2 + s4/2)/4);
+    }
+    c2.putImageData(img,0,0);
+    aplicar(cn);
+    const st = el('carstat'); if (st) st.textContent = 'Fondo recortado. Si queda halo sube la tolerancia; si se come el coche, bájala.';
+  }
 
   el('b_set').onclick = () => { buildSettings(); el('sheet_set').classList.add('on'); };
   el('close_set').onclick = () => el('sheet_set').classList.remove('on');

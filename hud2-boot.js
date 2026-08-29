@@ -41,22 +41,55 @@ function boot(){
   const wrap = document.createElement('div'); wrap.id = 'hud2-wrap';
   const cv = document.createElement('canvas'); cv.id = 'hud2-canvas';
   wrap.appendChild(cv);
-  const btn = document.createElement('button'); btn.id = 'hud2-btn'; btn.textContent = 'HUD 2';
+  // Se intenta colocar el botón junto al de faro, clonando sus clases para que
+  // herede tu CSS. Si no se encuentra, cae al botón flotante de siempre.
+  function buscarFaro(){
+    const cands = document.querySelectorAll('button,a,div[role="button"],[onclick],[id],[class]');
+    for (const e of cands){
+      if (e.id === 'hud2-btn') continue;
+      const txt = (e.textContent || '').trim().toLowerCase();
+      const sig = ((e.id||'') + ' ' + (e.className||'') + ' ' + (e.title||'') + ' '
+                 + (e.getAttribute && (e.getAttribute('aria-label')||''))).toLowerCase();
+      const pinta = /faro|luces|light|headlight/.test(sig)
+                 || (txt.length <= 12 && /^faros?$|^luces$/.test(txt));
+      if (!pinta) continue;
+      // debe ser un control visible, no un contenedor enorme
+      const r = e.getBoundingClientRect ? e.getBoundingClientRect() : null;
+      if (r && r.width > 4 && r.width < 260 && r.height > 4 && r.height < 140) return e;
+    }
+    return null;
+  }
+
+  const btn = document.createElement('button');
+  btn.textContent = 'HUD 2';
+  const faro = buscarFaro();
+  if (faro && faro.parentNode){
+    btn.className = faro.className;          // mismo aspecto que el resto de la barra
+    btn.id = 'hud2-btn-inline';
+    faro.parentNode.insertBefore(btn, faro.nextSibling);
+    console.log('[hud2] botón colocado junto a:', faro.id || faro.className || faro.textContent.trim());
+  } else {
+    btn.id = 'hud2-btn';                     // flotante de reserva
+    console.log('[hud2] no encuentro el botón de faro; se usa el flotante');
+  }
   const err = document.createElement('div'); err.id = 'hud2-err';
   const fps = document.createElement('div'); fps.id = 'hud2-fps';
-  document.body.append(wrap, btn, err, fps);
+  document.body.append(wrap, err, fps);
+  if (btn.id === 'hud2-btn') document.body.append(btn);
 
   // MISMA clave que hud2.html: los ajustes que afinaste en el coche se heredan aquí.
   const HUD2_KEY = 'hud2.cfg';
   const HUD2_DEF = { theme:'auto', maxFps:0, beamReach:34, fogEnd:260,
                      lookAhead:55, camHeight:2.6, camBack:7.5, posts:true,
                      rain:false, spray:true, traffic:'off',
-                     rbRadius:45, rbArc:18, rbSmooth:1 };
+                     rbRadius:45, rbArc:18, rbSmooth:1, hud:true };
   let cfg;
   try { cfg = Object.assign({}, HUD2_DEF, JSON.parse(localStorage.getItem(HUD2_KEY) || '{}')); }
   catch(e){ cfg = Object.assign({}, HUD2_DEF); }
 
   const hud = createHud2(cv, cfg);
+  // foto del coche guardada desde hud2.html (mismo origen, mismo almacen)
+  try { const f = localStorage.getItem('hud2.foto'); if (f) hud.setCarPhoto(f); } catch(e){}
   hud.onError = e => { err.style.display = 'block'; err.textContent = 'hud2: ' + e.message; };
 
   // ruta de ejemplo, solo hasta que tu app llame a setRoute
@@ -95,6 +128,14 @@ function boot(){
     // ajustes persistentes, compartidos con hud2.html
     ajustes(){ return Object.assign({}, cfg); },
     auto(v){ autoOn = v !== false; return autoOn; },
+    // coloca el botón junto al elemento que le pases: window.hud2.junto('#miBotonFaro')
+    junto(sel){
+      const ref = typeof sel === 'string' ? document.querySelector(sel) : sel;
+      if (!ref || !ref.parentNode) return false;
+      btn.className = ref.className; btn.id = 'hud2-btn-inline'; btn.style.cssText = '';
+      ref.parentNode.insertBefore(btn, ref.nextSibling);
+      return true;
+    },
     ruta(){ return { propia: rutaPropia, metros: Math.round(hud.state().routeLen),
                      rotondas: hud.state().rotondas }; },
     ajustar(o){ Object.assign(cfg, o); hud.set(cfg);
@@ -217,7 +258,13 @@ function boot(){
 
   function activar(on){
     wrap.classList.toggle('on', on);
-    btn.classList.toggle('on', on);
+    if (btn.id === 'hud2-btn') btn.classList.toggle('on', on);
+    else btn.style.opacity = on ? '1' : '';
+    // El mapa sigue renderizando aunque esté tapado y se come GPU.
+    try {
+      const m = window.map || window.mapa || window.mapaTesla;
+      if (m && m.stop && m.resize){ if (on) m.stop(); else setTimeout(() => m.resize(), 50); }
+    } catch(e){}
     fps.style.display = on ? 'block' : 'none';
     if (on){ hud.resize(); hud.start(); } else hud.stop();
   }
