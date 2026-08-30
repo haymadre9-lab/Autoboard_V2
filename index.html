@@ -590,15 +590,35 @@ function chargerInfo(tg){
 }
 async function fetchPois(ll){
   try{
-    const url='https://api.openchargemap.io/v3/poi/?output=json&latitude='+ll[0]+'&longitude='+ll[1]+'&distance=6&distanceunit=KM&maxresults=100&compact=false&verbose=false&key='+OCM_KEY;
-    const r=await fetch(url); if(!r.ok)return; const j=await r.json(); const arr=[];
+    // OCM devolvia 524 (timeout de Cloudflare) con compact=false y 100 resultados:
+    // esa combinacion le pide el objeto completo con todo expandido y no llega a
+    // tiempo. Se piden menos y en formato compacto, con reintento aun mas ligero.
+    const pedir=async (n,comp,ms)=>{
+      const u='https://api.openchargemap.io/v3/poi/?output=json&latitude='+ll[0]+'&longitude='+ll[1]
+             +'&distance=6&distanceunit=KM&maxresults='+n+'&compact='+comp+'&verbose=false&key='+OCM_KEY;
+      const ctl=new AbortController(), to=setTimeout(()=>ctl.abort(),ms);
+      try{ const res=await fetch(u,{signal:ctl.signal}); clearTimeout(to); return res; }
+      catch(e){ clearTimeout(to); return null; }
+    };
+    let r=await pedir(40,'true',9000);
+    if(!r||!r.ok) r=await pedir(15,'true',7000);          // reintento minimo
+    if(!r||!r.ok){
+      // no se vacia la lista: se conserva lo ultimo bueno y se avisa
+      const cod=r?r.status:'sin respuesta';
+      console.warn('[POIs] OpenChargeMap no responde ('+cod+'); se mantienen los '+pois.length+' anteriores');
+      try{ $('status').textContent='Cargadores: OCM no responde ('+cod+')'; }catch(e){}
+      return;
+    }
+    const j=await r.json(); const arr=[];
     for(const poi of (j||[])){ const ai=poi.AddressInfo; if(!ai)continue;
       const conns=poi.Connections||[]; let kw=0; const socks=[]; const connsDetail=[];
       for(const c of conns){ if(c.PowerKW&&c.PowerKW>kw)kw=c.PowerKW; const t=c.ConnectionType&&c.ConnectionType.Title; if(t){ let n=t.replace('CCS (Type 2)','CCS').replace('Type 2','Tipo 2'); if(socks.indexOf(n)<0)socks.push(n); } connsDetail.push({t:(c.ConnectionType&&c.ConnectionType.Title)||'?', kw:c.PowerKW||0, n:c.Quantity||1, st:(c.StatusType&&c.StatusType.Title)||''}); }
       arr.push({type:'charge',ll:[ai.Latitude,ai.Longitude],name:ai.Title||'Punto de carga',op:(function(){var t=(poi.OperatorInfo&&poi.OperatorInfo.Title)||'';return /unknown|desconoc/i.test(t)?'':t;})(),kw:kw?Math.round(kw):0,socks:socks,pts:poi.NumberOfPoints||0,usage:(poi.UsageType&&poi.UsageType.Title)||'',cost:(poi.UsageCost||''),photos:((poi.MediaItems||[]).map(m=>m.ItemThumbnailURL||m.ItemURL).filter(Boolean).slice(0,8)),conns:connsDetail,addr:[ai.AddressLine1,ai.Town].filter(Boolean).join(', '),tel:ai.ContactTelephone1||'',url:ai.RelatedURL||''});
     }
+    if(!arr.length && pois.length){ console.warn('[POIs] OCM devolvio 0; se mantienen los anteriores'); return; }
     pois=arr; drawChargers(); mergeGoingElectric(ll);
-  }catch(e){}
+    console.log('[POIs] cargadores:', arr.length);
+  }catch(e){ console.warn('[POIs] fallo:', e.message); }
 }
 function geKey(){ try{ return (localStorage.getItem('geKey')||'').trim(); }catch(e){ return ''; } }
 // GoingElectric como 2ª fuente (se fusiona con OCM). Mapeo tentativo: se ajustará al ver datos reales con la key.
