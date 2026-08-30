@@ -32,10 +32,9 @@ const CSS = `
   font:600 12px/1 ui-sans-serif,sans-serif;letter-spacing:.1em;text-transform:uppercase;
   padding:13px 18px;cursor:pointer;backdrop-filter:blur(6px)}
 #hud2-wrap.on ~ #hud2-back{display:block}
-#hud2-gear{position:fixed;right:14px;top:14px;z-index:9150;display:none;
-  background:rgba(10,13,16,.8);border:1px solid #2c3942;color:#5fd0e0;border-radius:6px;
-  font:600 11px/1 ui-sans-serif,sans-serif;letter-spacing:.12em;text-transform:uppercase;
-  padding:10px 13px;cursor:pointer}
+#hud2-gear{position:fixed;left:10px;top:10px;z-index:9150;display:none;width:32px;height:32px;
+  background:rgba(10,13,16,.72);border:1px solid #2c3942;color:#8fd8e4;border-radius:8px;
+  font:15px/1 ui-sans-serif,sans-serif;padding:0;cursor:pointer;opacity:.75}
 #hud2-wrap.on ~ #hud2-gear{display:block}
 #hud2-set{position:fixed;inset:0;z-index:9300;display:none;flex-direction:column;
   background:rgba(6,9,12,.96);padding:18px 16px;gap:8px;overflow-y:auto;
@@ -92,7 +91,10 @@ function boot(){
 
   const btn = document.createElement('button');
   btn.textContent = 'HUD 2';
-  const faro = buscarFaro();
+  // En modo incrustado manda la barra de modos de la app: nada de botón propio.
+  let incrustadoPrev = false;
+  try { incrustadoPrev = !!(JSON.parse(localStorage.getItem('hud2.cfg') || '{}').incrustado); } catch(e){}
+  const faro = incrustadoPrev ? null : buscarFaro();
   if (faro && faro.parentNode){
     btn.className = faro.className;          // mismo aspecto que el resto de la barra
     btn.id = 'hud2-btn-inline';
@@ -104,13 +106,13 @@ function boot(){
   }
   const err = document.createElement('div'); err.id = 'hud2-err';
   const fps = document.createElement('div'); fps.id = 'hud2-fps';
-  const gear = document.createElement('button'); gear.id = 'hud2-gear'; gear.textContent = 'Ajustes';
+  const gear = document.createElement('button'); gear.id = 'hud2-gear'; gear.textContent = '⚙'; gear.title = 'Ajustes del HUD 2';
   // Salida siempre visible: el botón que abre el HUD puede quedar tapado por la
   // propia capa si está integrado en la barra de la app.
   const back = document.createElement('button'); back.id = 'hud2-back'; back.textContent = '← Mapa';
   const sheet = document.createElement('div'); sheet.id = 'hud2-set';
   document.body.append(wrap, err, fps, gear, back, sheet);
-  if (btn.id === 'hud2-btn') document.body.append(btn);
+  if (btn.id === 'hud2-btn' && !incrustadoPrev) document.body.append(btn);
 
   // MISMA clave que hud2.html: los ajustes que afinaste en el coche se heredan aquí.
   const HUD2_KEY = 'hud2.cfg';
@@ -130,6 +132,8 @@ function boot(){
      y tus controles siguen visibles alrededor.
      ------------------------------------------------------------------ */
   let destinoEl = null, cvIn = null, dimOrig = null;
+  let rutaActual = null, opcRuta = null;
+  function recordarRuta(ll, o){ rutaActual = ll; opcRuta = o || null; }
   function montarIncrustado(){
     destinoEl = document.querySelector(cfg.destino || '#hudroad');
     if (!destinoEl || !destinoEl.parentNode) return false;
@@ -210,6 +214,10 @@ function boot(){
   const tramo = (dist, k) => { const n = Math.round(dist/4);
     for (let i = 0; i < n; i++){ _h += k*4; _x += Math.sin(_h)*4; _z += Math.cos(_h)*4; demo.push(toLL(_x,_z)); } };
   demo.push(toLL(0,0));
+  // Arranque en recta larga: sin ruta y parado, el HUD enseña carretera y coche
+  // en vez de quedarse en negro. Luego llegan curvas suaves para que el paisaje
+  // cambie en cuanto empieces a moverte.
+  tramo(700, 0);        tramo(400,  0.0011);  tramo(500, -0.0008);
   tramo(320, 0);        tramo(180,  0.0035);  tramo(260, 0);
   tramo(140,-0.0045);   tramo(200,  0);
   tramo(16*4.0, -1/16); tramo(240,  0);          // rotonda 1: R=16 m, ~230 grados
@@ -224,6 +232,7 @@ function boot(){
     const g = JSON.parse(localStorage.getItem('hud2.ruta') || 'null');
     if (g && g.length > 3) inicial = g;
   } catch(e){}
+  recordarRuta(inicial, {});
   try { hud.setRoute(inicial); } catch(e){ hud.onError(e); }
 
   /* ------------------------------------------------------------------
@@ -259,7 +268,7 @@ function boot(){
 
   // API pública, envolviendo setRoute para saber si ya hay ruta real
   window.hud2 = Object.assign(Object.create(hud), {
-    setRoute(ll, o){ rutaPropia = true;
+    setRoute(ll, o){ rutaPropia = true; recordarRuta(ll, o);
       try { localStorage.setItem('hud2.ruta', JSON.stringify(ll)); } catch(e){}
       return hud.setRoute(ll, o); },
     abrir(){ activar(true); }, cerrar(){ activar(false); },
@@ -323,7 +332,9 @@ function boot(){
     firmaRuta = f;
     try {
       const extra = json ? extraerPasos(json) : null;
-      const r = hud.setRoute(ll, extra ? { motorway: extra.autovias } : {});
+      const opc = extra ? { motorway: extra.autovias } : {};
+      recordarRuta(ll, opc);
+      const r = hud.setRoute(ll, opc);
       rutaPropia = true;
       if (extra && extra.pasos.length) hud.setManeuvers(extra.pasos);
       rutaPropia = true;
@@ -681,6 +692,9 @@ function boot(){
           hudIn = createHud2(cvIn, cfg);
           hudIn.onError = hud.onError;
           espejo();
+          // La instancia incrustada nace vacía: si no se le pasa la ruta que ya
+          // está cargada, el HUD sale en negro hasta que se calcule otra.
+          if (rutaActual){ try { hudIn.setRoute(rutaActual, opcRuta || {}); } catch(e){} }
         }
         hudIn.set(cfg); hudIn.resize(); hudIn.start(); gpsOn();
       } else { if (hudIn) hudIn.stop(); desmontarIncrustado(); gpsOff(); }
