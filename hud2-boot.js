@@ -119,12 +119,55 @@ function boot(){
                      rain:false, spray:true, traffic:'off',
                      rbRadius:45, rbArc:18, rbSmooth:1, hud:true, horizon:0.50, carScale:1,
                      perfil:'auto', detalleCoche:true, carPhotoUrl:'', frenarCamara:false, hudScale:1,
-                     abrirAlNavegar:false };
+                     abrirAlNavegar:false, incrustado:false, destino:'#hudroad' };
   let cfg;
   try { cfg = Object.assign({}, HUD2_DEF, JSON.parse(localStorage.getItem(HUD2_KEY) || '{}')); }
   catch(e){ cfg = Object.assign({}, HUD2_DEF); }
 
+  /* ------------------------------------------------------------------
+     Modo incrustado: el HUD 2 ocupa el hueco del canvas del HUD actual
+     (#hudroad por defecto) en vez de tapar la pantalla entera. Tu interfaz
+     y tus controles siguen visibles alrededor.
+     ------------------------------------------------------------------ */
+  let destinoEl = null, cvIn = null, dimOrig = null;
+  function montarIncrustado(){
+    destinoEl = document.querySelector(cfg.destino || '#hudroad');
+    if (!destinoEl || !destinoEl.parentNode) return false;
+    if (!cvIn){
+      cvIn = document.createElement('canvas');
+      cvIn.id = 'hud2-inline';
+      destinoEl.parentNode.insertBefore(cvIn, destinoEl.nextSibling);
+    }
+    // copiar tamaño y estilo del original para no descuadrar tu maquetación
+    const r = destinoEl.getBoundingClientRect();
+    cvIn.style.cssText = destinoEl.style.cssText;
+    cvIn.className = destinoEl.className;
+    cvIn.style.display = 'block';
+    if (!cvIn.style.width)  cvIn.style.width  = (r.width  || destinoEl.width)  + 'px';
+    if (!cvIn.style.height) cvIn.style.height = (r.height || destinoEl.height) + 'px';
+    destinoEl.style.display = 'none';
+
+    // Ocultar no basta: tu bucle sigue dibujando contra un lienzo invisible y
+    // eso cuesta GPU. Encogerlo a 1x1 deja el contexto válido (tu código no
+    // falla) pero el coste de rasterizado se vuelve cero.
+    if (dimOrig === null){
+      dimOrig = { w: destinoEl.width, h: destinoEl.height };
+      try { destinoEl.width = 1; destinoEl.height = 1; } catch(e){}
+      console.log('[hud2] lienzo del HUD anterior reducido a 1x1 (era '
+                  + dimOrig.w + 'x' + dimOrig.h + ')');
+    }
+    return true;
+  }
+  function desmontarIncrustado(){
+    if (cvIn) cvIn.style.display = 'none';
+    if (destinoEl){
+      if (dimOrig){ try { destinoEl.width = dimOrig.w; destinoEl.height = dimOrig.h; } catch(e){} dimOrig = null; }
+      destinoEl.style.display = '';
+    }
+  }
+
   const hud = createHud2(cv, cfg);
+  let hudIn = null;                     // instancia para el canvas incrustado
   console.log('[hud2] módulo versión', hud.version);
   // foto del coche guardada desde hud2.html (mismo origen, mismo almacen)
   try {
@@ -203,6 +246,8 @@ function boot(){
     // ajustes persistentes, compartidos con hud2.html
     ajustes(){ return Object.assign({}, cfg); },
     gps(v){ if (v === false) gpsOff(); else gpsOn(); return watch !== null; },
+    // Si algún día localizas el rAF de tu HUD: window.hud2.pararBucle(id)
+    pararBucle(id){ try { cancelAnimationFrame(id); return true; } catch(e){ return false; } },
     auto(v){ autoOn = v !== false; return autoOn; },
     // coloca el botón junto al elemento que le pases: window.hud2.junto('#miBotonFaro')
     junto(sel){
@@ -231,7 +276,19 @@ function boot(){
      Si ninguno dispara, queda la llamada explícita window.hud2.setRoute().
      ------------------------------------------------------------------ */
   let autoOn = true;
-  let firmaRuta = null, mapaInst = null;
+  let firmaRuta = null, mapaInst = null, incrustadoActivo = false;
+  // Reenvía a la instancia incrustada todo lo que se le da a la principal.
+  function espejo(){
+    if (!hudIn) return;
+    for (const m of ['setRoute','setManeuvers','setRadars','setLimits','setSpeed',
+                     'syncPosition','setCarPhoto','setCarPhotoUrl','setLatLng','set']){
+      const orig = hud[m];
+      if (typeof orig !== 'function' || orig.__esp) continue;
+      const env = function(){ try { hudIn[m].apply(hudIn, arguments); } catch(e){}
+                              return orig.apply(hud, arguments); };
+      env.__esp = true; hud[m] = env;
+    }
+  }
   const firmar = ll => ll.length + ':' + ll[0][0].toFixed(5) + ',' + ll[0][1].toFixed(5)
                      + ':' + ll[ll.length-1][0].toFixed(5) + ',' + ll[ll.length-1][1].toFixed(5);
 
@@ -452,6 +509,8 @@ function boot(){
           + '<h3>Efectos</h3>'
           + '<label class="ck"><input type="checkbox" id="h2_rain"'+(cfg.rain?' checked':'')+'> Lluvia</label>'
           + '<label class="ck"><input type="checkbox" id="h2_spray"'+(cfg.spray?' checked':'')+'> Agua de las ruedas</label>'
+          + '<h3>Integración</h3>'
+          + '<label class="ck"><input type="checkbox" id="h2_incrustado"'+(cfg.incrustado?' checked':'')+'> Sustituir el HUD actual (' + (cfg.destino||'#hudroad') + ')</label>'
           + '<label class="ck"><input type="checkbox" id="h2_abrirAlNavegar"'+(cfg.abrirAlNavegar?' checked':'')+'> Abrir solo al iniciar navegación</label>'
           + '<h3>Rendimiento</h3>'
           + seg('h2_perf', [['auto','Auto'],['ligero','Ligero'],['completo','Completo']], cfg.perfil)
@@ -486,8 +545,11 @@ function boot(){
     for (const [k,,,,,u,dv] of SLD)
       g('h2r_'+k).oninput = e => { cfg[k] = +e.target.value/dv; g('h2o_'+k).textContent = cfg[k]+u; guardar(); };
     g('h2_perf').onclick = e => { if(!e.target.dataset.v) return; cfg.perfil = e.target.dataset.v; guardar(); pintarAjustes(); };
-    for (const k of ['posts','hud','rain','spray','detalleCoche','frenarCamara','abrirAlNavegar'])
-      g('h2_'+k).onchange = e => { cfg[k] = e.target.checked; guardar(); };
+    for (const k of ['posts','hud','rain','spray','detalleCoche','frenarCamara','abrirAlNavegar','incrustado'])
+      g('h2_'+k).onchange = e => {
+        cfg[k] = e.target.checked; guardar();
+        if (k === 'incrustado'){ activar(false); sheet.classList.remove('on'); }
+      };
     if (g('h2_url').addEventListener) g('h2_url').onchange = e => {
       cfg.carPhotoUrl = e.target.value.trim(); guardar();
       if (cfg.carPhotoUrl) hud.setCarPhotoUrl(cfg.carPhotoUrl); else hud.setCarPhoto(null);
@@ -589,6 +651,23 @@ function boot(){
   })();
 
   function activar(on){
+    // modo incrustado: ni capa, ni botón de salida, ni parar el mapa
+    if (cfg.incrustado){
+      if (on){
+        if (!montarIncrustado()){ console.warn('[hud2] no encuentro', cfg.destino); return; }
+        if (!hudIn){
+          hudIn = createHud2(cvIn, cfg);
+          hudIn.onError = hud.onError;
+          espejo();
+        }
+        hudIn.set(cfg); hudIn.resize(); hudIn.start(); gpsOn();
+      } else { if (hudIn) hudIn.stop(); desmontarIncrustado(); gpsOff(); }
+      btn.classList.toggle('on', on);
+      gear.style.display = on ? 'block' : 'none';
+      if (!on) sheet.classList.remove('on');
+      incrustadoActivo = on;
+      return;
+    }
     wrap.classList.toggle('on', on);
     if (btn.id === 'hud2-btn') btn.classList.toggle('on', on);
     else btn.style.opacity = on ? '1' : '';
