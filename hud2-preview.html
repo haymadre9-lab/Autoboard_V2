@@ -133,6 +133,7 @@ function createHud2(canvas, opts = {}){
                             // coche en cuadro, pero resta sensación de giro)
     detalleCoche: true,     // zócalo, pasos de rueda, retrovisores, montantes
     hud: true,              // superponer maniobra, velocidad y limite
+    carteles: true,         // señales de dirección dentro de la escena
     carPhoto: null,         // dataURL de tu coche recortado; null = coche dibujado
     rbRadius: 45,           // radio maximo para considerar rotonda, en metros
     rbArc: 18,              // metros minimos de curva sostenida
@@ -150,7 +151,7 @@ function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
-  api.version = '2026.08.30-4';   // sube al cambiar: sirve para saber qué está corriendo
+  api.version = '2026.08.30-5';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
   let manList = [], limList = [], radList = [];
@@ -928,6 +929,73 @@ function createHud2(canvas, opts = {}){
     }
   }
 
+  /* ---------------- Carteles de dirección ----------------
+     Se plantan 170 m antes de cada maniobra que tenga nombre de calle.
+     Azul en autovía, blanco en convencional, como en carretera de verdad.
+     En autovía van sobre pórtico; en convencional, en poste al margen. */
+  function drawSigns(pal){
+    if (!cfgOpt.carteles || !manList.length) return;
+    const fogRGB = hexToRgb(pal.skyBot);
+    for (const m of manList){
+      const calle = m.calle;
+      if (!calle) continue;
+      const sMet = m.metro - 170;                       // dónde se planta el cartel
+      const d = sMet - s;
+      if (d < -8 || d > Math.min(cfgOpt.fogEnd, 260)) continue;
+      const cx = xsec(sMet);
+      const mw = cx.f > 0.5;
+      const fog = clamp((d - cfgOpt.fogEnd*0.3)/(cfgOpt.fogEnd*0.8), 0, 1);
+      if (fog > 0.9) continue;
+
+      const anchoM = mw ? 5.6 : 3.4, altoM = mw ? 1.9 : 1.25;
+      const yBase = mw ? 5.4 : 2.5;                     // pórtico alto o poste bajo
+      const lado = mw ? 0 : cx.half + 1.9;              // centrado o al margen derecho
+      const P = (o, y) => ptOff(sMet, lado + o, y);
+
+      // postes
+      const poste = c => mixc([88,94,100], fogRGB, fog);
+      if (mw){
+        for (const sg of [-1, 1])
+          poly([P(sg*(anchoM/2+0.2)-0.09, 0), P(sg*(anchoM/2+0.2)+0.09, 0),
+                P(sg*(anchoM/2+0.2)+0.09, yBase+altoM), P(sg*(anchoM/2+0.2)-0.09, yBase+altoM)], poste());
+      } else {
+        poly([P(-0.09, 0), P(0.09, 0), P(0.09, yBase+altoM), P(-0.09, yBase+altoM)], poste());
+      }
+
+      // panel
+      const quad = [P(-anchoM/2, yBase), P(anchoM/2, yBase),
+                    P(anchoM/2, yBase+altoM), P(-anchoM/2, yBase+altoM)];
+      const base = mw ? [22, 62, 138] : [236, 238, 234];
+      if (!poly(quad, mixc(base, fogRGB, fog))) continue;
+      // marco
+      const borde = mw ? [232,236,244] : [40,44,48];
+      poly([P(-anchoM/2, yBase), P(anchoM/2, yBase), P(anchoM/2, yBase+0.09), P(-anchoM/2, yBase+0.09)], mixc(borde, fogRGB, fog));
+      poly([P(-anchoM/2, yBase+altoM-0.09), P(anchoM/2, yBase+altoM-0.09),
+            P(anchoM/2, yBase+altoM), P(-anchoM/2, yBase+altoM)], mixc(borde, fogRGB, fog));
+
+      // texto: se proyectan dos esquinas para saber cuánto mide en pantalla
+      const a = projCopy(P(-anchoM/2, yBase + altoM*0.5));
+      const b = projCopy(P( anchoM/2, yBase + altoM*0.5));
+      const c = projCopy(P(-anchoM/2, yBase));
+      if (!a.ok || !b.ok || !c.ok) continue;
+      const wpx = Math.hypot(b.x-a.x, b.y-a.y);
+      if (wpx < 34) continue;                           // demasiado lejos para leerlo
+      const hpx = Math.hypot(c.x-a.x, c.y-a.y)*2;
+      let txt = String(calle).toUpperCase();
+      if (m.tipo === 'roundabout' && m.salida) txt = m.salida + 'ª  ' + txt;
+      ctx.save();
+      ctx.translate((a.x+b.x)/2, (a.y+b.y)/2);
+      ctx.rotate(Math.atan2(b.y-a.y, b.x-a.x));
+      let fs = Math.min(hpx*0.42, wpx/Math.max(txt.length, 1)*1.55);
+      ctx.font = `700 ${Math.max(6, fs)}px ui-sans-serif,system-ui,sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.globalAlpha = 1 - fog;
+      ctx.fillStyle = mw ? '#f2f6ff' : '#14181c';
+      ctx.fillText(txt, 0, 0, wpx*0.9);
+      ctx.restore();
+    }
+  }
+
   /* ---------------- HUD: maniobra, velocidad, límite, radar ---------------- */
 
   // Si tu app no llama a setManeuver(), la maniobra se deduce de la geometría:
@@ -1097,6 +1165,7 @@ function createHud2(canvas, opts = {}){
     drawSky(pal);
     drawRoad(pal);
     drawBeams(pal, pal.glow);
+    drawSigns(pal);
     if (!ligero()){ updateTraffic(dt); drawTraffic(pal); } else cars.length = 0;
     if (!ligero()) updateSpray(dt); else spray.length = 0;
     drawSpray(pal, 'far');

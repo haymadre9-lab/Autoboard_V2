@@ -729,7 +729,20 @@ function applyRoute(route){
   // ---- HUD 2: geometria real de la ruta + maniobras de TomTom ----
   try{
     if(window.hud2 && routeCoordsLL && routeCoordsLL.length>8){
-      hud2.setRoute(routeCoordsLL);
+      // Tramos de autovia: TomTom no da road_class, pero tu isHighway() ya
+      // reconoce A-8, AP-8, "Autovia", "Autopista"... Se marcan por offset.
+      const autov=[]; let ini=null, off=0;
+      for(let i=0;i<instr.length;i++){
+        const it=instr[i], m0=it.routeOffsetInMeters||0;
+        const m1=(instr[i+1]&&instr[i+1].routeOffsetInMeters)||m0;
+        const hw=isHighway({name:it.street||it.roadNumbers&&it.roadNumbers[0]||''});
+        if(hw && ini===null) ini=m0;
+        if(!hw && ini!==null){ if(m0-ini>300) autov.push([ini,m0]); ini=null; }
+        off=m1;
+      }
+      if(ini!==null && off-ini>300) autov.push([ini,off]);
+      hud2.setRoute(routeCoordsLL, {motorway:autov});
+      if(autov.length) console.log('[hud2] tramos de autovia:', autov.length);
       const pasos=[];
       for(const it of instr){
         const mv=ttMan(it)||{}, tp=mv.type||'', mo=mv.modifier||'';
@@ -975,7 +988,7 @@ if('serviceWorker' in navigator){
   const oldModes=document.querySelector('.ovl.modes'); if(oldModes) oldModes.style.display='none';
 
   const bar=document.createElement('div'); bar.className='ab-modes';
-  bar.innerHTML='<button data-m="hud">HUD</button><button data-m="split" class="on">Split</button><button data-m="map">Mapa</button><button data-m="faro" class="faro-btn">Faro</button>';
+  bar.innerHTML='<button data-m="hud">HUD 2</button><button data-m="split" class="on">Split</button><button data-m="map">Mapa</button><button data-m="faro" class="faro-btn">Faro</button>';
   app.appendChild(bar);
 
   function relayout(){
