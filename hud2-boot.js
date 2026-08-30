@@ -279,6 +279,9 @@ function boot(){
     // Si algún día localizas el rAF de tu HUD: window.hud2.pararBucle(id)
     pararBucle(id){ try { cancelAnimationFrame(id); return true; } catch(e){ return false; } },
     auto(v){ autoOn = v !== false; return autoOn; },
+    // Devuelve window.fetch original. Sirve para descartar de raíz que el
+    // enganche de red del HUD 2 esté interfiriendo con otras peticiones.
+    desengancharRed(){ if (fetchOrig){ window.fetch = fetchOrig; console.log('[hud2] fetch restaurado'); return true; } return false; },
     // coloca el botón junto al elemento que le pases: window.hud2.junto('#miBotonFaro')
     junto(sel){
       const ref = typeof sel === 'string' ? document.querySelector(sel) : sel;
@@ -458,10 +461,14 @@ function boot(){
   }
 
   // 1) respuestas del router
+  let fetchOrig = null;
   if (window.fetch){
     const f0 = window.fetch;
+    fetchOrig = f0;
     window.fetch = function(...a){
       return f0.apply(this, a).then(res => {
+        // Nunca se altera la respuesta: se inspecciona una COPIA y se devuelve
+        // el original intacto. Aun así, desengancharRed() lo quita del todo.
         try {
           const u = String((a[0] && a[0].url) || a[0] || '');
           if (/route|directions|navigation|valhalla|osrm/i.test(u) && res.ok){
