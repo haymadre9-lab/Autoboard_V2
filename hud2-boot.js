@@ -215,15 +215,54 @@ function boot(){
      Si ninguno dispara, queda la llamada explícita window.hud2.setRoute().
      ------------------------------------------------------------------ */
   let autoOn = true;
-  function aceptar(ll, origen){
+  function aceptar(ll, origen, json){
     if (!autoOn || !ll || ll.length < 8) return false;
     try {
-      const r = hud.setRoute(ll);
+      const extra = json ? extraerPasos(json) : null;
+      const r = hud.setRoute(ll, extra ? { motorway: extra.autovias } : {});
       rutaPropia = true;
+      if (extra && extra.pasos.length) hud.setManeuvers(extra.pasos);
       try { localStorage.setItem('hud2.ruta', JSON.stringify(ll)); } catch(e){}
-      console.log('[hud2] ruta detectada por ' + origen + ':', r);
+      console.log('[hud2] ruta detectada por ' + origen + ':', r,
+        extra ? ('| ' + extra.pasos.length + ' maniobras, ' + extra.autovias.length + ' tramos de autovía') : '');
       return true;
     } catch(e){ console.warn('[hud2] ruta descartada (' + origen + '):', e.message); return false; }
+  }
+
+  /**
+   * Saca maniobras y tramos de autovía de los steps del router. OSRM y MapTiler
+   * dan legs[].steps[] con maneuver.type / .modifier / .exit, name, ref y
+   * intersections[].classes. Con eso se rellena todo sin tocar tu código.
+   */
+  function extraerPasos(j){
+    const legs = (j.routes && j.routes[0] && j.routes[0].legs) || j.legs;
+    if (!Array.isArray(legs)) return null;
+    const MOD = { left:'left', 'slight left':'left', 'sharp left':'left',
+                  right:'right', 'slight right':'right', 'sharp right':'right',
+                  straight:'straight', uturn:'left' };
+    const pasos = [], autovias = [];
+    let metro = 0, mwIni = null;
+    for (const leg of legs){
+      for (const st of (leg.steps || [])){
+        const mv = st.maneuver || {};
+        const tipo = /roundabout|rotary/i.test(mv.type || '') ? 'roundabout'
+                   : (MOD[(mv.modifier || '').toLowerCase()] || null);
+        if (tipo && metro > 5 && !/^depart$/i.test(mv.type || ''))
+          pasos.push({ metro, tipo, calle: st.name || st.ref || '', salida: mv.exit });
+
+        // ¿este tramo es autovía?
+        let esMW = false;
+        const cls = (st.intersections || []).reduce((a,i) => a.concat(i.classes || []), []);
+        if (cls.indexOf('motorway') >= 0) esMW = true;
+        if (!esMW && /^(A|AP)-?\d/i.test(st.ref || '')) esMW = true;
+        const largo = st.distance || 0;
+        if (esMW && mwIni === null) mwIni = metro;
+        if (!esMW && mwIni !== null){ if (metro - mwIni > 300) autovias.push([mwIni, metro]); mwIni = null; }
+        metro += largo;
+      }
+    }
+    if (mwIni !== null && metro - mwIni > 300) autovias.push([mwIni, metro]);
+    return { pasos, autovias };
   }
 
   function decodePoly(str, prec){
@@ -276,7 +315,7 @@ function boot(){
         try {
           const u = String((a[0] && a[0].url) || a[0] || '');
           if (/route|directions|navigation|valhalla|osrm/i.test(u) && res.ok){
-            res.clone().json().then(j => { const ll = extraer(j); if (ll) aceptar(ll, 'red'); }).catch(()=>{});
+            res.clone().json().then(j => { const ll = extraer(j); if (ll) aceptar(ll, 'red', j); }).catch(()=>{});
           }
         } catch(e){}
         return res;
