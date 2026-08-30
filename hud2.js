@@ -65,6 +65,7 @@ export function createHud2(canvas, opts = {}){
     posts: true,            // farolas y quitamiedos
     carColor: '#cdd3d9',
     carScale: 1.0,          // tamaño del coche, 0.6 a 1.6
+    hudScale: 1.0,          // tamaño de los textos del HUD
     maxFps: 0,              // 0 = libre
     perfil: 'auto',         // 'auto' | 'ligero' | 'completo'
     frenarCamara: false,    // limitar look-ahead en curva cerrada (mantiene el
@@ -88,7 +89,7 @@ export function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
-  api.version = '2026.08.30-2';   // sube al cambiar: sirve para saber qué está corriendo
+  api.version = '2026.08.30-3';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
   let manList = [], limList = [], radList = [];
@@ -591,8 +592,10 @@ export function createHud2(canvas, opts = {}){
       const pl = projCopy(ptOff(s-1.2, off-0.95, 0)), pr = projCopy(ptOff(s-1.2, off+0.95, 0));
       const pa = projCopy(ptOff(s-1.2, off, 0));
       if (pa.ok){
-        let wpx = Math.abs(pr.x-pl.x) * 1.32 * (cfgOpt.carScale || 1);
-        if (!isFinite(wpx) || wpx < 8) wpx = W*0.34*(cfgOpt.carScale || 1);
+        let wpx = Math.abs(pr.x-pl.x) * 1.06 * (cfgOpt.carScale || 1);
+        if (!isFinite(wpx) || wpx < 8) wpx = W*0.26*(cfgOpt.carScale || 1);
+        // si el sprite no cabe en pantalla, se limita: mejor pequeño que fuera de cuadro
+        wpx = Math.min(wpx, W*0.85);
         const hpx = wpx*carAR;
         ctx.save(); ctx.globalAlpha = 0.45;
         const sg2 = ctx.createRadialGradient(pa.x,pa.y,0,pa.x,pa.y,wpx*0.55);
@@ -876,7 +879,7 @@ export function createHud2(canvas, opts = {}){
     : (d/1000).toFixed(1) + ' km';
 
   function drawHUD(){
-    const k = Math.min(W, H) / 420;                       // escala con el tamaño real
+    const k = (Math.min(W, H) / 420) * (cfgOpt.hudScale || 1);
     const pad = Math.round(14*k);
     // la maniobra de la lista manda mientras no la hayas pasado
     let m = manOver;
@@ -919,14 +922,14 @@ export function createHud2(canvas, opts = {}){
     // velocidad
     ctx.save();
     ctx.fillStyle = '#e8eef2';
-    ctx.font = `200 ${Math.round(62*k)}px ui-sans-serif,system-ui,sans-serif`;
+    ctx.font = `200 ${Math.round(86*k)}px ui-sans-serif,system-ui,sans-serif`;
     ctx.textBaseline = 'alphabetic';
     const kmh = String(Math.round(speed*3.6));
-    ctx.fillText(kmh, pad, H - pad - 8*k);
+    ctx.fillText(kmh, pad, H - pad - 6*k);
     const wkm = ctx.measureText(kmh).width;
     ctx.fillStyle = '#7b8b96';
-    ctx.font = `${Math.round(12*k)}px ui-sans-serif,system-ui,sans-serif`;
-    ctx.fillText('KM/H', pad + wkm + 8*k, H - pad - 8*k);
+    ctx.font = `${Math.round(14*k)}px ui-sans-serif,system-ui,sans-serif`;
+    ctx.fillText('KM/H', pad + wkm + 10*k, H - pad - 10*k);
     ctx.restore();
 
     // límite de velocidad

@@ -27,7 +27,7 @@ const CSS = `
 #hud2-err{position:fixed;left:14px;right:14px;top:14px;z-index:9200;display:none;
   background:rgba(255,90,77,.16);border:1px solid #ff5a4d;color:#ffd9d5;
   padding:10px 12px;border-radius:5px;font:12px/1.5 ui-monospace,monospace}
-#hud2-back{position:fixed;left:14px;bottom:14px;z-index:9150;display:none;
+#hud2-back{position:fixed;left:14px;top:14px;z-index:9150;display:none;
   background:rgba(10,13,16,.82);border:1px solid #2c3942;color:#e8eef2;border-radius:6px;
   font:600 12px/1 ui-sans-serif,sans-serif;letter-spacing:.1em;text-transform:uppercase;
   padding:13px 18px;cursor:pointer;backdrop-filter:blur(6px)}
@@ -57,7 +57,7 @@ const CSS = `
   font:600 12px/1 inherit;cursor:pointer;margin-top:8px}
 #hud2-set .drop{border:1px dashed #232c33;border-radius:5px;padding:14px;text-align:center;
   color:#5fd0e0;font-weight:600;cursor:pointer}
-#hud2-fps{position:fixed;left:14px;top:14px;z-index:9100;display:none;
+#hud2-fps{position:fixed;left:50%;transform:translateX(-50%);top:20px;z-index:9100;display:none;
   color:#7b8b96;font:11px/1 ui-sans-serif,sans-serif;letter-spacing:.16em;text-transform:uppercase}
 #hud2-wrap.on ~ #hud2-fps{display:block}
 `;
@@ -118,7 +118,7 @@ function boot(){
                      lookAhead:55, camHeight:2.6, camBack:7.5, posts:true,
                      rain:false, spray:true, traffic:'off',
                      rbRadius:45, rbArc:18, rbSmooth:1, hud:true, horizon:0.50, carScale:1,
-                     perfil:'auto', detalleCoche:true, carPhotoUrl:'', frenarCamara:false };
+                     perfil:'auto', detalleCoche:true, carPhotoUrl:'', frenarCamara:false, hudScale:1 };
   let cfg;
   try { cfg = Object.assign({}, HUD2_DEF, JSON.parse(localStorage.getItem(HUD2_KEY) || '{}')); }
   catch(e){ cfg = Object.assign({}, HUD2_DEF); }
@@ -427,7 +427,8 @@ function boot(){
     ['camBack','Distancia detrás',20,200,1,'m',10],
     ['fogEnd','Niebla',60,500,10,'m',1],
     ['horizon','Encuadre vertical',30,70,1,'%',100],
-    ['carScale','Tamaño del coche',60,160,1,'%',100]
+    ['carScale','Tamaño del coche',60,160,1,'%',100],
+    ['hudScale','Tamaño de los textos',70,180,1,'%',100]
   ];
   const guardar = () => { hud.set(cfg); try { localStorage.setItem(HUD2_KEY, JSON.stringify(cfg)); } catch(e){} };
   const seg = (id, opts, val) => '<div class="sg" id="'+id+'">' + opts.map(o =>
