@@ -476,9 +476,15 @@ let routeCasing=null, routeLine=null;
 
 // ===== estado =====
 let raw=null, disp=null, follow=true, speedKmh=0, limit=null, radarAlerted=false;
-let pois=[], lastPoiPos=null, lastPoiAt=0, lastLimPos=null, lastLimAt=0;
+let pois=[], lastPoiPos=null, lastPoiAt=0, lastOcmPos=null, lastOcmAt=0, lastLimPos=null, lastLimAt=0;
 let radarDB=[], radars=[], raining=false, lastWxPos=null, lastWxAt=0;
 async function checkWeather(lat,lon){ try{ const r=await fetch("https://api.open-meteo.com/v1/forecast?latitude="+lat+"&longitude="+lon+"&current=precipitation,weather_code"); const j=await r.json(); const p=(j.current&&j.current.precipitation)||0; const wc=(j.current&&j.current.weather_code)||0; raining=(p>0)||(wc>=51&&wc<=67)||(wc>=80&&wc<=99); }catch(e){} }
+// Cargadores de la ultima sesion: se pintan al instante mientras OCM responde.
+(function(){ try{
+  const c=JSON.parse(localStorage.getItem('poisCache')||'null');
+  if(c&&c.arr&&c.arr.length){ pois=c.arr;
+    console.log('[POIs] cache inicial:', pois.length, 'cargadores de hace '+Math.round((Date.now()-c.t)/60000)+' min'); }
+}catch(e){} })();
 fetch('radares.json').then(r=>r.json()).then(d=>{ radarDB=d; if(disp) refreshRadars([disp.lat,disp.lon]); try{ if(window.hud2) hud2.radares(d); }catch(e){} }).catch(()=>{});
 
 // ===== GPS =====
@@ -494,7 +500,10 @@ navigator.geolocation && navigator.geolocation.watchPosition(p=>{
   const acc=Math.round(c.accuracy||0);
   $('status').textContent='GPS '+c.latitude.toFixed(4)+', '+c.longitude.toFixed(4)+' · ±'+acc+' m'+(acc>800?' (impreciso)':' ✔');
   const here=[raw.lat,raw.lon];
-  if(!lastPoiPos||dist(lastPoiPos,here)>800||now-lastPoiAt>60000){lastPoiAt=now;lastPoiPos=here;fetchPois(here);refreshRadars(here);}
+  // Radares aparte (son locales y baratos); los POIs, mucho mas espaciados
+  // porque cada consulta a OCM tarda decenas de segundos.
+  if(!lastPoiPos||dist(lastPoiPos,here)>800||now-lastPoiAt>60000){lastPoiAt=now;lastPoiPos=here;refreshRadars(here);}
+  if(!lastOcmPos||dist(lastOcmPos,here)>3000||now-lastOcmAt>180000){lastOcmAt=now;lastOcmPos=here;fetchPois(here);}
   if(!lastWxPos||dist(lastWxPos,here)>5000||now-lastWxAt>600000){lastWxAt=now;lastWxPos=here;checkWeather(here[0],here[1]);}
   if(!lastLimPos||dist(lastLimPos,here)>250||now-lastLimAt>20000){lastLimAt=now;lastLimPos=here;fetchLimit(here);}
 },e=>{$('status').textContent='GPS: '+e.message;},{enableHighAccuracy:true,maximumAge:1000,timeout:20000});
@@ -588,7 +597,10 @@ function chargerInfo(tg){
   const socks=[]; for(const k in tg){ const mm=k.match(/^socket:([^:]+)$/i); if(mm && tg[k]!=='no' && tg[k]!=='0'){ let n=mm[1].replace(/_/g,' ').replace('type2 combo','CCS').replace('type2','Tipo 2').replace('chademo','CHAdeMO').replace('ccs','CCS'); if(socks.indexOf(n)<0)socks.push(n); } }
   return {op,kw,socks};
 }
+let poisEnCurso=false;
 async function fetchPois(ll){
+  if(poisEnCurso){ console.log('[POIs] ya hay una peticion en curso; se omite'); return; }
+  poisEnCurso=true;
   try{
     // OCM devolvia 524 (timeout de Cloudflare) con compact=false y 100 resultados:
     // esa combinacion le pide el objeto completo con todo expandido y no llega a
@@ -600,13 +612,28 @@ async function fetchPois(ll){
       try{ const res=await fetch(u,{signal:ctl.signal}); clearTimeout(to); return res; }
       catch(e){ clearTimeout(to); return null; }
     };
-    let r=await pedir(40,'true',9000);
-    if(!r||!r.ok) r=await pedir(15,'true',7000);          // reintento minimo
+    // OCM tarda ~35 s en esta zona. No se puede "esperar mas" sin mas: a esa
+    // velocidad las peticiones se solapan mientras conduces. Se pide poco, con
+    // margen amplio, y solo una en vuelo (ver poisEnCurso mas abajo).
+    let r=await pedir(25,'true',45000);
+    if(!r||!r.ok) r=await pedir(10,'true',30000);         // reintento minimo
     if(!r||!r.ok){
       // no se vacia la lista: se conserva lo ultimo bueno y se avisa
       const cod=r?r.status:'sin respuesta';
       console.warn('[POIs] OpenChargeMap no responde ('+cod+'); se mantienen los '+pois.length+' anteriores');
       try{ $('status').textContent='Cargadores: OCM no responde ('+cod+')'; }catch(e){}
+      // rescate: cargadores guardados de una sesion anterior, si son de esta zona
+      if(!pois.length){
+        try{
+          const c=JSON.parse(localStorage.getItem('poisCache')||'null');
+          if(c && c.arr && c.arr.length && dist(ll,c.ll)<20000){
+            pois=c.arr; drawChargers();
+            const min=Math.round((Date.now()-c.t)/60000);
+            console.log('[POIs] usando cache de hace '+min+' min:', pois.length, 'cargadores');
+            try{ $('status').textContent='Cargadores en cache ('+min+' min)'; }catch(e){}
+          }
+        }catch(e){}
+      }
       return;
     }
     const j=await r.json(); const arr=[];
@@ -618,7 +645,10 @@ async function fetchPois(ll){
     if(!arr.length && pois.length){ console.warn('[POIs] OCM devolvio 0; se mantienen los anteriores'); return; }
     pois=arr; drawChargers(); mergeGoingElectric(ll);
     console.log('[POIs] cargadores:', arr.length);
+    // se guardan en disco: si OCM se cae, al menos tienes los de la ultima vez
+    try{ localStorage.setItem('poisCache', JSON.stringify({t:Date.now(), ll:ll, arr:arr})); }catch(e){}
   }catch(e){ console.warn('[POIs] fallo:', e.message); }
+  finally{ poisEnCurso=false; }
 }
 function geKey(){ try{ return (localStorage.getItem('geKey')||'').trim(); }catch(e){ return ''; } }
 // GoingElectric como 2ª fuente (se fusiona con OCM). Mapeo tentativo: se ajustará al ver datos reales con la key.
