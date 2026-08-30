@@ -151,11 +151,11 @@ function createHud2(canvas, opts = {}){
   let pts = null, N = 0, routeLen = 0;     // ruta remuestreada: x, z, rumbo
   let RB = [], MW = [];                    // rotondas detectadas, tramos de autovía
   let s = 0, speed = 0, targetSpeed = 0, brake = 0, prevSpeed = 0;
-  let running = false, raf = 0, last = 0, lastDraw = 0;
+  let running = false, raf = 0, last = 0, lastDraw = 0, frameN = 0;
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
-  api.version = '2026.08.30-5';   // sube al cambiar: sirve para saber qué está corriendo
+  api.version = '2026.08.30-6';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
   let manList = [], limList = [], radList = [];
@@ -1135,9 +1135,25 @@ function createHud2(canvas, opts = {}){
   function resize(){
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     const r = canvas.getBoundingClientRect();
-    W = Math.max(200, r.width | 0); H = Math.max(150, r.height | 0);
+    const nw = Math.max(200, r.width | 0), nh = Math.max(150, r.height | 0);
+    if (nw === W && nh === H && canvas.width === W*dpr) return;   // nada que hacer
+    W = nw; H = nh;
     canvas.width = W*dpr; canvas.height = H*dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    xsCache.clear();
+  }
+
+  // Arrastrar el divisor del Split cambia el tamaño del panel SIN disparar el
+  // evento resize de la ventana: sin esto, el HUD sigue con las medidas viejas
+  // hasta que se cambia de modo.
+  let ro = null;
+  if (typeof ResizeObserver !== 'undefined'){
+    let pend = 0;
+    ro = new ResizeObserver(() => {
+      if (pend) return;
+      pend = requestAnimationFrame(() => { pend = 0; resize(); });
+    });
+    try { ro.observe(canvas); } catch(e){}
   }
 
   // Perfil automático: si el equipo no sostiene 26 fps, se recorta solo.
@@ -1156,6 +1172,8 @@ function createHud2(canvas, opts = {}){
     if (cfgOpt.maxFps && now - lastDraw < 1000/cfgOpt.maxFps - 1) return;
     lastDraw = now;
     if (!pts) return;
+    // red de seguridad para navegadores sin ResizeObserver
+    if ((frameN++ & 31) === 0) resize();
 
     prevSpeed = speed;
     speed += (targetSpeed - speed) * Math.min(dt*2.2, 1);
@@ -1196,7 +1214,8 @@ function createHud2(canvas, opts = {}){
     if (redo && pts){ RB = detectRoundabouts(); xsCache.clear(); }
   };
   api.state = () => ({ s, speed, routeLen, rotondas: RB.length, running });
-  api.destroy = () => { api.stop(); pts = null; RB = []; MW = []; };
+  api.destroy = () => { api.stop(); if (ro) try { ro.disconnect(); } catch(e){}
+                        pts = null; RB = []; MW = []; };
 
   window.addEventListener('resize', resize);
   resize();
