@@ -84,7 +84,7 @@ export function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
-  api.version = '2026.08.29-8';   // sube al cambiar: sirve para saber qué está corriendo
+  api.version = '2026.08.29-9';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
   let manList = [], limList = [], radList = [];
@@ -128,23 +128,39 @@ export function createHud2(canvas, opts = {}){
   api.setRadars = function(puntos, margen){
     margen = margen || 45;
     radList = [];
-    if (!pts || !origin || !puntos) return 0;
+    if (!pts || !origin || !puntos || !puntos.length) return 0;
     const lat0 = origin[0]*Math.PI/180, RT = 6378137;
+    // Rejilla de 120 m: sin ella, 300 radares por una ruta de 96 km son 14
+    // millones de comparaciones y se nota como un tirón al calcular ruta.
+    const CELL = 120, grid = new Map();
+    const key = (a,b) => a + ',' + b;
+    for (let i = 0; i < N; i++){
+      const k = key(Math.floor(pts[i*3]/CELL), Math.floor(pts[i*3+1]/CELL));
+      let arr = grid.get(k); if (!arr){ arr = []; grid.set(k, arr); }
+      arr.push(i);
+    }
     for (const p of puntos){
-      const lat = p.lat !== undefined ? p.lat : (Array.isArray(p) ? p[0] : p.latitude);
-      const lng = p.lng !== undefined ? p.lng : (Array.isArray(p) ? p[1] : p.longitude);
+      const lat = p.lat !== undefined ? p.lat : (Array.isArray(p) ? p[0] : (p.latitude !== undefined ? p.latitude : p.y));
+      const lng = p.lng !== undefined ? p.lng : (Array.isArray(p) ? p[1] : (p.longitude !== undefined ? p.longitude : (p.lon !== undefined ? p.lon : p.x)));
       if (!isFinite(lat) || !isFinite(lng)) continue;
       const px = RT*(lng-origin[1])*Math.PI/180*Math.cos(lat0);
       const pz = RT*(lat-origin[0])*Math.PI/180;
+      const cx = Math.floor(px/CELL), cz = Math.floor(pz/CELL);
       let best = -1, bd = Infinity;
-      for (let i = 0; i < N; i++){
-        const d = (pts[i*3]-px)**2 + (pts[i*3+1]-pz)**2;
-        if (d < bd){ bd = d; best = i; }
+      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++){
+        const arr = grid.get(key(cx+a, cz+b)); if (!arr) continue;
+        for (const i of arr){
+          const d = (pts[i*3]-px)**2 + (pts[i*3+1]-pz)**2;
+          if (d < bd){ bd = d; best = i; }
+        }
       }
       if (best >= 0 && Math.sqrt(bd) <= margen)
-        radList.push({ metro: best*STEP, kmh: p.kmh || p.speed || null });
+        radList.push({ metro: best*STEP,
+                       kmh: p.kmh || p.speed || p.velocidad || p.limite || null });
     }
     radList.sort((a,b) => a.metro - b.metro);
+    // dos radares a menos de 60 m son el mismo punto duplicado
+    radList = radList.filter((r,i) => i === 0 || r.metro - radList[i-1].metro > 60);
     return radList.length;
   };
 

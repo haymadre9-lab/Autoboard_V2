@@ -202,7 +202,12 @@ function boot(){
       return true;
     },
     ruta(){ return { propia: rutaPropia, metros: Math.round(hud.state().routeLen),
-                     rotondas: hud.state().rotondas }; },
+                     rotondas: hud.state().rotondas,
+                     radares: radaresRaw ? radaresRaw.length : 0 }; },
+    // por si prefieres pasárselos tú: window.hud2.radares(miLista)
+    radares(lista){ if (lista){ radaresRaw = lista;
+      try { localStorage.setItem('hud2.radares', JSON.stringify(lista)); } catch(e){} }
+      aplicarRadares(); return radaresRaw ? radaresRaw.length : 0; },
     ajustar(o){ Object.assign(cfg, o); hud.set(cfg);
       try { localStorage.setItem(HUD2_KEY, JSON.stringify(cfg)); } catch(e){} }
   });
@@ -222,6 +227,8 @@ function boot(){
       const r = hud.setRoute(ll, extra ? { motorway: extra.autovias } : {});
       rutaPropia = true;
       if (extra && extra.pasos.length) hud.setManeuvers(extra.pasos);
+      rutaPropia = true;
+      aplicarRadares();                       // los metros cambian con cada ruta
       try { localStorage.setItem('hud2.ruta', JSON.stringify(ll)); } catch(e){}
       console.log('[hud2] ruta detectada por ' + origen + ':', r,
         extra ? ('| ' + extra.pasos.length + ' maniobras, ' + extra.autovias.length + ' tramos de autovía') : '');
@@ -307,6 +314,38 @@ function boot(){
     return ok ? c.map(p => [p[1], p[0]]) : null;
   }
 
+  /* ---- radares: se interceptan igual que la ruta ---- */
+  let radaresRaw = null;
+  try { const g = JSON.parse(localStorage.getItem('hud2.radares') || 'null');
+        if (g && g.length) radaresRaw = g; } catch(e){}
+
+  function extraerRadares(j){
+    let arr = null;
+    if (Array.isArray(j)) arr = j;
+    else if (j && Array.isArray(j.radares)) arr = j.radares;
+    else if (j && Array.isArray(j.features))                     // GeoJSON
+      arr = j.features.map(f => {
+        const c = f.geometry && f.geometry.coordinates;
+        return c ? Object.assign({ lat:c[1], lng:c[0] }, f.properties || {}) : null;
+      }).filter(Boolean);
+    else if (j && typeof j === 'object'){
+      for (const k in j) if (Array.isArray(j[k]) && j[k].length > 3){ arr = j[k]; break; }
+    }
+    if (!arr || arr.length < 1) return null;
+    const p0 = arr[0];
+    const tiene = o => o && (o.lat !== undefined || o.latitude !== undefined
+                             || o.lon !== undefined || Array.isArray(o));
+    return tiene(p0) ? arr : null;
+  }
+
+  function aplicarRadares(){
+    if (!radaresRaw || !rutaPropia) return;
+    try {
+      const n = hud.setRadars(radaresRaw);
+      console.log('[hud2] radares sobre la ruta:', n, 'de', radaresRaw.length);
+    } catch(e){ console.warn('[hud2] radares:', e.message); }
+  }
+
   // 1) respuestas del router
   if (window.fetch){
     const f0 = window.fetch;
@@ -316,6 +355,14 @@ function boot(){
           const u = String((a[0] && a[0].url) || a[0] || '');
           if (/route|directions|navigation|valhalla|osrm/i.test(u) && res.ok){
             res.clone().json().then(j => { const ll = extraer(j); if (ll) aceptar(ll, 'red', j); }).catch(()=>{});
+          } else if (/radar|camera|speedcam/i.test(u) && res.ok){
+            res.clone().json().then(j => {
+              const r = extraerRadares(j);
+              if (r){ radaresRaw = r;
+                try { localStorage.setItem('hud2.radares', JSON.stringify(r)); } catch(e){}
+                console.log('[hud2] lista de radares capturada:', r.length);
+                aplicarRadares(); }
+            }).catch(()=>{});
           }
         } catch(e){}
         return res;
