@@ -479,7 +479,7 @@ let raw=null, disp=null, follow=true, speedKmh=0, limit=null, radarAlerted=false
 let pois=[], lastPoiPos=null, lastPoiAt=0, lastLimPos=null, lastLimAt=0;
 let radarDB=[], radars=[], raining=false, lastWxPos=null, lastWxAt=0;
 async function checkWeather(lat,lon){ try{ const r=await fetch("https://api.open-meteo.com/v1/forecast?latitude="+lat+"&longitude="+lon+"&current=precipitation,weather_code"); const j=await r.json(); const p=(j.current&&j.current.precipitation)||0; const wc=(j.current&&j.current.weather_code)||0; raining=(p>0)||(wc>=51&&wc<=67)||(wc>=80&&wc<=99); }catch(e){} }
-fetch('radares.json').then(r=>r.json()).then(d=>{ radarDB=d; if(disp) refreshRadars([disp.lat,disp.lon]); }).catch(()=>{});
+fetch('radares.json').then(r=>r.json()).then(d=>{ radarDB=d; if(disp) refreshRadars([disp.lat,disp.lon]); try{ if(window.hud2) hud2.radares(d); }catch(e){} }).catch(()=>{});
 
 // ===== GPS =====
 if(!window.isSecureContext){ $('status').innerHTML='⚠ Ábrelo con <b>https://</b> para el GPS'; }
@@ -522,17 +522,15 @@ function frame(now){
     }
     $('spd').textContent=Math.round(speedKmh);
     { var _s2=document.getElementById('spd2'); if(_s2)_s2.textContent=Math.round(speedKmh); }
-    if(hudOn){ roadPhase=(roadPhase + speedKmh*dt*0.9)%13;
-      let tBend=0, rnd=0;
-      if(routeOn && hudTurnDist!=null){
-        if(hudTurnType==='roundabout'||hudTurnType==='rotary'){ if(hudTurnDist<280 && hudTurnDist>150){ rnd=Math.max(0,Math.min(1,1-(hudTurnDist/280))); } }
-        else if(hudTurnDist<250){ const prox=Math.max(0,Math.min(1,1-(hudTurnDist/250))); const mo=hudTurnMod||''; let dir=0; if(mo.indexOf('left')>=0)dir=-1; else if(mo.indexOf('right')>=0)dir=1; if(mo.indexOf('slight')>=0)dir*=0.6; tBend=dir*prox; } }
-      roadBend += (tBend-roadBend)*Math.min(1,dt*3);
-      drawHudRoad(roadPhase, roadBend, rnd, hudTurnExit);
-      const cw=hudcv.width,ch=hudcv.height,carY=0.60*ch; const off=(hudLineX?hudLineX(cw*0.5,carY):cw*0.5)-cw*0.5;
-      $('hudcar').style.transform='translate(-50%,-50%) translateX('+off.toFixed(1)+'px) rotate('+(roadBend*14).toFixed(1)+'deg)';
-      { const bm=$('beams'); if(bm) bm.style.transform='translateX(-50%) translateX('+off.toFixed(1)+'px) rotate('+(roadBend*14).toFixed(1)+'deg)'; } // el haz gira con el coche
-      if(raining) drawHudRain(dt); else clearHudRain(); }
+    // ---- HUD 2: el dibujo lo lleva hud2.js dentro de #hudroad ----
+    // Se sustituyen drawHudRoad, drawHudRain, las salpicaduras y los transform
+    // de #hudcar y #beams. El bloque original queda al final del archivo,
+    // comentado, por si hay que volver atras.
+    if(hudOn && window.hud2){
+      hud2.setSpeed(speedKmh/3.6);
+      if(disp) hud2.syncPosition(disp.lat, disp.lon);
+      hud2.set({ rain: !!raining });
+    }
     if(now-lastLogic>120){ lastLogic=now;
       if(limit){ $('limit').style.display='flex'; $('limitn').textContent=limit; $('spd').classList.toggle('over',speedKmh>limit+3); } else $('limit').style.display='none';
       updateRadar();
@@ -727,6 +725,24 @@ function applyRoute(route){
   const merged=[]; for(const st of steps){ if(merged.length){ const pv=merged[merged.length-1]; const tt=(st.maneuver||{}).type; if(dist(pv.ll,st.ll)<90 && tt!=='off ramp' && tt!=='roundabout' && tt!=='arrive'){ continue; } } merged.push(st); } if(merged.length>=2) steps=merged;
   if(!steps.length&&routeCoordsLL.length){ steps=[{distance:(route.summary&&route.summary.lengthInMeters)||0,name:'',ll:routeCoordsLL[0],instr:'Comienza la ruta',maneuver:{type:'depart'},_min:1e9,_v:false},{distance:0,name:'',ll:routeCoordsLL[routeCoordsLL.length-1],instr:'Has llegado a tu destino',maneuver:{type:'arrive'},_min:1e9,_v:false}]; }
   stepIdx=0; routeSummary=route.summary||null; renderStep(true);
+
+  // ---- HUD 2: geometria real de la ruta + maniobras de TomTom ----
+  try{
+    if(window.hud2 && routeCoordsLL && routeCoordsLL.length>8){
+      hud2.setRoute(routeCoordsLL);
+      const pasos=[];
+      for(const it of instr){
+        const mv=ttMan(it)||{}, tp=mv.type||'', mo=mv.modifier||'';
+        const tipo = /roundabout|rotary/.test(tp) ? 'roundabout'
+                   : mo.indexOf('left')>=0  ? 'left'
+                   : mo.indexOf('right')>=0 ? 'right' : null;
+        const metro = it.routeOffsetInMeters||0;
+        if(tipo && metro>5) pasos.push({metro:metro, tipo:tipo, calle:it.street||'', salida:mv.exit});
+      }
+      if(pasos.length) hud2.setManeuvers(pasos);
+      if(typeof radarDB!=='undefined' && radarDB && radarDB.length) hud2.radares(radarDB);
+    }
+  }catch(e){ console.warn('[hud2] applyRoute:', e.message); }
 }
 function clearRoute(){ clearRouteLayers(); routeCoordsLL=[]; const rr=$('reroute'); if(rr)rr.style.display='none'; }
 function trimRoute(){ if(!routeCoordsLL.length||!disp)return; const nowp=performance.now(); if(nowp-lastTrim<1200)return; lastTrim=nowp;
@@ -975,6 +991,7 @@ if('serviceWorker' in navigator){
     else if(m==='faro'){ document.body.classList.add('faro'); }
     else { hudPane.style.flex='0 0 '+savedSplitPct()+'%'; }
     try{ hudOn = (m!=='map' && m!=='faro'); if(typeof updateHudCar==='function') updateHudCar(); }catch(e){}
+    try{ if(window.hud2){ hudOn ? hud2.abrir() : hud2.cerrar(); } }catch(e){}
     bar.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
     LS.set('abMode',m);
     requestAnimationFrame(()=>{ relayout(); setTimeout(relayout,70); setTimeout(relayout,220); });
@@ -1323,3 +1340,20 @@ if('serviceWorker' in navigator){
 </script>
 </body></html>
 <script type="module" src="./hud2-boot.js"></script>
+<script>
+/* ---- HUD 2: configuracion inicial ---------------------------------------
+   Se pinta dentro de #hudroad (un solo lienzo, un solo bucle) y se apaga su
+   superposicion propia: la velocidad, la maniobra y el radar los siguen
+   mostrando #spdHud, #navstack y #radarsign, que ya funcionan.            */
+(function(){
+  function init(){
+    if(!window.hud2){ setTimeout(init,300); return; }
+    // ajustar() toca la configuracion del arranque (y la guarda); set() solo el motor
+    const cfg={ incrustado:true, destino:'#hudroad', hud:false, abrirAlNavegar:false };
+    if(typeof hud2.ajustar==='function') hud2.ajustar(cfg); else hud2.set(cfg);
+    if(typeof radarDB!=='undefined' && radarDB && radarDB.length) hud2.radares(radarDB);
+    if(typeof hudOn!=='undefined' && hudOn) hud2.abrir();
+  }
+  init();
+})();
+</script>

@@ -133,6 +133,14 @@ function boot(){
   function montarIncrustado(){
     destinoEl = document.querySelector(cfg.destino || '#hudroad');
     if (!destinoEl || !destinoEl.parentNode) return false;
+
+    // Si el destino YA es un canvas, se pinta directamente en él: un solo
+    // lienzo, un solo bucle. Es la opción más fluida.
+    if (destinoEl.tagName === 'CANVAS'){
+      cvIn = destinoEl;
+      ocultarViejos(true);
+      return true;
+    }
     if (!cvIn){
       cvIn = document.createElement('canvas');
       cvIn.id = 'hud2-inline';
@@ -158,9 +166,22 @@ function boot(){
     }
     return true;
   }
+  // Los adornos del HUD antiguo (coche en img, haces en div, lluvia en canvas)
+  // sobran: el HUD 2 los dibuja dentro del lienzo.
+  const VIEJOS = ['hudcar', 'beams', 'hudrain'];
+  function ocultarViejos(on){
+    for (const id of VIEJOS){
+      const e = document.getElementById(id);
+      if (!e) continue;
+      if (on){ if (e.dataset.hud2disp === undefined) e.dataset.hud2disp = e.style.display || ''; e.style.display = 'none'; }
+      else e.style.display = e.dataset.hud2disp || '';
+    }
+  }
+
   function desmontarIncrustado(){
-    if (cvIn) cvIn.style.display = 'none';
-    if (destinoEl){
+    ocultarViejos(false);
+    if (cvIn && cvIn !== destinoEl) cvIn.style.display = 'none';
+    if (destinoEl && cvIn !== destinoEl){
       if (dimOrig){ try { destinoEl.width = dimOrig.w; destinoEl.height = dimOrig.h; } catch(e){} dimOrig = null; }
       destinoEl.style.display = '';
     }
