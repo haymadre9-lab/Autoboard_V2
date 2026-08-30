@@ -131,6 +131,10 @@ function createHud2(canvas, opts = {}){
     carColor: '#cdd3d9',
     carScale: 1.0,          // tamaño del coche, 0.6 a 1.6
     maxFps: 0,              // 0 = libre
+    perfil: 'auto',         // 'auto' | 'ligero' | 'completo'
+    frenarCamara: false,    // limitar look-ahead en curva cerrada (mantiene el
+                            // coche en cuadro, pero resta sensación de giro)
+    detalleCoche: true,     // zócalo, pasos de rueda, retrovisores, montantes
     hud: true,              // superponer maniobra, velocidad y limite
     carPhoto: null,         // dataURL de tu coche recortado; null = coche dibujado
     rbRadius: 45,           // radio maximo para considerar rotonda, en metros
@@ -149,10 +153,20 @@ function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
-  api.version = '2026.08.29-9';   // sube al cambiar: sirve para saber qué está corriendo
+  api.version = '2026.08.30-2';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
   let manList = [], limList = [], radList = [];
+
+  /** Carga la foto desde una URL del propio repo: no hace falta USB en el coche. */
+  api.setCarPhotoUrl = function(url){
+    if (!url){ api.setCarPhoto(null); return; }
+    const im = new Image();
+    im.crossOrigin = 'anonymous';
+    im.onload = () => { carImg = im; carAR = im.naturalHeight/im.naturalWidth; cfgOpt.carPhoto = url; };
+    im.onerror = () => { if (api.onError) api.onError(new Error('no se pudo cargar ' + url)); };
+    im.src = url;
+  };
 
   /** Foto del coche ya recortada (dataURL PNG con alfa). null vuelve al dibujado. */
   api.setCarPhoto = function(url){
@@ -288,7 +302,17 @@ function createHud2(canvas, opts = {}){
     return f;
   }
   // Perfil transversal interpolado: convencional -> autovía con mediana.
+  const xsCache = new Map();
   function xsec(t){
+    const key = (t/4)|0;
+    const hit = xsCache.get(key);
+    if (hit !== undefined) return hit;
+    const v = xsecCalc(key*4);
+    if (xsCache.size > 4000) xsCache.clear();
+    xsCache.set(key, v);
+    return v;
+  }
+  function xsecCalc(t){
     const rf = rbFactor(t), f = mwFactor(t) * (1 - rf);
     return { f, rf,
       med:  f*1.7,
@@ -349,7 +373,7 @@ function createHud2(canvas, opts = {}){
 
     MW = o.motorway || [];
     RB = detectRoundabouts();
-    manList = []; limList = []; radList = [];   // van referidas a metros de la ruta vieja
+    manList = []; limList = []; radList = []; xsCache.clear();
     s = Math.min(6, routeLen*0.02);
     return { metros: Math.round(routeLen), puntos: N, rotondas: RB.length };
   };
@@ -446,13 +470,12 @@ function createHud2(canvas, opts = {}){
     const height = cfgOpt.camHeight * (1 - t*0.22);
     let back   = cfgOpt.camBack * (1 + t*0.30);
     let lookM  = 20 + cfgOpt.lookAhead*t;
-    // En curva cerrada la distancia se recorre girando: en una rotonda de 14 m,
-    // 40 m por delante son 164 grados de arco y la camara acabaria mirando hacia
-    // atras, con el coche fuera del encuadre. Se limita por curvatura.
-    const k = Math.abs(curv(s));
-    if (k > 1e-4){
-      lookM = Math.min(lookM, 0.85/k);     // como mucho ~49 grados de giro al punto de mira
-      back  = Math.min(back,  0.30/k);     // y la camara no se va al otro lado del arco
+    // En curva cerrada la distancia se recorre girando, así que la cámara puede
+    // acabar mirando hacia atrás y el coche sale de cuadro. Limitarlo lo evita,
+    // pero mata la sensación de giro: por eso está desactivado por defecto.
+    if (cfgOpt.frenarCamara){
+      const k = Math.abs(curv(s));
+      if (k > 1e-4){ lookM = Math.min(lookM, 0.85/k); back = Math.min(back, 0.30/k); }
     }
     const c = ptOff(s - back, off, height);
     const g = ptOff(s + lookM, off*0.5, height*0.42);
@@ -525,7 +548,8 @@ function createHud2(canvas, opts = {}){
 
   function drawRoad(pal){
     const fogRGB = hexToRgb(pal.skyBot), fogEnd = cfgOpt.fogEnd;
-    const SEG = 4, FAR = Math.min(fogEnd + 40, 620);
+    const lig = ligero();
+    const SEG = lig ? 7 : 4, FAR = Math.min(fogEnd + 40, lig ? 300 : 620);
     const s0 = Math.floor((s - 12)/SEG)*SEG;
     const rbCur = RB.find(r => s > r.s0 - 200 && s < r.s1 + 60);
     let islandDone = false;
@@ -573,7 +597,7 @@ function createHud2(canvas, opts = {}){
         drawIsland(rbCur, pal, fogRGB); islandDone = true;
       }
 
-      if (cfgOpt.posts && A.rf < 0.5 && Math.abs(curv(a)) <= 0.02 && fog <= .97){
+      if (cfgOpt.posts && !lig && A.rf < 0.5 && Math.abs(curv(a)) <= 0.02 && fog <= .97){
         for (const sg of [-1,1]){
           const o = sg*(A.half + 1.7);
           poly([ptOff(a,o,0.5), ptOff(b,o,0.5), ptOff(b,o,0.85), ptOff(a,o,0.85)],
@@ -690,8 +714,9 @@ function createHud2(canvas, opts = {}){
       else
         face([P(A[0],-A[1]*.98,A[2]), P(B[0],-B[1]*.98,B[2]), P(B[0],B[1]*.98,B[2]), P(A[0],A[1]*.98,A[2])], base);
     }
+    const detalle = cfgOpt.detalleCoche && !ligero();
     // zócalo oscuro bajo la cintura: rompe la masa y hace el coche menos "bloque"
-    for (const sg of [-1,1])
+    if (detalle) for (const sg of [-1,1])
       for (let i = 2; i < PROF.length-3; i++){
         const A = PROF[i], B = PROF[i+1];
         poly([P(A[0], sg*(A[1]+0.004), 0.335), P(B[0], sg*(B[1]+0.004), 0.335),
@@ -699,7 +724,7 @@ function createHud2(canvas, opts = {}){
              mixc([base[0]*0.42, base[1]*0.42, base[2]*0.44], fogRGB, fog));
       }
     // pasos de rueda
-    for (const wz of [-1.42, 1.46]) for (const sg of [-1,1]){
+    if (detalle) for (const wz of [-1.42, 1.46]) for (const sg of [-1,1]){
       const arc = [];
       for (let a = 0; a <= 8; a++){ const an = Math.PI*a/8;
         arc.push(P(wz - Math.cos(an)*0.60, sg*0.962, 0.345 + Math.sin(an)*0.56)); }
@@ -708,12 +733,12 @@ function createHud2(canvas, opts = {}){
       poly(arc, mixc([26,28,32], fogRGB, fog));
     }
     // retrovisores
-    for (const sg of [-1,1])
+    if (detalle) for (const sg of [-1,1])
       poly([P(0.98, sg*0.96, 1.02), P(1.10, sg*1.20, 1.06),
             P(1.02, sg*1.20, 1.16), P(0.90, sg*0.96, 1.12)],
            mixc([base[0]*0.72, base[1]*0.72, base[2]*0.75], fogRGB, fog));
     // montante trasero: separa luna de carrocería y da lectura de volumen
-    for (const sg of [-1,1])
+    if (detalle) for (const sg of [-1,1])
       poly([P(1.30, sg*0.640, 1.345), P(1.70, sg*0.478, 1.215),
             P(1.70, sg*0.430, 1.180), P(1.30, sg*0.590, 1.300)],
            mixc([base[0]*0.55, base[1]*0.55, base[2]*0.58], fogRGB, fog));
@@ -1019,8 +1044,19 @@ function createHud2(canvas, opts = {}){
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
+  // Perfil automático: si el equipo no sostiene 26 fps, se recorta solo.
+  let fpsMedia = 60, autoLigero = false;
+  const ligero = () => cfgOpt.perfil === 'ligero'
+    || (cfgOpt.perfil === 'auto' && autoLigero);
+  api.fps = () => Math.round(fpsMedia);
+
   function frame(now){
     const dt = Math.min((now - last)/1000, 0.05); last = now;
+    if (dt > 0){
+      fpsMedia += (1/dt - fpsMedia) * 0.05;
+      if (!autoLigero && fpsMedia < 26) autoLigero = true;
+      else if (autoLigero && fpsMedia > 48) autoLigero = false;
+    }
     if (cfgOpt.maxFps && now - lastDraw < 1000/cfgOpt.maxFps - 1) return;
     lastDraw = now;
     if (!pts) return;
@@ -1037,13 +1073,12 @@ function createHud2(canvas, opts = {}){
     drawSky(pal);
     drawRoad(pal);
     drawBeams(pal, pal.glow);
-    updateTraffic(dt);
-    drawTraffic(pal);
-    updateSpray(dt);
+    if (!ligero()){ updateTraffic(dt); drawTraffic(pal); } else cars.length = 0;
+    if (!ligero()) updateSpray(dt); else spray.length = 0;
     drawSpray(pal, 'far');
     drawCar(pal, Math.max(0.30*pal.glow, brake), pal.glow);
     drawSpray(pal, 'near');
-    if (cfgOpt.rain) drawRain(dt);
+    if (cfgOpt.rain && !ligero()) drawRain(dt);
     if (cfgOpt.hud) drawHUD();
   }
 
@@ -1061,7 +1096,7 @@ function createHud2(canvas, opts = {}){
   api.set = o => {
     const redo = ('rbRadius' in o) || ('rbArc' in o);
     Object.assign(cfgOpt, o);
-    if (redo && pts) RB = detectRoundabouts();
+    if (redo && pts){ RB = detectRoundabouts(); xsCache.clear(); }
   };
   api.state = () => ({ s, speed, routeLen, rotondas: RB.length, running });
   api.destroy = () => { api.stop(); pts = null; RB = []; MW = []; };
@@ -1079,7 +1114,7 @@ const HUD2_KEY = 'hud2.cfg';
 const HUD2_DEF = { theme:'auto', maxFps:0, beamReach:34, fogEnd:260,
                    lookAhead:55, camHeight:2.6, camBack:7.5, posts:true,
                    rain:false, spray:true, traffic:'off',
-                   rbRadius:45, rbArc:18, rbSmooth:1, hud:true, horizon:0.50, carScale:1 };
+                   rbRadius:45, rbArc:18, rbSmooth:1, hud:true, horizon:0.50, carScale:1, perfil:'auto', detalleCoche:true };
 function hud2LoadCfg(){
   try { return Object.assign({}, HUD2_DEF, JSON.parse(localStorage.getItem(HUD2_KEY) || '{}')); }
   catch(e){ return Object.assign({}, HUD2_DEF); }

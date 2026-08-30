@@ -117,7 +117,8 @@ function boot(){
   const HUD2_DEF = { theme:'auto', maxFps:0, beamReach:34, fogEnd:260,
                      lookAhead:55, camHeight:2.6, camBack:7.5, posts:true,
                      rain:false, spray:true, traffic:'off',
-                     rbRadius:45, rbArc:18, rbSmooth:1, hud:true, horizon:0.50, carScale:1 };
+                     rbRadius:45, rbArc:18, rbSmooth:1, hud:true, horizon:0.50, carScale:1,
+                     perfil:'auto', detalleCoche:true, carPhotoUrl:'', frenarCamara:false };
   let cfg;
   try { cfg = Object.assign({}, HUD2_DEF, JSON.parse(localStorage.getItem(HUD2_KEY) || '{}')); }
   catch(e){ cfg = Object.assign({}, HUD2_DEF); }
@@ -126,8 +127,8 @@ function boot(){
   console.log('[hud2] módulo versión', hud.version);
   // foto del coche guardada desde hud2.html (mismo origen, mismo almacen)
   try {
-    const f = localStorage.getItem('hud2.foto');
-    if (f) hud.setCarPhoto(f);
+    if (cfg.carPhotoUrl) hud.setCarPhotoUrl(cfg.carPhotoUrl);
+    else { const f = localStorage.getItem('hud2.foto'); if (f) hud.setCarPhoto(f); }
   } catch(e){}
   // rescate: si la foto guardada resultara invisible, se descarta sola
   window.hud2SinFoto = () => { try { localStorage.removeItem('hud2.foto'); } catch(e){}
@@ -228,8 +229,18 @@ function boot(){
      Si ninguno dispara, queda la llamada explícita window.hud2.setRoute().
      ------------------------------------------------------------------ */
   let autoOn = true;
+  let firmaRuta = null, mapaInst = null;
+  const firmar = ll => ll.length + ':' + ll[0][0].toFixed(5) + ',' + ll[0][1].toFixed(5)
+                     + ':' + ll[ll.length-1][0].toFixed(5) + ',' + ll[ll.length-1][1].toFixed(5);
+
   function aceptar(ll, origen, json){
     if (!autoOn || !ll || ll.length < 8) return false;
+    // MapLibre llama a setData muchas veces por segundo para repintar la línea.
+    // Sin esta comprobación se recargaba la ruta entera en cada llamada y la
+    // posición volvía al principio: de ahí los tirones y los saltos.
+    const f = firmar(ll);
+    if (f === firmaRuta) return false;
+    firmaRuta = f;
     try {
       const extra = json ? extraerPasos(json) : null;
       const r = hud.setRoute(ll, extra ? { motorway: extra.autovias } : {});
@@ -386,11 +397,13 @@ function boot(){
     const proto = ml.Map.prototype;
     const addS = proto.addSource;
     proto.addSource = function(id, src){
+      mapaInst = this;                       // así podemos pararlo al abrir el HUD
       try { if (src && src.type === 'geojson'){ const ll = extraer(src.data); if (ll) aceptar(ll, 'addSource:'+id); } } catch(e){}
       return addS.apply(this, arguments);
     };
     const getS = proto.getSource;
     proto.getSource = function(id){
+      mapaInst = this;
       const src = getS.apply(this, arguments);
       if (src && src.setData && !src.__hud2){
         src.__hud2 = true;
@@ -433,9 +446,17 @@ function boot(){
           + '<h3>Efectos</h3>'
           + '<label class="ck"><input type="checkbox" id="h2_rain"'+(cfg.rain?' checked':'')+'> Lluvia</label>'
           + '<label class="ck"><input type="checkbox" id="h2_spray"'+(cfg.spray?' checked':'')+'> Agua de las ruedas</label>'
+          + '<h3>Rendimiento</h3>'
+          + seg('h2_perf', [['auto','Auto'],['ligero','Ligero'],['completo','Completo']], cfg.perfil)
+          + '<label class="ck"><input type="checkbox" id="h2_detalleCoche"'+(cfg.detalleCoche?' checked':'')+'> Detalles del coche</label>'
+          + '<label class="ck"><input type="checkbox" id="h2_frenarCamara"'+(cfg.frenarCamara?' checked':'')+'> Sujetar cámara en curva cerrada</label>'
           + '<h3>Tráfico</h3>'
           + seg('h2_traf', [['off','Ninguno'],['poca','Poco'],['normal','Normal'],['mucha','Denso']], cfg.traffic)
           + '<h3>Tu coche</h3>'
+          + '<label><span class="r"><span>Foto por URL (súbela al repo)</span></span>'
+          + '<input type="text" id="h2_url" value="' + (cfg.carPhotoUrl||'') + '" placeholder="./coche.png" '
+          + 'style="width:100%;background:#0d1216;border:1px solid #232c33;border-radius:5px;color:#e8eef2;'
+          + 'font:11px ui-monospace,monospace;padding:9px"></label>'
           + '<input type="file" id="h2_file" accept="image/*" style="display:none">'
           + '<div class="drop" id="h2_drop">' + (hayFoto() ? 'Cambiar foto' : 'Cargar foto de tu coche') + '</div>'
           + '<div id="h2_stat" style="color:#7b8b96;margin:8px 0 10px">'
@@ -457,8 +478,13 @@ function boot(){
     g('h2_traf').onclick = e => { if(!e.target.dataset.v) return; cfg.traffic = e.target.dataset.v; guardar(); pintarAjustes(); };
     for (const [k,,,,,u,dv] of SLD)
       g('h2r_'+k).oninput = e => { cfg[k] = +e.target.value/dv; g('h2o_'+k).textContent = cfg[k]+u; guardar(); };
-    for (const k of ['posts','hud','rain','spray'])
+    g('h2_perf').onclick = e => { if(!e.target.dataset.v) return; cfg.perfil = e.target.dataset.v; guardar(); pintarAjustes(); };
+    for (const k of ['posts','hud','rain','spray','detalleCoche','frenarCamara'])
       g('h2_'+k).onchange = e => { cfg[k] = e.target.checked; guardar(); };
+    if (g('h2_url').addEventListener) g('h2_url').onchange = e => {
+      cfg.carPhotoUrl = e.target.value.trim(); guardar();
+      if (cfg.carPhotoUrl) hud.setCarPhotoUrl(cfg.carPhotoUrl); else hud.setCarPhoto(null);
+    };
     g('h2_drop').onclick = () => g('h2_file').click();
     g('h2_file').onchange = e => { if (e.target.files[0]) cargarFoto(e.target.files[0]); };
     if (g('h2_cut')){ g('h2r_tol').oninput = e => g('h2o_tol').textContent = e.target.value;
@@ -560,9 +586,13 @@ function boot(){
     if (btn.id === 'hud2-btn') btn.classList.toggle('on', on);
     else btn.style.opacity = on ? '1' : '';
     // El mapa sigue renderizando aunque esté tapado y se come GPU.
+    // Parar el mapa de verdad: tapado con CSS sigue renderizando y se come la GPU.
     try {
-      const m = window.map || window.mapa || window.mapaTesla;
-      if (m && m.stop && m.resize){ if (on) m.stop(); else setTimeout(() => m.resize(), 50); }
+      const m = mapaInst || window.map || window.mapa || window.mapaTesla;
+      if (m){
+        if (on){ if (m.stop) m.stop(); if (m.getCanvas) m.getCanvas().style.visibility = 'hidden'; }
+        else { if (m.getCanvas) m.getCanvas().style.visibility = ''; if (m.resize) setTimeout(() => m.resize(), 60); }
+      }
     } catch(e){}
     fps.style.display = on ? 'block' : 'none';
     gear.style.display = on ? 'block' : 'none';
