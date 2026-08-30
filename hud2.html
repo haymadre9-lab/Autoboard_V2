@@ -154,7 +154,7 @@ function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
-  api.version = '2026.08.30-3';   // sube al cambiar: sirve para saber qué está corriendo
+  api.version = '2026.08.30-4';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
   let manList = [], limList = [], radList = [];
@@ -339,6 +339,7 @@ function createHud2(canvas, opts = {}){
   api.setRoute = function(latlngs, o = {}){
     if (!latlngs || latlngs.length < 3) throw new Error('hacen falta al menos 3 puntos');
     origin = latlngs[0];
+    if (solLat === null){ solLat = origin[0]; solLng = origin[1]; }
     const raw = toLocal(latlngs);
 
     // Remuestreo uniforme. Los vértices de OSM son irregulares y sin esto la
@@ -517,11 +518,35 @@ function createHud2(canvas, opts = {}){
 
   /* ---------------- dibujo ---------------- */
 
+  // Altura del sol sobre el horizonte, en grados. Con esto el tema automático
+  // funciona en diciembre igual que en junio: a las 18:30 en Bilbao ya es noche,
+  // y un reloj con horas fijas no se entera.
+  let solLat = null, solLng = null;
+  api.setLatLng = (la, ln) => { solLat = la; solLng = ln; };
+  function alturaSol(){
+    if (solLat === null) return null;
+    const d = new Date();
+    const n = Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
+    const dec = 23.44 * Math.sin((360/365)*(n + 284) * Math.PI/180);
+    const horaUTC = d.getUTCHours() + d.getUTCMinutes()/60;
+    const horaSolar = horaUTC + solLng/15;
+    const H = (horaSolar - 12) * 15;
+    const r = Math.PI/180;
+    return Math.asin(Math.sin(solLat*r)*Math.sin(dec*r)
+                   + Math.cos(solLat*r)*Math.cos(dec*r)*Math.cos(H*r)) / r;
+  }
   function palette(){
     if (cfgOpt.theme !== 'auto') return PAL[cfgOpt.theme] || PAL.day;
-    const h = new Date().getHours();
+    const alt = alturaSol();
+    if (alt !== null) return alt > 6 ? PAL.day : alt > -6 ? PAL.dusk : PAL.night;
+    const h = new Date().getHours();          // sin posición, reloj como respaldo
     return (h >= 21 || h < 7) ? PAL.night : (h >= 19 || h < 8) ? PAL.dusk : PAL.day;
   }
+  /** Qué tema está aplicando ahora mismo el modo automático. */
+  api.temaActual = () => {
+    const p = palette();
+    return p === PAL.night ? 'night' : p === PAL.dusk ? 'dusk' : 'day';
+  };
 
   function drawSky(pal){
     const g = ctx.createLinearGradient(0,0,0,H);

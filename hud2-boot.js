@@ -118,7 +118,8 @@ function boot(){
                      lookAhead:55, camHeight:2.6, camBack:7.5, posts:true,
                      rain:false, spray:true, traffic:'off',
                      rbRadius:45, rbArc:18, rbSmooth:1, hud:true, horizon:0.50, carScale:1,
-                     perfil:'auto', detalleCoche:true, carPhotoUrl:'', frenarCamara:false, hudScale:1 };
+                     perfil:'auto', detalleCoche:true, carPhotoUrl:'', frenarCamara:false, hudScale:1,
+                     abrirAlNavegar:false };
   let cfg;
   try { cfg = Object.assign({}, HUD2_DEF, JSON.parse(localStorage.getItem(HUD2_KEY) || '{}')); }
   catch(e){ cfg = Object.assign({}, HUD2_DEF); }
@@ -184,6 +185,7 @@ function boot(){
         }
       }
       ultPos = { lat:c.latitude, lng:c.longitude, t };
+      hud.setLatLng(c.latitude, c.longitude);     // para el tema por altura solar
       if (v !== null) hud.setSpeed(v);
       hud.syncPosition(c.latitude, c.longitude);
     }, e => console.warn('[hud2] GPS:', e.message),
@@ -248,6 +250,7 @@ function boot(){
       if (extra && extra.pasos.length) hud.setManeuvers(extra.pasos);
       rutaPropia = true;
       aplicarRadares();                       // los metros cambian con cada ruta
+      if (cfg.abrirAlNavegar && !wrap.classList.contains('on')) activar(true);
       try { localStorage.setItem('hud2.ruta', JSON.stringify(ll)); } catch(e){}
       console.log('[hud2] ruta detectada por ' + origen + ':', r,
         extra ? ('| ' + extra.pasos.length + ' maniobras, ' + extra.autovias.length + ' tramos de autovía') : '');
@@ -436,7 +439,9 @@ function boot(){
 
   function pintarAjustes(){
     let html = '<h2>Ajustes HUD 2</h2><h3>Tema</h3>'
-      + seg('h2_tema', [['auto','Auto'],['day','Día'],['dusk','Tarde'],['night','Noche']], cfg.theme)
+      + seg('h2_tema', [['auto', 'Auto' + (cfg.theme==='auto' && hud.temaActual ? ' ('
+          + ({day:'día',dusk:'tarde',night:'noche'})[hud.temaActual()] + ')' : '')],
+          ['day','Día'],['dusk','Tarde'],['night','Noche']], cfg.theme)
       + '<h3>Límite de frames</h3>'
       + seg('h2_fps', [[0,'Libre'],[30,'30'],[24,'24'],[20,'20']], cfg.maxFps);
     for (const [k,lab,mn,mx,st,u,dv] of SLD)
@@ -447,6 +452,7 @@ function boot(){
           + '<h3>Efectos</h3>'
           + '<label class="ck"><input type="checkbox" id="h2_rain"'+(cfg.rain?' checked':'')+'> Lluvia</label>'
           + '<label class="ck"><input type="checkbox" id="h2_spray"'+(cfg.spray?' checked':'')+'> Agua de las ruedas</label>'
+          + '<label class="ck"><input type="checkbox" id="h2_abrirAlNavegar"'+(cfg.abrirAlNavegar?' checked':'')+'> Abrir solo al iniciar navegación</label>'
           + '<h3>Rendimiento</h3>'
           + seg('h2_perf', [['auto','Auto'],['ligero','Ligero'],['completo','Completo']], cfg.perfil)
           + '<label class="ck"><input type="checkbox" id="h2_detalleCoche"'+(cfg.detalleCoche?' checked':'')+'> Detalles del coche</label>'
@@ -480,7 +486,7 @@ function boot(){
     for (const [k,,,,,u,dv] of SLD)
       g('h2r_'+k).oninput = e => { cfg[k] = +e.target.value/dv; g('h2o_'+k).textContent = cfg[k]+u; guardar(); };
     g('h2_perf').onclick = e => { if(!e.target.dataset.v) return; cfg.perfil = e.target.dataset.v; guardar(); pintarAjustes(); };
-    for (const k of ['posts','hud','rain','spray','detalleCoche','frenarCamara'])
+    for (const k of ['posts','hud','rain','spray','detalleCoche','frenarCamara','abrirAlNavegar'])
       g('h2_'+k).onchange = e => { cfg[k] = e.target.checked; guardar(); };
     if (g('h2_url').addEventListener) g('h2_url').onchange = e => {
       cfg.carPhotoUrl = e.target.value.trim(); guardar();
