@@ -27,6 +27,11 @@ const CSS = `
 #hud2-err{position:fixed;left:14px;right:14px;top:14px;z-index:9200;display:none;
   background:rgba(255,90,77,.16);border:1px solid #ff5a4d;color:#ffd9d5;
   padding:10px 12px;border-radius:5px;font:12px/1.5 ui-monospace,monospace}
+#hud2-back{position:fixed;left:14px;bottom:14px;z-index:9150;display:none;
+  background:rgba(10,13,16,.82);border:1px solid #2c3942;color:#e8eef2;border-radius:6px;
+  font:600 12px/1 ui-sans-serif,sans-serif;letter-spacing:.1em;text-transform:uppercase;
+  padding:13px 18px;cursor:pointer;backdrop-filter:blur(6px)}
+#hud2-wrap.on ~ #hud2-back{display:block}
 #hud2-gear{position:fixed;right:14px;top:14px;z-index:9150;display:none;
   background:rgba(10,13,16,.8);border:1px solid #2c3942;color:#5fd0e0;border-radius:6px;
   font:600 11px/1 ui-sans-serif,sans-serif;letter-spacing:.12em;text-transform:uppercase;
@@ -100,8 +105,11 @@ function boot(){
   const err = document.createElement('div'); err.id = 'hud2-err';
   const fps = document.createElement('div'); fps.id = 'hud2-fps';
   const gear = document.createElement('button'); gear.id = 'hud2-gear'; gear.textContent = 'Ajustes';
+  // Salida siempre visible: el botón que abre el HUD puede quedar tapado por la
+  // propia capa si está integrado en la barra de la app.
+  const back = document.createElement('button'); back.id = 'hud2-back'; back.textContent = '← Mapa';
   const sheet = document.createElement('div'); sheet.id = 'hud2-set';
-  document.body.append(wrap, err, fps, gear, sheet);
+  document.body.append(wrap, err, fps, gear, back, sheet);
   if (btn.id === 'hud2-btn') document.body.append(btn);
 
   // MISMA clave que hud2.html: los ajustes que afinaste en el coche se heredan aquí.
@@ -558,10 +566,16 @@ function boot(){
     } catch(e){}
     fps.style.display = on ? 'block' : 'none';
     gear.style.display = on ? 'block' : 'none';
+    back.style.display = on ? 'block' : 'none';
     if (!on) sheet.classList.remove('on');
     if (on){ hud.resize(); hud.start(); gpsOn(); } else { hud.stop(); gpsOff(); }
   }
   btn.onclick = () => activar(!wrap.classList.contains('on'));
+  back.onclick = () => activar(false);
+  // Escape y el botón atrás del navegador también cierran
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && wrap.classList.contains('on')) activar(false);
+  });
   window.addEventListener('orientationchange', () => setTimeout(hud.resize, 250));
 }
 
