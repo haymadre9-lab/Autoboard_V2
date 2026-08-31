@@ -132,6 +132,7 @@ function createHud2(canvas, opts = {}){
     carScale: 1.0,          // tamaño del coche, 0.6 a 1.6
     hudScale: 1.0,          // tamaño de los textos del HUD
     maxFps: 0,              // 0 = libre
+    escala: 1.0,            // resolucion de render: 0.5 = la mitad de pixeles por lado
     perfil: 'auto',         // 'auto' | 'ligero' | 'completo'
     frenarCamara: false,    // limitar look-ahead en curva cerrada (mantiene el
                             // coche en cuadro, pero resta sensación de giro)
@@ -155,7 +156,7 @@ function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
-  api.version = '2026.08.30-6';   // sube al cambiar: sirve para saber qué está corriendo
+  api.version = '2026.08.30-7';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
   let manList = [], limList = [], radList = [];
@@ -373,6 +374,16 @@ function createHud2(canvas, opts = {}){
     for (let p = 0; p < cfgOpt.rbSmooth; p++)
       for (let i = 1; i < N-1; i++)
         pts[i*3+2] = pts[i*3+2]*0.5 + (pts[(i-1)*3+2] + pts[(i+1)*3+2])*0.25;
+    // Pasada extra SOLO donde la curvatura es alta: redondea rotondas y giros
+    // cerrados sin aplanar las curvas largas de carretera abierta.
+    for (let p = 0; p < 3; p++)
+      for (let i = 2; i < N-2; i++){
+        const k = Math.abs(pts[(i+1)*3+2] - pts[(i-1)*3+2]) / (2*STEP);
+        if (k > 0.020)
+          pts[i*3+2] = pts[i*3+2]*0.34
+                     + (pts[(i-1)*3+2] + pts[(i+1)*3+2])*0.24
+                     + (pts[(i-2)*3+2] + pts[(i+2)*3+2])*0.09;
+      }
 
     MW = o.motorway || [];
     RB = detectRoundabouts();
@@ -576,12 +587,22 @@ function createHud2(canvas, opts = {}){
   function drawRoad(pal){
     const fogRGB = hexToRgb(pal.skyBot), fogEnd = cfgOpt.fogEnd;
     const lig = ligero();
-    const SEG = lig ? 7 : 4, FAR = Math.min(fogEnd + 40, lig ? 300 : 620);
-    const s0 = Math.floor((s - 12)/SEG)*SEG;
+    const SEGb = lig ? 7 : 4, FAR = Math.min(fogEnd + 40, lig ? 300 : 620);
+    // Segmento adaptativo: donde la carretera es recta no hace falta trocearla,
+    // y en curva cerrada se acorta para que no se vea poligonal. Sale mas suave
+    // Y mas barato que un paso fijo.
+    const s0 = Math.floor((s - 12)/SEGb)*SEGb;
     const rbCur = RB.find(r => s > r.s0 - 200 && s < r.s1 + 60);
     let islandDone = false;
 
-    for (let d = FAR; d >= -12; d -= SEG){
+    const pasos = [];
+    for (let d = -12; d <= FAR; ){
+      const k = Math.abs(curv(s0 + d));
+      const paso = k > 0.030 ? 2.5 : k > 0.008 ? SEGb*0.75 : SEGb*(d > 120 ? 2 : 1.4);
+      pasos.push([d, paso]); d += paso;
+    }
+    for (let i = pasos.length - 1; i >= 0; i--){
+      const d = pasos[i][0], SEG = pasos[i][1];
       const a = s0 + d, b = a + SEG;
       if (a < -20 || b > routeLen) continue;
       const A = xsec(a), B = xsec(b);
@@ -1133,13 +1154,18 @@ function createHud2(canvas, opts = {}){
   /* ---------------- bucle ---------------- */
 
   function resize(){
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    // El coste de rasterizado va con el numero de pixeles, o sea con el CUADRADO
+    // de la escala: a 0.6 se pinta el 36% de los pixeles. El canvas se sigue
+    // estirando por CSS al tamano completo, asi que no cambia la maquetacion.
+    dpr = Math.min(window.devicePixelRatio || 1, 2) * clamp(cfgOpt.escala || 1, 0.35, 1);
     const r = canvas.getBoundingClientRect();
     const nw = Math.max(200, r.width | 0), nh = Math.max(150, r.height | 0);
-    if (nw === W && nh === H && canvas.width === W*dpr) return;   // nada que hacer
+    if (nw === W && nh === H && Math.abs(canvas.width - W*dpr) < 1) return;
     W = nw; H = nh;
-    canvas.width = W*dpr; canvas.height = H*dpr;
+    canvas.width = Math.round(W*dpr); canvas.height = Math.round(H*dpr);
+    canvas.style.width = '100%'; canvas.style.height = '100%';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.imageSmoothingEnabled = true;
     xsCache.clear();
   }
 
@@ -1210,7 +1236,9 @@ function createHud2(canvas, opts = {}){
   api.resize = resize;
   api.set = o => {
     const redo = ('rbRadius' in o) || ('rbArc' in o);
+    const reesc = ('escala' in o) && o.escala !== cfgOpt.escala;
     Object.assign(cfgOpt, o);
+    if (reesc){ W = 0; H = 0; resize(); }
     if (redo && pts){ RB = detectRoundabouts(); xsCache.clear(); }
   };
   api.state = () => ({ s, speed, routeLen, rotondas: RB.length, running });
@@ -1289,7 +1317,8 @@ function hud2SaveCfg(c){ try { localStorage.setItem(HUD2_KEY, JSON.stringify(c))
     ['fogEnd',    'Niebla',             60, 500, 10, 'm'],
     ['horizon',   'Encuadre vertical',  30,  70,  1, '%', 100],
     ['carScale',  'Tamaño del coche',   60, 160,  1, '%', 100],
-    ['hudScale',  'Tamaño de los textos',70,180,  1, '%', 100]
+    ['hudScale',  'Tamaño de los textos',70,180,  1, '%', 100],
+    ['escala',    'Resolución de render',35,100,  5, '%', 100]
   ];
   const FPSOPT = [[0,'Libre'],[30,'30'],[24,'24'],[20,'20']];
 

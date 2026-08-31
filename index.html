@@ -1412,7 +1412,9 @@ if('serviceWorker' in navigator){
   function init(){
     if(!window.hud2){ setTimeout(init,300); return; }
     // ajustar() toca la configuracion del arranque (y la guarda); set() solo el motor
-    const cfg={ incrustado:true, destino:'#hudroad', hud:false, abrirAlNavegar:false };
+    const cfg={ incrustado:true, destino:'#hudroad', hud:false, abrirAlNavegar:false,
+                carteles:false,      // los carteles del mapa mandan; nada dentro de la escena
+                escala:0.6 };        // resolucion de render: sube o baja desde Ajustes
     if(typeof hud2.ajustar==='function') hud2.ajustar(cfg); else hud2.set(cfg);
     if(typeof radarDB!=='undefined' && radarDB && radarDB.length) hud2.radares(radarDB);
     if(typeof hudOn!=='undefined' && hudOn) hud2.abrir();
