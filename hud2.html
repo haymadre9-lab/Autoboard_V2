@@ -172,7 +172,7 @@ function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
-  api.version = '2026.08.30-9';   // sube al cambiar: sirve para saber qué está corriendo
+  api.version = '2026.08.31-1';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
   let fuera = 0;
@@ -572,13 +572,20 @@ function createHud2(canvas, opts = {}){
   // project() reutiliza un objeto: si necesitas dos resultados a la vez, copia.
   const projCopy = p => { const q = project(p); return {x:q.x, y:q.y, d:q.d, ok:q.ok}; };
 
-  function poly(list, fill){
+  function poly(list, fill, sellar){
     const sc = [];
     for (const p of list){ const q = project(p); if (!q.ok) return false; sc.push(q.x, q.y); }
     ctx.beginPath(); ctx.moveTo(sc[0], sc[1]);
     for (let i = 2; i < sc.length; i += 2) ctx.lineTo(sc[i], sc[i+1]);
     ctx.closePath();
-    if (fill){ ctx.fillStyle = fill; ctx.fill(); }
+    if (fill){
+      ctx.fillStyle = fill; ctx.fill();
+      // Canvas antialiasa cada poligono por separado: entre dos caras contiguas
+      // queda una linea de fondo de medio pixel. En la carroceria eso se ve como
+      // un despiece de trozos sueltos. Repasando el borde con el MISMO color, las
+      // caras se sellan y el coche se lee como una pieza.
+      if (sellar){ ctx.strokeStyle = fill; ctx.lineWidth = 1.15; ctx.lineJoin = 'round'; ctx.stroke(); }
+    }
     return true;
   }
 
@@ -737,7 +744,9 @@ function createHud2(canvas, opts = {}){
     let nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx;
     const L = Math.hypot(nx,ny,nz) || 1; nx/=L; ny/=L; nz/=L;
     if ((cam.x-p0.x)*nx + (cam.y-p0.y)*ny + (cam.z-p0.z)*nz < 0) return null;   // culling
-    let k = (0.38 + 0.62*Math.abs(nx*LIGHT[0]+ny*LIGHT[1]+nz*LIGHT[2])) * (boost||1);
+    // Rango de sombreado mas estrecho: con 0.38-1.00 dos caras vecinas podian
+    // diferenciarse tanto que parecian piezas distintas. 0.55-1.00 las une.
+    let k = (0.55 + 0.45*Math.abs(nx*LIGHT[0]+ny*LIGHT[1]+nz*LIGHT[2])) * (boost||1);
     // oclusión ambiente: los bajos reciben menos luz del cielo
     const alt = (p0.y + p1.y + p2.y)/3;
     if (alt < 0.75) k *= 0.62 + 0.38*(alt/0.75);
@@ -810,8 +819,8 @@ function createHud2(canvas, opts = {}){
       for (let k = 0; k < 10; k++){ const a = k/10*6.2832;
         a1.push(P(wz+Math.cos(a)*r, wx, 0.345+Math.sin(a)*r));
         a2.push(P(wz+Math.cos(a)*r*0.55, wx*0.985, 0.345+Math.sin(a)*r*0.55)); }
-      poly(a1, mixc([30,32,36], fogRGB, fog));
-      poly(a2, mixc([96,102,110], fogRGB, fog));
+      poly(a1, mixc([30,32,36], fogRGB, fog), true);
+      poly(a2, mixc([96,102,110], fogRGB, fog), true);
     }
     for (let i = 0; i < PROF.length-1; i++){
       const A = PROF[i], B = PROF[i+1], cabin = A[3] > 0.15 && B[3] > 0.15;
@@ -831,29 +840,29 @@ function createHud2(canvas, opts = {}){
     if (detalle) for (const sg of [-1,1])
       for (let i = 2; i < PROF.length-3; i++){
         const A = PROF[i], B = PROF[i+1];
-        poly([P(A[0], sg*(A[1]+0.004), 0.335), P(B[0], sg*(B[1]+0.004), 0.335),
-              P(B[0], sg*(B[1]+0.004), 0.50),  P(A[0], sg*(A[1]+0.004), 0.50)],
-             mixc([base[0]*0.42, base[1]*0.42, base[2]*0.44], fogRGB, fog));
+        poly([P(A[0], sg*(A[1]-0.002), 0.335), P(B[0], sg*(B[1]-0.002), 0.335),
+              P(B[0], sg*(B[1]-0.002), 0.50),  P(A[0], sg*(A[1]-0.002), 0.50)],
+             mixc([base[0]*0.42, base[1]*0.42, base[2]*0.44], fogRGB, fog), true);
       }
     // pasos de rueda
     if (detalle) for (const wz of [-1.42, 1.46]) for (const sg of [-1,1]){
       const arc = [];
       for (let a = 0; a <= 8; a++){ const an = Math.PI*a/8;
-        arc.push(P(wz - Math.cos(an)*0.60, sg*0.962, 0.345 + Math.sin(an)*0.56)); }
+        arc.push(P(wz - Math.cos(an)*0.60, sg*0.952, 0.345 + Math.sin(an)*0.56)); }
       for (let a = 8; a >= 0; a--){ const an = Math.PI*a/8;
-        arc.push(P(wz - Math.cos(an)*0.50, sg*0.962, 0.345 + Math.sin(an)*0.46)); }
-      poly(arc, mixc([26,28,32], fogRGB, fog));
+        arc.push(P(wz - Math.cos(an)*0.50, sg*0.952, 0.345 + Math.sin(an)*0.46)); }
+      poly(arc, mixc([26,28,32], fogRGB, fog), true);
     }
     // retrovisores
     if (detalle) for (const sg of [-1,1])
       poly([P(0.98, sg*0.96, 1.02), P(1.10, sg*1.20, 1.06),
             P(1.02, sg*1.20, 1.16), P(0.90, sg*0.96, 1.12)],
-           mixc([base[0]*0.72, base[1]*0.72, base[2]*0.75], fogRGB, fog));
+           mixc([base[0]*0.72, base[1]*0.72, base[2]*0.75], fogRGB, fog), true);
     // montante trasero: separa luna de carrocería y da lectura de volumen
     if (detalle) for (const sg of [-1,1])
       poly([P(1.30, sg*0.640, 1.345), P(1.70, sg*0.478, 1.215),
             P(1.70, sg*0.430, 1.180), P(1.30, sg*0.590, 1.300)],
-           mixc([base[0]*0.55, base[1]*0.55, base[2]*0.58], fogRGB, fog));
+           mixc([base[0]*0.55, base[1]*0.55, base[2]*0.58], fogRGB, fog), true);
 
     // ópticas: son geometría permanente, apagadas son cristal oscuro
     for (const sg of [-1,1]){

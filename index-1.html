@@ -207,6 +207,34 @@
   </div>
 </div>
 
+<!-- Eruda: consola dentro de la propia pagina, para poder depurar en la pantalla
+     del Tesla, donde no hay F12. No se carga sola: se activa con ?debug=1 en la
+     URL, o pulsando 5 veces seguidas sobre la barra de estado. -->
+<script>
+(function(){
+  let cargando=false;
+  function abrirConsola(){
+    if(cargando||window.eruda) { if(window.eruda) eruda.show(); return; }
+    cargando=true;
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/eruda';
+    s.onload=()=>{ try{ eruda.init(); eruda.show(); }catch(e){} };
+    s.onerror=()=>{ cargando=false; alert('No se pudo cargar la consola (sin conexion)'); };
+    document.head.appendChild(s);
+  }
+  window.abrirConsola=abrirConsola;
+  if(/[?&]debug=1/.test(location.search)) addEventListener('DOMContentLoaded',abrirConsola);
+  addEventListener('DOMContentLoaded',()=>{
+    const st=document.getElementById('status'); if(!st) return;
+    let n=0,t0=0;
+    st.addEventListener('click',()=>{
+      const ahora=Date.now();
+      n=(ahora-t0<900)?n+1:1; t0=ahora;
+      if(n>=5){ n=0; abrirConsola(); }
+    });
+  });
+})();
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
 <script>
 /* ================= Adaptador MapLibre (emula la API de Leaflet que usa la app) ================= */
