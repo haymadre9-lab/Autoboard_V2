@@ -108,8 +108,24 @@ const PROF = [
 ];
 const LIGHT = (() => { const v=[0.32,0.86,-0.40], L=Math.hypot(v[0],v[1],v[2]); return v.map(k=>k/L); })();
 
-const hexToRgb = h => { const n = parseInt(h.slice(1),16); return [n>>16&255, n>>8&255, n&255]; };
-const mixc = (c,t,f) => `rgb(${Math.round(c[0]+(t[0]-c[0])*f)},${Math.round(c[1]+(t[1]-c[1])*f)},${Math.round(c[2]+(t[2]-c[2])*f)})`;
+const _hexCache = {};
+const hexToRgb = h => _hexCache[h] || (_hexCache[h] =
+  (n => [n>>16&255, n>>8&255, n&255])(parseInt(h.slice(1),16)));
+// mixc se llamaba ~600 veces por frame y cada una creaba una cadena nueva:
+// mucha basura para el recolector. Se cachea cuantizando el color y la niebla.
+const _mixCache = new Map();
+const mixc = (c,t,f) => {
+  const q = (f*24)|0;
+  const key = ((c[0]|0)<<24 ^ (c[1]|0)<<16 ^ (c[2]|0)<<8 ^ q) + ':' + ((t[0]|0)<<8 ^ (t[1]|0)<<4 ^ (t[2]|0));
+  let v = _mixCache.get(key);
+  if (v !== undefined) return v;
+  const g = q/24;
+  v = 'rgb(' + Math.round(c[0]+(t[0]-c[0])*g) + ',' + Math.round(c[1]+(t[1]-c[1])*g)
+      + ',' + Math.round(c[2]+(t[2]-c[2])*g) + ')';
+  if (_mixCache.size > 6000) _mixCache.clear();
+  _mixCache.set(key, v);
+  return v;
+};
 const clamp = (v,a,b) => v < a ? a : v > b ? b : v;
 const smooth = x => x*x*(3-2*x);
 
@@ -152,7 +168,7 @@ function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
-  api.version = '2026.08.30-8';   // sube al cambiar: sirve para saber qué está corriendo
+  api.version = '2026.08.30-9';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
   let fuera = 0;
@@ -594,10 +610,15 @@ function createHud2(canvas, opts = {}){
     return p === PAL.night ? 'night' : p === PAL.dusk ? 'dusk' : 'day';
   };
 
+  let skyGrad = null, skyKey = '';
   function drawSky(pal){
-    const g = ctx.createLinearGradient(0,0,0,H);
-    g.addColorStop(0, pal.skyTop); g.addColorStop(1, pal.skyBot);
-    ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+    const key = pal.skyTop + H;
+    if (key !== skyKey){                       // solo al cambiar tema o tamaño
+      skyGrad = ctx.createLinearGradient(0,0,0,H);
+      skyGrad.addColorStop(0, pal.skyTop); skyGrad.addColorStop(1, pal.skyBot);
+      skyKey = key;
+    }
+    ctx.fillStyle = skyGrad; ctx.fillRect(0,0,W,H);
     const hz = projCopy({ x: cam.x + fwd.x*4000, y: 0, z: cam.z + fwd.z*4000 });
     const y = hz.ok ? hz.y : H*cfgOpt.horizon*0.9;
     ctx.fillStyle = pal.ground; ctx.fillRect(0, y, W, H-y);
@@ -619,7 +640,7 @@ function createHud2(canvas, opts = {}){
   }
 
   function drawRoad(pal){
-    const fogRGB = hexToRgb(pal.skyBot), fogEnd = cfgOpt.fogEnd;
+    const fogRGB = hexToRgb(pal.skyBot), groundRGB = hexToRgb(pal.ground), fogEnd = cfgOpt.fogEnd;
     const lig = ligero();
     const SEGb = lig ? 7 : 4, FAR = Math.min(fogEnd + 40, lig ? 300 : 620);
     // Segmento adaptativo: donde la carretera es recta no hace falta trocearla,
@@ -627,7 +648,7 @@ function createHud2(canvas, opts = {}){
     // Y mas barato que un paso fijo.
     const s0 = Math.floor((s - 12)/SEGb)*SEGb;
     const rbCur = RB.find(r => s > r.s0 - 200 && s < r.s1 + 60);
-    let islandDone = false;
+    let islandDone = false, halos = 0;
 
     const pasos = [];
     for (let d = -12; d <= FAR; ){
@@ -645,11 +666,11 @@ function createHud2(canvas, opts = {}){
 
       poly([ptOff(a,A.med), ptOff(b,B.med), ptOff(b,B.half), ptOff(a,A.half)], asf);
       poly([ptOff(a,-A.half), ptOff(b,-B.half), ptOff(b,-B.med), ptOff(a,-A.med)], asf);
-      if (A.med > 0.02 || B.med > 0.02)
+      if (A.med > 0.05 && B.med > 0.05)          // sin mediana no hay quad que pintar
         poly([ptOff(a,-A.med), ptOff(b,-B.med), ptOff(b,B.med), ptOff(a,A.med)],
-             mixc(hexToRgb(pal.ground), fogRGB, fog));
+             mixc(groundRGB, fogRGB, fog));
 
-      if (fog <= .97){
+      if (fog <= .82){                            // mas alla no se distinguen
         const lin = mixc(pal.line, fogRGB, fog);
         const band = (o1, o2, col, al) => {
           if (al !== undefined){ ctx.save(); ctx.globalAlpha = al; }
@@ -687,9 +708,12 @@ function createHud2(canvas, opts = {}){
           if (((a % 24)+24) % 24 < SEG){
             poly([ptOff(a,o-0.08,0), ptOff(a+0.4,o-0.08,0),
                   ptOff(a+0.4,o+0.08,5.6), ptOff(a,o+0.08,5.6)], mixc([92,98,104], fogRGB, fog));
-            if (pal.glow > 0 && sg === 1){
+            if (pal.glow > 0 && sg === 1 && halos < 3 && d < 90){
+              // Un createRadialGradient cuesta mucho mas que un relleno plano.
+              // Solo las tres farolas mas cercanas llevan halo; el resto, poste.
               const lp = projCopy(ptOff(a+0.2, o-1.5, 5.6));
               if (lp.ok){
+                halos++;
                 const r = Math.max(6, 900/lp.d);
                 const g = ctx.createRadialGradient(lp.x, lp.y, 0, lp.x, lp.y, r);
                 g.addColorStop(0, `rgba(255,171,61,${.55*pal.glow*(1-fog)})`);
