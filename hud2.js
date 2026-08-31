@@ -91,9 +91,12 @@ export function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
-  api.version = '2026.08.30-7';   // sube al cambiar: sirve para saber qué está corriendo
+  api.version = '2026.08.30-8';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
+  let fuera = 0;
+  api.onFueraDeRuta = null;
+  api.fueraDeRuta = () => fuera >= 6;
   let manList = [], limList = [], radList = [];
 
   /** Carga la foto desde una URL del propio repo: no hace falta USB en el coche. */
@@ -323,6 +326,7 @@ export function createHud2(canvas, opts = {}){
     MW = o.motorway || [];
     RB = detectRoundabouts();
     manList = []; limList = []; radList = []; xsCache.clear();
+    fuera = 0; cam0.off = null;
     s = Math.min(6, routeLen*0.02);
     return { metros: Math.round(routeLen), puntos: N, rotondas: RB.length };
   };
@@ -399,10 +403,21 @@ export function createHud2(canvas, opts = {}){
       const d = (pts[i*3]-px)**2 + (pts[i*3+1]-pz)**2;
       if (d < bestD){ bestD = d; best = i; }
     }
-    if (best === null || bestD > 60*60) return null;      // >60 m: fuera de ruta
+    const desvio = Math.sqrt(bestD);
+    if (best === null || desvio > 55){
+      // Fuera de ruta. NO se corrige: forzar la posicion contra una ruta que ya
+      // no sigues es lo que hace que el coche pegue saltos y aparezcan curvas
+      // de la nada. Se avisa y se espera a que tu app recalcule.
+      if (++fuera === 6 && api.onFueraDeRuta) { try { api.onFueraDeRuta(desvio); } catch(e){} }
+      return null;
+    }
+    fuera = 0;
     const gpsS = best*STEP;
-    s += (gpsS - s) * 0.25;                                // corrección suave
-    return { s: gpsS, desvio: Math.sqrt(bestD) };
+    // correccion suave y ACOTADA: como mucho 6 m por fix. Un salto grande del
+    // receptor no puede teletransportar la escena.
+    const dif = clamp((gpsS - s) * 0.18, -6, 6);
+    s = clamp(s + dif, 0, routeLen - 1);
+    return { s: gpsS, desvio: desvio, fuera: false };
   };
 
   /* ---------------- cámara y proyección ---------------- */
@@ -410,13 +425,27 @@ export function createHud2(canvas, opts = {}){
   const cam = {x:0,y:0,z:0}, fwd = {x:0,y:0,z:1}, rgt = {x:1,y:0,z:0}, upv = {x:0,y:1,z:0};
   let focal = 500;
 
+  // Estado suavizado de la camara. Antes cada parametro saltaba al valor nuevo
+  // en el mismo frame: al cambiar la velocidad o el ancho de calzada, la escena
+  // pegaba un tiron (zoom repentino, coche cruzando de lado a lado).
+  const cam0 = { off:null, fov:44, hgt:2.6, back:7.5, look:20 };
+  let dtCam = 0.016;
+
   function setupCamera(){
     const t = Math.min(speed*3.6/130, 1);
-    const off = myOffset(s);
+    const offObj = myOffset(s);
+    // el desplazamiento lateral se persigue, no se copia: 2.5 m/s como mucho
+    if (cam0.off === null) cam0.off = offObj;
+    else {
+      const dmax = 2.5*dtCam;
+      const dif = clamp(offObj - cam0.off, -dmax, dmax);
+      cam0.off += dif;
+    }
+    const off = cam0.off;
     // El acoplamiento con la velocidad es lo que da la sensación de avance:
     // más FOV, cámara más baja, y mirando mucho más lejos al acelerar.
-    const fovDeg = 44 + t*20;
-    const height = cfgOpt.camHeight * (1 - t*0.22);
+    let fovDeg = 44 + t*20;
+    let height = cfgOpt.camHeight * (1 - t*0.22);
     let back   = cfgOpt.camBack * (1 + t*0.30);
     let lookM  = 20 + cfgOpt.lookAhead*t;
     // En curva cerrada la distancia se recorre girando, así que la cámara puede
@@ -426,6 +455,14 @@ export function createHud2(canvas, opts = {}){
       const k = Math.abs(curv(s));
       if (k > 1e-4){ lookM = Math.min(lookM, 0.85/k); back = Math.min(back, 0.30/k); }
     }
+    // suavizado exponencial de los cuatro parametros
+    const k = Math.min(dtCam*2.2, 1);
+    cam0.fov  += (fovDeg - cam0.fov)*k;
+    cam0.hgt  += (height - cam0.hgt)*k;
+    cam0.back += (back   - cam0.back)*k;
+    cam0.look += (lookM  - cam0.look)*Math.min(dtCam*1.4, 1);
+    fovDeg = cam0.fov; height = cam0.hgt; back = cam0.back; lookM = cam0.look;
+
     const c = ptOff(s - back, off, height);
     const g = ptOff(s + lookM, off*0.5, height*0.42);
     cam.x=c.x; cam.y=c.y; cam.z=c.z;
@@ -438,6 +475,7 @@ export function createHud2(canvas, opts = {}){
     upv.y = fwd.z*rgt.x - fwd.x*rgt.z;
     upv.z = fwd.x*rgt.y - fwd.y*rgt.x;
     focal = (H/2) / Math.tan((fovDeg*Math.PI/180)/2);
+    cfgOpt.__off = off;
   }
 
   const P0 = {x:0,y:0,d:0,ok:false};
@@ -1144,6 +1182,7 @@ export function createHud2(canvas, opts = {}){
     s = clamp(s + speed*dt, 0, routeLen - 1);
 
     const pal = palette();
+    dtCam = dt || 0.016;
     setupCamera();
     drawSky(pal);
     drawRoad(pal);
