@@ -36,7 +36,7 @@
   #searchToggle{position:absolute;z-index:720;top:12px;right:12px;width:48px;height:48px;border-radius:50%;background:#2f6bff;border:2px solid rgba(255,255,255,.18);box-shadow:0 3px 12px rgba(0,0,0,.45);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;}
   body.solo-map .spdmap{right:72px!important;}
   .navstack{top:14px!important;z-index:700!important;}
-  #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0e17;}
+  #map{position:absolute;inset:0;background:#1b1f26;width:100%;height:100%;background:#0a0e17;}
 .maplibregl-ctrl-attrib{font-size:9px;opacity:.5;}
 .maplibregl-popup-content{background:#fff;color:#111;border-radius:12px;padding:10px 12px;}
 .maplibregl-popup-close-button{font-size:18px;padding:0 6px;}
@@ -223,11 +223,15 @@ const MT_STYLES={
 
   class MapWrap{
     constructor(el,opts){
-      this._m=new maplibregl.Map({container:el, style:MT_STYLES.sat, center:[-2.93,43.26], zoom:16,
+      // Base VECTORIAL por defecto (streets-v2). No se pixela a ningun zoom, pesa
+      // 4-5 veces menos que el satelite raster y se sube a la GPU una sola vez
+      // como geometria. El satelite sigue disponible con el boton 🛰️.
+      const _h=new Date().getHours(), _ini=(_h>=21||_h<7)?MT_STYLES.night:MT_STYLES.day;
+      this._m=new maplibregl.Map({container:el, style:_ini, center:[-2.93,43.26], zoom:16,
         attributionControl:{compact:true}, dragRotate:false, pitchWithRotate:false, keyboard:false, fadeDuration:0, dragPan:true});
       try{ this._m.touchZoomRotate.disableRotation(); }catch(e){}
       try{ this._m.setMaxPitch(70); }catch(e){}
-      this.raw=this._m; this.ready=false; this.q=[]; this._overlays=[]; this._polys=[]; this._baseKey='sat';
+      this.raw=this._m; this.ready=false; this.q=[]; this._overlays=[]; this._polys=[]; this._baseKey=(new Date().getHours()>=21||new Date().getHours()<7)?'night':'day';
       this._m.on('load',()=>{ this.ready=true; this.q.forEach(f=>{try{f();}catch(e){}}); this.q=[]; });
       this._m.on('style.load',()=>{ this._reAdd(); }); // tras setStyle: re-añade overlays y rutas
     }
@@ -465,7 +469,7 @@ let navZoom=16;
 map.setView([43.26,-2.93],navZoom);
 /* v2: la base es un ESTILO vectorial de MapTiler; estas quedan como referencias inertes */
 const satLayer={on(){},redraw(){}}, streetDay={on(){},redraw(){}}, streetNight={on(){},redraw(){}};
-let baseSat=true, mapNite=false, curBase={redraw(){},on(){}}, trafficLayer=null, trafficOn=false;
+let baseSat=false, mapNite=false, curBase={redraw(){},on(){}}, trafficLayer=null, trafficOn=false;
 let tilt=false, minKw=0, showRadars=true, showChargers=true, evListHidden=false, avoidTolls=false, avoidMotorways=false, avoidFerries=false, routeType="fastest";
 const carIcon=L.divIcon({className:'',html:'<div id="carrot"><svg width="38" height="38" viewBox="0 0 24 24"><path d="M12 2 L20 21 L12 15.5 L4 21 Z" fill="#ff2d2d" stroke="#fff" stroke-width="1.3"/></svg></div>',iconSize:[38,38],iconAnchor:[19,19]});
 const carMk=L.marker([43.26,-2.93],{icon:carIcon,interactive:false,keyboard:false,zIndexOffset:1000}).addTo(map);
