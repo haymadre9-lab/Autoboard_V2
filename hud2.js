@@ -27,23 +27,26 @@ const PAL = {
 // Perfil de la carrocería: z_local (+ = hacia delante), semiancho, altura de
 // cintura, semiancho de techo, altura de techo. Ajústalo a tu coche si quieres.
 const PROF = [
+  // Proporciones de un sedán fastback tamaño Model 3: 4,69 m de largo, 1,85 de
+  // ancho, 1,44 de alto, 2,88 de batalla. Techo con caída continua desde el
+  // vértice hasta el portón — eso es lo que da la silueta, no los detalles.
   // z_local (+ = hacia delante), semiancho, altura de cintura, semiancho de techo, altura de techo
-  [-2.38, 0.735, 0.815, 0.00, 0.865],
-  [-2.20, 0.845, 0.880, 0.00, 0.930],
-  [-1.95, 0.910, 0.915, 0.00, 0.965],
-  [-1.66, 0.935, 0.935, 0.400, 1.155],
-  [-1.32, 0.947, 0.948, 0.635, 1.315],
-  [-0.92, 0.954, 0.957, 0.735, 1.418],
-  [-0.46, 0.958, 0.963, 0.775, 1.468],
-  [ 0.02, 0.958, 0.965, 0.782, 1.482],
-  [ 0.48, 0.955, 0.963, 0.770, 1.470],
-  [ 0.94, 0.949, 0.958, 0.723, 1.425],
-  [ 1.34, 0.940, 0.950, 0.628, 1.345],
-  [ 1.68, 0.928, 0.938, 0.470, 1.215],
-  [ 1.96, 0.905, 0.921, 0.235, 1.075],
-  [ 2.16, 0.868, 0.898, 0.00, 0.985],
-  [ 2.30, 0.812, 0.868, 0.00, 0.930],
-  [ 2.38, 0.730, 0.826, 0.00, 0.880]
+  [-2.347, 0.800, 0.950, 0.000, 1.020],
+  [-2.150, 0.875, 0.970, 0.000, 1.062],
+  [-1.900, 0.905, 0.990, 0.150, 1.125],
+  [-1.600, 0.920, 1.000, 0.305, 1.212],
+  [-1.250, 0.925, 1.005, 0.520, 1.300],
+  [-0.850, 0.925, 1.000, 0.660, 1.386],
+  [-0.450, 0.925, 0.990, 0.710, 1.428],
+  [-0.050, 0.925, 0.980, 0.722, 1.443],
+  [ 0.350, 0.923, 0.975, 0.712, 1.437],
+  [ 0.750, 0.918, 0.970, 0.672, 1.400],
+  [ 1.100, 0.910, 0.960, 0.560, 1.330],
+  [ 1.450, 0.895, 0.950, 0.300, 1.218],
+  [ 1.750, 0.875, 0.930, 0.000, 1.098],
+  [ 2.000, 0.845, 0.900, 0.000, 0.990],
+  [ 2.200, 0.805, 0.870, 0.000, 0.928],
+  [ 2.347, 0.745, 0.840, 0.000, 0.880]
 ];
 const LIGHT = (() => { const v=[0.32,0.86,-0.40], L=Math.hypot(v[0],v[1],v[2]); return v.map(k=>k/L); })();
 
@@ -79,7 +82,7 @@ export function createHud2(canvas, opts = {}){
     camBack: 7.5,
     horizon: 0.50,          // centro vertical del encuadre: <0.5 sube la escena
     posts: true,            // farolas y quitamiedos
-    carColor: '#cdd3d9',
+    carColor: '#eef1f4',    // blanco perla; se puede cambiar desde Ajustes
     carScale: 1.0,          // tamaño del coche, 0.6 a 1.6
     hudScale: 1.0,          // tamaño de los textos del HUD
     maxFps: 0,              // 0 = libre
@@ -107,7 +110,7 @@ export function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
-  api.version = '2026.08.31-1';   // sube al cambiar: sirve para saber qué está corriendo
+  api.version = '2026.08.31-5';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
   let fuera = 0;
@@ -736,7 +739,18 @@ export function createHud2(canvas, opts = {}){
         return;
       }
     }
-    const face = (p, col, boost) => { const c = shade(col, p[0], p[1], p[2], fog, fogRGB, boost); if (c) poly(p, c); };
+    // Las caras se acumulan y se pintan de lejos a cerca. Sin esto, una cara del
+    // lado opuesto dibujada mas tarde tapaba a la cercana: de ahi las manchas
+    // sueltas sobre el techo y los laterales.
+    const cs = [];
+    const prof = q => { let z = 0;
+      for (const p of q) z += (p.x-cam.x)*fwd.x + (p.y-cam.y)*fwd.y + (p.z-cam.z)*fwd.z;
+      return z/q.length; };
+    const face = (q, col, boost) => { const c = shade(col, q[0], q[1], q[2], fog, fogRGB, boost);
+      if (c) cs.push([prof(q), q, c]); };
+    const plano = (q, col) => cs.push([prof(q), q, col]);
+    const volcar = () => { cs.sort((a,b) => b[0] - a[0]);
+      for (const c of cs) poly(c[1], c[2], true); cs.length = 0; };
     const glow = (p3, col, rad, al) => {
       const lp = projCopy(p3); if (!lp.ok) return;
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
@@ -749,16 +763,19 @@ export function createHud2(canvas, opts = {}){
     poly([P(-2.4,-1.05,0.008), P(2.4,-1.05,0.008), P(2.4,1.05,0.008), P(-2.4,1.05,0.008)],
          `rgba(0,0,0,${0.34*(1-fog)})`);
 
-    for (const wz of [-1.42, 1.46]) for (const wx of [-0.93, 0.93]){
-      const r = 0.335, a1 = [], a2 = [];
+    for (const wz of [-1.4375, 1.4375]) for (const wx of [-0.915, 0.915]){
+      const r = 0.340, a1 = [], a2 = [];
       for (let k = 0; k < 10; k++){ const a = k/10*6.2832;
-        a1.push(P(wz+Math.cos(a)*r, wx, 0.345+Math.sin(a)*r));
-        a2.push(P(wz+Math.cos(a)*r*0.55, wx*0.985, 0.345+Math.sin(a)*r*0.55)); }
-      poly(a1, mixc([30,32,36], fogRGB, fog), true);
-      poly(a2, mixc([96,102,110], fogRGB, fog), true);
+        a1.push(P(wz+Math.cos(a)*r, wx, 0.350+Math.sin(a)*r));
+        a2.push(P(wz+Math.cos(a)*r*0.56, wx*0.985, 0.350+Math.sin(a)*r*0.56)); }
+      plano(a1, mixc([30,32,36], fogRGB, fog));
+      plano(a2, mixc([96,102,110], fogRGB, fog));
     }
     for (let i = 0; i < PROF.length-1; i++){
-      const A = PROF[i], B = PROF[i+1], cabin = A[3] > 0.15 && B[3] > 0.15;
+      // Umbral bajo: con 0.15 las estaciones de la luneta trasera (0.150 y 0.305)
+      // no contaban como cabina y se pintaban del color de la carroceria. Por eso
+      // el techo parecia una pieza oscura flotando sobre un bloque blanco.
+      const A = PROF[i], B = PROF[i+1], cabin = A[3] > 0.05 || B[3] > 0.05;
       for (const sg of [-1,1]){
         face([P(A[0],sg*A[1],0.34), P(B[0],sg*B[1],0.34), P(B[0],sg*B[1],B[2]), P(A[0],sg*A[1],A[2])], base);
         face([P(A[0],sg*A[1],A[2]), P(B[0],sg*B[1],B[2]), P(B[0],sg*B[3],B[4]), P(A[0],sg*A[3],A[4])],
@@ -771,52 +788,85 @@ export function createHud2(canvas, opts = {}){
         face([P(A[0],-A[1]*.98,A[2]), P(B[0],-B[1]*.98,B[2]), P(B[0],B[1]*.98,B[2]), P(A[0],A[1]*.98,A[2])], base);
     }
     const detalle = cfgOpt.detalleCoche && !ligero();
+    // TAPAS DE LOS EXTREMOS. El loft solo cosia laterales, hombro y techo: los
+    // dos extremos quedaban ABIERTOS y desde la camara, que mira al porton, se
+    // veia el interior hueco. Esto era lo que hacia que pareciera un despiece.
+    for (const [idx, sgn] of [[0, -1], [PROF.length-1, 1]]){
+      const S = PROF[idx];
+      const tapa = [P(S[0], -S[1], 0.34), P(S[0], S[1], 0.34), P(S[0], S[1], S[2])];
+      if (S[3] > 0.02){ tapa.push(P(S[0], S[3], S[4]), P(S[0], -S[3], S[4])); }
+      else tapa.push(P(S[0], 0, S[4]));
+      tapa.push(P(S[0], -S[1], S[2]));
+      // El sentido de giro decide hacia donde mira la normal: en la tapa trasera
+      // hay que invertirlo o el culling se la come.
+      face(sgn < 0 ? tapa.slice().reverse() : tapa, base);
+    }
+
     // zócalo oscuro bajo la cintura: rompe la masa y hace el coche menos "bloque"
     if (detalle) for (const sg of [-1,1])
       for (let i = 2; i < PROF.length-3; i++){
         const A = PROF[i], B = PROF[i+1];
-        poly([P(A[0], sg*(A[1]-0.002), 0.335), P(B[0], sg*(B[1]-0.002), 0.335),
+        plano([P(A[0], sg*(A[1]-0.002), 0.335), P(B[0], sg*(B[1]-0.002), 0.335),
               P(B[0], sg*(B[1]-0.002), 0.50),  P(A[0], sg*(A[1]-0.002), 0.50)],
-             mixc([base[0]*0.42, base[1]*0.42, base[2]*0.44], fogRGB, fog), true);
+             mixc([base[0]*0.42, base[1]*0.42, base[2]*0.44], fogRGB, fog));
       }
     // pasos de rueda
     if (detalle) for (const wz of [-1.42, 1.46]) for (const sg of [-1,1]){
       const arc = [];
       for (let a = 0; a <= 8; a++){ const an = Math.PI*a/8;
-        arc.push(P(wz - Math.cos(an)*0.60, sg*0.952, 0.345 + Math.sin(an)*0.56)); }
+        arc.push(P(wz - Math.cos(an)*0.62, sg*0.930, 0.350 + Math.sin(an)*0.58)); }
       for (let a = 8; a >= 0; a--){ const an = Math.PI*a/8;
-        arc.push(P(wz - Math.cos(an)*0.50, sg*0.952, 0.345 + Math.sin(an)*0.46)); }
-      poly(arc, mixc([26,28,32], fogRGB, fog), true);
+        arc.push(P(wz - Math.cos(an)*0.52, sg*0.930, 0.350 + Math.sin(an)*0.48)); }
+      plano(arc, mixc([26,28,32], fogRGB, fog));
     }
     // retrovisores
     if (detalle) for (const sg of [-1,1])
-      poly([P(0.98, sg*0.96, 1.02), P(1.10, sg*1.20, 1.06),
-            P(1.02, sg*1.20, 1.16), P(0.90, sg*0.96, 1.12)],
-           mixc([base[0]*0.72, base[1]*0.72, base[2]*0.75], fogRGB, fog), true);
+      plano([P(0.92, sg*0.92, 1.05), P(1.06, sg*1.17, 1.09),
+            P(0.98, sg*1.17, 1.19), P(0.84, sg*0.92, 1.15)],
+           mixc([base[0]*0.72, base[1]*0.72, base[2]*0.75], fogRGB, fog));
     // montante trasero: separa luna de carrocería y da lectura de volumen
     if (detalle) for (const sg of [-1,1])
-      poly([P(1.30, sg*0.640, 1.345), P(1.70, sg*0.478, 1.215),
-            P(1.70, sg*0.430, 1.180), P(1.30, sg*0.590, 1.300)],
-           mixc([base[0]*0.55, base[1]*0.55, base[2]*0.58], fogRGB, fog), true);
+      plano([P(-1.60, sg*0.305, 1.212), P(-1.90, sg*0.150, 1.125),
+            P(-1.90, sg*0.100, 1.100), P(-1.60, sg*0.255, 1.190)],
+           mixc([base[0]*0.55, base[1]*0.55, base[2]*0.58], fogRGB, fog));
+
+    volcar();   // aqui se pinta toda la carroceria, ya ordenada
+
+    // PARACHOQUES TRASERO. Los pilotos arrancan a 0.905 y el faldon acaba a
+    // 0.34: el punto medio cae en 0.62, asi que de ahi hacia abajo va en negro.
+    // Envuelve un poco por los flancos, como en un paragolpes real.
+    {
+      const yTope = 0.62, yPie = 0.335;
+      const negro = mixc([26, 28, 32], fogRGB, fog);
+      poly([P(-2.336, -0.800, yPie), P(-2.336, 0.800, yPie),
+            P(-2.336, 0.800, yTope), P(-2.336, -0.800, yTope)], negro, true);
+      for (const sg of [-1, 1])
+        poly([P(-2.336, sg*0.800, yPie), P(-2.10, sg*0.868, yPie),
+              P(-2.10, sg*0.868, yTope), P(-2.336, sg*0.800, yTope)], negro, true);
+      // difusor: franja mas oscura al ras del suelo
+      poly([P(-2.334, -0.62, yPie), P(-2.334, 0.62, yPie),
+            P(-2.334, 0.62, yPie+0.075), P(-2.334, -0.62, yPie+0.075)],
+           mixc([16, 17, 20], fogRGB, fog), true);
+    }
 
     // ópticas: son geometría permanente, apagadas son cristal oscuro
     for (const sg of [-1,1]){
-      poly([P(-2.325,sg*0.30,0.855), P(-2.325,sg*0.86,0.855), P(-2.325,sg*0.86,1.005), P(-2.325,sg*0.30,1.005)],
+      poly([P(-2.335,sg*0.26,0.905), P(-2.335,sg*0.80,0.905), P(-2.335,sg*0.80,1.010), P(-2.335,sg*0.26,1.010)],
            mixc([74+181*tail, 14+42*tail, 18], fogRGB, fog));
-      if (tail > 0.2) glow(P(-2.33, sg*0.58, 0.93), '255,54,32', 300, 0.60*tail);
+      if (tail > 0.2) glow(P(-2.34, sg*0.53, 0.955), '255,54,32', 300, 0.60*tail);
       const b = head > 0.2 ? [252,250,236] : [58,62,70];
-      poly([P(2.325,sg*0.30,0.775), P(2.325,sg*0.88,0.775), P(2.325,sg*0.88,0.945), P(2.325,sg*0.30,0.945)],
+      poly([P(2.335,sg*0.26,0.760), P(2.335,sg*0.74,0.760), P(2.335,sg*0.74,0.880), P(2.335,sg*0.26,0.880)],
            mixc(b, fogRGB, fog));
-      if (head > 0.2) glow(P(2.34, sg*0.58, 0.86), '255,246,220', 420, 0.55*head);
+      if (head > 0.2) glow(P(2.35, sg*0.50, 0.820), '255,246,220', 420, 0.55*head);
     }
     if (tail > 0.2){
-      poly([P(-2.318,-0.28,0.48), P(-2.318,0.28,0.48), P(-2.318,0.28,0.63), P(-2.318,-0.28,0.63)],
+      poly([P(-2.330,-0.27,0.560), P(-2.330,0.27,0.560), P(-2.330,0.27,0.690), P(-2.330,-0.27,0.690)],
            mixc([200+55*tail, 202+53*tail, 196+52*tail], fogRGB, fog));
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
-      poly([P(-2.314,-0.28,0.48), P(-2.314,0.28,0.48), P(-2.314,0.28,0.645), P(-2.314,-0.28,0.645)],
+      poly([P(-2.326,-0.27,0.560), P(-2.326,0.27,0.560), P(-2.326,0.27,0.700), P(-2.326,-0.27,0.700)],
            `rgba(255,240,205,${0.30*tail})`);
       ctx.restore();
-      for (const sg of [-1,1]) glow(P(-2.305, sg*0.20, 0.665), '255,240,203', 260, 0.85*tail);
+      for (const sg of [-1,1]) glow(P(-2.318, sg*0.19, 0.720), '255,240,203', 260, 0.85*tail);
     }
   }
 

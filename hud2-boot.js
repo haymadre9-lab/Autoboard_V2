@@ -121,7 +121,7 @@ function boot(){
                      rain:false, spray:true, traffic:'off',
                      rbRadius:45, rbArc:18, rbSmooth:1, hud:true, horizon:0.50, carScale:1,
                      perfil:'auto', detalleCoche:true, carPhotoUrl:'', frenarCamara:false, hudScale:1,
-                     abrirAlNavegar:false, incrustado:false, destino:'#hudroad', carteles:true, escala:1 };
+                     abrirAlNavegar:false, incrustado:false, destino:'#hudroad', carteles:true, escala:1, carColor:'#eef1f4' };
   let cfg;
   try { cfg = Object.assign({}, HUD2_DEF, JSON.parse(localStorage.getItem(HUD2_KEY) || '{}')); }
   catch(e){ cfg = Object.assign({}, HUD2_DEF); }
@@ -560,6 +560,12 @@ function boot(){
           + '<h3>Tráfico</h3>'
           + seg('h2_traf', [['off','Ninguno'],['poca','Poco'],['normal','Normal'],['mucha','Denso']], cfg.traffic)
           + '<h3>Tu coche</h3>'
+          + '<h3>Color del coche</h3><div class="sg" id="h2_color">'
+          + [['#eef1f4','Blanco'],['#9aa2ab','Gris'],['#1d2126','Negro'],
+             ['#8d2b2b','Rojo'],['#22406e','Azul']].map(c =>
+              '<button data-v="'+c[0]+'" class="'+(cfg.carColor===c[0]?'on':'')+'" '
+              + 'style="background:'+c[0]+';color:'+(c[0]==='#eef1f4'?'#111':'#fff')+'">'+c[1]+'</button>').join('')
+          + '</div>'
           + '<label><span class="r"><span>Foto por URL (súbela al repo)</span></span>'
           + '<input type="text" id="h2_url" value="' + (cfg.carPhotoUrl||'') + '" placeholder="./coche.png" '
           + 'style="width:100%;background:#0d1216;border:1px solid #232c33;border-radius:5px;color:#e8eef2;'
@@ -595,6 +601,8 @@ function boot(){
       cfg.carPhotoUrl = e.target.value.trim(); guardar();
       if (cfg.carPhotoUrl) hud.setCarPhotoUrl(cfg.carPhotoUrl); else hud.setCarPhoto(null);
     };
+    g('h2_color').onclick = e => { if(!e.target.dataset.v) return;
+      cfg.carColor = e.target.dataset.v; guardar(); pintarAjustes(); };
     g('h2_drop').onclick = () => g('h2_file').click();
     g('h2_file').onchange = e => { if (e.target.files[0]) cargarFoto(e.target.files[0]); };
     if (g('h2_cut')){ g('h2r_tol').oninput = e => g('h2o_tol').textContent = e.target.value;
