@@ -206,27 +206,24 @@ function boot(){
 
   // ruta de ejemplo, solo hasta que tu app llame a setRoute
   let rutaPropia = false;
-  // Ruta de prueba incorporada: 3,4 km con DOS rotondas (16 m y 22 m de radio),
-  // curvas suaves, dos cerradas y rectas. No hay que pegar nada para usarla.
+  // Trazado de reserva, sin rotondas: recta larga, curvas de radio amplio y
+  // un cruce sugerido con dos quiebros. Se usa cuando no hay ruta calculada.
   const R = 6378137, LAT0 = 43.3320, LNG0 = -3.1090, c0 = Math.cos(LAT0*Math.PI/180);
   const toLL = (x,z) => [LAT0 + z/R*180/Math.PI, LNG0 + x/(R*c0)*180/Math.PI];
   const demo = []; let _x = 0, _z = 0, _h = 0;
   const tramo = (dist, k) => { const n = Math.round(dist/4);
     for (let i = 0; i < n; i++){ _h += k*4; _x += Math.sin(_h)*4; _z += Math.cos(_h)*4; demo.push(toLL(_x,_z)); } };
   demo.push(toLL(0,0));
-  // Arranque en recta larga: sin ruta y parado, el HUD enseña carretera y coche
-  // en vez de quedarse en negro. Luego llegan curvas suaves para que el paisaje
-  // cambie en cuanto empieces a moverte.
-  tramo(700, 0);        tramo(400,  0.0011);  tramo(500, -0.0008);
-  tramo(320, 0);        tramo(180,  0.0035);  tramo(260, 0);
-  tramo(140,-0.0045);   tramo(200,  0);
-  tramo(16*4.0, -1/16); tramo(240,  0);          // rotonda 1: R=16 m, ~230 grados
-  tramo(300, 0.0018);   tramo(420,  0);
-  tramo(120,-0.0060);   tramo(260,  0);
-  tramo(22*3.14,-1/22); tramo(380,  0);          // rotonda 2: R=22 m, 180 grados
-  tramo(200, 0.0026);   tramo(300,  0);
-  // Si ya cargaste un trazado en hud2.html, se reutiliza: mismo origen, mismo
-  // localStorage. Así el botón HUD 2 muestra tu ruta y no la de ejemplo.
+  // Trazado de reserva: recta larga de entrada y despues solo curvas de radio
+  // amplio, alternando lado. Sin rotondas, sin giros cerrados y sin cruces:
+  // el radio mas pequeno son 550 m, asi que ninguna llega a marear.
+  tramo(800,  0);          tramo(460,  0.0011);   tramo(340,  0);
+  tramo(420, -0.0013);     tramo(300,  0);
+  tramo(520,  0.0008);     tramo(360, -0.0009);   tramo(400,  0);
+  tramo(440,  0.0015);     tramo(320, -0.0006);   tramo(380,  0.0010);
+  tramo(300, -0.0012);     tramo(700,  0);
+
+  // Si ya cargaste un trazado antes, se reutiliza; si no, el de reserva.
   let inicial = demo;
   try {
     const g = JSON.parse(localStorage.getItem('hud2.ruta') || 'null');
@@ -241,6 +238,9 @@ function boot(){
      calcula por diferencia de posiciones, que es lo normal en muchos equipos.
      ------------------------------------------------------------------ */
   let watch = null, ultPos = null, vCalc = 0;
+  // Al llegar a destino la ruta deja de existir: se avisa y se sigue por la
+  // prolongacion recta hasta que la app calcule otra.
+  hud.onFinRuta = () => console.log('[hud2] fin de ruta: se continua en recta');
   function gpsOn(){
     if (watch !== null || !navigator.geolocation) return;
     watch = navigator.geolocation.watchPosition(p => {
@@ -563,11 +563,16 @@ function boot(){
           + '<h3>Tráfico</h3>'
           + seg('h2_traf', [['off','Ninguno'],['poca','Poco'],['normal','Normal'],['mucha','Denso']], cfg.traffic)
           + '<h3>Tu coche</h3>'
-          + '<h3>Color del coche</h3><div class="sg" id="h2_color">'
-          + [['#eef1f4','Blanco'],['#9aa2ab','Gris'],['#1d2126','Negro'],
-             ['#8d2b2b','Rojo'],['#22406e','Azul']].map(c =>
+          + '<h3>Color del coche</h3><div class="sg" id="h2_color" '
+          + 'style="flex-wrap:wrap;border:0;gap:6px">'
+          + [['#eef1f4','Blanco'],['#c3c9ce','Aluminio'],['#8f979e','Gris'],
+             ['#5a6169','Grafito'],['#1d2126','Negro'],['#8d2b2b','Rojo'],
+             ['#22406e','Azul'],['#1f5b4a','Verde'],['#6d5a3c','Arena']].map(c =>
               '<button data-v="'+c[0]+'" class="'+(cfg.carColor===c[0]?'on':'')+'" '
-              + 'style="background:'+c[0]+';color:'+(c[0]==='#eef1f4'?'#111':'#fff')+'">'+c[1]+'</button>').join('')
+              + 'style="flex:0 0 31%;border-radius:5px;background:'+c[0]
+              + ';color:'+(['#eef1f4','#c3c9ce','#8f979e'].indexOf(c[0])>=0?'#111':'#fff')
+              + ';border:2px solid '+(cfg.carColor===c[0]?'#5fd0e0':'transparent')+'">'
+              + c[1]+'</button>').join('')
           + '</div>'
           + '<label><span class="r"><span>Foto por URL (súbela al repo)</span></span>'
           + '<input type="text" id="h2_url" value="' + (cfg.carPhotoUrl||'') + '" placeholder="./coche.png" '

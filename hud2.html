@@ -178,10 +178,13 @@ function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
-  api.version = '2026.08.31-8';   // sube al cambiar: sirve para saber qué está corriendo
+  api.version = '2026.09.01-4';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
-  let fuera = 0;
+  let fuera = 0, finAvisado = false;
+  api.onFinRuta = null;
+  /** true cuando ya has pasado del final de la ruta cargada. */
+  api.finDeRuta = () => !!pts && s > routeLen - 30;
   api.onFueraDeRuta = null;
   api.fueraDeRuta = () => fuera >= 6;
   let manList = [], limList = [], radList = [];
@@ -413,7 +416,7 @@ function createHud2(canvas, opts = {}){
     MW = o.motorway || [];
     RB = detectRoundabouts();
     manList = []; limList = []; radList = []; xsCache.clear();
-    fuera = 0; cam0.off = null; cam0.yaw = null;
+    fuera = 0; finAvisado = false; cam0.off = null; cam0.yaw = null;
     s = Math.min(6, routeLen*0.02);
     return { metros: Math.round(routeLen), puntos: N, rotondas: RB.length };
   };
@@ -489,6 +492,7 @@ function createHud2(canvas, opts = {}){
     const px = R*(lng-origin[1])*Math.PI/180*Math.cos(lat0);
     const pz = R*(lat-origin[0])*Math.PI/180;
     let best = null, bestD = Infinity;
+    if (s > routeLen - 5) return null;      // ya fuera del trazado cargado
     const i0 = Math.max(0, ((s-windowM)/STEP)|0), i1 = Math.min(N-1, ((s+windowM)/STEP)|0);
     for (let i = i0; i <= i1; i++){
       const d = (pts[i*3]-px)**2 + (pts[i*3+1]-pz)**2;
@@ -698,7 +702,7 @@ function createHud2(canvas, opts = {}){
     for (let i = pasos.length - 1; i >= 0; i--){
       const d = pasos[i][0], SEG = pasos[i][1];
       const a = s0 + d, b = a + SEG;
-      if (a < -20 || b > routeLen) continue;
+      if (a < -20 || b > routeLen + 5000) continue;
       const A = xsec(a), B = xsec(b);
       const fog = clamp((d - fogEnd*0.25)/(fogEnd*0.9), 0, 1);
       const asf = mixc(pal.asphalt, fogRGB, fog);
@@ -771,7 +775,10 @@ function createHud2(canvas, opts = {}){
     const vx=p2.x-p0.x, vy=p2.y-p0.y, vz=p2.z-p0.z;
     let nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx;
     const L = Math.hypot(nx,ny,nz) || 1; nx/=L; ny/=L; nz/=L;
-    if ((cam.x-p0.x)*nx + (cam.y-p0.y)*ny + (cam.z-p0.z)*nz < 0) return null;   // culling
+    // Sin descarte de caras traseras: con el orden por profundidad las de detras
+    // se pintan primero y quedan tapadas. Descartarlas dejaba agujeros por los
+    // que se veia el interior y las opticas delanteras a traves de la luna.
+    if (nx*0 === 1) return null;
     // Rango de sombreado mas estrecho: con 0.38-1.00 dos caras vecinas podian
     // diferenciarse tanto que parecian piezas distintas. 0.55-1.00 las une.
     let k = (0.55 + 0.45*Math.abs(nx*LIGHT[0]+ny*LIGHT[1]+nz*LIGHT[2])) * (boost||1);
@@ -789,7 +796,7 @@ function createHud2(canvas, opts = {}){
     const rel = sPos - s;
     const fog = clamp((rel - cfgOpt.fogEnd*0.25)/(cfgOpt.fogEnd*0.9), 0, 1);
     if (fog > 0.96) return;
-    const base = hexToRgb(colorIn || cfgOpt.carColor), glass = [22,26,31];
+    const base = hexToRgb(colorIn || cfgOpt.carColor), glass = [12,14,17];
     const off = offIn === undefined ? myOffset(s) : offIn;
     // un coche de frente es el mismo modelo girado 180 grados: se invierten
     // a la vez el eje longitudinal y el transversal
@@ -868,12 +875,14 @@ function createHud2(canvas, opts = {}){
       const A = PROF[i], B = PROF[i+1], cabin = A[3] > 0.05 || B[3] > 0.05;
       for (const sg of [-1,1]){
         face([P(A[0],sg*A[1],0.34), P(B[0],sg*B[1],0.34), P(B[0],sg*B[1],B[2]), P(A[0],sg*A[1],A[2])], base);
-        face([P(A[0],sg*A[1],A[2]), P(B[0],sg*B[1],B[2]), P(B[0],sg*B[3],B[4]), P(A[0],sg*A[3],A[4])],
-             cabin ? glass : base, cabin ? 1.5 : 1);
+        // Costados de la luneta: son montante y aleta, o sea CHAPA opaca. Iban
+        // en material traslucido y por eso el trasero se veia oscuro de lado a lado.
+        face([P(A[0],sg*A[1],A[2]), P(B[0],sg*B[1],B[2]), P(B[0],sg*B[3],B[4]), P(A[0],sg*A[3],A[4])], base);
       }
       if (A[3] > 0.02 || B[3] > 0.02)
+        // Luna central: negra del todo, sin realce. Es el unico cristal visible.
         face([P(A[0],-A[3],A[4]), P(B[0],-B[3],B[4]), P(B[0],B[3],B[4]), P(A[0],A[3],A[4])],
-             cabin ? glass : base, cabin ? 1.7 : 1);
+             cabin ? glass : base, cabin ? 0.40 : 1);
       else
         face([P(A[0],-A[1]*.98,A[2]), P(B[0],-B[1]*.98,B[2]), P(B[0],B[1]*.98,B[2]), P(A[0],A[1]*.98,A[2])], base);
     }
@@ -920,44 +929,52 @@ function createHud2(canvas, opts = {}){
             P(-1.90, sg*0.100, 1.100), P(-1.60, sg*0.255, 1.190)],
            mixc([base[0]*0.55, base[1]*0.55, base[2]*0.58], fogRGB, fog));
 
-    volcar();   // aqui se pinta toda la carroceria, ya ordenada
-
     // PARACHOQUES TRASERO. Los pilotos arrancan a 0.905 y el faldon acaba a
     // 0.34: el punto medio cae en 0.62, asi que de ahi hacia abajo va en negro.
     // Envuelve un poco por los flancos, como en un paragolpes real.
     {
-      const yTope = 0.62, yPie = 0.335;
+      const yT = 0.62, yP = 0.335, X = 0.800, rx = 0.075, ry = 0.045;
       const negro = mixc([26, 28, 32], fogRGB, fog);
-      poly([P(-2.336, -0.800, yPie), P(-2.336, 0.800, yPie),
-            P(-2.336, 0.800, yTope), P(-2.336, -0.800, yTope)], negro, true);
+      // contorno con las cuatro esquinas achaflanadas, como el piloto
+      plano([[-X+rx,yP],[X-rx,yP],[X-rx*0.35,yP+ry*0.45],[X,yP+ry],
+             [X,yT-ry],[X-rx*0.35,yT-ry*0.45],[X-rx,yT],[-X+rx,yT],
+             [-X+rx*0.35,yT-ry*0.45],[-X,yT-ry],[-X,yP+ry],[-X+rx*0.35,yP+ry*0.45]]
+            .map(q => P(-2.362, q[0], q[1])), negro);
       for (const sg of [-1, 1])
-        poly([P(-2.336, sg*0.800, yPie), P(-2.10, sg*0.868, yPie),
-              P(-2.10, sg*0.868, yTope), P(-2.336, sg*0.800, yTope)], negro, true);
-      // difusor: franja mas oscura al ras del suelo
-      poly([P(-2.334, -0.62, yPie), P(-2.334, 0.62, yPie),
-            P(-2.334, 0.62, yPie+0.075), P(-2.334, -0.62, yPie+0.075)],
-           mixc([16, 17, 20], fogRGB, fog), true);
+        plano([P(-2.362, sg*X, yP+ry*0.5), P(-2.10, sg*0.868, yP+ry*0.5),
+               P(-2.10, sg*0.868, yT-ry*0.5), P(-2.362, sg*X, yT-ry*0.5)], negro);
+      plano([P(-2.366, -0.60, yP+0.012), P(-2.366, 0.60, yP+0.012),
+             P(-2.366, 0.60, yP+0.080), P(-2.366, -0.60, yP+0.080)],
+            mixc([16, 17, 20], fogRGB, fog));
     }
 
     // ópticas: son geometría permanente, apagadas son cristal oscuro
     for (const sg of [-1,1]){
-      poly([P(-2.335,sg*0.26,0.905), P(-2.335,sg*0.80,0.905), P(-2.335,sg*0.80,1.010), P(-2.335,sg*0.26,1.010)],
-           mixc([74+181*tail, 14+42*tail, 18], fogRGB, fog));
-      if (tail > 0.2) glow(P(-2.34, sg*0.53, 0.955), '255,54,32', 300, 0.60*tail);
+      // Piloto con extremos redondeados: contorno de 12 puntos con las esquinas
+      // achaflanadas en dos pasos, en vez de un rectangulo seco.
+      {
+        const x0=0.26, x1=0.80, y0=0.905, y1=1.010, rx=0.055, ry=0.030;
+        plano([[x0+rx,y0],[x1-rx,y0],[x1-rx*0.35,y0+ry*0.45],[x1,y0+ry],
+              [x1,y1-ry],[x1-rx*0.35,y1-ry*0.45],[x1-rx,y1],[x0+rx,y1],
+              [x0+rx*0.35,y1-ry*0.45],[x0,y1-ry],[x0,y0+ry],[x0+rx*0.35,y0+ry*0.45]]
+             .map(q => P(-2.360, sg*q[0], q[1])),
+             mixc([74+181*tail, 14+42*tail, 18], fogRGB, fog));
+      }
       const b = head > 0.2 ? [252,250,236] : [58,62,70];
-      poly([P(2.335,sg*0.26,0.760), P(2.335,sg*0.74,0.760), P(2.335,sg*0.74,0.880), P(2.335,sg*0.26,0.880)],
+      plano([P(2.360,sg*0.26,0.760), P(2.360,sg*0.74,0.760), P(2.360,sg*0.74,0.880), P(2.360,sg*0.26,0.880)],
            mixc(b, fogRGB, fog));
-      if (head > 0.2) glow(P(2.35, sg*0.50, 0.820), '255,246,220', 420, 0.55*head);
+      if (head > 0.2) glow(P(2.375, sg*0.50, 0.820), '255,246,220', 420, 0.55*head);
     }
     if (tail > 0.2){
-      poly([P(-2.330,-0.27,0.560), P(-2.330,0.27,0.560), P(-2.330,0.27,0.690), P(-2.330,-0.27,0.690)],
+      plano([P(-2.358,-0.27,0.560), P(-2.358,0.27,0.560), P(-2.358,0.27,0.690), P(-2.358,-0.27,0.690)],
            mixc([200+55*tail, 202+53*tail, 196+52*tail], fogRGB, fog));
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
-      poly([P(-2.326,-0.27,0.560), P(-2.326,0.27,0.560), P(-2.326,0.27,0.700), P(-2.326,-0.27,0.700)],
+      plano([P(-2.356,-0.27,0.560), P(-2.356,0.27,0.560), P(-2.356,0.27,0.700), P(-2.356,-0.27,0.700)],
            `rgba(255,240,205,${0.30*tail})`);
       ctx.restore();
-      for (const sg of [-1,1]) glow(P(-2.318, sg*0.19, 0.720), '255,240,203', 260, 0.85*tail);
+      for (const sg of [-1,1]) glow(P(-2.355, sg*0.19, 0.720), '255,240,203', 260, 0.85*tail);
     }
+    volcar();   // todo el coche, en una sola pasada ordenada por profundidad
   }
 
   function drawBeams(pal, on){
@@ -1352,7 +1369,14 @@ function createHud2(canvas, opts = {}){
     const accel = dt > 0 ? (speed - prevSpeed)/dt : 0;
     const want = clamp((-accel - 0.35)/1.8, 0, 1);
     brake += (want - brake) * Math.min(dt*(want > brake ? 14 : 5), 1);
-    s = clamp(s + speed*dt, 0, routeLen - 1);
+    // Pasado el final de la ruta se sigue avanzando: at() extrapola en linea
+    // recta, asi que la carretera continua en vez de acabarse bajo las ruedas.
+    // Se permiten 5 km de prolongacion, suficientes para cualquier sobrepaso.
+    s = clamp(s + speed*dt, 0, routeLen + 5000);
+    if (!finAvisado && s > routeLen - 30){
+      finAvisado = true;
+      if (api.onFinRuta) { try { api.onFinRuta(); } catch(e){} }
+    }
 
     const pal = palette();
     dtCam = dt || 0.016;
