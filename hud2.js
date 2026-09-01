@@ -88,6 +88,8 @@ export function createHud2(canvas, opts = {}){
     maxFps: 0,              // 0 = libre
     escala: 1.0,            // resolucion de render: 0.5 = la mitad de pixeles por lado
     perfil: 'auto',         // 'auto' | 'ligero' | 'completo'
+    giroMax: 45,            // grados/s que puede girar la camara como maximo
+    vista: 1.0,             // 1 = normal; >1 aleja y sube la camara (mas suave)
     frenarCamara: false,    // limitar look-ahead en curva cerrada (mantiene el
                             // coche en cuadro, pero resta sensación de giro)
     detalleCoche: true,     // zócalo, pasos de rueda, retrovisores, montantes
@@ -110,7 +112,7 @@ export function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
-  api.version = '2026.08.31-5';   // sube al cambiar: sirve para saber qué está corriendo
+  api.version = '2026.08.31-6';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
   let fuera = 0;
@@ -345,7 +347,7 @@ export function createHud2(canvas, opts = {}){
     MW = o.motorway || [];
     RB = detectRoundabouts();
     manList = []; limList = []; radList = []; xsCache.clear();
-    fuera = 0; cam0.off = null;
+    fuera = 0; cam0.off = null; cam0.yaw = null;
     s = Math.min(6, routeLen*0.02);
     return { metros: Math.round(routeLen), puntos: N, rotondas: RB.length };
   };
@@ -447,7 +449,7 @@ export function createHud2(canvas, opts = {}){
   // Estado suavizado de la camara. Antes cada parametro saltaba al valor nuevo
   // en el mismo frame: al cambiar la velocidad o el ancho de calzada, la escena
   // pegaba un tiron (zoom repentino, coche cruzando de lado a lado).
-  const cam0 = { off:null, fov:44, hgt:2.6, back:7.5, look:20 };
+  const cam0 = { off:null, fov:44, hgt:2.6, back:7.5, look:20, yaw:null, pit:0 };
   let dtCam = 0.016;
 
   function setupCamera(){
@@ -463,10 +465,11 @@ export function createHud2(canvas, opts = {}){
     const off = cam0.off;
     // El acoplamiento con la velocidad es lo que da la sensación de avance:
     // más FOV, cámara más baja, y mirando mucho más lejos al acelerar.
-    let fovDeg = 44 + t*20;
-    let height = cfgOpt.camHeight * (1 - t*0.22);
-    let back   = cfgOpt.camBack * (1 + t*0.30);
-    let lookM  = 20 + cfgOpt.lookAhead*t;
+    const v = cfgOpt.vista || 1;
+    let fovDeg = (44 + t*20) * (1 + (v-1)*0.18);
+    let height = cfgOpt.camHeight * (1 - t*0.22) * (1 + (v-1)*0.75);
+    let back   = cfgOpt.camBack * (1 + t*0.30) * v;
+    let lookM  = (20 + cfgOpt.lookAhead*t) * (1 + (v-1)*0.5);
     // En curva cerrada la distancia se recorre girando, así que la cámara puede
     // acabar mirando hacia atrás y el coche sale de cuadro. Limitarlo lo evita,
     // pero mata la sensación de giro: por eso está desactivado por defecto.
@@ -487,7 +490,24 @@ export function createHud2(canvas, opts = {}){
     cam.x=c.x; cam.y=c.y; cam.z=c.z;
     let dx=g.x-cam.x, dy=g.y-cam.y, dz=g.z-cam.z;
     const L = Math.hypot(dx,dy,dz) || 1;
-    fwd.x=dx/L; fwd.y=dy/L; fwd.z=dz/L;
+
+    // LIMITE DE VELOCIDAD DE GIRO. En rotonda el punto de mira barre muchos
+    // grados por segundo y la escena se vuelve mareante. Aqui se acota cuanto
+    // puede girar la camara por segundo: la cinta sigue siendo la real, solo
+    // que la mirada llega un poco por detras y vuelve enseguida.
+    const yawObj = Math.atan2(dx, dz);
+    const pitObj = Math.asin(clamp(dy/L, -1, 1));
+    if (cam0.yaw === null){ cam0.yaw = yawObj; cam0.pit = pitObj; }
+    else {
+      let dY = yawObj - cam0.yaw;
+      while (dY >  Math.PI) dY -= 2*Math.PI;
+      while (dY < -Math.PI) dY += 2*Math.PI;
+      const maxY = (cfgOpt.giroMax || 45) * Math.PI/180 * dtCam;
+      cam0.yaw += clamp(dY * Math.min(dtCam*4.5, 1), -maxY, maxY);
+      cam0.pit += (pitObj - cam0.pit) * Math.min(dtCam*3, 1);
+    }
+    const cp = Math.cos(cam0.pit);
+    fwd.x = Math.sin(cam0.yaw)*cp; fwd.y = Math.sin(cam0.pit); fwd.z = Math.cos(cam0.yaw)*cp;
     const rl = Math.hypot(fwd.z, fwd.x) || 1;
     rgt.x=fwd.z/rl; rgt.y=0; rgt.z=-fwd.x/rl;
     upv.x = fwd.y*rgt.z - fwd.z*rgt.y;

@@ -121,7 +121,7 @@ function boot(){
                      rain:false, spray:true, traffic:'off',
                      rbRadius:45, rbArc:18, rbSmooth:1, hud:true, horizon:0.50, carScale:1,
                      perfil:'auto', detalleCoche:true, carPhotoUrl:'', frenarCamara:false, hudScale:1,
-                     abrirAlNavegar:false, incrustado:false, destino:'#hudroad', carteles:true, escala:1, carColor:'#eef1f4' };
+                     abrirAlNavegar:false, incrustado:false, destino:'#hudroad', carteles:true, escala:1, carColor:'#eef1f4', giroMax:45, vista:1 };
   let cfg;
   try { cfg = Object.assign({}, HUD2_DEF, JSON.parse(localStorage.getItem(HUD2_KEY) || '{}')); }
   catch(e){ cfg = Object.assign({}, HUD2_DEF); }
@@ -528,7 +528,9 @@ function boot(){
     ['horizon','Encuadre vertical',30,70,1,'%',100],
     ['carScale','Tamaño del coche',60,160,1,'%',100],
     ['hudScale','Tamaño de los textos',70,180,1,'%',100],
-    ['escala','Resolución de render',35,100,5,'%',100]
+    ['escala','Resolución de render',35,100,5,'%',100],
+    ['vista','Distancia de vista',100,220,5,'%',100],
+    ['giroMax','Giro máximo de cámara',20,120,5,'°/s',1]
   ];
   const guardar = () => { hud.set(cfg); try { localStorage.setItem(HUD2_KEY, JSON.stringify(cfg)); } catch(e){} };
   const seg = (id, opts, val) => '<div class="sg" id="'+id+'">' + opts.map(o =>

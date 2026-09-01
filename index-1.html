@@ -553,7 +553,9 @@ function frame(now){
       // El rumbo del receptor tiembla varios grados parado y a baja velocidad.
       // Como la camara del mapa usa disp.head como bearing, ese temblor se ve en
       // las flechas. Se suaviza mas, y por debajo de 2 m/s se congela del todo.
-      if(raw.spd>2) disp.head=angLerp(disp.head,raw.head,Math.min(1,dt*1.4));
+      // Aun temblaba: se sube el umbral a 3 m/s y se suaviza mas todavia. Por
+      // debajo de esa velocidad el rumbo del receptor es practicamente ruido.
+      if(raw.spd>3) disp.head=angLerp(disp.head,raw.head,Math.min(1,dt*0.9));
       carMk.setLatLng([disp.lat,disp.lon]);
       const cr=$('carrot'); if(cr) cr.style.transform='rotate(0deg)';   // MapLibre gira el mapa (bearing); la flecha queda fija arriba
       if(follow && !window.__uTouch && now-lastCam>50){ lastCam=now;   // pausa la cámara mientras el usuario toca (pan fluido + clic en marcadores)
@@ -561,7 +563,9 @@ function frame(now){
         let bearing=(typeof disp.head==='number' && isFinite(disp.head))?disp.head:0;   // evita NaN -> que la cámara nunca falle
         // cuantizado a 0.25 grados: por debajo de eso solo es ruido del GPS y
         // obliga al mapa a repintar las etiquetas y flechas sin motivo
-        bearing=Math.round(bearing*4)/4;
+        // cuantizado a medio grado: por debajo de eso el mapa repinta etiquetas
+        // y flechas sin que se aprecie ningun giro real
+        bearing=Math.round(bearing*2)/2;
         const clat=(isFinite(disp.lat)?disp.lat:0), clon=(isFinite(disp.lon)?disp.lon:0);
         try{ map.raw.jumpTo({ center:[clon,clat], zoom:navZoom, bearing:bearing, pitch:(tilt?55:0),
               padding:{top:Math.round(paneH*0.52),bottom:0,left:0,right:0} }); }catch(e){}   // 0.52 -> coche justo encima del radar
