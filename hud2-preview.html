@@ -149,7 +149,7 @@ function createHud2(canvas, opts = {}){
     maxFps: 0,              // 0 = libre
     escala: 1.0,            // resolucion de render: 0.5 = la mitad de pixeles por lado
     perfil: 'auto',         // 'auto' | 'ligero' | 'completo'
-    rotondaInvertida: false, // si la isla sale al lado equivocado, ponlo a true
+    rotondaInvertida: false, // el lado por defecto ya es el correcto en España
     giroMax: 45,            // grados/s que puede girar la camara como maximo
     vista: 1.0,             // 1 = normal; >1 aleja y sube la camara (mas suave)
     frenarCamara: false,    // limitar look-ahead en curva cerrada (mantiene el
@@ -174,7 +174,7 @@ function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
-  api.version = '2026.08.31-7';   // sube al cambiar: sirve para saber qué está corriendo
+  api.version = '2026.08.31-8';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
   let fuera = 0;
@@ -441,10 +441,10 @@ function createHud2(canvas, opts = {}){
       if (giro < 0.9) continue;                              // una curva suave no lo es
       const R = 1/kAvg;
       const mid = (r.s0+r.s1)/2, p = at(mid), n = normalAt(mid);
-      // La isla va al lado hacia el que curva el trazado. En España se circula
-      // en sentido antihorario, asi que la isla queda a tu IZQUIERDA. Si en tu
-      // pantalla sale al otro lado, invierte con rotondaInvertida.
-      const sg = r.sign * (cfgOpt.rotondaInvertida ? -1 : 1);
+      // El centro de la rotonda esta en el lado CONTRARIO al signo de curvatura
+      // tal y como lo devuelve curv() con este convenio de rumbo. Verificado en
+      // carretera: en España la isla queda a tu izquierda y asi sale bien.
+      const sg = -r.sign * (cfgOpt.rotondaInvertida ? -1 : 1);
       out.push({ s0:r.s0, s1:r.s1, R, giro,
                  cx: p.x + n.x*R*sg, cz: p.z + n.z*R*sg });
     }
