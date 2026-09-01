@@ -121,7 +121,7 @@ function boot(){
                      rain:false, spray:true, traffic:'off',
                      rbRadius:45, rbArc:18, rbSmooth:1, hud:true, horizon:0.50, carScale:1,
                      perfil:'auto', detalleCoche:true, carPhotoUrl:'', frenarCamara:false, hudScale:1,
-                     abrirAlNavegar:false, incrustado:false, destino:'#hudroad', carteles:true, escala:1, carColor:'#eef1f4', giroMax:45, vista:1 };
+                     abrirAlNavegar:false, incrustado:false, destino:'#hudroad', carteles:true, escala:1, carColor:'#eef1f4', giroMax:45, vista:1, rotondaInvertida:false };
   let cfg;
   try { cfg = Object.assign({}, HUD2_DEF, JSON.parse(localStorage.getItem(HUD2_KEY) || '{}')); }
   catch(e){ cfg = Object.assign({}, HUD2_DEF); }
@@ -558,6 +558,7 @@ function boot(){
           + seg('h2_perf', [['auto','Auto'],['ligero','Ligero'],['completo','Completo']], cfg.perfil)
           + '<label class="ck"><input type="checkbox" id="h2_detalleCoche"'+(cfg.detalleCoche?' checked':'')+'> Detalles del coche</label>'
           + '<label class="ck"><input type="checkbox" id="h2_carteles"'+(cfg.carteles?' checked':'')+'> Carteles de dirección</label>'
+          + '<label class="ck"><input type="checkbox" id="h2_rotondaInvertida"'+(cfg.rotondaInvertida?' checked':'')+'> Invertir lado de las rotondas</label>'
           + '<label class="ck"><input type="checkbox" id="h2_frenarCamara"'+(cfg.frenarCamara?' checked':'')+'> Sujetar cámara en curva cerrada</label>'
           + '<h3>Tráfico</h3>'
           + seg('h2_traf', [['off','Ninguno'],['poca','Poco'],['normal','Normal'],['mucha','Denso']], cfg.traffic)
@@ -594,7 +595,7 @@ function boot(){
     for (const [k,,,,,u,dv] of SLD)
       g('h2r_'+k).oninput = e => { cfg[k] = +e.target.value/dv; g('h2o_'+k).textContent = cfg[k]+u; guardar(); };
     g('h2_perf').onclick = e => { if(!e.target.dataset.v) return; cfg.perfil = e.target.dataset.v; guardar(); pintarAjustes(); };
-    for (const k of ['posts','hud','rain','spray','detalleCoche','frenarCamara','abrirAlNavegar','incrustado','carteles'])
+    for (const k of ['posts','hud','rain','spray','detalleCoche','frenarCamara','abrirAlNavegar','incrustado','carteles','rotondaInvertida'])
       g('h2_'+k).onchange = e => {
         cfg[k] = e.target.checked; guardar();
         if (k === 'incrustado'){ activar(false); sheet.classList.remove('on'); }

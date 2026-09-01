@@ -207,6 +207,41 @@
   </div>
 </div>
 
+<script>
+/* ---- Forzar actualizacion del service worker -----------------------------
+   El SW cachea con el nombre 'teslanav-v61', el MISMO que usa Tesla Nav, y
+   ambas apps comparten origen: se pisan los archivos entre ellas. Aqui se
+   borran los caches con nombre ajeno, se pide actualizacion al SW y, si entra
+   uno nuevo, se recarga una sola vez. Asi deja de servir versiones viejas.   */
+(function(){
+  const MIO = 'autoboard';          // los caches que NO empiecen asi, se borran
+  if(!('serviceWorker' in navigator)) return;
+  addEventListener('load', async () => {
+    try{
+      if(window.caches){
+        const ns = await caches.keys();
+        for(const n of ns) if(n.indexOf(MIO)!==0){ await caches.delete(n); console.log('[sw] cache ajeno borrado:', n); }
+      }
+      const rs = await navigator.serviceWorker.getRegistrations();
+      for(const r of rs){
+        r.update();
+        r.addEventListener('updatefound', () => {
+          const nuevo = r.installing;
+          if(!nuevo) return;
+          nuevo.addEventListener('statechange', () => {
+            if(nuevo.state==='installed' && navigator.serviceWorker.controller
+               && !sessionStorage.getItem('swRecargado')){
+              sessionStorage.setItem('swRecargado','1');
+              console.log('[sw] version nueva instalada; recargando');
+              location.reload();
+            }
+          });
+        });
+      }
+    }catch(e){ console.warn('[sw]', e.message); }
+  });
+})();
+</script>
 <!-- Eruda: consola dentro de la propia pagina, para poder depurar en la pantalla
      del Tesla, donde no hay F12. No se carga sola: se activa con ?debug=1 en la
      URL, o pulsando 5 veces seguidas sobre la barra de estado. -->

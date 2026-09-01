@@ -149,6 +149,7 @@ function createHud2(canvas, opts = {}){
     maxFps: 0,              // 0 = libre
     escala: 1.0,            // resolucion de render: 0.5 = la mitad de pixeles por lado
     perfil: 'auto',         // 'auto' | 'ligero' | 'completo'
+    rotondaInvertida: false, // si la isla sale al lado equivocado, ponlo a true
     giroMax: 45,            // grados/s que puede girar la camara como maximo
     vista: 1.0,             // 1 = normal; >1 aleja y sube la camara (mas suave)
     frenarCamara: false,    // limitar look-ahead en curva cerrada (mantiene el
@@ -173,7 +174,7 @@ function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
-  api.version = '2026.08.31-6';   // sube al cambiar: sirve para saber qué está corriendo
+  api.version = '2026.08.31-7';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
   let fuera = 0;
@@ -440,8 +441,12 @@ function createHud2(canvas, opts = {}){
       if (giro < 0.9) continue;                              // una curva suave no lo es
       const R = 1/kAvg;
       const mid = (r.s0+r.s1)/2, p = at(mid), n = normalAt(mid);
+      // La isla va al lado hacia el que curva el trazado. En España se circula
+      // en sentido antihorario, asi que la isla queda a tu IZQUIERDA. Si en tu
+      // pantalla sale al otro lado, invierte con rotondaInvertida.
+      const sg = r.sign * (cfgOpt.rotondaInvertida ? -1 : 1);
       out.push({ s0:r.s0, s1:r.s1, R, giro,
-                 cx: p.x + n.x*R*r.sign, cz: p.z + n.z*R*r.sign });
+                 cx: p.x + n.x*R*sg, cz: p.z + n.z*R*sg });
     }
     return out;
   }
@@ -1375,9 +1380,10 @@ function createHud2(canvas, opts = {}){
   api.set = o => {
     const redo = ('rbRadius' in o) || ('rbArc' in o);
     const reesc = ('escala' in o) && o.escala !== cfgOpt.escala;
+    const rein  = ('rotondaInvertida' in o) && o.rotondaInvertida !== cfgOpt.rotondaInvertida;
     Object.assign(cfgOpt, o);
     if (reesc){ W = 0; H = 0; resize(); }
-    if (redo && pts){ RB = detectRoundabouts(); xsCache.clear(); }
+    if ((redo || rein) && pts){ RB = detectRoundabouts(); xsCache.clear(); }
   };
   api.state = () => ({ s, speed, routeLen, rotondas: RB.length, running });
   api.destroy = () => { api.stop(); if (ro) try { ro.disconnect(); } catch(e){}
