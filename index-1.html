@@ -1493,7 +1493,9 @@ if('serviceWorker' in navigator){
                 hud:false,           // sin panel de texto: el cartel del mapa manda
                 carteles:true,       // SI los paneles azules/blancos dentro de la escena
                 abrirAlNavegar:false,
-                escala:0.6 };        // resolucion de render: se ajusta desde Ajustes
+                escala:0.6,          // resolucion de render: se ajusta desde Ajustes
+                correccion:0.6, zonaMuerta:10,   // suavidad por encima de exactitud
+                giroMax:35, vista:1.25 };        // camara algo mas lejos y lenta
     if(typeof hud2.ajustar==='function') hud2.ajustar(cfg); else hud2.set(cfg);
     if(typeof radarDB!=='undefined' && radarDB && radarDB.length) hud2.radares(radarDB);
     if(typeof hudOn!=='undefined' && hudOn) hud2.abrir();

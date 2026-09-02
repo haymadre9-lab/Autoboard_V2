@@ -150,7 +150,11 @@ function createHud2(canvas, opts = {}){
     escala: 1.0,            // resolucion de render: 0.5 = la mitad de pixeles por lado
     perfil: 'auto',         // 'auto' | 'ligero' | 'completo'
     rotondaInvertida: false, // el lado por defecto ya es el correcto en España
-    giroMax: 45,            // grados/s que puede girar la camara como maximo
+    // Prioridad a la suavidad: la exactitud la da el mapa, no el HUD. Con estos
+    // valores la escena nunca da tirones, aunque quede algo desfasada.
+    correccion: 0.6,        // m/s maximos de correccion de posicion por GPS
+    zonaMuerta: 10,         // errores menores que esto (m) se ignoran
+    giroMax: 35,            // grados/s que puede girar la camara como maximo
     vista: 1.0,             // 1 = normal; >1 aleja y sube la camara (mas suave)
     frenarCamara: false,    // limitar look-ahead en curva cerrada (mantiene el
                             // coche en cuadro, pero resta sensación de giro)
@@ -174,10 +178,10 @@ function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
-  api.version = '2026.09.01-4';   // sube al cambiar: sirve para saber qué está corriendo
+  api.version = '2026.09.01-6';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
-  let fuera = 0, finAvisado = false;
+  let fuera = 0, finAvisado = false, sErr = 0;
   api.onFinRuta = null;
   /** true cuando ya has pasado del final de la ruta cargada. */
   api.finDeRuta = () => !!pts && s > routeLen - 30;
@@ -412,7 +416,7 @@ function createHud2(canvas, opts = {}){
     MW = o.motorway || [];
     RB = detectRoundabouts();
     manList = []; limList = []; radList = []; xsCache.clear();
-    fuera = 0; finAvisado = false; cam0.off = null; cam0.yaw = null;
+    fuera = 0; finAvisado = false; sErr = 0; cam0.off = null; cam0.yaw = null;
     s = Math.min(6, routeLen*0.02);
     return { metros: Math.round(routeLen), puntos: N, rotondas: RB.length };
   };
@@ -504,11 +508,13 @@ function createHud2(canvas, opts = {}){
     }
     fuera = 0;
     const gpsS = best*STEP;
-    // correccion suave y ACOTADA: como mucho 6 m por fix. Un salto grande del
-    // receptor no puede teletransportar la escena.
-    const dif = clamp((gpsS - s) * 0.18, -6, 6);
-    s = clamp(s + dif, 0, routeLen - 1);
-    return { s: gpsS, desvio: desvio, fuera: false };
+    // NO se toca la posicion aqui. Antes se corregia hasta 6 m de golpe con cada
+    // fix, o sea un tiron por segundo: como la geometria depende de la posicion,
+    // ese salto metia y sacaba de la curva. Ahora solo se anota el error y se
+    // reparte a lo largo del tiempo, a un ritmo maximo en m/s.
+    const err = gpsS - s;
+    sErr = Math.abs(err) < (cfgOpt.zonaMuerta || 4) ? 0 : err;
+    return { s: gpsS, desvio: desvio, error: err, fuera: false };
   };
 
   /* ---------------- cámara y proyección ---------------- */
@@ -573,7 +579,7 @@ function createHud2(canvas, opts = {}){
       while (dY >  Math.PI) dY -= 2*Math.PI;
       while (dY < -Math.PI) dY += 2*Math.PI;
       const maxY = (cfgOpt.giroMax || 45) * Math.PI/180 * dtCam;
-      cam0.yaw += clamp(dY * Math.min(dtCam*4.5, 1), -maxY, maxY);
+      cam0.yaw += clamp(dY * Math.min(dtCam*2.6, 1), -maxY, maxY);
       cam0.pit += (pitObj - cam0.pit) * Math.min(dtCam*3, 1);
     }
     const cp = Math.cos(cam0.pit);
@@ -1368,7 +1374,16 @@ function createHud2(canvas, opts = {}){
     // Pasado el final de la ruta se sigue avanzando: at() extrapola en linea
     // recta, asi que la carretera continua en vez de acabarse bajo las ruedas.
     // Se permiten 5 km de prolongacion, suficientes para cualquier sobrepaso.
-    s = clamp(s + speed*dt, 0, routeLen + 5000);
+    // Avance por velocidad + correccion repartida. El limite en m/s hace que el
+    // mundo se recoloque despacio en vez de dar saltos: el coche queda clavado.
+    let paso = speed*dt;
+    if (sErr !== 0){
+      const maxC = (cfgOpt.correccion || 1.2) * dt;
+      const c = clamp(sErr*0.35, -maxC, maxC);
+      paso += c; sErr -= c;
+      if (Math.abs(sErr) < 0.05) sErr = 0;
+    }
+    s = clamp(s + paso, 0, routeLen + 5000);
     if (!finAvisado && s > routeLen - 30){
       finAvisado = true;
       if (api.onFinRuta) { try { api.onFinRuta(); } catch(e){} }
