@@ -119,9 +119,9 @@ function boot(){
   const HUD2_DEF = { theme:'auto', maxFps:0, beamReach:34, fogEnd:260,
                      lookAhead:55, camHeight:2.6, camBack:7.5, posts:true,
                      rain:false, spray:true, traffic:'off',
-                     rbRadius:45, rbArc:18, rbSmooth:1, hud:true, horizon:0.50, carScale:1,
+                     rbRadius:45, rbArc:18, rbSmooth:3, hud:true, horizon:0.50, carScale:1,
                      perfil:'auto', detalleCoche:true, carPhotoUrl:'', frenarCamara:false, hudScale:1,
-                     abrirAlNavegar:false, incrustado:false, destino:'#hudroad', carteles:true, escala:1, carColor:'#eef1f4', giroMax:35, vista:1, rotondaInvertida:false, correccion:0.6, zonaMuerta:10 };
+                     abrirAlNavegar:false, incrustado:false, destino:'#hudroad', carteles:true, escala:1, carColor:'#eef1f4', giroMax:35, vista:1.25, rotondaInvertida:false, correccion:0.6, zonaMuerta:10 };
   let cfg;
   try { cfg = Object.assign({}, HUD2_DEF, JSON.parse(localStorage.getItem(HUD2_KEY) || '{}')); }
   catch(e){ cfg = Object.assign({}, HUD2_DEF); }
@@ -576,10 +576,10 @@ function boot(){
               + ';border:2px solid '+(cfg.carColor===c[0]?'#5fd0e0':'transparent')+'">'
               + c[1]+'</button>').join('')
           + '</div>'
-          + '<label><span class="r"><span>Foto por URL (súbela al repo)</span></span>'
-          + '<input type="text" id="h2_url" value="' + (cfg.carPhotoUrl||'') + '" placeholder="./coche.png" '
-          + 'style="width:100%;background:#0d1216;border:1px solid #232c33;border-radius:5px;color:#e8eef2;'
-          + 'font:11px ui-monospace,monospace;padding:9px"></label>'
+          + '<h3>Modelo</h3><div class="sg" id="h2_modelo">'
+          + [['','Dibujado'],['./coche.png','Mi coche']].map(m =>
+              '<button data-v="'+m[0]+'" class="'+((cfg.carPhotoUrl||'')===m[0]?'on':'')+'">'+m[1]+'</button>').join('')
+          + '</div>'
           + '<input type="file" id="h2_file" accept="image/*" style="display:none">'
           + '<div class="drop" id="h2_drop">' + (hayFoto() ? 'Cambiar foto' : 'Cargar foto de tu coche') + '</div>'
           + '<div id="h2_stat" style="color:#7b8b96;margin:8px 0 10px">'
@@ -607,9 +607,13 @@ function boot(){
         cfg[k] = e.target.checked; guardar();
         if (k === 'incrustado'){ activar(false); sheet.classList.remove('on'); }
       };
-    if (g('h2_url').addEventListener) g('h2_url').onchange = e => {
-      cfg.carPhotoUrl = e.target.value.trim(); guardar();
+    g('h2_modelo').onclick = e => {
+      if (e.target.dataset.v === undefined) return;
+      cfg.carPhotoUrl = e.target.dataset.v; guardar();
+      // La foto se carga SIEMPRE desde el repo, nunca de localStorage: un PNG en
+      // base64 no cabe y por eso no se guardaba entre sesiones.
       if (cfg.carPhotoUrl) hud.setCarPhotoUrl(cfg.carPhotoUrl); else hud.setCarPhoto(null);
+      pintarAjustes();
     };
     g('h2_color').onclick = e => { if(!e.target.dataset.v) return;
       cfg.carColor = e.target.dataset.v; guardar(); pintarAjustes(); };

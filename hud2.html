@@ -168,7 +168,7 @@ function createHud2(canvas, opts = {}){
     carPhoto: null,         // dataURL de tu coche recortado; null = coche dibujado
     rbRadius: 45,           // radio maximo para considerar rotonda, en metros
     rbArc: 18,              // metros minimos de curva sostenida
-    rbSmooth: 1,            // pasadas de suavizado del rumbo (mas = aplana rotondas)
+    rbSmooth: 3,            // pasadas de suavizado del rumbo de toda la ruta
     rain: false,            // lluvia en pantalla
     spray: true,            // agua levantada por las ruedas (solo con lluvia)
     traffic: 'off'          // 'off' | 'poca' | 'normal' | 'mucha'
@@ -182,7 +182,7 @@ function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
-  api.version = '2026.09.01-6';   // sube al cambiar: sirve para saber qué está corriendo
+  api.version = '2026.09.02-1';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
   let fuera = 0, finAvisado = false, sErr = 0;
@@ -301,7 +301,9 @@ function createHud2(canvas, opts = {}){
   const normalAt = t => { const h = at(t).h; return { x: Math.cos(h), z: -Math.sin(h) }; };
   // Ventana corta: con +-6 m una rotonda de 15 m de radio se promediaba
   // hasta desaparecer. Con +-3.5 m se conserva.
-  const curv = t => (at(t+3.5).h - at(t-3.5).h) / 7;
+  // Ventana de 12 m: con +-3.5 m un vertice suelto disparaba la curvatura y con
+  // ella el segmento adaptativo, el limite de offset y la camara.
+  const curv = t => (at(t+6).h - at(t-6).h) / 12;
 
   // Una polilínea desplazada se pliega si el desplazamiento hacia el interior
   // supera el radio. Aquí se limita al 72% para que nunca se cruce sobre sí misma.
@@ -338,14 +340,23 @@ function createHud2(canvas, opts = {}){
   }
   // Perfil transversal interpolado: convencional -> autovía con mediana.
   const xsCache = new Map();
-  function xsec(t){
-    const key = (t/4)|0;
-    const hit = xsCache.get(key);
+  function xsecUno(k){
+    const hit = xsCache.get(k);
     if (hit !== undefined) return hit;
-    const v = xsecCalc(key*4);
-    if (xsCache.size > 4000) xsCache.clear();
-    xsCache.set(key, v);
+    const v = xsecCalc(k*4);
+    if (xsCache.size > 6000) xsCache.clear();
+    xsCache.set(k, v);
     return v;
+  }
+  // Interpolado entre celdas: antes el perfil saltaba de golpe cada 4 m y el eje
+  // del coche se movia a escalones.
+  function xsec(t){
+    const q = t/4, k = Math.floor(q), f = q - k;
+    if (f < 0.001) return xsecUno(k);
+    const a = xsecUno(k), b = xsecUno(k+1);
+    return { f: a.f + (b.f-a.f)*f, rf: a.rf + (b.rf-a.rf)*f,
+             med: a.med + (b.med-a.med)*f, half: a.half + (b.half-a.half)*f,
+             mine: a.mine + (b.mine-a.mine)*f };
   }
   function xsecCalc(t){
     const rf = rbFactor(t), f = mwFactor(t) * (1 - rf);
@@ -403,9 +414,14 @@ function createHud2(canvas, opts = {}){
     }
     // Suavizado del rumbo. Quita el temblor de los vertices de OSM, pero cada
     // pasada tambien aplana las rotondas: por eso es configurable.
+    // Suavizado del rumbo con ventana de 5 puntos (10 m). Los latigazos venian
+    // de vertices casi coincidentes en el polyline de TomTom: un par de puntos
+    // juntos crean un pico de curvatura que la camara persigue de golpe.
     for (let p = 0; p < cfgOpt.rbSmooth; p++)
-      for (let i = 1; i < N-1; i++)
-        pts[i*3+2] = pts[i*3+2]*0.5 + (pts[(i-1)*3+2] + pts[(i+1)*3+2])*0.25;
+      for (let i = 2; i < N-2; i++)
+        pts[i*3+2] = pts[i*3+2]*0.36
+                   + (pts[(i-1)*3+2] + pts[(i+1)*3+2])*0.22
+                   + (pts[(i-2)*3+2] + pts[(i+2)*3+2])*0.10;
     // Pasada extra SOLO donde la curvatura es alta: redondea rotondas y giros
     // cerrados sin aplanar las curvas largas de carretera abierta.
     for (let p = 0; p < 3; p++)
@@ -538,7 +554,7 @@ function createHud2(canvas, opts = {}){
     // el desplazamiento lateral se persigue, no se copia: 2.5 m/s como mucho
     if (cam0.off === null) cam0.off = offObj;
     else {
-      const dmax = 2.5*dtCam;
+      const dmax = 1.1*dtCam;   // 1,1 m/s: el coche no se desplaza a tirones
       const dif = clamp(offObj - cam0.off, -dmax, dmax);
       cam0.off += dif;
     }

@@ -661,9 +661,16 @@ let tileErrTmr=null;
 function onTileErr(){ if(tileErrTmr)return; tileErrTmr=setTimeout(()=>{ tileErrTmr=null; try{ if(curBase)curBase.redraw(); }catch(e){} },2500); }
 [satLayer,streetDay,streetNight].forEach(l=>l.on('tileerror',onTileErr));
 $('recenter').onclick=()=>{ follow=true; locate(); if(disp) map.setView([disp.lat,disp.lon],navZoom,{animate:true}); };
-map.on('zoomend',()=>{ navZoom=map.getZoom(); saveSettings(); });
-$('zoomIn').onclick=()=>{ navZoom=Math.min(19,navZoom+1); map.setZoom(navZoom); saveSettings(); };
-$('zoomOut').onclick=()=>{ navZoom=Math.max(5,navZoom-1); map.setZoom(navZoom); saveSettings(); };
+// El zoom se acota: por debajo de 13 el mapa se queda sin detalle util y por
+// encima de 18 las teselas vectoriales se estiran. Fuera de rango, se vuelve al
+// valor de navegacion. Esto evita quedarse sin mapa por un pellizco accidental.
+const ZOOM_NAV=16, ZOOM_MIN=13, ZOOM_MAX=18;
+map.on('zoomend',()=>{ let z=map.getZoom();
+  if(!isFinite(z)) z=ZOOM_NAV;
+  if(z<ZOOM_MIN||z>ZOOM_MAX){ z=Math.max(ZOOM_MIN,Math.min(ZOOM_MAX,z)); map.setZoom(z); }
+  navZoom=z; saveSettings(); });
+$('zoomIn').onclick=()=>{ navZoom=Math.min(ZOOM_MAX,navZoom+1); map.setZoom(navZoom); saveSettings(); };
+$('zoomOut').onclick=()=>{ navZoom=Math.max(ZOOM_MIN,navZoom-1); map.setZoom(navZoom); saveSettings(); };
 
 // ===== POIs: cargadores (Overpass) + radares (base de pago) =====
 function parseMax(v){ if(!v)return null; const m=(''+v).match(/\d+/); return m?parseInt(m[0]):null; }
@@ -1503,11 +1510,29 @@ if('serviceWorker' in navigator){
     // Salirse de la ruta y seguir mostrandola era lo que volvia loca la escena:
     // la distancia crecia hacia atras y la geometria daba saltos. Ahora el HUD 2
     // avisa y se pide recalculo con la funcion de ruta que ya tiene la app.
+    // Ademas del aviso del HUD, un vigilante propio: si la distancia al trazado
+    // crece durante varios segundos seguidos, se recalcula aunque el HUD calle.
+    setInterval(function(){
+      try{
+        if(typeof routeOn==='undefined' || !routeOn || !disp || !routeCoordsLL) return;
+        let mejor=Infinity;
+        for(let i=0;i<routeCoordsLL.length;i+=4){
+          const d=dist([disp.lat,disp.lon], routeCoordsLL[i]);
+          if(d<mejor) mejor=d;
+        }
+        if(mejor>70 && Date.now()-(window.__hud2Recalc||0)>8000){
+          window.__hud2Recalc=Date.now();
+          $('status').textContent='Fuera de ruta ('+Math.round(mejor)+' m) · recalculando…';
+          if(typeof destLL!=='undefined' && destLL) routeTo(destLL);
+        }
+      }catch(e){}
+    }, 4000);
+
     hud2.onFueraDeRuta = function(desvio){
       console.warn('[hud2] fuera de ruta:', Math.round(desvio), 'm');
       try{
         if(typeof routeOn!=='undefined' && routeOn && typeof destLL!=='undefined' && destLL){
-          if(Date.now()-(window.__hud2Recalc||0) > 15000){   // como mucho cada 15 s
+          if(Date.now()-(window.__hud2Recalc||0) > 8000){    // reintento cada 8 s
             window.__hud2Recalc=Date.now();
             $('status').textContent='Fuera de ruta · recalculando…';
             routeTo(destLL);
