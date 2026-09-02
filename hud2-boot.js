@@ -121,7 +121,7 @@ function boot(){
                      rain:false, spray:true, traffic:'off',
                      rbRadius:45, rbArc:18, rbSmooth:3, hud:true, horizon:0.50, carScale:1,
                      perfil:'auto', detalleCoche:true, carPhotoUrl:'', frenarCamara:false, hudScale:1,
-                     abrirAlNavegar:false, incrustado:false, destino:'#hudroad', carteles:true, escala:1, carColor:'#eef1f4', giroMax:35, vista:1.25, rotondaInvertida:false, correccion:0.6, zonaMuerta:10 };
+                     abrirAlNavegar:false, incrustado:false, destino:'#hudroad', carteles:true, ambiente:true, escala:1, carColor:'#eef1f4', giroMax:35, vista:1.25, rotondaInvertida:false, correccion:0.6, zonaMuerta:10 };
   let cfg;
   try { cfg = Object.assign({}, HUD2_DEF, JSON.parse(localStorage.getItem(HUD2_KEY) || '{}')); }
   catch(e){ cfg = Object.assign({}, HUD2_DEF); }
@@ -548,6 +548,14 @@ function boot(){
     for (const [k,lab,mn,mx,st,u,dv] of SLD)
       html += '<label><span class="r"><span>'+lab+'</span><em id="h2o_'+k+'">'+cfg[k]+u+'</em></span>'
             + '<input type="range" id="h2r_'+k+'" min="'+mn+'" max="'+mx+'" step="'+st+'" value="'+(cfg[k]*dv)+'"></label>';
+    html += '<h3>Color del coche</h3><div class="sg" id="h2_color" style="flex-wrap:wrap;border:0;gap:6px">'
+      + [['#eef1f4','Blanco'],['#c3c9ce','Aluminio'],['#8f979e','Gris'],
+         ['#5a6169','Grafito'],['#1d2126','Negro'],['#8d2b2b','Rojo'],
+         ['#22406e','Azul'],['#1f5b4a','Verde'],['#6d5a3c','Arena']].map(c =>
+          '<button data-v="'+c[0]+'" style="flex:0 0 31%;border-radius:5px;padding:10px 0;'
+          + 'background:'+c[0]+';color:'+(['#eef1f4','#c3c9ce','#8f979e'].indexOf(c[0])>=0?'#111':'#fff')
+          + ';border:2px solid '+(cfg.carColor===c[0]?'#5fd0e0':'transparent')+'">'+c[1]+'</button>').join('')
+      + '</div>';
     html += '<label class="ck"><input type="checkbox" id="h2_posts"'+(cfg.posts?' checked':'')+'> Farolas y quitamiedos</label>'
           + '<label class="ck"><input type="checkbox" id="h2_hud"'+(cfg.hud?' checked':'')+'> Maniobra, velocidad y límite</label>'
           + '<h3>Efectos</h3>'
@@ -559,26 +567,22 @@ function boot(){
           + '<h3>Rendimiento</h3>'
           + seg('h2_perf', [['auto','Auto'],['ligero','Ligero'],['completo','Completo']], cfg.perfil)
           + '<label class="ck"><input type="checkbox" id="h2_detalleCoche"'+(cfg.detalleCoche?' checked':'')+'> Detalles del coche</label>'
+          + '<label class="ck"><input type="checkbox" id="h2_ambiente"'+(cfg.ambiente?' checked':'')+'> Bruma, viñeteado y captafaros</label>'
           + '<label class="ck"><input type="checkbox" id="h2_carteles"'+(cfg.carteles?' checked':'')+'> Carteles de dirección</label>'
           + '<label class="ck"><input type="checkbox" id="h2_rotondaInvertida"'+(cfg.rotondaInvertida?' checked':'')+'> Invertir lado de las rotondas</label>'
           + '<label class="ck"><input type="checkbox" id="h2_frenarCamara"'+(cfg.frenarCamara?' checked':'')+'> Sujetar cámara en curva cerrada</label>'
           + '<h3>Tráfico</h3>'
           + seg('h2_traf', [['off','Ninguno'],['poca','Poco'],['normal','Normal'],['mucha','Denso']], cfg.traffic)
           + '<h3>Tu coche</h3>'
-          + '<h3>Color del coche</h3><div class="sg" id="h2_color" '
-          + 'style="flex-wrap:wrap;border:0;gap:6px">'
-          + [['#eef1f4','Blanco'],['#c3c9ce','Aluminio'],['#8f979e','Gris'],
-             ['#5a6169','Grafito'],['#1d2126','Negro'],['#8d2b2b','Rojo'],
-             ['#22406e','Azul'],['#1f5b4a','Verde'],['#6d5a3c','Arena']].map(c =>
-              '<button data-v="'+c[0]+'" class="'+(cfg.carColor===c[0]?'on':'')+'" '
-              + 'style="flex:0 0 31%;border-radius:5px;background:'+c[0]
-              + ';color:'+(['#eef1f4','#c3c9ce','#8f979e'].indexOf(c[0])>=0?'#111':'#fff')
-              + ';border:2px solid '+(cfg.carColor===c[0]?'#5fd0e0':'transparent')+'">'
-              + c[1]+'</button>').join('')
-          + '</div>'
-          + '<h3>Modelo</h3><div class="sg" id="h2_modelo">'
-          + [['','Dibujado'],['./coche.png','Mi coche']].map(m =>
-              '<button data-v="'+m[0]+'" class="'+((cfg.carPhotoUrl||'')===m[0]?'on':'')+'">'+m[1]+'</button>').join('')
+          + '<h3>Foto del coche</h3>'
+          + '<div style="display:flex;gap:6px;margin-bottom:10px">'
+          + '<input type="text" id="h2_url" value="' + (cfg.carPhotoUrl||'') + '" placeholder="./coche.png" '
+          + 'style="flex:1;min-width:0;background:#0d1216;border:1px solid #232c33;border-radius:5px;'
+          + 'color:#e8eef2;font:11px ui-monospace,monospace;padding:9px">'
+          + '<button id="h2_micoche" style="flex:0 0 auto;background:#5fd0e0;color:#06131a;border:0;'
+          + 'border-radius:5px;font:600 11px/1 inherit;padding:9px 11px;cursor:pointer">./coche.png</button>'
+          + '<button id="h2_sinfoto" style="flex:0 0 auto;background:transparent;border:1px solid #232c33;'
+          + 'color:#7b8b96;border-radius:5px;font:11px/1 inherit;padding:9px 11px;cursor:pointer">Dibujado</button>'
           + '</div>'
           + '<input type="file" id="h2_file" accept="image/*" style="display:none">'
           + '<div class="drop" id="h2_drop">' + (hayFoto() ? 'Cambiar foto' : 'Cargar foto de tu coche') + '</div>'
@@ -602,19 +606,18 @@ function boot(){
     for (const [k,,,,,u,dv] of SLD)
       g('h2r_'+k).oninput = e => { cfg[k] = +e.target.value/dv; g('h2o_'+k).textContent = cfg[k]+u; guardar(); };
     g('h2_perf').onclick = e => { if(!e.target.dataset.v) return; cfg.perfil = e.target.dataset.v; guardar(); pintarAjustes(); };
-    for (const k of ['posts','hud','rain','spray','detalleCoche','frenarCamara','abrirAlNavegar','incrustado','carteles','rotondaInvertida'])
+    for (const k of ['posts','hud','rain','spray','detalleCoche','frenarCamara','abrirAlNavegar','incrustado','carteles','rotondaInvertida','ambiente'])
       g('h2_'+k).onchange = e => {
         cfg[k] = e.target.checked; guardar();
         if (k === 'incrustado'){ activar(false); sheet.classList.remove('on'); }
       };
-    g('h2_modelo').onclick = e => {
-      if (e.target.dataset.v === undefined) return;
-      cfg.carPhotoUrl = e.target.dataset.v; guardar();
-      // La foto se carga SIEMPRE desde el repo, nunca de localStorage: un PNG en
-      // base64 no cabe y por eso no se guardaba entre sesiones.
-      if (cfg.carPhotoUrl) hud.setCarPhotoUrl(cfg.carPhotoUrl); else hud.setCarPhoto(null);
-      pintarAjustes();
-    };
+    // La foto se carga SIEMPRE desde el repo, nunca de localStorage: un PNG en
+    // base64 no cabe y por eso no se guardaba entre sesiones.
+    const ponerFoto = url => { cfg.carPhotoUrl = url; guardar();
+      if (url) hud.setCarPhotoUrl(url); else hud.setCarPhoto(null); pintarAjustes(); };
+    g('h2_url').onchange = e => ponerFoto(e.target.value.trim());
+    g('h2_micoche').onclick = () => ponerFoto('./coche.png');
+    g('h2_sinfoto').onclick = () => ponerFoto('');
     g('h2_color').onclick = e => { if(!e.target.dataset.v) return;
       cfg.carColor = e.target.dataset.v; guardar(); pintarAjustes(); };
     g('h2_drop').onclick = () => g('h2_file').click();

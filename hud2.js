@@ -99,7 +99,8 @@ export function createHud2(canvas, opts = {}){
                             // coche en cuadro, pero resta sensación de giro)
     detalleCoche: true,     // zócalo, pasos de rueda, retrovisores, montantes
     hud: true,              // superponer maniobra, velocidad y limite
-    carteles: true,         // señales de dirección dentro de la escena
+    carteles: true,
+    ambiente: true,         // bruma de horizonte, viñeteado y captafaros         // señales de dirección dentro de la escena
     carPhoto: null,         // dataURL de tu coche recortado; null = coche dibujado
     rbRadius: 45,           // radio maximo para considerar rotonda, en metros
     rbArc: 18,              // metros minimos de curva sostenida
@@ -117,7 +118,7 @@ export function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
-  api.version = '2026.09.02-1';   // sube al cambiar: sirve para saber qué está corriendo
+  api.version = '2026.09.02-2';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
   let fuera = 0, finAvisado = false, sErr = 0;
@@ -610,7 +611,7 @@ export function createHud2(canvas, opts = {}){
     return p === PAL.night ? 'night' : p === PAL.dusk ? 'dusk' : 'day';
   };
 
-  let skyGrad = null, skyKey = '';
+  let skyGrad = null, skyKey = '', vig = null, vigH = 0;
   function drawSky(pal){
     const key = pal.skyTop + H;
     if (key !== skyKey){                       // solo al cambiar tema o tamaño
@@ -622,6 +623,17 @@ export function createHud2(canvas, opts = {}){
     const hz = projCopy({ x: cam.x + fwd.x*4000, y: 0, z: cam.z + fwd.z*4000 });
     const y = hz.ok ? hz.y : H*cfgOpt.horizon*0.9;
     ctx.fillStyle = pal.ground; ctx.fillRect(0, y, W, H-y);
+    // Bruma sobre la linea del horizonte: sin ella cielo y suelo se cortan a
+    // cuchillo y la escena se ve plana.
+    if (cfgOpt.ambiente){
+      const hb = Math.max(28, H*0.13);
+      const g2 = ctx.createLinearGradient(0, y-hb, 0, y+hb*0.7);
+      g2.addColorStop(0, 'rgba(0,0,0,0)');
+      g2.addColorStop(0.55, pal.skyBot);
+      g2.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.save(); ctx.globalAlpha = 0.75;
+      ctx.fillStyle = g2; ctx.fillRect(0, y-hb, W, hb*1.7); ctx.restore();
+    }
   }
 
   function drawIsland(r, pal, fogRGB){
@@ -639,6 +651,7 @@ export function createHud2(canvas, opts = {}){
           {x:r.cx+0.16,y:6.2,z:r.cz},{x:r.cx-0.16,y:6.2,z:r.cz}], mixc([120,126,132], fogRGB, .2));
   }
 
+  const plano2 = (q, col) => poly(q, col);
   function drawRoad(pal){
     const fogRGB = hexToRgb(pal.skyBot), groundRGB = hexToRgb(pal.ground), fogEnd = cfgOpt.fogEnd;
     const lig = ligero();
@@ -700,6 +713,18 @@ export function createHud2(canvas, opts = {}){
         drawIsland(rbCur, pal, fogRGB); islandDone = true;
       }
 
+      // Captafaros del arcen: puntos rojos/blancos cada 12 m. De noche devuelven
+      // la luz de los faros y dan mucha sensacion de velocidad por muy poco coste.
+      if (cfgOpt.ambiente && fog < 0.75 && ((a % 12)+12) % 12 < SEG){
+        const bri = pal.glow > 0 ? 1 : 0.45;
+        for (const sg of [-1,1]){
+          const o = sg*(A.half - 0.12);
+          plano2([ptOff(a, o-0.07, 0.02), ptOff(a+0.5, o-0.07, 0.02),
+                  ptOff(a+0.5, o+0.07, 0.02), ptOff(a, o+0.07, 0.02)],
+                 sg > 0 ? `rgba(255,180,90,${0.85*bri*(1-fog)})`
+                        : `rgba(230,238,255,${0.75*bri*(1-fog)})`);
+        }
+      }
       if (cfgOpt.posts && !lig && A.rf < 0.5 && Math.abs(curv(a)) <= 0.02 && fog <= .97){
         for (const sg of [-1,1]){
           const o = sg*(A.half + 1.7);
@@ -1286,7 +1311,7 @@ export function createHud2(canvas, opts = {}){
     canvas.style.width = '100%'; canvas.style.height = '100%';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingEnabled = true;
-    xsCache.clear();
+    xsCache.clear(); vig = null;
   }
 
   // Arrastrar el divisor del Split cambia el tamaño del panel SIN disparar el
@@ -1357,6 +1382,18 @@ export function createHud2(canvas, opts = {}){
     drawCar(pal, Math.max(0.30*pal.glow, brake), pal.glow);
     drawSpray(pal, 'near');
     if (cfgOpt.rain && !ligero()) drawRain(dt);
+    if (cfgOpt.ambiente){
+      // Viñeteado: oscurece las esquinas. Da profundidad y disimula el borde
+      // del lienzo, que en pantalla ancha se nota mucho.
+      if (!vig || vigH !== H){
+        vig = ctx.createRadialGradient(W/2, H*0.58, Math.min(W,H)*0.32,
+                                       W/2, H*0.58, Math.max(W,H)*0.78);
+        vig.addColorStop(0, 'rgba(0,0,0,0)');
+        vig.addColorStop(1, 'rgba(0,0,0,0.38)');
+        vigH = H;
+      }
+      ctx.fillStyle = vig; ctx.fillRect(0,0,W,H);
+    }
     if (cfgOpt.hud) drawHUD();
   }
 
