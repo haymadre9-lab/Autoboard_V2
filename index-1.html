@@ -869,12 +869,16 @@ function applyRoute(route){
       for(let i=0;i<instr.length;i++){
         const it=instr[i], m0=it.routeOffsetInMeters||0;
         const m1=(instr[i+1]&&instr[i+1].routeOffsetInMeters)||m0;
-        const hw=isHighway({name:it.street||it.roadNumbers&&it.roadNumbers[0]||''});
+        // TomTom deja street vacio o con "Salida N" en autopista y pone la
+        // referencia en roadNumbers: hay que mirar AMBOS, no uno u otro.
+        const refs=(it.roadNumbers||[]).join(' ');
+        const hw = isHighway({name: it.street||''}) || isHighway({name: refs})
+                || /\b(A|AP|E)-?\d/i.test(refs);
         if(hw && ini===null) ini=m0;
-        if(!hw && ini!==null){ if(m0-ini>300) autov.push([ini,m0]); ini=null; }
+        if(!hw && ini!==null){ if(m0-ini>150) autov.push([ini,m0]); ini=null; }
         off=m1;
       }
-      if(ini!==null && off-ini>300) autov.push([ini,off]);
+      if(ini!==null && off-ini>150) autov.push([ini,off]);
       hud2.setRoute(routeCoordsLL, {motorway:autov});
       if(autov.length) console.log('[hud2] tramos de autovia:', autov.length);
       const pasos=[];
@@ -1502,7 +1506,8 @@ if('serviceWorker' in navigator){
                 abrirAlNavegar:false,
                 escala:0.6,          // resolucion de render: se ajusta desde Ajustes
                 correccion:0.6, zonaMuerta:10,   // suavidad por encima de exactitud
-                giroMax:35, vista:1.25 };        // camara algo mas lejos y lenta
+                giroMax:35, vista:1.25,          // camara algo mas lejos y lenta
+                estilo:'suave', radioMin:130 };  // trazado interpretado, no calcado
     if(typeof hud2.ajustar==='function') hud2.ajustar(cfg); else hud2.set(cfg);
     if(typeof radarDB!=='undefined' && radarDB && radarDB.length) hud2.radares(radarDB);
     if(typeof hudOn!=='undefined' && hudOn) hud2.abrir();

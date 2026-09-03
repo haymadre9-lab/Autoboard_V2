@@ -165,6 +165,8 @@ function createHud2(canvas, opts = {}){
     carPhoto: null,         // dataURL de tu coche recortado; null = coche dibujado
     rbRadius: 45,           // radio maximo para considerar rotonda, en metros
     rbArc: 18,              // metros minimos de curva sostenida
+    estilo: 'suave',        // 'suave' = trazado interpretado; 'real' = calcado
+    radioMin: 130,          // en modo suave, ninguna curva baja de este radio (m)
     rbSmooth: 3,            // pasadas de suavizado del rumbo de toda la ruta
     rain: false,            // lluvia en pantalla
     spray: true,            // agua levantada por las ruedas (solo con lluvia)
@@ -179,7 +181,7 @@ function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
-  api.version = '2026.09.02-2';   // sube al cambiar: sirve para saber qué está corriendo
+  api.version = '2026.09.03-1';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
   let fuera = 0, finAvisado = false, sErr = 0;
@@ -431,12 +433,65 @@ function createHud2(canvas, opts = {}){
       }
 
     MW = o.motorway || [];
-    RB = detectRoundabouts();
+    RB = detectRoundabouts();          // se detectan sobre el trazado REAL
+    if (cfgOpt.estilo !== 'real') estilizar();
+
     manList = []; limList = []; radList = []; xsCache.clear();
     fuera = 0; finAvisado = false; sErr = 0; cam0.off = null; cam0.yaw = null;
     s = Math.min(6, routeLen*0.02);
     return { metros: Math.round(routeLen), puntos: N, rotondas: RB.length };
   };
+
+  /**
+   * Reescribe el trazado para que sea AGRADABLE, no exacto. Dos reglas:
+   *  1. Ninguna curva baja del radio minimo: las curvas encadenadas y cerradas
+   *     se funden en una sola curva amplia, y se acaban los latigazos.
+   *  2. Cada rotonda se sustituye por un gesto simple segun cuanto giras en
+   *     ella: poco -> curva a la derecha, medio -> practicamente recto, mucho
+   *     -> curva a la izquierda. Es lo que el conductor necesita saber.
+   * Despues se reintegran las posiciones desde los nuevos rumbos: la carretera
+   * deja de coincidir metro a metro con la real, y eso es intencionado.
+   */
+  function estilizar(){
+    const kMax = 1/(cfgOpt.radioMin || 130);
+    const h = new Float64Array(N);
+    for (let i = 0; i < N; i++) h[i] = pts[i*3+2];
+
+    // gesto de rotonda
+    for (const r of RB){
+      const i0 = Math.max(1, Math.round(r.s0/STEP)), i1 = Math.min(N-1, Math.round(r.s1/STEP));
+      const gr = r.giro*180/Math.PI;
+      const dir = gr < 130 ? 1 : gr < 210 ? 0 : -1;      // 1a / 2a / 3a salida
+      r.gesto = dir;
+      const total = dir * Math.min(gr, 75) * Math.PI/180;  // giro suave equivalente
+      const n = Math.max(1, i1-i0);
+      for (let i = i0; i <= i1; i++) h[i] = h[i0-1] + total*((i-i0+1)/n);
+      for (let i = i1+1; i < N; i++) h[i] = h[i]; // el resto se recoloca abajo
+      const desfase = h[i1] - pts[i1*3+2];
+      for (let i = i1+1; i < N; i++) h[i] = pts[i*3+2] + desfase;
+    }
+
+    // limite de curvatura: nada mas cerrado que radioMin
+    const dMax = kMax*STEP;
+    for (let i = 1; i < N; i++){
+      let d = h[i] - h[i-1];
+      if (d >  dMax) d =  dMax;
+      if (d < -dMax) d = -dMax;
+      h[i] = h[i-1] + d;
+    }
+    // suavizado final generoso
+    for (let p = 0; p < 6; p++)
+      for (let i = 2; i < N-2; i++)
+        h[i] = h[i]*0.34 + (h[i-1]+h[i+1])*0.23 + (h[i-2]+h[i+2])*0.10;
+
+    // reintegrar posiciones desde los rumbos nuevos
+    let x = pts[0], z = pts[1];
+    for (let i = 0; i < N; i++){
+      pts[i*3] = x; pts[i*3+1] = z; pts[i*3+2] = h[i];
+      x += Math.sin(h[i])*STEP; z += Math.cos(h[i])*STEP;
+    }
+    xsCache.clear();
+  }
 
   // Rotonda = curvatura sostenida con radio pequeño. Dos criterios, basta uno:
   //   a) arco largo con radio bajo (rotonda grande recorrida a medias)
@@ -697,6 +752,33 @@ function createHud2(canvas, opts = {}){
     }
   }
 
+  // Senal de rotonda en el arcen IZQUIERDO: disco azul con la flecha del gesto.
+  // Sustituye a la isla cuando el trazado va estilizado.
+  function senalRotonda(r, pal, fogRGB){
+    const sM = Math.max(r.s0 - 40, s - 5);
+    const cx = xsec(sM), o = -(cx.half + 1.5);
+    const yb = 1.15, rad = 0.62;
+    poly([ptOff(sM, o-0.07, 0), ptOff(sM+0.3, o-0.07, 0),
+          ptOff(sM+0.3, o+0.07, yb), ptOff(sM, o+0.07, yb)],
+         mixc([92,98,104], fogRGB, 0.1));
+    const disco = [];
+    for (let k = 0; k < 16; k++){ const a = k/16*6.2832;
+      disco.push(ptOff(sM, o + Math.cos(a)*rad, yb + rad + Math.sin(a)*rad)); }
+    poly(disco, mixc([236,238,234], fogRGB, 0.08));
+    const azul = [];
+    for (let k = 0; k < 16; k++){ const a = k/16*6.2832;
+      azul.push(ptOff(sM-0.01, o + Math.cos(a)*rad*0.78, yb + rad + Math.sin(a)*rad*0.78)); }
+    poly(azul, mixc([26,72,150], fogRGB, 0.08));
+    // flecha: derecha, recta o izquierda segun el gesto calculado
+    const g = r.gesto === undefined ? 0 : r.gesto;
+    const fx = g*0.30;
+    poly([ptOff(sM-0.02, o-0.07, yb+rad-0.34), ptOff(sM-0.02, o+0.07, yb+rad-0.34),
+          ptOff(sM-0.02, o+0.07+fx, yb+rad+0.10), ptOff(sM-0.02, o-0.07+fx, yb+rad+0.10)],
+         'rgba(240,246,255,0.95)');
+    poly([ptOff(sM-0.03, o-0.20+fx, yb+rad+0.06), ptOff(sM-0.03, o+0.20+fx, yb+rad+0.06),
+          ptOff(sM-0.03, o+fx, yb+rad+0.34)], 'rgba(240,246,255,0.95)');
+  }
+
   function drawIsland(r, pal, fogRGB){
     const gr = hexToRgb(pal.ground), RR = r.R;
     const ring = (rad, y, col) => {
@@ -771,7 +853,9 @@ function createHud2(canvas, opts = {}){
       }
 
       if (!islandDone && rbCur && ((rbCur.s0+rbCur.s1)/2) - s > d - SEG){
-        drawIsland(rbCur, pal, fogRGB); islandDone = true;
+        if (cfgOpt.estilo === 'real') drawIsland(rbCur, pal, fogRGB);
+        else senalRotonda(rbCur, pal, fogRGB);
+        islandDone = true;
       }
 
       // Captafaros del arcen: puntos rojos/blancos cada 12 m. De noche devuelven

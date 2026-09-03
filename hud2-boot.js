@@ -121,7 +121,7 @@ function boot(){
                      rain:false, spray:true, traffic:'off',
                      rbRadius:45, rbArc:18, rbSmooth:3, hud:true, horizon:0.50, carScale:1,
                      perfil:'auto', detalleCoche:true, carPhotoUrl:'', frenarCamara:false, hudScale:1,
-                     abrirAlNavegar:false, incrustado:false, destino:'#hudroad', carteles:true, ambiente:true, escala:1, carColor:'#eef1f4', giroMax:35, vista:1.25, rotondaInvertida:false, correccion:0.6, zonaMuerta:10 };
+                     abrirAlNavegar:false, incrustado:false, destino:'#hudroad', carteles:true, ambiente:true, estilo:'suave', radioMin:130, escala:1, carColor:'#eef1f4', giroMax:35, vista:1.25, rotondaInvertida:false, correccion:0.6, zonaMuerta:10 };
   let cfg;
   try { cfg = Object.assign({}, HUD2_DEF, JSON.parse(localStorage.getItem(HUD2_KEY) || '{}')); }
   catch(e){ cfg = Object.assign({}, HUD2_DEF); }
@@ -564,6 +564,10 @@ function boot(){
           + '<h3>Integración</h3>'
           + '<label class="ck"><input type="checkbox" id="h2_incrustado"'+(cfg.incrustado?' checked':'')+'> Sustituir el HUD actual (' + (cfg.destino||'#hudroad') + ')</label>'
           + '<label class="ck"><input type="checkbox" id="h2_abrirAlNavegar"'+(cfg.abrirAlNavegar?' checked':'')+'> Abrir solo al iniciar navegación</label>'
+          + '<h3>Trazado</h3>'
+          + seg('h2_estilo', [['suave','Suavizado'],['real','Calcado']], cfg.estilo)
+          + '<label><span class="r"><span>Radio mínimo de curva</span><em id="h2o_radioMin">'+cfg.radioMin+' m</em></span>'
+          + '<input type="range" id="h2r_radioMin" min="60" max="400" step="10" value="'+cfg.radioMin+'"></label>'
           + '<h3>Rendimiento</h3>'
           + seg('h2_perf', [['auto','Auto'],['ligero','Ligero'],['completo','Completo']], cfg.perfil)
           + '<label class="ck"><input type="checkbox" id="h2_detalleCoche"'+(cfg.detalleCoche?' checked':'')+'> Detalles del coche</label>'
@@ -605,6 +609,12 @@ function boot(){
     g('h2_traf').onclick = e => { if(!e.target.dataset.v) return; cfg.traffic = e.target.dataset.v; guardar(); pintarAjustes(); };
     for (const [k,,,,,u,dv] of SLD)
       g('h2r_'+k).oninput = e => { cfg[k] = +e.target.value/dv; g('h2o_'+k).textContent = cfg[k]+u; guardar(); };
+    g('h2_estilo').onclick = e => { if(!e.target.dataset.v) return;
+      cfg.estilo = e.target.dataset.v; guardar(); pintarAjustes();
+      if (rutaActual) try { hud.setRoute(rutaActual, opcRuta||{}); } catch(err){} };
+    g('h2r_radioMin').oninput = e => { cfg.radioMin = +e.target.value;
+      g('h2o_radioMin').textContent = cfg.radioMin+' m'; guardar(); };
+    g('h2r_radioMin').onchange = () => { if (rutaActual) try { hud.setRoute(rutaActual, opcRuta||{}); } catch(err){} };
     g('h2_perf').onclick = e => { if(!e.target.dataset.v) return; cfg.perfil = e.target.dataset.v; guardar(); pintarAjustes(); };
     for (const k of ['posts','hud','rain','spray','detalleCoche','frenarCamara','abrirAlNavegar','incrustado','carteles','rotondaInvertida','ambiente'])
       g('h2_'+k).onchange = e => {
