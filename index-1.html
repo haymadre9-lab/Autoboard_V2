@@ -936,7 +936,22 @@ async function buildRoute(pts){ if(pts.length<2)return;
     $('searchBar').style.display='none'; $('navbanner').style.display='flex'; hideSuggest();
   }catch(e){ $('status').textContent='Error de ruta'; }
 }
-async function routeTo(dest){ if(!raw){ $('status').textContent='Sin GPS todavía'; return; } buildRoute([[raw.lat,raw.lon],dest]); }
+/* Ultimos destinos: se guardan al lanzar la ruta y se ofrecen al tocar el
+   buscador, antes de escribir nada. Evita teclear conduciendo lo que ya has
+   usado, sin tener que crear un favorito.                                     */
+function getRecientes(){ try{ return JSON.parse(localStorage.getItem('recientes')||'[]'); }catch(e){ return []; } }
+function addReciente(ll, nombre){
+  try{
+    if(!ll || !isFinite(ll[0])) return;
+    const n=(nombre||'').trim() || (ll[0].toFixed(4)+', '+ll[1].toFixed(4));
+    let r=getRecientes().filter(x => dist([x.lat,x.lon], ll) > 120);   // no duplicar
+    r.unshift({name:n.slice(0,60), lat:ll[0], lon:ll[1], t:Date.now()});
+    localStorage.setItem('recientes', JSON.stringify(r.slice(0,5)));
+  }catch(e){}
+}
+async function routeTo(dest, nombre){ if(!raw){ $('status').textContent='Sin GPS todavía'; return; }
+  addReciente(dest, nombre || $('dest').value);
+  buildRoute([[raw.lat,raw.lon],dest]); }
 function addWaypoint(ll){ if(!raw)return; if(routeOn&&destLL) buildRoute([[raw.lat,raw.lon],ll,destLL]); else routeTo(ll); }
 function renderStep(say){ const s=steps[stepIdx]; if(!s)return; const hw=isHighway(s); $('navbanner').classList.toggle('hw',hw); $('arrow').innerHTML=maneuverSVG(s,hw); $('navsub').textContent=s.name||shortHint(s); if(say)speak(s.instr);
   const nx=steps[stepIdx+1]; if(nx){ $('navnext2').style.display='flex'; $('arrow2').innerHTML=maneuverSVG(nx,isHighway(nx)); $('nn2txt').textContent='Luego · '+shortHint(nx); } else $('navnext2').style.display='none'; }
@@ -1008,14 +1023,25 @@ $('goRoute').onclick=async ()=>{ const q=$('dest').value.trim(); if(!q)return; $
 $('navx').onclick=endRoute;
 $('reroute').onclick=()=>{ const a=$('reroute')._alt; if(a){ applyRoute(a); $('reroute').style.display='none'; speak('Cambiando a la ruta más rápida'); } };
 async function renderSuggest(q){ const box=$('suggest');
-  if(!q){ const favs=getFavs(); if(!favs.length){ box.innerHTML='<div class="sug"><span class="t">Sin favoritos aún</span></div>'; box.style.display='block'; return; }
-    box.innerHTML=favs.map((f,i)=>'<div class="sug" data-fav="'+i+'"><span class="t">⭐ '+f.name+'</span><span class="sugx" data-ren="'+i+'">✏️</span><span class="sugx" data-del="'+i+'">✕</span></div>').join(''); box.style.display='block';
-    box.querySelectorAll('.sug').forEach(el=>{ el.onclick=(ev)=>{ if(ev.target.dataset.del!=null){ delFav(+ev.target.dataset.del); return; } if(ev.target.dataset.ren!=null){ renameFav(+ev.target.dataset.ren); return; } const f=getFavs()[+el.dataset.fav]; routeTo([f.lat,f.lon]); }; }); return; }
+  if(!q){ const favs=getFavs(), rec=getRecientes();
+    if(!favs.length && !rec.length){ box.innerHTML='<div class="sug"><span class="t">Sin destinos recientes ni favoritos</span></div>'; box.style.display='block'; return; }
+    let html='';
+    if(rec.length) html+=rec.map((r,i)=>'<div class="sug" data-rec="'+i+'"><span class="t">🕘 '+r.name+'</span><span class="sugx" data-recdel="'+i+'">✕</span></div>').join('');
+    if(favs.length) html+=favs.map((f,i)=>'<div class="sug" data-fav="'+i+'"><span class="t">⭐ '+f.name+'</span><span class="sugx" data-ren="'+i+'">✏️</span><span class="sugx" data-del="'+i+'">✕</span></div>').join('');
+    box.innerHTML=html; box.style.display='block';
+    box.querySelectorAll('.sug').forEach(el=>{ el.onclick=(ev)=>{
+      if(ev.target.dataset.recdel!=null){ const r=getRecientes(); r.splice(+ev.target.dataset.recdel,1);
+        localStorage.setItem('recientes',JSON.stringify(r)); renderSuggest(''); return; }
+      if(ev.target.dataset.del!=null){ delFav(+ev.target.dataset.del); return; }
+      if(ev.target.dataset.ren!=null){ renameFav(+ev.target.dataset.ren); return; }
+      if(el.dataset.rec!=null){ const r=getRecientes()[+el.dataset.rec]; routeTo([r.lat,r.lon], r.name); return; }
+      const f=getFavs()[+el.dataset.fav]; routeTo([f.lat,f.lon], f.name); }; }); return; }
   if(q.length<3){ box.style.display='none'; return; }
   try{ const r=await fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(q)+'&format=json&limit=6&countrycodes=es&accept-language=es'); const j=await r.json();
     if(!j||!j.length){ box.style.display='none'; return; }
     box.innerHTML=j.map(it=>'<div class="sug" data-lat="'+it.lat+'" data-lon="'+it.lon+'"><span class="t">📍 '+it.display_name.split(',').slice(0,3).join(',')+'</span></div>').join(''); box.style.display='block';
-    box.querySelectorAll('.sug').forEach(el=>{ el.onclick=()=>routeTo([parseFloat(el.dataset.lat),parseFloat(el.dataset.lon)]); });
+    box.querySelectorAll('.sug').forEach(el=>{ el.onclick=()=>routeTo(
+      [parseFloat(el.dataset.lat),parseFloat(el.dataset.lon)], el.textContent.replace('📍','').trim()); });
   }catch(e){ box.style.display='none'; }
 }
 

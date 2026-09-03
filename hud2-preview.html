@@ -181,7 +181,7 @@ function createHud2(canvas, opts = {}){
   let origin = null;                       // [lat, lng] del primer punto
   const api = {};
   api.onError = null;
-  api.version = '2026.09.03-1';   // sube al cambiar: sirve para saber qué está corriendo
+  api.version = '2026.09.03-2';   // sube al cambiar: sirve para saber qué está corriendo
   let carImg = null, carAR = 1;
   let manOver = null, limitOver = null, radarOver = null, streetOver = null;
   let fuera = 0, finAvisado = false, sErr = 0;
@@ -739,6 +739,36 @@ function createHud2(canvas, opts = {}){
     const hz = projCopy({ x: cam.x + fwd.x*4000, y: 0, z: cam.z + fwd.z*4000 });
     const y = hz.ok ? hz.y : H*cfgOpt.horizon*0.9;
     ctx.fillStyle = pal.ground; ctx.fillRect(0, y, W, H-y);
+    if (cfgOpt.ambiente){
+      // MONTES AL FONDO. Dos siluetas con perfil generado por senos, desplazadas
+      // con el rumbo de la camara: dan profundidad y, al moverse despacio con el
+      // giro, refuerzan la sensacion de que el mundo gira y el coche no.
+      const rumbo = Math.atan2(fwd.x, fwd.z);
+      const gr = hexToRgb(pal.ground), sk = hexToRgb(pal.skyBot);
+      for (const capa of [[0.55, 0.052, 1.0], [0.30, 0.085, 1.7]]){
+        const mez = capa[0], amp = capa[1]*H, vel = capa[2];
+        ctx.fillStyle = mixc(gr, sk, mez);
+        ctx.beginPath(); ctx.moveTo(0, y+2);
+        for (let px = 0; px <= W; px += 14){
+          const u = px/W*6.2 + rumbo*vel*2.4;
+          const alt = (Math.sin(u) + Math.sin(u*2.3+1.1)*0.5 + Math.sin(u*0.6+2.2)*0.8)/2.3;
+          ctx.lineTo(px, y + 2 - (0.45 + alt*0.55)*amp);
+        }
+        ctx.lineTo(W, y+2); ctx.closePath(); ctx.fill();
+      }
+
+      // Sol o luna, segun el tema, con su halo.
+      const disc = pal.glow >= 1 ? ['235,240,255', 0.55] : pal.glow > 0 ? ['255,190,120', 0.85] : ['255,246,214', 0.7];
+      const dx = W*0.5 + Math.sin(rumbo*1.0 + 0.8)*W*0.42;
+      const dy = y - H*0.16;
+      const hg = ctx.createRadialGradient(dx, dy, 0, dx, dy, H*0.22);
+      hg.addColorStop(0, `rgba(${disc[0]},${0.30*disc[1]})`);
+      hg.addColorStop(1, `rgba(${disc[0]},0)`);
+      ctx.fillStyle = hg; ctx.beginPath(); ctx.arc(dx, dy, H*0.22, 0, 6.29); ctx.fill();
+      ctx.fillStyle = `rgba(${disc[0]},${disc[1]})`;
+      ctx.beginPath(); ctx.arc(dx, dy, H*0.028, 0, 6.29); ctx.fill();
+    }
+
     // Bruma sobre la linea del horizonte: sin ella cielo y suelo se cortan a
     // cuchillo y la escena se ve plana.
     if (cfgOpt.ambiente){
@@ -821,6 +851,13 @@ function createHud2(canvas, opts = {}){
       const asf = mixc(pal.asphalt, fogRGB, fog);
 
       poly([ptOff(a,A.med), ptOff(b,B.med), ptOff(b,B.half), ptOff(a,A.half)], asf);
+      // Grano del asfalto: una banda ligeramente mas clara cada 3 segmentos.
+      // Con el color plano la calzada parecia carton.
+      if (cfgOpt.ambiente && fog < 0.6 && ((a/SEG)|0) % 3 === 0){
+        const cl = mixc([pal.asphalt[0]+9, pal.asphalt[1]+9, pal.asphalt[2]+10], fogRGB, fog);
+        poly([ptOff(a,A.med), ptOff(b,B.med), ptOff(b,B.half), ptOff(a,A.half)], cl);
+        poly([ptOff(a,-A.half), ptOff(b,-B.half), ptOff(b,-B.med), ptOff(a,-A.med)], cl);
+      }
       poly([ptOff(a,-A.half), ptOff(b,-B.half), ptOff(b,-B.med), ptOff(a,-A.med)], asf);
       if (A.med > 0.05 && B.med > 0.05)          // sin mediana no hay quad que pintar
         poly([ptOff(a,-A.med), ptOff(b,-B.med), ptOff(b,B.med), ptOff(a,A.med)],
