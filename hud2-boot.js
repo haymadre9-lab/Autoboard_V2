@@ -125,6 +125,9 @@ function boot(){
   let cfg;
   try { cfg = Object.assign({}, HUD2_DEF, JSON.parse(localStorage.getItem(HUD2_KEY) || '{}')); }
   catch(e){ cfg = Object.assign({}, HUD2_DEF); }
+  // El HUD antiguo ya no existe: el modo incrustado es el unico. Desactivarlo
+  // dejaba la capa a pantalla completa sin nada debajo, y de ahi el bloqueo.
+  cfg.incrustado = true;
 
   /* ------------------------------------------------------------------
      Modo incrustado: el HUD 2 ocupa el hueco del canvas del HUD actual
@@ -562,7 +565,6 @@ function boot(){
           + '<label class="ck"><input type="checkbox" id="h2_rain"'+(cfg.rain?' checked':'')+'> Lluvia</label>'
           + '<label class="ck"><input type="checkbox" id="h2_spray"'+(cfg.spray?' checked':'')+'> Agua de las ruedas</label>'
           + '<h3>Integración</h3>'
-          + '<label class="ck"><input type="checkbox" id="h2_incrustado"'+(cfg.incrustado?' checked':'')+'> Sustituir el HUD actual (' + (cfg.destino||'#hudroad') + ')</label>'
           + '<label class="ck"><input type="checkbox" id="h2_abrirAlNavegar"'+(cfg.abrirAlNavegar?' checked':'')+'> Abrir solo al iniciar navegación</label>'
           + '<h3>Trazado</h3>'
           + seg('h2_estilo', [['suave','Suavizado'],['real','Calcado']], cfg.estilo)
@@ -616,11 +618,8 @@ function boot(){
       g('h2o_radioMin').textContent = cfg.radioMin+' m'; guardar(); };
     g('h2r_radioMin').onchange = () => { if (rutaActual) try { hud.setRoute(rutaActual, opcRuta||{}); } catch(err){} };
     g('h2_perf').onclick = e => { if(!e.target.dataset.v) return; cfg.perfil = e.target.dataset.v; guardar(); pintarAjustes(); };
-    for (const k of ['posts','hud','rain','spray','detalleCoche','frenarCamara','abrirAlNavegar','incrustado','carteles','rotondaInvertida','ambiente'])
-      g('h2_'+k).onchange = e => {
-        cfg[k] = e.target.checked; guardar();
-        if (k === 'incrustado'){ activar(false); sheet.classList.remove('on'); }
-      };
+    for (const k of ['posts','hud','rain','spray','detalleCoche','frenarCamara','abrirAlNavegar','carteles','rotondaInvertida','ambiente'])
+      g('h2_'+k).onchange = e => { cfg[k] = e.target.checked; guardar(); };
     // La foto se carga SIEMPRE desde el repo, nunca de localStorage: un PNG en
     // base64 no cabe y por eso no se guardaba entre sesiones.
     const ponerFoto = url => { cfg.carPhotoUrl = url; guardar();

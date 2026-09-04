@@ -36,7 +36,7 @@
   #searchToggle{position:absolute;z-index:720;top:12px;right:12px;width:48px;height:48px;border-radius:50%;background:#2f6bff;border:2px solid rgba(255,255,255,.18);box-shadow:0 3px 12px rgba(0,0,0,.45);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;}
   body.solo-map .spdmap{right:72px!important;}
   .navstack{top:14px!important;z-index:700!important;}
-  #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0e17;}
+  #map{position:absolute;inset:0;background:#1b1f26;width:100%;height:100%;background:#0a0e17;}
 .maplibregl-ctrl-attrib{font-size:9px;opacity:.5;}
 .maplibregl-popup-content{background:#fff;color:#111;border-radius:12px;padding:10px 12px;}
 .maplibregl-popup-close-button{font-size:18px;padding:0 6px;}
@@ -207,6 +207,69 @@
   </div>
 </div>
 
+<script>
+/* ---- Forzar actualizacion del service worker -----------------------------
+   El SW cachea con el nombre 'teslanav-v61', el MISMO que usa Tesla Nav, y
+   ambas apps comparten origen: se pisan los archivos entre ellas. Aqui se
+   borran los caches con nombre ajeno, se pide actualizacion al SW y, si entra
+   uno nuevo, se recarga una sola vez. Asi deja de servir versiones viejas.   */
+(function(){
+  const MIO = 'autoboard';          // los caches que NO empiecen asi, se borran
+  if(!('serviceWorker' in navigator)) return;
+  addEventListener('load', async () => {
+    try{
+      if(window.caches){
+        const ns = await caches.keys();
+        for(const n of ns) if(n.indexOf(MIO)!==0){ await caches.delete(n); console.log('[sw] cache ajeno borrado:', n); }
+      }
+      const rs = await navigator.serviceWorker.getRegistrations();
+      for(const r of rs){
+        r.update();
+        r.addEventListener('updatefound', () => {
+          const nuevo = r.installing;
+          if(!nuevo) return;
+          nuevo.addEventListener('statechange', () => {
+            if(nuevo.state==='installed' && navigator.serviceWorker.controller
+               && !sessionStorage.getItem('swRecargado')){
+              sessionStorage.setItem('swRecargado','1');
+              console.log('[sw] version nueva instalada; recargando');
+              location.reload();
+            }
+          });
+        });
+      }
+    }catch(e){ console.warn('[sw]', e.message); }
+  });
+})();
+</script>
+<!-- Eruda: consola dentro de la propia pagina, para poder depurar en la pantalla
+     del Tesla, donde no hay F12. No se carga sola: se activa con ?debug=1 en la
+     URL, o pulsando 5 veces seguidas sobre la barra de estado. -->
+<script>
+(function(){
+  let cargando=false;
+  function abrirConsola(){
+    if(cargando||window.eruda) { if(window.eruda) eruda.show(); return; }
+    cargando=true;
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/eruda';
+    s.onload=()=>{ try{ eruda.init(); eruda.show(); }catch(e){} };
+    s.onerror=()=>{ cargando=false; alert('No se pudo cargar la consola (sin conexion)'); };
+    document.head.appendChild(s);
+  }
+  window.abrirConsola=abrirConsola;
+  if(/[?&]debug=1/.test(location.search)) addEventListener('DOMContentLoaded',abrirConsola);
+  addEventListener('DOMContentLoaded',()=>{
+    const st=document.getElementById('status'); if(!st) return;
+    let n=0,t0=0;
+    st.addEventListener('click',()=>{
+      const ahora=Date.now();
+      n=(ahora-t0<900)?n+1:1; t0=ahora;
+      if(n>=5){ n=0; abrirConsola(); }
+    });
+  });
+})();
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
 <script>
 /* ================= Adaptador MapLibre (emula la API de Leaflet que usa la app) ================= */
@@ -223,11 +286,15 @@ const MT_STYLES={
 
   class MapWrap{
     constructor(el,opts){
-      this._m=new maplibregl.Map({container:el, style:MT_STYLES.sat, center:[-2.93,43.26], zoom:16,
+      // Base VECTORIAL por defecto (streets-v2). No se pixela a ningun zoom, pesa
+      // 4-5 veces menos que el satelite raster y se sube a la GPU una sola vez
+      // como geometria. El satelite sigue disponible con el boton 🛰️.
+      const _h=new Date().getHours(), _ini=(_h>=21||_h<7)?MT_STYLES.night:MT_STYLES.day;
+      this._m=new maplibregl.Map({container:el, style:_ini, center:[-2.93,43.26], zoom:16,
         attributionControl:{compact:true}, dragRotate:false, pitchWithRotate:false, keyboard:false, fadeDuration:0, dragPan:true});
       try{ this._m.touchZoomRotate.disableRotation(); }catch(e){}
       try{ this._m.setMaxPitch(70); }catch(e){}
-      this.raw=this._m; this.ready=false; this.q=[]; this._overlays=[]; this._polys=[]; this._baseKey='sat';
+      this.raw=this._m; this.ready=false; this.q=[]; this._overlays=[]; this._polys=[]; this._baseKey=(new Date().getHours()>=21||new Date().getHours()<7)?'night':'day';
       this._m.on('load',()=>{ this.ready=true; this.q.forEach(f=>{try{f();}catch(e){}}); this.q=[]; });
       this._m.on('style.load',()=>{ this._reAdd(); }); // tras setStyle: re-añade overlays y rutas
     }
@@ -465,7 +532,7 @@ let navZoom=16;
 map.setView([43.26,-2.93],navZoom);
 /* v2: la base es un ESTILO vectorial de MapTiler; estas quedan como referencias inertes */
 const satLayer={on(){},redraw(){}}, streetDay={on(){},redraw(){}}, streetNight={on(){},redraw(){}};
-let baseSat=true, mapNite=false, curBase={redraw(){},on(){}}, trafficLayer=null, trafficOn=false;
+let baseSat=false, mapNite=false, curBase={redraw(){},on(){}}, trafficLayer=null, trafficOn=false;
 let tilt=false, minKw=0, showRadars=true, showChargers=true, evListHidden=false, avoidTolls=false, avoidMotorways=false, avoidFerries=false, routeType="fastest";
 const carIcon=L.divIcon({className:'',html:'<div id="carrot"><svg width="38" height="38" viewBox="0 0 24 24"><path d="M12 2 L20 21 L12 15.5 L4 21 Z" fill="#ff2d2d" stroke="#fff" stroke-width="1.3"/></svg></div>',iconSize:[38,38],iconAnchor:[19,19]});
 const carMk=L.marker([43.26,-2.93],{icon:carIcon,interactive:false,keyboard:false,zIndexOffset:1000}).addTo(map);
@@ -518,12 +585,22 @@ function frame(now){
     if(disp && raw){
       if(raw.spd>0.5){ const nx=moveLL(disp.lat,disp.lon,disp.head,raw.spd*dt); disp.lat=nx[0]; disp.lon=nx[1]; }
       disp.lat+=(raw.lat-disp.lat)*Math.min(1,dt*1.8); disp.lon+=(raw.lon-disp.lon)*Math.min(1,dt*1.8);
-      disp.head=angLerp(disp.head,raw.head,Math.min(1,dt*3));
+      // El rumbo del receptor tiembla varios grados parado y a baja velocidad.
+      // Como la camara del mapa usa disp.head como bearing, ese temblor se ve en
+      // las flechas. Se suaviza mas, y por debajo de 2 m/s se congela del todo.
+      // Aun temblaba: se sube el umbral a 3 m/s y se suaviza mas todavia. Por
+      // debajo de esa velocidad el rumbo del receptor es practicamente ruido.
+      if(raw.spd>3) disp.head=angLerp(disp.head,raw.head,Math.min(1,dt*0.9));
       carMk.setLatLng([disp.lat,disp.lon]);
       const cr=$('carrot'); if(cr) cr.style.transform='rotate(0deg)';   // MapLibre gira el mapa (bearing); la flecha queda fija arriba
       if(follow && !window.__uTouch && now-lastCam>50){ lastCam=now;   // pausa la cámara mientras el usuario toca (pan fluido + clic en marcadores)
         const paneH=(document.getElementById('mapPane')||{}).clientHeight||window.innerHeight;
-        const bearing=(typeof disp.head==='number' && isFinite(disp.head))?disp.head:0;   // evita NaN -> que la cámara nunca falle
+        let bearing=(typeof disp.head==='number' && isFinite(disp.head))?disp.head:0;   // evita NaN -> que la cámara nunca falle
+        // cuantizado a 0.25 grados: por debajo de eso solo es ruido del GPS y
+        // obliga al mapa a repintar las etiquetas y flechas sin motivo
+        // cuantizado a medio grado: por debajo de eso el mapa repinta etiquetas
+        // y flechas sin que se aprecie ningun giro real
+        bearing=Math.round(bearing*2)/2;
         const clat=(isFinite(disp.lat)?disp.lat:0), clon=(isFinite(disp.lon)?disp.lon:0);
         try{ map.raw.jumpTo({ center:[clon,clat], zoom:navZoom, bearing:bearing, pitch:(tilt?55:0),
               padding:{top:Math.round(paneH*0.52),bottom:0,left:0,right:0} }); }catch(e){}   // 0.52 -> coche justo encima del radar
@@ -584,9 +661,16 @@ let tileErrTmr=null;
 function onTileErr(){ if(tileErrTmr)return; tileErrTmr=setTimeout(()=>{ tileErrTmr=null; try{ if(curBase)curBase.redraw(); }catch(e){} },2500); }
 [satLayer,streetDay,streetNight].forEach(l=>l.on('tileerror',onTileErr));
 $('recenter').onclick=()=>{ follow=true; locate(); if(disp) map.setView([disp.lat,disp.lon],navZoom,{animate:true}); };
-map.on('zoomend',()=>{ navZoom=map.getZoom(); saveSettings(); });
-$('zoomIn').onclick=()=>{ navZoom=Math.min(19,navZoom+1); map.setZoom(navZoom); saveSettings(); };
-$('zoomOut').onclick=()=>{ navZoom=Math.max(5,navZoom-1); map.setZoom(navZoom); saveSettings(); };
+// El zoom se acota: por debajo de 13 el mapa se queda sin detalle util y por
+// encima de 18 las teselas vectoriales se estiran. Fuera de rango, se vuelve al
+// valor de navegacion. Esto evita quedarse sin mapa por un pellizco accidental.
+const ZOOM_NAV=16, ZOOM_MIN=13, ZOOM_MAX=18;
+map.on('zoomend',()=>{ let z=map.getZoom();
+  if(!isFinite(z)) z=ZOOM_NAV;
+  if(z<ZOOM_MIN||z>ZOOM_MAX){ z=Math.max(ZOOM_MIN,Math.min(ZOOM_MAX,z)); map.setZoom(z); }
+  navZoom=z; saveSettings(); });
+$('zoomIn').onclick=()=>{ navZoom=Math.min(ZOOM_MAX,navZoom+1); map.setZoom(navZoom); saveSettings(); };
+$('zoomOut').onclick=()=>{ navZoom=Math.max(ZOOM_MIN,navZoom-1); map.setZoom(navZoom); saveSettings(); };
 
 // ===== POIs: cargadores (Overpass) + radares (base de pago) =====
 function parseMax(v){ if(!v)return null; const m=(''+v).match(/\d+/); return m?parseInt(m[0]):null; }
@@ -785,12 +869,16 @@ function applyRoute(route){
       for(let i=0;i<instr.length;i++){
         const it=instr[i], m0=it.routeOffsetInMeters||0;
         const m1=(instr[i+1]&&instr[i+1].routeOffsetInMeters)||m0;
-        const hw=isHighway({name:it.street||it.roadNumbers&&it.roadNumbers[0]||''});
+        // TomTom deja street vacio o con "Salida N" en autopista y pone la
+        // referencia en roadNumbers: hay que mirar AMBOS, no uno u otro.
+        const refs=(it.roadNumbers||[]).join(' ');
+        const hw = isHighway({name: it.street||''}) || isHighway({name: refs})
+                || /\b(A|AP|E)-?\d/i.test(refs);
         if(hw && ini===null) ini=m0;
-        if(!hw && ini!==null){ if(m0-ini>300) autov.push([ini,m0]); ini=null; }
+        if(!hw && ini!==null){ if(m0-ini>150) autov.push([ini,m0]); ini=null; }
         off=m1;
       }
-      if(ini!==null && off-ini>300) autov.push([ini,off]);
+      if(ini!==null && off-ini>150) autov.push([ini,off]);
       hud2.setRoute(routeCoordsLL, {motorway:autov});
       if(autov.length) console.log('[hud2] tramos de autovia:', autov.length);
       const pasos=[];
@@ -848,7 +936,22 @@ async function buildRoute(pts){ if(pts.length<2)return;
     $('searchBar').style.display='none'; $('navbanner').style.display='flex'; hideSuggest();
   }catch(e){ $('status').textContent='Error de ruta'; }
 }
-async function routeTo(dest){ if(!raw){ $('status').textContent='Sin GPS todavía'; return; } buildRoute([[raw.lat,raw.lon],dest]); }
+/* Ultimos destinos: se guardan al lanzar la ruta y se ofrecen al tocar el
+   buscador, antes de escribir nada. Evita teclear conduciendo lo que ya has
+   usado, sin tener que crear un favorito.                                     */
+function getRecientes(){ try{ return JSON.parse(localStorage.getItem('recientes')||'[]'); }catch(e){ return []; } }
+function addReciente(ll, nombre){
+  try{
+    if(!ll || !isFinite(ll[0])) return;
+    const n=(nombre||'').trim() || (ll[0].toFixed(4)+', '+ll[1].toFixed(4));
+    let r=getRecientes().filter(x => dist([x.lat,x.lon], ll) > 120);   // no duplicar
+    r.unshift({name:n.slice(0,60), lat:ll[0], lon:ll[1], t:Date.now()});
+    localStorage.setItem('recientes', JSON.stringify(r.slice(0,5)));
+  }catch(e){}
+}
+async function routeTo(dest, nombre){ if(!raw){ $('status').textContent='Sin GPS todavía'; return; }
+  addReciente(dest, nombre || $('dest').value);
+  buildRoute([[raw.lat,raw.lon],dest]); }
 function addWaypoint(ll){ if(!raw)return; if(routeOn&&destLL) buildRoute([[raw.lat,raw.lon],ll,destLL]); else routeTo(ll); }
 function renderStep(say){ const s=steps[stepIdx]; if(!s)return; const hw=isHighway(s); $('navbanner').classList.toggle('hw',hw); $('arrow').innerHTML=maneuverSVG(s,hw); $('navsub').textContent=s.name||shortHint(s); if(say)speak(s.instr);
   const nx=steps[stepIdx+1]; if(nx){ $('navnext2').style.display='flex'; $('arrow2').innerHTML=maneuverSVG(nx,isHighway(nx)); $('nn2txt').textContent='Luego · '+shortHint(nx); } else $('navnext2').style.display='none'; }
@@ -920,14 +1023,25 @@ $('goRoute').onclick=async ()=>{ const q=$('dest').value.trim(); if(!q)return; $
 $('navx').onclick=endRoute;
 $('reroute').onclick=()=>{ const a=$('reroute')._alt; if(a){ applyRoute(a); $('reroute').style.display='none'; speak('Cambiando a la ruta más rápida'); } };
 async function renderSuggest(q){ const box=$('suggest');
-  if(!q){ const favs=getFavs(); if(!favs.length){ box.innerHTML='<div class="sug"><span class="t">Sin favoritos aún</span></div>'; box.style.display='block'; return; }
-    box.innerHTML=favs.map((f,i)=>'<div class="sug" data-fav="'+i+'"><span class="t">⭐ '+f.name+'</span><span class="sugx" data-ren="'+i+'">✏️</span><span class="sugx" data-del="'+i+'">✕</span></div>').join(''); box.style.display='block';
-    box.querySelectorAll('.sug').forEach(el=>{ el.onclick=(ev)=>{ if(ev.target.dataset.del!=null){ delFav(+ev.target.dataset.del); return; } if(ev.target.dataset.ren!=null){ renameFav(+ev.target.dataset.ren); return; } const f=getFavs()[+el.dataset.fav]; routeTo([f.lat,f.lon]); }; }); return; }
+  if(!q){ const favs=getFavs(), rec=getRecientes();
+    if(!favs.length && !rec.length){ box.innerHTML='<div class="sug"><span class="t">Sin destinos recientes ni favoritos</span></div>'; box.style.display='block'; return; }
+    let html='';
+    if(rec.length) html+=rec.map((r,i)=>'<div class="sug" data-rec="'+i+'"><span class="t">🕘 '+r.name+'</span><span class="sugx" data-recdel="'+i+'">✕</span></div>').join('');
+    if(favs.length) html+=favs.map((f,i)=>'<div class="sug" data-fav="'+i+'"><span class="t">⭐ '+f.name+'</span><span class="sugx" data-ren="'+i+'">✏️</span><span class="sugx" data-del="'+i+'">✕</span></div>').join('');
+    box.innerHTML=html; box.style.display='block';
+    box.querySelectorAll('.sug').forEach(el=>{ el.onclick=(ev)=>{
+      if(ev.target.dataset.recdel!=null){ const r=getRecientes(); r.splice(+ev.target.dataset.recdel,1);
+        localStorage.setItem('recientes',JSON.stringify(r)); renderSuggest(''); return; }
+      if(ev.target.dataset.del!=null){ delFav(+ev.target.dataset.del); return; }
+      if(ev.target.dataset.ren!=null){ renameFav(+ev.target.dataset.ren); return; }
+      if(el.dataset.rec!=null){ const r=getRecientes()[+el.dataset.rec]; routeTo([r.lat,r.lon], r.name); return; }
+      const f=getFavs()[+el.dataset.fav]; routeTo([f.lat,f.lon], f.name); }; }); return; }
   if(q.length<3){ box.style.display='none'; return; }
   try{ const r=await fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(q)+'&format=json&limit=6&countrycodes=es&accept-language=es'); const j=await r.json();
     if(!j||!j.length){ box.style.display='none'; return; }
     box.innerHTML=j.map(it=>'<div class="sug" data-lat="'+it.lat+'" data-lon="'+it.lon+'"><span class="t">📍 '+it.display_name.split(',').slice(0,3).join(',')+'</span></div>').join(''); box.style.display='block';
-    box.querySelectorAll('.sug').forEach(el=>{ el.onclick=()=>routeTo([parseFloat(el.dataset.lat),parseFloat(el.dataset.lon)]); });
+    box.querySelectorAll('.sug').forEach(el=>{ el.onclick=()=>routeTo(
+      [parseFloat(el.dataset.lat),parseFloat(el.dataset.lon)], el.textContent.replace('📍','').trim()); });
   }catch(e){ box.style.display='none'; }
 }
 
@@ -1411,13 +1525,57 @@ if('serviceWorker' in navigator){
 (function(){
   function init(){
     if(!window.hud2){ setTimeout(init,300); return; }
-    // ajustar() toca la configuracion del arranque (y la guarda); set() solo el motor
-    const cfg={ incrustado:true, destino:'#hudroad', hud:false, abrirAlNavegar:false,
-                carteles:false,      // los carteles del mapa mandan; nada dentro de la escena
-                escala:0.6 };        // resolucion de render: sube o baja desde Ajustes
+    // SOLO lo estructural se impone en cada arranque. Lo demas (coche, color,
+    // carteles, escala, camara...) es tuyo: se aplicaba aqui en cada carga y por
+    // eso se perdia lo que ajustabas en el panel.
+    const fijo = { incrustado:true, destino:'#hudroad', hud:false };
+    // La primera vez, y solo la primera, se dejan unos valores de partida.
+    let primera = false;
+    try { primera = !localStorage.getItem('hud2.inicializado'); } catch(e){}
+    const inicial = primera ? {
+      carteles:true, abrirAlNavegar:false, escala:0.6,
+      correccion:0.6, zonaMuerta:10, giroMax:35, vista:1.25,
+      estilo:'suave', radioMin:130
+    } : {};
+    if(primera){ try{ localStorage.setItem('hud2.inicializado','1'); }catch(e){} }
+    const cfg = Object.assign({}, inicial, fijo);
     if(typeof hud2.ajustar==='function') hud2.ajustar(cfg); else hud2.set(cfg);
     if(typeof radarDB!=='undefined' && radarDB && radarDB.length) hud2.radares(radarDB);
     if(typeof hudOn!=='undefined' && hudOn) hud2.abrir();
+
+    // Salirse de la ruta y seguir mostrandola era lo que volvia loca la escena:
+    // la distancia crecia hacia atras y la geometria daba saltos. Ahora el HUD 2
+    // avisa y se pide recalculo con la funcion de ruta que ya tiene la app.
+    // Ademas del aviso del HUD, un vigilante propio: si la distancia al trazado
+    // crece durante varios segundos seguidos, se recalcula aunque el HUD calle.
+    setInterval(function(){
+      try{
+        if(typeof routeOn==='undefined' || !routeOn || !disp || !routeCoordsLL) return;
+        let mejor=Infinity;
+        for(let i=0;i<routeCoordsLL.length;i+=4){
+          const d=dist([disp.lat,disp.lon], routeCoordsLL[i]);
+          if(d<mejor) mejor=d;
+        }
+        if(mejor>70 && Date.now()-(window.__hud2Recalc||0)>8000){
+          window.__hud2Recalc=Date.now();
+          $('status').textContent='Fuera de ruta ('+Math.round(mejor)+' m) · recalculando…';
+          if(typeof destLL!=='undefined' && destLL) routeTo(destLL);
+        }
+      }catch(e){}
+    }, 4000);
+
+    hud2.onFueraDeRuta = function(desvio){
+      console.warn('[hud2] fuera de ruta:', Math.round(desvio), 'm');
+      try{
+        if(typeof routeOn!=='undefined' && routeOn && typeof destLL!=='undefined' && destLL){
+          if(Date.now()-(window.__hud2Recalc||0) > 8000){    // reintento cada 8 s
+            window.__hud2Recalc=Date.now();
+            $('status').textContent='Fuera de ruta · recalculando…';
+            routeTo(destLL);
+          }
+        }
+      }catch(e){ console.warn('[hud2] recalculo:', e.message); }
+    };
   }
   init();
 })();
