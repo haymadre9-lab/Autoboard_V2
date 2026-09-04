@@ -291,11 +291,53 @@ const MT_STYLES={
       // como geometria. El satelite sigue disponible con el boton 🛰️.
       const _h=new Date().getHours(), _ini=(_h>=21||_h<7)?MT_STYLES.night:MT_STYLES.day;
       this._m=new maplibregl.Map({container:el, style:_ini, center:[-2.93,43.26], zoom:16,
-        attributionControl:{compact:true}, dragRotate:false, pitchWithRotate:false, keyboard:false, fadeDuration:0, dragPan:true});
+        attributionControl:{compact:true}, dragRotate:false, pitchWithRotate:false, keyboard:false, fadeDuration:0, dragPan:true,
+        // cache acotado: con el canvas del HUD 2 al lado, la memoria de video
+        // va justa y es lo que provoca la perdida de contexto
+        maxTileCacheSize:60, refreshExpiredTiles:false, antialias:false});
       try{ this._m.touchZoomRotate.disableRotation(); }catch(e){}
       try{ this._m.setMaxPitch(70); }catch(e){}
       this.raw=this._m; this.ready=false; this.q=[]; this._overlays=[]; this._polys=[]; this._baseKey=(new Date().getHours()>=21||new Date().getHours()<7)?'night':'day';
       this._m.on('load',()=>{ this.ready=true; this.q.forEach(f=>{try{f();}catch(e){}}); this.q=[]; });
+
+      /* ---- Vigilancia del mapa en blanco -------------------------------
+         Con teselas vectoriales el mapa se queda blanco por dos motivos:
+         se pierde el contexto WebGL (memoria justa, tipico si hay otro
+         canvas grande al lado) o fallan las peticiones de teselas. Los dos
+         se detectan y se recuperan sin tocar la ruta.                     */
+      try{
+        const cv=this._m.getCanvas();
+        cv.addEventListener('webglcontextlost', e=>{
+          e.preventDefault();
+          console.warn('[mapa] contexto WebGL perdido');
+          try{ $('status').textContent='Mapa: recuperando gráficos…'; }catch(_){}
+        }, false);
+        cv.addEventListener('webglcontextrestored', ()=>{
+          console.warn('[mapa] contexto restaurado');
+          try{ this._m.resize(); this._setBase(MT_STYLES[this._baseKey]); }catch(_){}
+        }, false);
+      }catch(e){}
+
+      this._m.on('error', e=>{
+        const msg=(e&&e.error&&e.error.message)||'';
+        if(/tile|source|fetch|network|403|429/i.test(msg)) console.warn('[mapa] tesela:', msg.slice(0,90));
+      });
+
+      // Perro guardian: si estando en movimiento no hay ni una tesela cargada
+      // durante 12 s, se recarga el estilo. Es lo que saca del blanco.
+      let ultimoOk=Date.now();
+      this._m.on('data', d=>{ if(d && d.dataType==='source' && d.isSourceLoaded) ultimoOk=Date.now(); });
+      setInterval(()=>{
+        try{
+          if(!this.ready) return;
+          if(Date.now()-ultimoOk < 12000) return;
+          if(typeof speedKmh!=='undefined' && speedKmh < 3) return;   // parado, no molestar
+          ultimoOk=Date.now();
+          console.warn('[mapa] sin teselas 12 s: recargando estilo');
+          try{ $('status').textContent='Mapa sin datos · recargando'; }catch(_){}
+          this._setBase(MT_STYLES[this._baseKey]);
+        }catch(e){}
+      }, 6000);
       this._m.on('style.load',()=>{ this._reAdd(); }); // tras setStyle: re-añade overlays y rutas
     }
     run(f){ if(this.ready && this._m.isStyleLoaded()){ try{f();}catch(e){} } else this.q.push(f); }
