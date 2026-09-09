@@ -242,6 +242,32 @@
   });
 })();
 </script>
+<script>
+/* ---- Purga periodica del cache de teselas --------------------------------
+   El navegador del Tesla acumula teselas sin limite. Esto borra SOLO las
+   entradas de mapa (maptiler / .pbf / tiles) cada 20 minutos, dejando intactos
+   los archivos de la app. NO recarga la pagina, asi que la ruta en curso no se
+   pierde: vive en memoria de JavaScript, no en el cache.                      */
+(function(){
+  if(!window.caches) return;
+  async function purgar(){
+    let n=0;
+    try{
+      for(const nombre of await caches.keys()){
+        const c=await caches.open(nombre);
+        for(const req of await c.keys()){
+          if(/maptiler|\.pbf|\/tiles?\/|rainviewer|openchargemap/i.test(req.url)){
+            await c.delete(req); n++;
+          }
+        }
+      }
+      if(n) console.log('[cache] '+n+' entradas de mapa purgadas');
+    }catch(e){ console.warn('[cache]', e.message); }
+  }
+  addEventListener('load', ()=>{ setTimeout(purgar, 60000); setInterval(purgar, 1200000); });
+  window.purgarCache=purgar;     // por si lo quieres lanzar a mano
+})();
+</script>
 <!-- Eruda: consola dentro de la propia pagina, para poder depurar en la pantalla
      del Tesla, donde no hay F12. No se carga sola: se activa con ?debug=1 en la
      URL, o pulsando 5 veces seguidas sobre la barra de estado. -->

@@ -738,8 +738,21 @@ function boot(){
           // está cargada, el HUD sale en negro hasta que se calcule otra.
           if (rutaActual){ try { hudIn.setRoute(rutaActual, opcRuta || {}); } catch(e){} }
         }
+        // resize() reconstruye el buffer que se libero al cerrar
+        if (cvIn && cvIn.width <= 2 && cvIn.__w){ try { cvIn.width = cvIn.__w; cvIn.height = cvIn.__h; } catch(e){} }
         hudIn.set(cfg); hudIn.resize(); hudIn.start(); gpsOn();
-      } else { if (hudIn) hudIn.stop(); desmontarIncrustado(); gpsOff(); }
+      } else {
+        if (hudIn) hudIn.stop();
+        // LIBERAR MEMORIA DE VIDEO. Parar el bucle no basta: el lienzo sigue
+        // reservando su buffer. Encogiendolo a 1x1 se devuelve esa memoria al
+        // navegador, que es justo lo que le falta al mapa para no quedarse en
+        // blanco. Al reabrir, resize() lo reconstruye.
+        if (cvIn){
+          try { cvIn.__w = cvIn.width; cvIn.__h = cvIn.height; cvIn.width = 1; cvIn.height = 1; } catch(e){}
+        }
+        desmontarIncrustado(); gpsOff();
+        console.log('[hud2] cerrado: memoria del lienzo liberada');
+      }
       btn.classList.toggle('on', on);
       gear.style.display = on ? 'block' : 'none';
       if (!on) sheet.classList.remove('on');
