@@ -349,21 +349,13 @@ const MT_STYLES={
         if(/tile|source|fetch|network|403|429/i.test(msg)) console.warn('[mapa] tesela:', msg.slice(0,90));
       });
 
-      // Perro guardian: si estando en movimiento no hay ni una tesela cargada
-      // durante 12 s, se recarga el estilo. Es lo que saca del blanco.
-      let ultimoOk=Date.now();
-      this._m.on('data', d=>{ if(d && d.dataType==='source' && d.isSourceLoaded) ultimoOk=Date.now(); });
-      setInterval(()=>{
-        try{
-          if(!this.ready) return;
-          if(Date.now()-ultimoOk < 12000) return;
-          if(typeof speedKmh!=='undefined' && speedKmh < 3) return;   // parado, no molestar
-          ultimoOk=Date.now();
-          console.warn('[mapa] sin teselas 12 s: recargando estilo');
-          try{ $('status').textContent='Mapa sin datos · recargando'; }catch(_){}
-          this._setBase(MT_STYLES[this._baseKey]);
-        }catch(e){}
-      }, 6000);
+      /* NO hay perro guardian que recargue el estilo.
+         Lo tuve puesto y era peor que la enfermedad: setStyle() borra TODAS las
+         capas, incluida la linea de ruta, y con teselas vectoriales ya cacheadas
+         los eventos de carga dejan de llegar aunque el mapa este perfecto. Asi
+         que saltaba en falso, recargaba, y de paso hacia desaparecer la ruta.
+         La unica recuperacion automatica que queda es la del contexto WebGL,
+         que si responde a un fallo real y no toca las capas.                  */
       this._m.on('style.load',()=>{ this._reAdd(); }); // tras setStyle: re-añade overlays y rutas
     }
     run(f){ if(this.ready && this._m.isStyleLoaded()){ try{f();}catch(e){} } else this.q.push(f); }
