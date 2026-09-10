@@ -404,6 +404,27 @@ function boot(){
   }
 
   // saca [[lat,lng],...] de casi cualquier forma en que venga una ruta
+  /* Firma barata SIN construir arrays. MapLibre llama a setData muchas veces por
+     segundo mientras navegas (repinta el tramo recorrido); extraer() creaba en
+     cada llamada un array nuevo de decenas de miles de coordenadas. Esa basura
+     era lo que ahogaba la memoria y dejaba el mapa en blanco justo cuando hay
+     ruta. Ahora se mira largo y extremos, y solo se extrae si ha cambiado. */
+  let firmaCruda = null;
+  function firmaRapida(obj){
+    try{
+      let c = obj && (obj.coordinates
+              || (obj.geometry && obj.geometry.coordinates)
+              || (obj.features && obj.features[0] && obj.features[0].geometry
+                  && obj.features[0].geometry.coordinates));
+      if (!c || !c.length) return null;
+      if (Array.isArray(c[0][0])) c = c[0];
+      const a = c[0], z = c[c.length-1];
+      if (!a || typeof a[0] !== 'number') return null;
+      return c.length + ':' + a[0].toFixed(5) + ',' + a[1].toFixed(5)
+                      + ':' + z[0].toFixed(5) + ',' + z[1].toFixed(5);
+    }catch(e){ return null; }
+  }
+
   function extraer(obj){
     if (!obj) return null;
     const g = obj.routes && obj.routes[0] && obj.routes[0].geometry;
@@ -500,7 +521,16 @@ function boot(){
     const addS = proto.addSource;
     proto.addSource = function(id, src){
       mapaInst = this;                       // así podemos pararlo al abrir el HUD
-      try { if (src && src.type === 'geojson'){ const ll = extraer(src.data); if (ll) aceptar(ll, 'addSource:'+id); } } catch(e){}
+      try {
+        if (src && src.type === 'geojson'){
+          const f = firmaRapida(src.data);
+          if (f && f !== firmaCruda){
+            firmaCruda = f;
+            const ll = extraer(src.data);
+            if (ll) aceptar(ll, 'addSource:'+id);
+          }
+        }
+      } catch(e){}
       return addS.apply(this, arguments);
     };
     const getS = proto.getSource;
@@ -510,7 +540,17 @@ function boot(){
       if (src && src.setData && !src.__hud2){
         src.__hud2 = true;
         const sd = src.setData.bind(src);
-        src.setData = d => { try { const ll = extraer(d); if (ll) aceptar(ll, 'setData:'+id); } catch(e){} return sd(d); };
+        src.setData = d => {
+        try {
+          const f = firmaRapida(d);
+          if (f && f !== firmaCruda){
+            firmaCruda = f;
+            const ll = extraer(d);
+            if (ll) aceptar(ll, 'setData:'+id);
+          }
+        } catch(e){}
+        return sd(d);
+      };
       }
       return src;
     };

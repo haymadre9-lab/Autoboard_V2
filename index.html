@@ -1406,9 +1406,15 @@ if('serviceWorker' in navigator){
       sheet.classList.add('open'); expand(false);
     };
     $('csX').onclick=close;
-    $('csGo').onclick=()=>{ if(cur){ close(); routeTo(cur.ll); } };
-    $('csAdd').onclick=()=>{ if(cur){ close(); if(typeof addWaypoint==='function') addWaypoint(cur.ll); } };
-    $('csFav').onclick=()=>{ if(cur&&typeof saveFav==='function'){ saveFav(cur.name||'Cargador',cur.ll[0],cur.ll[1]); } };
+    // close() pone cur=null, asi que habia que guardar el punto ANTES de cerrar:
+    // tal y como estaba, al pulsar Ir se leia cur.ll de un cur ya borrado y la
+    // llamada fallaba sin crear ruta.
+    $('csGo').onclick=()=>{ const p=cur; if(!p||!p.ll) return; close(); routeTo(p.ll, p.name||'Cargador'); };
+    $('csAdd').onclick=()=>{ const p=cur; if(!p||!p.ll) return; close();
+      if(typeof addWaypoint==='function') addWaypoint(p.ll); };
+    $('csFav').onclick=()=>{ const p=cur; if(!p||!p.ll) return;
+      if(typeof saveFav==='function'){ saveFav(p.name||'Cargador', p.ll[0], p.ll[1]);
+        try{ $('status').textContent='Guardado en favoritos'; }catch(e){} } };
     // deslizar el asa: arriba = expandir, abajo = colapsar/cerrar
     let sy=0, dragging=false;
     const g=$('csGrab');
@@ -1619,8 +1625,12 @@ if('serviceWorker' in navigator){
     setInterval(function(){
       try{
         if(typeof routeOn==='undefined' || !routeOn || !disp || !routeCoordsLL) return;
+        // Muestreo grueso y acotado: recorrer 48.000 puntos cada 4 s en una ruta
+        // larga es trabajo inutil. Con 1 de cada 40 basta para saber si te has
+        // salido, y son unas decenas de comparaciones.
+        const paso=Math.max(1, Math.round(routeCoordsLL.length/400));
         let mejor=Infinity;
-        for(let i=0;i<routeCoordsLL.length;i+=4){
+        for(let i=0;i<routeCoordsLL.length;i+=paso){
           const d=dist([disp.lat,disp.lon], routeCoordsLL[i]);
           if(d<mejor) mejor=d;
         }
