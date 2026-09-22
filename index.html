@@ -320,6 +320,15 @@
 /* ================= Adaptador MapLibre (emula la API de Leaflet que usa la app) ================= */
 /* v2: teselas VECTORIALES (MapTiler) + giro/inclinación nativos en GPU. */
 const MAPTILER_KEY="sG00UkBX9Ig2ifguvPgU"; // <-- restríngela por dominio en MapTiler al publicar
+/* Satelite de respaldo construido aqui mismo: no depende de ningun style.json
+   remoto ni del plan de MapTiler, solo de teselas de imagen. Si el 'hybrid' de
+   MapTiler falla (403/429 con planes limitados), se usa este.               */
+const SAT_ALT={ version:8, glyphs:'https://api.maptiler.com/fonts/{fontstack}/{range}.pbf?key='+MAPTILER_KEY,
+  sources:{ orto:{ type:'raster', tileSize:256, maxzoom:19,
+    tiles:['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+    attribution:'Imagery © Esri, Maxar, Earthstar Geographics' } },
+  layers:[{id:'fondo',type:'background',paint:{'background-color':'#0b1016'}},
+          {id:'orto',type:'raster',source:'orto'}] };
 const MT_STYLES={
   sat:  'https://api.maptiler.com/maps/hybrid/style.json?key='+MAPTILER_KEY,
   day:  'https://api.maptiler.com/maps/streets-v2/style.json?key='+MAPTILER_KEY,
@@ -366,9 +375,13 @@ const MT_STYLES={
       this._m.on('error', e=>{
         const msg=(e&&e.error&&e.error.message)||'';
         // fallo al cargar el ESTILO: desbloquear ya, sin esperar al vigilante
-        if(!this._estiloOk && /style|sprite|glyphs|403|401|429/i.test(msg)){
-          console.warn('[mapa] fallo de estilo:', msg.slice(0,90));
+        if(!this._estiloOk && /style|sprite|glyphs|403|401|429|404/i.test(msg)){
+          console.warn('[MAP] error de estilo:', msg.slice(0,110));
           clearTimeout(this._tEstilo); this._estiloOk=true; this._vaciar();
+          if(this._urlEstilo===MT_STYLES.sat && !this._intento){
+            console.warn('[MAP] probando satélite alternativo (Esri)');
+            this._setBase(SAT_ALT, 1);
+          }
         }
         if(/tile|source|fetch|network|403|429/i.test(msg)) console.warn('[mapa] tesela:', msg.slice(0,90));
       });
@@ -380,7 +393,9 @@ const MT_STYLES={
          que saltaba en falso, recargaba, y de paso hacia desaparecer la ruta.
          La unica recuperacion automatica que queda es la del contexto WebGL,
          que si responde a un fallo real y no toca las capas.                  */
-      this._m.on('style.load',()=>{ clearTimeout(this._tEstilo); this._estiloOk=true; this._reAdd(); this._vaciar();
+      this._m.on('style.load',()=>{ clearTimeout(this._tEstilo); this._estiloOk=true;
+        console.log('[MAP] style.load'); console.log('[MAP] restaurando ruta');
+        this._reAdd(); this._vaciar();
         // comprobacion: si alguna polilinea no volvio, se reintenta y se avisa
         setTimeout(()=>{ let faltan=0;
           this._polys.forEach(p=>{ if(!this._m.getLayer(p.id)){ faltan++; this._mountPoly(p); } });
@@ -454,57 +469,30 @@ const MT_STYLES={
        partir de ahi TODO se encola sin ejecutarse — la ruta no se redibuja y no
        se puede volver al mapa normal. Un vigilante de 9 s lo desbloquea y
        vuelve al estilo anterior.                                            */
-    _setBase(url){
-      const prev=this._urlEstilo;
+    _setBase(url, intento){
+      const etiqueta = (url===MT_STYLES.sat||url===SAT_ALT) ? 'SATELITE' : (url===MT_STYLES.night?'NOCHE':'MAPA');
+      console.log('[MAP] cambio a '+etiqueta);
       this.run(()=>{
-        this._estiloOk=false; this._urlEstilo=url;
+        this._estiloOk=false; this._urlEstilo=url; this._intento=intento||0;
+        console.log('[MAP] setStyle iniciado');
         clearTimeout(this._tEstilo);
         this._tEstilo=setTimeout(()=>{
           if(this._estiloOk) return;
-          console.warn('[mapa] el estilo no cargó en 9 s; se desbloquea y se vuelve al anterior');
+          console.warn('[MAP] error: el estilo no cargó en 9 s');
           this._estiloOk=true; this._vaciar();
-          if(prev && prev!==url){ try{ this._urlEstilo=prev; this._m.setStyle(prev); }catch(e){} }
+          // 1er fallo del satelite -> satelite alternativo (teselas propias).
+          // Solo si tambien falla ese, se vuelve al mapa normal.
+          if(etiqueta==='SATELITE' && !this._intento){
+            console.warn('[MAP] probando satélite alternativo (Esri)');
+            this._setBase(SAT_ALT, 1);
+          } else {
+            console.warn('[MAP] fallback a MAPA');
+            this._setBase(MT_STYLES.day, 1);
+          }
         }, 9000);
         this._m.setStyle(url);
       });
     }
-    // ---- overlays raster (tráfico, lluvia) ----
-    _addOverlay(o){ o._map=this; this._overlays.push(o); o._added=true; this.run(()=>this._mountOverlay(o)); }
-    _mountOverlay(o){ const m=this._m; try{ if(!m.getSource(o.id)) m.addSource(o.id,{type:'raster',tiles:[o.url],tileSize:256}); if(!m.getLayer(o.id)) m.addLayer({id:o.id,type:'raster',source:o.id,paint:{'raster-opacity':(o.opts.opacity!=null?o.opts.opacity:1)}}); }catch(e){} }
-    _removeOverlay(o){ o._added=false; this._overlays=this._overlays.filter(x=>x!==o); const m=this._m; try{ if(m.getLayer(o.id))m.removeLayer(o.id); if(m.getSource(o.id))m.removeSource(o.id); }catch(e){} }
-    _refreshOverlay(o){ const m=this._m; try{ const s=m.getSource(o.id); if(s&&s.setTiles)s.setTiles([o.url]); }catch(e){} }
-    _overlayToFront(o){ try{ if(this._m.getLayer(o.id))this._m.moveLayer(o.id); }catch(e){} }
-    // ---- polilíneas (ruta) como GeoJSON ----
-    _addPoly(p){ p._map=this; this._polys.push(p); p._added=true; this.run(()=>this._mountPoly(p)); }
-    // Coordenadas: si la polilinea ya las trae en [lng,lat] (p.lngLat), no se
-    // vuelve a crear un array entero en cada actualizacion.
-    _gj(p){ const c=p.lngLat ? (p.coords||[]) : (p.coords||[]).map(D2);
-      return {type:'Feature',geometry:{type:'LineString',coordinates:c}}; }
-    _mountPoly(p){ const m=this._m; const gj=this._gj(p);
-      try{
-        // tolerance: geojson-vt simplifica la linea POR ZOOM al teselarla.
-        // Subirla de 0.375 a 1.2 hace que a zoom lejano se dibujen muchos menos
-        // vertices sin que se note; a zoom de navegacion apenas cambia.
-        if(!m.getSource(p.id)) m.addSource(p.id,{type:'geojson',data:gj,tolerance:(p.opts.tolerance!=null?p.opts.tolerance:0.375),lineMetrics:false});
-        else m.getSource(p.id).setData(gj);
-        const lay={'line-join':'round','line-cap':'round'};
-        // Borde en la MISMA fuente: una sola geometria, dos capas. Antes eran dos
-        // polilineas con la ruta duplicada y dos re-teselados por actualizacion.
-        if(p.opts.casing && !m.getLayer(p.id+'-c'))
-          m.addLayer({id:p.id+'-c',type:'line',source:p.id,layout:lay,paint:{'line-color':p.opts.casing,'line-width':p.opts.casingWeight||12,'line-opacity':(p.opts.casingOpacity!=null?p.opts.casingOpacity:0.9)}});
-        if(!m.getLayer(p.id)) m.addLayer({id:p.id,type:'line',source:p.id,layout:lay,paint:{'line-color':p.opts.color||'#4c8dff','line-width':p.opts.weight||6,'line-opacity':(p.opts.opacity!=null?p.opts.opacity:1)}});
-      }catch(e){} }
-    _updatePoly(p){ const m=this._m; try{ const s=m.getSource(p.id); if(s)s.setData(this._gj(p)); }catch(e){} }
-    // Coleccion de lineas con color por propiedad: una fuente, una capa.
-    _mountFC(o){ const m=this._m;
-      try{ const gj={type:'FeatureCollection',features:o.feats};
-        if(!m.getSource(o.id)) m.addSource(o.id,{type:'geojson',data:gj,tolerance:1.2}); else m.getSource(o.id).setData(gj);
-        if(!m.getLayer(o.id)) m.addLayer({id:o.id,type:'line',source:o.id,layout:{'line-join':'round','line-cap':'round'},
-          paint:{'line-color':['get','c'],'line-width':o.opts.weight||6,'line-opacity':(o.opts.opacity!=null?o.opts.opacity:1)}});
-      }catch(e){} }
-    _addFC(o){ o._map=this; this._fcs.push(o); o._added=true; this.run(()=>this._mountFC(o)); }
-    _removeFC(o){ o._added=false; this._fcs=this._fcs.filter(x=>x!==o); const m=this._m;
-      try{ if(m.getLayer(o.id))m.removeLayer(o.id); if(m.getSource(o.id))m.removeSource(o.id); }catch(e){} }
     _polyToFront(p){ try{ if(this._m.getLayer(p.id+'-c'))this._m.moveLayer(p.id+'-c'); if(this._m.getLayer(p.id))this._m.moveLayer(p.id); }catch(e){} }
     _removePoly(p){ p._added=false; this._polys=this._polys.filter(x=>x!==p); const m=this._m; try{ if(m.getLayer(p.id))m.removeLayer(p.id); if(m.getLayer(p.id+'-c'))m.removeLayer(p.id+'-c'); if(m.getSource(p.id))m.removeSource(p.id); }catch(e){} }
   }
@@ -1444,7 +1432,7 @@ async function renderSuggest(q){ const box=$('suggest');
 function bringOverlaysFront(){ if(trafficLayer)trafficLayer.bringToFront(); if(routeCasing)routeCasing.bringToFront(); if(routeLine)routeLine.bringToFront(); }
 function applyBase(){
   const key = baseSat ? 'sat' : (mapNite ? 'night' : 'day');
-  if(map._baseKey!==key){ map._baseKey=key; map._setBase(MT_STYLES[key]); }
+  if(map._baseKey!==key){ map._baseKey=key; map._setBase(MT_STYLES[key], 0); }
   $('map').classList.remove('nite'); // el estilo vectorial ya trae su noche
   $('daynight').textContent=baseSat?'🗺️':'🛰️';
   {const _mn=$('mapnight'); if(_mn)_mn.classList.toggle('on',mapNite);}
