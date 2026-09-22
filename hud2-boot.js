@@ -32,11 +32,11 @@ const CSS = `
   font:600 12px/1 ui-sans-serif,sans-serif;letter-spacing:.1em;text-transform:uppercase;
   padding:13px 18px;cursor:pointer;backdrop-filter:blur(6px)}
 #hud2-wrap.on ~ #hud2-back{display:block}
-#hud2-gear{position:fixed;left:10px;top:56px;z-index:9150;display:none;width:32px;height:32px;
+#hud2-gear{position:fixed;left:10px;top:104px;z-index:9150;display:none;width:32px;height:32px;
   background:rgba(10,13,16,.72);border:1px solid #2c3942;color:#8fd8e4;border-radius:8px;
   font:15px/1 ui-sans-serif,sans-serif;padding:0;cursor:pointer;opacity:.75}
 #hud2-wrap.on ~ #hud2-gear{display:block}
-#hud2-set{position:fixed;inset:0;z-index:9300;display:none;flex-direction:column;
+#hud2-set{position:fixed;inset:0;z-index:9400;display:none;flex-direction:column;
   background:rgba(6,9,12,.96);padding:18px 16px;gap:8px;overflow-y:auto;
   font:12px/1.5 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;color:#e8eef2}
 #hud2-set.on{display:flex}

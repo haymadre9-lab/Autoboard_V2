@@ -21,8 +21,12 @@
   body.solo-hud #hudPane{flex:1 1 auto;}
   /* Mapa, Faro y HUD 2 en COLUMNA: ocupa menos ancho y deja libre la casita
      y el buscador, que antes quedaban debajo de Faro. */
-  .ab-modes{position:absolute;z-index:950;top:10px;left:10px;width:auto;display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:0;backdrop-filter:none;padding:0;}
-  .ab-modes .faro-btn{flex-basis:auto;margin-top:0;}
+  /* Mapa y HUD 2 arriba, uno al lado del otro; Faro centrado debajo de ambos.
+     Asi el engranaje del HUD 2 no se monta encima de Faro. */
+  .ab-modes{position:absolute;z-index:950;top:10px;left:10px;width:auto;display:grid;
+    grid-template-columns:auto auto;gap:6px;justify-items:center;background:none;border:0;backdrop-filter:none;padding:0;}
+  .ab-modes .faro-btn{grid-column:2;grid-row:2;justify-self:center;}
+  .ab-modes .faro-btn{}   /* posicion: ver regla de grid arriba */
   .ab-modes button{border:1px solid #1e2836;background:rgba(10,14,20,.7);backdrop-filter:blur(6px);color:#c3ccda;font-weight:700;font-size:12px;padding:6px 0;width:60px;text-align:center;border-radius:10px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.35);}
   .ab-modes button.on{background:#22d3ee;color:#04141a;}
   .spdmap{position:absolute;z-index:600;top:10px;right:10px;background:rgba(12,16,22,.88);border:1px solid #1e2836;border-radius:14px;padding:7px 16px;display:none;flex-direction:column;align-items:center;line-height:1;}
@@ -110,6 +114,19 @@
   .ttwrap{bottom:56px;right:10px;display:none;gap:6px;background:rgba(16,18,24,.9);border:1px solid var(--bd);border-radius:10px;padding:5px;}
   .ttwrap input{background:#0a0d13;border:1px solid var(--bd);border-radius:8px;color:var(--txt);padding:8px;font-size:12px;width:180px;} .ttwrap button{border:0;background:var(--ok);color:#04130c;font-weight:800;border-radius:8px;padding:0 12px;cursor:pointer;}
   .navstack{top:10px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;align-items:center;z-index:500;}
+  /* ROTONDA: panel circular. El circulo grande manda (se reconoce de lejos) y
+     el texto baja a una franja estrecha debajo, en vez de deformar el rectangulo. */
+  .navbanner.rot{flex-direction:column;align-items:center;gap:2px;
+    width:132px;min-width:0;padding:10px 8px 8px;border-radius:70px 70px 20px 20px;}
+  .navbanner.rot .arrow{width:104px;height:104px;flex:0 0 auto;border-radius:50%;
+    background:radial-gradient(circle at 50% 45%,rgba(20,28,38,.92),rgba(8,12,18,.92));
+    border:3px solid #39d98a;box-shadow:0 0 14px rgba(57,217,138,.25);box-sizing:border-box;padding:4px;}
+  .navbanner.rot .arrow svg{width:100%;height:100%}
+  .navbanner.rot .navtext{text-align:center;width:100%}
+  .navbanner.rot .navd{font-size:20px;line-height:1.1}
+  .navbanner.rot .navsub{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .navbanner.rot .navx{position:absolute;top:6px;right:8px}
+  @media (max-height:520px){ .navbanner.rot{width:108px} .navbanner.rot .arrow{width:84px;height:84px} }
   .navbanner{display:none;align-items:center;gap:12px;background:#ffffff;border:2px solid #cfd6e0;border-radius:18px;padding:9px 16px;box-shadow:0 5px 16px rgba(0,0,0,.4);}
   .navbanner.hw{background:#1558d6;border-color:#0d3ea0;}
   .navbanner .navd{font-weight:900;font-size:19px;color:#111;line-height:1;}
@@ -325,7 +342,7 @@ const MT_STYLES={
         maxTileCacheSize:60, refreshExpiredTiles:false, antialias:false});
       try{ this._m.touchZoomRotate.disableRotation(); }catch(e){}
       try{ this._m.setMaxPitch(70); }catch(e){}
-      this.raw=this._m; this.ready=false; this.q=[]; this._overlays=[]; this._polys=[]; this._symGroups=[]; this._fcs=[]; this._baseKey=(new Date().getHours()>=21||new Date().getHours()<7)?'night':'day';
+      this.raw=this._m; this.ready=false; this._urlEstilo=_ini; this._tEstilo=null; this.q=[]; this._overlays=[]; this._polys=[]; this._symGroups=[]; this._fcs=[]; this._baseKey=(new Date().getHours()>=21||new Date().getHours()<7)?'night':'day';
       this._m.on('load',()=>{ this.ready=true; this._estiloOk=true; this._vaciar(); });
 
       /* ---- Vigilancia del mapa en blanco -------------------------------
@@ -348,6 +365,11 @@ const MT_STYLES={
 
       this._m.on('error', e=>{
         const msg=(e&&e.error&&e.error.message)||'';
+        // fallo al cargar el ESTILO: desbloquear ya, sin esperar al vigilante
+        if(!this._estiloOk && /style|sprite|glyphs|403|401|429/i.test(msg)){
+          console.warn('[mapa] fallo de estilo:', msg.slice(0,90));
+          clearTimeout(this._tEstilo); this._estiloOk=true; this._vaciar();
+        }
         if(/tile|source|fetch|network|403|429/i.test(msg)) console.warn('[mapa] tesela:', msg.slice(0,90));
       });
 
@@ -358,7 +380,12 @@ const MT_STYLES={
          que saltaba en falso, recargaba, y de paso hacia desaparecer la ruta.
          La unica recuperacion automatica que queda es la del contexto WebGL,
          que si responde a un fallo real y no toca las capas.                  */
-      this._m.on('style.load',()=>{ this._estiloOk=true; this._reAdd(); this._vaciar(); }); // tras setStyle: re-añade todo y vacia la cola
+      this._m.on('style.load',()=>{ clearTimeout(this._tEstilo); this._estiloOk=true; this._reAdd(); this._vaciar();
+        // comprobacion: si alguna polilinea no volvio, se reintenta y se avisa
+        setTimeout(()=>{ let faltan=0;
+          this._polys.forEach(p=>{ if(!this._m.getLayer(p.id)){ faltan++; this._mountPoly(p); } });
+          console.log('[mapa] estilo cargado; capas de linea:', this._polys.length, faltan?('('+faltan+' re-montadas)'):'(todas ok)');
+        }, 60); }); // tras setStyle: re-añade todo y vacia la cola
     }
     // ANTES: isStyleLoaded() es falso cada vez que hay teselas cargandose (casi
     // siempre navegando), y la cola solo se vaciaba UNA vez, al arrancar. Todo
@@ -422,7 +449,25 @@ const MT_STYLES={
       return this;
     }
     // ---- base por setStyle (satélite/día/noche) ----
-    _setBase(url){ this.run(()=>{ this._estiloOk=false; this._m.setStyle(url); }); }
+    /* Si setStyle() se queda sin cargar (estilo que falla, 403/429 de MapTiler,
+       red caida), 'style.load' NUNCA llega: _estiloOk se queda en false y a
+       partir de ahi TODO se encola sin ejecutarse — la ruta no se redibuja y no
+       se puede volver al mapa normal. Un vigilante de 9 s lo desbloquea y
+       vuelve al estilo anterior.                                            */
+    _setBase(url){
+      const prev=this._urlEstilo;
+      this.run(()=>{
+        this._estiloOk=false; this._urlEstilo=url;
+        clearTimeout(this._tEstilo);
+        this._tEstilo=setTimeout(()=>{
+          if(this._estiloOk) return;
+          console.warn('[mapa] el estilo no cargó en 9 s; se desbloquea y se vuelve al anterior');
+          this._estiloOk=true; this._vaciar();
+          if(prev && prev!==url){ try{ this._urlEstilo=prev; this._m.setStyle(prev); }catch(e){} }
+        }, 9000);
+        this._m.setStyle(url);
+      });
+    }
     // ---- overlays raster (tráfico, lluvia) ----
     _addOverlay(o){ o._map=this; this._overlays.push(o); o._added=true; this.run(()=>this._mountOverlay(o)); }
     _mountOverlay(o){ const m=this._m; try{ if(!m.getSource(o.id)) m.addSource(o.id,{type:'raster',tiles:[o.url],tileSize:256}); if(!m.getLayer(o.id)) m.addLayer({id:o.id,type:'raster',source:o.id,paint:{'raster-opacity':(o.opts.opacity!=null?o.opts.opacity:1)}}); }catch(e){} }
@@ -700,24 +745,24 @@ const rot={'straight':0,'slight right':40,'right':90,'sharp right':135,'uturn':1
 function arrowSVG(mod,col,w){col=col||'#0a8a34';w=w||7.5;return '<svg viewBox="0 0 48 52"><path d="M24 7 L24 45 M24 7 L12 21 M24 7 L36 21" fill="none" stroke="'+col+'" stroke-width="'+w+'" stroke-linecap="round" stroke-linejoin="round" transform="rotate('+(rot[mod]||0)+' 24 26)"/></svg>';}
 function arrowHead(x,y,t,c){const a1=t+2.55,a2=t-2.55,l=6.5;return '<path d="M'+x.toFixed(1)+' '+y.toFixed(1)+' L'+(x+Math.sin(a1)*l).toFixed(1)+' '+(y-Math.cos(a1)*l).toFixed(1)+' M'+x.toFixed(1)+' '+y.toFixed(1)+' L'+(x+Math.sin(a2)*l).toFixed(1)+' '+(y-Math.cos(a2)*l).toFixed(1)+'" stroke="'+c+'" stroke-width="4" stroke-linecap="round"/>';}
 function roundaboutSVG(exit,mod,col){
-  // Rotonda con TODAS las salidas: entrada abajo, circulacion antihoraria, la
-  // salida elegida resaltada con flecha y el numero en una insignia.
-  const c=col||'#0a8a34', g='#9aa3b2', cx=24, cy=24, r=9.5;
+  // Anillo exterior grueso + isla central + todas las salidas, con la tuya
+  // resaltada y el numero DENTRO de la isla. Pensado para leerse de lejos.
+  const c=col||'#39d98a', g='#8b95a4', cx=26, cy=26, r=13;
   const n=Math.max(1,Math.min(6,parseInt(exit,10)||1));
-  const total=Math.max(3,n+1);                        // salidas visibles alrededor
-  const ang=k=>Math.PI/2 - (k+1)*(2*Math.PI/(total+1)); // desde la entrada, sentido antihorario visto en planta
-  let s='<svg viewBox="0 0 48 52"><circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+g+'" stroke-width="3.4"/>';
-  s+='<path d="M'+cx+' 50 L'+cx+' '+(cy+r)+'" stroke="'+c+'" stroke-width="4.4" stroke-linecap="round"/>';
-  for(let k=0;k<total;k++){ const a=-ang(k), x1=cx+Math.cos(a)*r, y1=cy+Math.sin(a)*r, x2=cx+Math.cos(a)*(r+8.5), y2=cy+Math.sin(a)*(r+8.5);
-    const sel=(k===n-1);
-    s+='<path d="M'+x1.toFixed(1)+' '+y1.toFixed(1)+' L'+x2.toFixed(1)+' '+y2.toFixed(1)+'" stroke="'+(sel?c:g)+'" stroke-width="'+(sel?4.6:2.6)+'" stroke-linecap="round"/>';
-    if(sel){ // arco recorrido desde la entrada hasta la salida
-      const a0=Math.PI/2, a1=a, large=((a0-a1+2*Math.PI)%(2*Math.PI))>Math.PI?1:0;
-      s+='<path d="M'+cx+' '+(cy+r)+' A'+r+' '+r+' 0 '+large+' 1 '+x1.toFixed(1)+' '+y1.toFixed(1)+'" fill="none" stroke="'+c+'" stroke-width="4.4" stroke-linecap="round"/>';
-      s+=arrowHead(x2,y2,Math.atan2(x2-cx,-(y2-cy)),c); }
-  }
-  s+='<circle cx="40" cy="10" r="8.5" fill="#39d98a"/><text x="40" y="14" text-anchor="middle" font-size="12" font-weight="800" fill="#04130c">'+n+'</text></svg>';
-  return s;
+  const total=Math.max(3,n+1);
+  const ang=k=>Math.PI/2-(k+1)*(2*Math.PI/(total+1));
+  let s='<svg viewBox="0 0 52 52">';
+  s+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+g+'" stroke-width="5" opacity=".55"/>';
+  s+='<circle cx="'+cx+'" cy="'+cy+'" r="'+(r-5.5)+'" fill="'+g+'" opacity=".22"/>';   // isla central
+  s+='<path d="M'+cx+' 52 L'+cx+' '+(cy+r)+'" stroke="'+c+'" stroke-width="5.5" stroke-linecap="round"/>'; // entrada
+  for(let k=0;k<total;k++){ const a=-ang(k), x1=cx+Math.cos(a)*r, y1=cy+Math.sin(a)*r,
+      x2=cx+Math.cos(a)*(r+10), y2=cy+Math.sin(a)*(r+10), sel=(k===n-1);
+    s+='<path d="M'+x1.toFixed(1)+' '+y1.toFixed(1)+' L'+x2.toFixed(1)+' '+y2.toFixed(1)+'" stroke="'+(sel?c:g)+'" stroke-width="'+(sel?5.5:3)+'" stroke-linecap="round" opacity="'+(sel?1:.5)+'"/>';
+    if(sel){ const a0=Math.PI/2, large=((a0-a+2*Math.PI)%(2*Math.PI))>Math.PI?1:0;
+      s+='<path d="M'+cx+' '+(cy+r)+' A'+r+' '+r+' 0 '+large+' 1 '+x1.toFixed(1)+' '+y1.toFixed(1)+'" fill="none" stroke="'+c+'" stroke-width="5.5" stroke-linecap="round"/>';
+      s+=arrowHead(x2,y2,Math.atan2(x2-cx,-(y2-cy)),c); } }
+  s+='<text x="'+cx+'" y="'+(cy+4.5)+'" text-anchor="middle" font-size="13" font-weight="800" fill="'+c+'">'+n+'</text>';
+  return s+'</svg>';
 }
 function isHighway(st){const n=(((st&&st.name)||'')+'').toUpperCase();return /\b(A|AP|E)-?\d/.test(n)||n.indexOf('AUTOV')>=0||n.indexOf('AUTOP')>=0||n.indexOf('MOTORWAY')>=0;}
 function maneuverSVG(st,hw){const m=st.maneuver||{};const col=hw?'#ffffff':'#0a8a34';
@@ -1286,6 +1331,7 @@ async function routeTo(dest, nombre){ if(!raw){ $('status').textContent='Sin GPS
 function addWaypoint(ll){ if(!raw)return; if(routeOn&&destLL) buildRoute([[raw.lat,raw.lon],ll,destLL]); else routeTo(ll); }
 function renderStep(say){ const s=steps[stepIdx]; if(!s)return; const hw=isHighway(s); $('navbanner').classList.toggle('hw',hw); $('arrow').innerHTML=maneuverSVG(s,hw); $('navsub').textContent=s.name||shortHint(s); if(say)speak(s.instr);
   const mm=s.maneuver||{};
+  try{ $('navbanner').classList.toggle('rot', mm.type==='roundabout'||mm.type==='rotary'); }catch(e){}
   if((mm.type==='roundabout'||mm.type==='rotary') && mm.exit) $('navsub').textContent=mm.exit+'ª salida'+(s.name?' · '+s.name:'');
   const nx=steps[stepIdx+1]; if(nx){ $('navnext2').style.display='flex'; $('arrow2').innerHTML=maneuverSVG(nx,isHighway(nx)); $('nn2txt').textContent='Después · '+(nx.name||shortHint(nx)); } else $('navnext2').style.display='none'; }
 function endRoute(){ routeOn=false; steps=[]; osrmLanes=[]; hudTurnDist=null; hideLanes(); clearRoute(); $('navbanner').style.display='none'; $('navnext2').style.display='none'; $('trip').style.display='none'; $('searchBar').style.display='flex'; }
@@ -1502,7 +1548,7 @@ if('serviceWorker' in navigator){
 
   const bar=document.createElement('div'); bar.className='ab-modes';
   // Split eliminado: con mapa y HUD a la vez compiten por la misma GPU.
-  bar.innerHTML='<button data-m="map" class="on">Mapa</button><button data-m="faro" class="faro-btn">Faro</button><button data-m="hud">HUD 2</button>';
+  bar.innerHTML='<button data-m="map" class="on">Mapa</button><button data-m="hud">HUD 2</button><button data-m="faro" class="faro-btn">Faro</button>';
   app.appendChild(bar);
 
   function relayout(){
