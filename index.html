@@ -19,7 +19,9 @@
   body.solo-map #hudPane,body.solo-map #divider{display:none;}
   body.solo-hud #mapPane,body.solo-hud #divider{display:none;}
   body.solo-hud #hudPane{flex:1 1 auto;}
-  .ab-modes{position:absolute;z-index:950;top:10px;left:10px;width:192px;display:flex;flex-flow:row wrap;gap:6px;justify-content:center;background:none;border:0;backdrop-filter:none;padding:0;}
+  /* Mapa, Faro y HUD 2 en COLUMNA: ocupa menos ancho y deja libre la casita
+     y el buscador, que antes quedaban debajo de Faro. */
+  .ab-modes{position:absolute;z-index:950;top:10px;left:10px;width:auto;display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:0;backdrop-filter:none;padding:0;}
   .ab-modes .faro-btn{flex-basis:auto;margin-top:0;}
   .ab-modes button{border:1px solid #1e2836;background:rgba(10,14,20,.7);backdrop-filter:blur(6px);color:#c3ccda;font-weight:700;font-size:12px;padding:6px 0;width:60px;text-align:center;border-radius:10px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.35);}
   .ab-modes button.on{background:#22d3ee;color:#04141a;}
@@ -788,7 +790,10 @@ locate();
 // ===== bucle (interpolación suave, sin WebGL) =====
 let last=performance.now(), lastCam=0, lastLogic=0, interacting=false;
 function frame(now){
-  if(interacting){ requestAnimationFrame(frame); return; }
+  // Antes: si 'interacting' era true, frame() salia sin hacer NADA (ni
+  // seguimiento, ni trackRoute, ni instrucciones). Ahora solo se pausa la
+  // CAMARA; la navegacion sigue. Y si el gesto quedo colgado, se libera.
+  if(interacting && now-interactT>4000){ interacting=false; console.warn('[mapa] interaccion liberada por seguridad'); }
   try{
     const dt=Math.min(0.1,(now-last)/1000); last=now;
     if(disp && raw){
@@ -802,7 +807,7 @@ function frame(now){
       if(raw.spd>3) disp.head=angLerp(disp.head,raw.head,Math.min(1,dt*0.9));
       carMk.setLatLng([disp.lat,disp.lon]);
       const cr=$('carrot'); if(cr) cr.style.transform='rotate(0deg)';   // MapLibre gira el mapa (bearing); la flecha queda fija arriba
-      if(follow && !window.__uTouch && now-lastCam>50){ lastCam=now;   // pausa la cámara mientras el usuario toca (pan fluido + clic en marcadores)
+      if(follow && !interacting && !window.__uTouch && now-lastCam>50){ lastCam=now;   // pausa la cámara mientras el usuario toca (pan fluido + clic en marcadores)
         const paneH=(document.getElementById('mapPane')||{}).clientHeight||window.innerHeight;
         let bearing=(typeof disp.head==='number' && isFinite(disp.head))?disp.head:0;   // evita NaN -> que la cámara nunca falle
         // cuantizado a 0.25 grados: por debajo de eso solo es ruido del GPS y
@@ -813,7 +818,7 @@ function frame(now){
         const clat=(isFinite(disp.lat)?disp.lat:0), clon=(isFinite(disp.lon)?disp.lon:0);
         // Zoom de maniobra: entre 250 y 40 m antes del giro se acerca hasta +1,1
         // niveles, y despues vuelve suave a tu zoom normal.
-        { const d=(routeOn&&hudTurnDist!=null)?hudTurnDist:1e9;
+        { const d=(routeOn&&follow&&hudTurnDist!=null)?hudTurnDist:1e9;
           const obj=(d<250&&d>-20)?1.1*Math.min(1,(250-d)/210):0;
           window.__zoomMan=(window.__zoomMan||0)+(obj-(window.__zoomMan||0))*0.08; }
         try{ map.raw.jumpTo({ center:[clon,clat], zoom:navZoom+(window.__zoomMan||0), bearing:bearing, pitch:(tilt?55:0),
@@ -842,9 +847,20 @@ function frame(now){
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-map.on('dragstart',()=>{follow=false;interacting=true;});
-map.on('dragend',()=>{interacting=false;});
-map.on('zoomstart',()=>{interacting=true;}); map.on('zoomend',()=>{interacting=false;});
+/* INTERACCION DEL USUARIO.
+   Se escucha el MapLibre directamente (map.raw) porque el adaptador descarta el
+   evento y no deja ver e.originalEvent. Solo cuenta como interaccion lo que
+   trae originalEvent (dedo, raton, rueda); los jumpTo()/setZoom() del
+   seguimiento y del zoom de maniobra NO lo traen y se ignoran.
+   'interactT' se refresca mientras el gesto sigue vivo; si deja de llegar
+   senal 4 s, frame() libera 'interacting' aunque falte el zoomend/dragend.   */
+let interactT=0;
+const esUsuario=e=>!!(e&&e.originalEvent);
+map.raw.on('dragstart',e=>{ if(esUsuario(e)){ follow=false; interacting=true; interactT=performance.now(); } });
+map.raw.on('drag',     e=>{ if(esUsuario(e)) interactT=performance.now(); });
+map.raw.on('dragend',  e=>{ if(esUsuario(e)) interacting=false; });
+map.raw.on('zoomstart',e=>{ if(esUsuario(e)){ interacting=true; interactT=performance.now(); } });
+map.raw.on('zoom',     e=>{ if(esUsuario(e)) interactT=performance.now(); });
 function redrawTiles(){ try{ navZoom=16; saveSettings(); if(disp){ follow=true; map.setView([disp.lat,disp.lon],16,{animate:false}); } map.setZoom(16); if(curBase)curBase.redraw(); if(trafficLayer&&map.hasLayer(trafficLayer))trafficLayer.redraw(); $('status').textContent='Mapa actualizado'; }catch(e){} }
 $('refresh').onclick=redrawTiles;
 $('gear').onclick=()=>$('settings').classList.toggle('open');
@@ -879,10 +895,20 @@ $('recenter').onclick=()=>{ follow=true; locate(); if(disp) map.setView([disp.la
 // encima de 18 las teselas vectoriales se estiran. Fuera de rango, se vuelve al
 // valor de navegacion. Esto evita quedarse sin mapa por un pellizco accidental.
 const ZOOM_NAV=16, ZOOM_MIN=13, ZOOM_MAX=18;
-map.on('zoomend',()=>{ let z=map.getZoom();
-  if(!isFinite(z)) z=ZOOM_NAV;
-  if(z<ZOOM_MIN||z>ZOOM_MAX){ z=Math.max(ZOOM_MIN,Math.min(ZOOM_MAX,z)); map.setZoom(z); }
-  navZoom=z; saveSettings(); });
+/* ZOOM BASE DEL USUARIO.
+   Solo se guarda cuando el zoom lo cambia el usuario (originalEvent). El zoom
+   de maniobra va aparte, sumado en el jumpTo: antes zoomend lo guardaba como
+   zoom normal y cada maniobra se acumulaba sobre la anterior, ademas de
+   escribir en localStorage ~20 veces por segundo.                          */
+let tGuardarZoom=null;
+map.raw.on('zoomend',e=>{
+  interacting=false;                                  // fin de cualquier gesto de zoom
+  if(!esUsuario(e)) return;                           // programatico: ni se toca ni se guarda
+  let z=map.raw.getZoom(); if(!isFinite(z)) z=ZOOM_NAV;
+  if(z<ZOOM_MIN||z>ZOOM_MAX){ z=Math.max(ZOOM_MIN,Math.min(ZOOM_MAX,z)); map.raw.setZoom(z); }
+  navZoom=z; window.__zoomMan=0;                      // tu zoom pasa a ser la base; el extra se reinicia
+  clearTimeout(tGuardarZoom); tGuardarZoom=setTimeout(saveSettings,800);   // una escritura, no veinte
+});
 $('zoomIn').onclick=()=>{ navZoom=Math.min(ZOOM_MAX,navZoom+1); map.setZoom(navZoom); saveSettings(); };
 $('zoomOut').onclick=()=>{ navZoom=Math.max(ZOOM_MIN,navZoom-1); map.setZoom(navZoom); saveSettings(); };
 
