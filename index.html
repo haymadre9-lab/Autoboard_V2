@@ -478,7 +478,7 @@ const MT_STYLES={
         clearTimeout(this._tEstilo);
         this._tEstilo=setTimeout(()=>{
           if(this._estiloOk) return;
-          console.warn('[MAP] error: el estilo no cargó en 9 s');
+          console.warn('[MAP] error: el estilo no cargó en 6 s');
           this._estiloOk=true; this._vaciar();
           // 1er fallo del satelite -> satelite alternativo (teselas propias).
           // Solo si tambien falla ese, se vuelve al mapa normal.
@@ -489,7 +489,7 @@ const MT_STYLES={
             console.warn('[MAP] fallback a MAPA');
             this._setBase(MT_STYLES.day, 1);
           }
-        }, 9000);
+        }, 6000);
         this._m.setStyle(url);
       });
     }
@@ -1432,11 +1432,29 @@ async function renderSuggest(q){ const box=$('suggest');
 function bringOverlaysFront(){ if(trafficLayer)trafficLayer.bringToFront(); if(routeCasing)routeCasing.bringToFront(); if(routeLine)routeLine.bringToFront(); }
 function applyBase(){
   const key = baseSat ? 'sat' : (mapNite ? 'night' : 'day');
-  if(map._baseKey!==key){ map._baseKey=key; map._setBase(MT_STYLES[key], 0); }
+  if(map._baseKey!==key){ map._baseKey=key;
+    if(key==='sat') ponerSatelite(); else map._setBase(MT_STYLES[key], 0); }
   $('map').classList.remove('nite'); // el estilo vectorial ya trae su noche
   $('daynight').textContent=baseSat?'🗺️':'🛰️';
   {const _mn=$('mapnight'); if(_mn)_mn.classList.toggle('on',mapNite);}
   bringOverlaysFront();
+}
+/* SATELITE SIN ESPERA.
+   Antes se pedia el estilo a MapTiler y, si fallaba, habia que aguardar 9 s al
+   vigilante para saltar al alternativo: de ahi la tardanza. Ahora se comprueba
+   el style.json con una peticion corta (3 s) ANTES de cambiar, y se va directo
+   al que funcione. El resultado se recuerda: el segundo cambio es inmediato.  */
+let _satOk=null;
+async function ponerSatelite(){
+  if(_satOk===null){
+    const t0=performance.now();
+    try{
+      const ctl=new AbortController(), to=setTimeout(()=>ctl.abort(),3000);
+      const r=await fetch(MT_STYLES.sat,{signal:ctl.signal}); clearTimeout(to);
+      _satOk=r.ok; console.log('[MAP] comprobación satélite MapTiler: HTTP '+r.status+' en '+Math.round(performance.now()-t0)+' ms');
+    }catch(e){ _satOk=false; console.warn('[MAP] satélite MapTiler no responde ('+(e.name||'error')+')'); }
+  }
+  map._setBase(_satOk ? MT_STYLES.sat : SAT_ALT, _satOk?0:1);
 }
 function setBase(sat){ baseSat=sat; applyBase(); }
 $('daynight').textContent='🗺️';
