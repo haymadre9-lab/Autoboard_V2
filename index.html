@@ -1189,8 +1189,13 @@ function applyRoute(route){
 }
 function clearRoute(){ clearRouteLayers(); routeCoordsLL=[]; routeDraw=[]; routeDrawIdx=[]; const rr=$('reroute'); if(rr)rr.style.display='none'; }
 function trimRoute(){ if(!routeCoordsLL.length||!disp)return; const nowp=performance.now(); if(nowp-lastTrim<3000)return; lastTrim=nowp;
-  let bi=routeProgIdx,bd=1e9; const end=Math.min(routeCoordsLL.length,routeProgIdx+80);
-  for(let i=routeProgIdx;i<end;i++){ const dd=dist([disp.lat,disp.lon],routeCoordsLL[i]); if(dd<bd){bd=dd;bi=i;} }
+  // Progreso por segmento: con vertices dispersos, el mas cercano no marca bien
+  // por donde vas. Ventana mas amplia para no quedarse atras cada 3 s.
+  const hq={0:disp.lat,1:disp.lon}, aq=[disp.lat,disp.lon];
+  let bi=routeProgIdx,bd=1e9; const end=Math.min(routeCoordsLL.length,routeProgIdx+160);
+  for(let i=Math.max(1,routeProgIdx);i<end;i++){
+    const dd=segDistM(aq,{lat:routeCoordsLL[i-1][0],lon:routeCoordsLL[i-1][1]},{lat:routeCoordsLL[i][0],lon:routeCoordsLL[i][1]});
+    if(dd<bd){bd=dd;bi=i-1;} }
   if(bi!==routeProgIdx){ routeProgIdx=bi;
     // Se recorta la geometria de DIBUJO (cientos de puntos), no la completa
     // (miles). Busqueda binaria del primer punto dibujado por delante.
@@ -1198,7 +1203,7 @@ function trimRoute(){ if(!routeCoordsLL.length||!disp)return; const nowp=perform
       let lo=0, hi=routeDrawIdx.length-1;
       while(lo<hi){ const mid=(lo+hi)>>1; if(routeDrawIdx[mid]<routeProgIdx) lo=mid+1; else hi=mid; }
       const ahead=routeDraw.slice(lo); ahead.unshift([disp.lon,disp.lat]);
-      routeLine.coords=ahead; if(routeLine._map) routeLine._map._updatePoly(routeLine);
+      if(ahead.length>=2){ routeLine.coords=ahead; if(routeLine._map) routeLine._map._updatePoly(routeLine); }
     } }
 }
 async function geocode(q){ try{ const r=await fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(q)+'&format=json&limit=1&countrycodes=es&accept-language=es'); const j=await r.json(); if(j&&j.length)return [parseFloat(j[0].lat),parseFloat(j[0].lon)]; }catch(e){} return null; }
@@ -1264,12 +1269,20 @@ function trackRoute(){ if(!routeOn||!disp||!steps.length)return; trimRoute();
   // Busqueda LOCAL alrededor del progreso actual. Antes se recorria la mitad de
   // la ruta entera cada 120 ms. Solo si la ventana dice "fuera", se confirma con
   // un barrido completo (raro) antes de recalcular.
+  // DISTANCIA AL SEGMENTO, no al vertice. En autopista TomTom deja vertices a
+  // cientos de metros en las rectas: yendo sobre la ruta, el vertice mas
+  // cercano podia quedar a >70 m y se recalculaba sin motivo. Eso era lo que
+  // hacia desaparecer la linea "al cabo de un rato".
+  const seg=(i)=>segDistM(here,{lat:routeCoordsLL[i-1][0],lon:routeCoordsLL[i-1][1]},{lat:routeCoordsLL[i][0],lon:routeCoordsLL[i][1]});
   let dr=1e9;
-  const i0=Math.max(0,routeProgIdx-40), i1=Math.min(routeCoordsLL.length,routeProgIdx+400);
-  for(let i=i0;i<i1;i++){ const dd=dist(here,routeCoordsLL[i]); if(dd<dr)dr=dd; }
-  if(dr>70 && offAcc>=3){ for(let i=0;i<routeCoordsLL.length;i+=3){ const dd=dist(here,routeCoordsLL[i]); if(dd<dr)dr=dd; } }
+  const i0=Math.max(1,routeProgIdx-40), i1=Math.min(routeCoordsLL.length,routeProgIdx+400);
+  for(let i=i0;i<i1;i++){ const dd=seg(i); if(dd<dr)dr=dd; }
+  if(dr>70 && offAcc>=3){ for(let i=1;i<routeCoordsLL.length;i++){ const dd=seg(i); if(dd<dr)dr=dd; if(dr<=70)break; } }
   if(dr>70)offAcc++; else offAcc=0;
-  if(offAcc>3 && performance.now()-lastRecalc>8000){ lastRecalc=performance.now(); offAcc=0; speak('Recalculando ruta'); routeTo(destLL); return; }
+  if(offAcc>3 && performance.now()-lastRecalc>8000){
+    lastRecalc=performance.now(); offAcc=0;
+    console.warn('[ruta] recalculo: a', Math.round(dr), 'm de la ruta, progreso', routeProgIdx+'/'+routeCoordsLL.length);
+    speak('Recalculando ruta'); routeTo(destLL); return; }
   if(!s._v && d<320 && d>70){ s._v=true; speak('En '+fmtDist(d)+', '+s.instr); }
   const thr=Math.max(20,(raw.spd||0)*1.4); const passed=s._min<55&&d>s._min+15;
   if((d<thr||passed)&&stepIdx<steps.length-1){ stepIdx++; renderStep(true); s=steps[stepIdx]; d=dist(here,s.ll); }
