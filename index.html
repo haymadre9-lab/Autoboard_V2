@@ -166,7 +166,7 @@
   <button class="ovl zoomOut" id="zoomOut" title="Alejar">➖</button>
   <button class="ovl recenter" id="recenter">🎯</button>
   <div id="settings">
-    <div class="shead"><span>Ajustes</span><button id="setClose">✕</button></div>
+    <div class="shead"><span>Ajustes</span><button id="setClose">×</button></div>
     <div class="sgrid">
       <button class="setbtn" id="mapnight">🌙 Noche</button>
       <button class="setbtn" id="sound">🔇 Sonido</button>
@@ -196,7 +196,7 @@
     <div class="navbanner" id="navbanner">
       <div class="arrow" id="arrow"></div>
       <div class="navtext"><div class="navd" id="navdist">—</div><div class="navsub" id="navsub"></div></div>
-      <button class="navx" id="navx">✕</button>
+      <button class="navx" id="navx">×</button>
     </div>
     <div class="lanes" id="lanes"></div>
     <div class="navnext2" id="navnext2"><div class="arrow2" id="arrow2"></div><div class="nn2txt" id="nn2txt"></div></div>
@@ -324,7 +324,7 @@ const MT_STYLES={
       try{ this._m.touchZoomRotate.disableRotation(); }catch(e){}
       try{ this._m.setMaxPitch(70); }catch(e){}
       this.raw=this._m; this.ready=false; this.q=[]; this._overlays=[]; this._polys=[]; this._symGroups=[]; this._fcs=[]; this._baseKey=(new Date().getHours()>=21||new Date().getHours()<7)?'night':'day';
-      this._m.on('load',()=>{ this.ready=true; this.q.forEach(f=>{try{f();}catch(e){}}); this.q=[]; });
+      this._m.on('load',()=>{ this.ready=true; this._estiloOk=true; this._vaciar(); });
 
       /* ---- Vigilancia del mapa en blanco -------------------------------
          Con teselas vectoriales el mapa se queda blanco por dos motivos:
@@ -356,9 +356,15 @@ const MT_STYLES={
          que saltaba en falso, recargaba, y de paso hacia desaparecer la ruta.
          La unica recuperacion automatica que queda es la del contexto WebGL,
          que si responde a un fallo real y no toca las capas.                  */
-      this._m.on('style.load',()=>{ this._reAdd(); }); // tras setStyle: re-añade overlays y rutas
+      this._m.on('style.load',()=>{ this._estiloOk=true; this._reAdd(); this._vaciar(); }); // tras setStyle: re-añade todo y vacia la cola
     }
-    run(f){ if(this.ready && this._m.isStyleLoaded()){ try{f();}catch(e){} } else this.q.push(f); }
+    // ANTES: isStyleLoaded() es falso cada vez que hay teselas cargandose (casi
+    // siempre navegando), y la cola solo se vaciaba UNA vez, al arrancar. Todo
+    // lo encolado despues se perdia: cambio a satelite, ruta nueva, redibujo
+    // de la ruta tras cambiar estilo. Ahora basta con que el ESTILO este listo
+    // y la cola se vacia tambien en cada style.load.
+    run(f){ if(this.ready && this._estiloOk){ try{f();}catch(e){ console.warn('[mapa]',e.message); } } else this.q.push(f); }
+    _vaciar(){ const q=this.q; this.q=[]; q.forEach(f=>{ try{f();}catch(e){ console.warn('[mapa]',e.message); } }); }
     // tras setStyle se pierden fuentes, capas e IMAGENES: se vuelven a montar todas
     _reAdd(){ this._overlays.forEach(o=>this._mountOverlay(o)); this._polys.forEach(p=>this._mountPoly(p)); this._symGroups.forEach(g=>this._mountSym(g)); this._fcs.forEach(o=>this._mountFC(o)); }
     // ---- cámara / métodos Leaflet ----
@@ -414,7 +420,7 @@ const MT_STYLES={
       return this;
     }
     // ---- base por setStyle (satélite/día/noche) ----
-    _setBase(url){ this.run(()=>this._m.setStyle(url)); }
+    _setBase(url){ this.run(()=>{ this._estiloOk=false; this._m.setStyle(url); }); }
     // ---- overlays raster (tráfico, lluvia) ----
     _addOverlay(o){ o._map=this; this._overlays.push(o); o._added=true; this.run(()=>this._mountOverlay(o)); }
     _mountOverlay(o){ const m=this._m; try{ if(!m.getSource(o.id)) m.addSource(o.id,{type:'raster',tiles:[o.url],tileSize:256}); if(!m.getLayer(o.id)) m.addLayer({id:o.id,type:'raster',source:o.id,paint:{'raster-opacity':(o.opts.opacity!=null?o.opts.opacity:1)}}); }catch(e){} }
@@ -805,7 +811,12 @@ function frame(now){
         // y flechas sin que se aprecie ningun giro real
         bearing=Math.round(bearing*2)/2;
         const clat=(isFinite(disp.lat)?disp.lat:0), clon=(isFinite(disp.lon)?disp.lon:0);
-        try{ map.raw.jumpTo({ center:[clon,clat], zoom:navZoom, bearing:bearing, pitch:(tilt?55:0),
+        // Zoom de maniobra: entre 250 y 40 m antes del giro se acerca hasta +1,1
+        // niveles, y despues vuelve suave a tu zoom normal.
+        { const d=(routeOn&&hudTurnDist!=null)?hudTurnDist:1e9;
+          const obj=(d<250&&d>-20)?1.1*Math.min(1,(250-d)/210):0;
+          window.__zoomMan=(window.__zoomMan||0)+(obj-(window.__zoomMan||0))*0.08; }
+        try{ map.raw.jumpTo({ center:[clon,clat], zoom:navZoom+(window.__zoomMan||0), bearing:bearing, pitch:(tilt?55:0),
               padding:{top:Math.round(paneH*0.52),bottom:0,left:0,right:0} }); }catch(e){}   // 0.52 -> coche justo encima del radar
       }
     }
@@ -960,7 +971,27 @@ async function mergeGoingElectric(ll){
   }catch(e){}
 }
 function nearRoute(ll,maxM){ if(!routeCoordsLL.length)return false; let best=1e9; for(let i=1;i<routeCoordsLL.length;i+=2){ const d=segDistM(ll,{lat:routeCoordsLL[i-1][0],lon:routeCoordsLL[i-1][1]},{lat:routeCoordsLL[i][0],lon:routeCoordsLL[i][1]}); if(d<best)best=d; if(best<maxM)return true; } return best<maxM; }
-function refreshRadars(here){ const out=[]; for(const p of radarDB){ if(dist(here,[p.lat,p.lon])>5000)continue; if(routeOn && routeCoordsLL.length && !nearRoute([p.lat,p.lon],160)) continue; out.push({ll:[p.lat,p.lon],max:p.max,t:p.t,_al:false}); } radars=out; drawRadars(); }
+/* Con ruta activa, solo los radares de TU sentido. radares.json no trae la
+   orientacion de cada radar, asi que se usa el lado: en España el radar se
+   coloca a la derecha de la calzada que controla. Uno que queda a tu IZQUIERDA
+   a mas de 8 m del eje es de la calzada contraria y se descarta.            */
+function ladoRuta(ll){
+  let best=1e9, bi=-1; const i0=Math.max(1,routeProgIdx-20), n=routeCoordsLL.length;
+  for(let i=i0;i<n;i++){ const d=segDistM(ll,{lat:routeCoordsLL[i-1][0],lon:routeCoordsLL[i-1][1]},{lat:routeCoordsLL[i][0],lon:routeCoordsLL[i][1]}); if(d<best){best=d;bi=i;} }
+  if(bi<0) return {d:1e9,der:false};
+  const a=routeCoordsLL[bi-1], b=routeCoordsLL[bi], mx=Math.cos(a[0]*Math.PI/180);
+  const cruz=(b[1]-a[1])*mx*(ll[0]-a[0]) - (b[0]-a[0])*(ll[1]-a[1])*mx;   // <0 = derecha
+  return {d:best, der:cruz<0};
+}
+function refreshRadars(here){ const out=[];
+  for(const p of radarDB){ if(dist(here,[p.lat,p.lon])>5000)continue;
+    if(routeOn && routeCoordsLL.length){
+      const l=ladoRuta([p.lat,p.lon]);
+      if(l.d>40) continue;                    // no esta en tu ruta
+      if(!l.der && l.d>8) continue;           // esta en la calzada contraria
+    }
+    out.push({ll:[p.lat,p.lon],max:p.max,t:p.t,_al:false}); }
+  radars=out; drawRadars(); }
 function isTesla(p){ return /tesla|supercharger/i.test((p.op||'')+' '+(p.name||'')); }
 function drawChargers(){
   chargerGroup.clearLayers(); if(!showChargers)return;
@@ -1305,8 +1336,8 @@ async function renderSuggest(q){ const box=$('suggest');
   if(!q){ const favs=getFavs(), rec=getRecientes();
     if(!favs.length && !rec.length){ box.innerHTML='<div class="sug"><span class="t">Sin destinos recientes ni favoritos</span></div>'; box.style.display='block'; return; }
     let html='';
-    if(rec.length) html+=rec.map((r,i)=>'<div class="sug" data-rec="'+i+'"><span class="t">🕘 '+r.name+'</span><span class="sugx" data-recdel="'+i+'">✕</span></div>').join('');
-    if(favs.length) html+=favs.map((f,i)=>'<div class="sug" data-fav="'+i+'"><span class="t">⭐ '+f.name+'</span><span class="sugx" data-ren="'+i+'">✏️</span><span class="sugx" data-del="'+i+'">✕</span></div>').join('');
+    if(rec.length) html+=rec.map((r,i)=>'<div class="sug" data-rec="'+i+'"><span class="t">🕘 '+r.name+'</span><span class="sugx" data-recdel="'+i+'">×</span></div>').join('');
+    if(favs.length) html+=favs.map((f,i)=>'<div class="sug" data-fav="'+i+'"><span class="t">⭐ '+f.name+'</span><span class="sugx" data-ren="'+i+'">✏️</span><span class="sugx" data-del="'+i+'">×</span></div>').join('');
     box.innerHTML=html; box.style.display='block';
     box.querySelectorAll('.sug').forEach(el=>{ el.onclick=(ev)=>{
       if(ev.target.dataset.recdel!=null){ const r=getRecientes(); r.splice(+ev.target.dataset.recdel,1);
@@ -1432,7 +1463,7 @@ if('serviceWorker' in navigator){
 
   const bar=document.createElement('div'); bar.className='ab-modes';
   // Split eliminado: con mapa y HUD a la vez compiten por la misma GPU.
-  bar.innerHTML='<button data-m="map" class="on">Mapa</button><button data-m="hud">HUD 2</button><button data-m="faro" class="faro-btn">Faro</button>';
+  bar.innerHTML='<button data-m="map" class="on">Mapa</button><button data-m="faro" class="faro-btn">Faro</button><button data-m="hud">HUD 2</button>';
   app.appendChild(bar);
 
   function relayout(){
@@ -1492,7 +1523,7 @@ if('serviceWorker' in navigator){
     function isOpen(){ return getComputedStyle(sb).display!=='none'; }
     tog.onclick=()=>{ if(isOpen()){ sb.style.display='none'; } else { sb.style.display='flex'; const d=$('dest'); if(d){ d.focus(); } } };
     // mantener el icono en sintonía con el estado real (se cierra solo al elegir destino)
-    const sync=()=>{ tog.textContent=isOpen()?'✕':'🔍'; };
+    const sync=()=>{ tog.textContent=isOpen()?'×':'🔍'; };
     try{ new MutationObserver(sync).observe(sb,{attributes:true,attributeFilter:['style']}); }catch(e){}
     sync();
   }
@@ -1548,7 +1579,7 @@ if('serviceWorker' in navigator){
    +'.spdmap b{font-size:42px!important;}'   /* velocímetro más grande */
    +'.spdmap small{font-size:11px!important;}'
    +'body.solo-map .spdmap{right:12px!important;}'                        /* anula la regla vieja que la desplazaba */
-   +'#searchToggle{right:150px!important;}'                               /* lupa despejada de la velocidad, aun al maximizar */
+   +'#searchToggle{right:104px!important;}'                               /* lupa despejada de la velocidad, aun al maximizar */
    +'.gear,.recenter,#rain{display:none!important;}'
    +'.radarsign{opacity:.6;}'
    +'.radarsign.show{animation:radblink 1.05s ease-in-out infinite;}'
@@ -1596,7 +1627,7 @@ if('serviceWorker' in navigator){
     document.head.appendChild(cs);
     const sheet=document.createElement('div'); sheet.id='csheet';
     sheet.innerHTML='<div class="cs-grab" id="csGrab"><span></span></div>'
-      +'<div class="cs-head"><div class="cs-title" id="csTitle"></div><button class="cs-x" id="csX">✕</button></div>'
+      +'<div class="cs-head"><div class="cs-title" id="csTitle"></div><button class="cs-x" id="csX">×</button></div>'
       +'<div class="cs-sum" id="csSum"></div>'
       +'<div class="cs-btns"><button id="csGo">Ir</button><button id="csAdd">Añadir parada</button><button id="csFav">⭐ Guardar</button></div>'
       +'<div class="cs-body" id="csBody"></div>';
