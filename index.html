@@ -394,7 +394,7 @@ const MT_STYLES={
          La unica recuperacion automatica que queda es la del contexto WebGL,
          que si responde a un fallo real y no toca las capas.                  */
       this._m.on('style.load',()=>{ clearTimeout(this._tEstilo); this._estiloOk=true;
-        console.log('[MAP] style.load'); console.log('[MAP] restaurando ruta');
+        console.log('[STYLE] style.load · estilo actual:', this._elegido||'?'); console.log('[MAP] restaurando ruta');
         this._reAdd(); this._vaciar();
         // comprobacion: si alguna polilinea no volvio, se reintenta y se avisa
         setTimeout(()=>{ let faltan=0;
@@ -471,10 +471,15 @@ const MT_STYLES={
        vuelve al estilo anterior.                                            */
     _setBase(url, intento){
       const etiqueta = (url===MT_STYLES.sat||url===SAT_ALT) ? 'SATELITE' : (url===MT_STYLES.night?'NOCHE':'MAPA');
-      console.log('[MAP] cambio a '+etiqueta);
+      // Quien pide el cambio: 3 niveles de la pila bastan para identificarlo.
+      const quien=((new Error()).stack||'').split('\n').slice(2,5).map(l=>l.trim().replace(/^at\s+/,'').split(' ')[0]).join(' < ');
+      console.log('[STYLE] solicitando: '+etiqueta+'  ← '+quien);
+      if(this._elegido && this._elegido!==etiqueta && !intento)
+        console.warn('[STYLE] CAMBIO NO SOLICITADO A '+etiqueta+' (estabas en '+this._elegido+')');
+      if(!intento) this._elegido=etiqueta;
       this.run(()=>{
         this._estiloOk=false; this._urlEstilo=url; this._intento=intento||0;
-        console.log('[MAP] setStyle iniciado');
+        console.log('[STYLE] setStyle('+etiqueta+')');
         clearTimeout(this._tEstilo);
         this._tEstilo=setTimeout(()=>{
           if(this._estiloOk) return;
@@ -1151,9 +1156,11 @@ function simplificarDP(pts, tolM){
 function clearRouteLayers(){ if(routeCasing){map.removeLayer(routeCasing);routeCasing=null;} if(routeLine){map.removeLayer(routeLine);routeLine=null;} trafficSegs.forEach(l=>map.removeLayer(l)); trafficSegs=[]; }
 function drawRouteTT(route){
   const pts=[]; (route.legs||[]).forEach(l=>(l.points||[]).forEach(p=>pts.push([p.latitude,p.longitude])));
+  console.log('[NAV] coordenadas recibidas:', pts.length, 'puntos');
   routeCoordsLL=pts; routeProgIdx=0; clearRouteLayers();
   // Tolerancia de 3 m: a zoom 16 un pixel son ~2,4 m, asi que la diferencia no
   // se ve. En tramos rectos de autopista se descartan casi todos los puntos.
+  console.log('[NAV] dibujando ruta…');
   const sim=simplificarDP(pts, 3); routeDraw=sim.p; routeDrawIdx=sim.i;
   console.log('[ruta] puntos TomTom:', pts.length, '→ dibujados:', routeDraw.length,
               '('+Math.round(100-routeDraw.length/Math.max(1,pts.length)*100)+'% menos)');
@@ -1195,6 +1202,7 @@ function applyRoute(route){
   const merged=[]; for(const st of steps){ if(merged.length){ const pv=merged[merged.length-1]; const tt=(st.maneuver||{}).type; if(dist(pv.ll,st.ll)<90 && tt!=='off ramp' && tt!=='roundabout' && tt!=='arrive'){ continue; } } merged.push(st); } if(merged.length>=2) steps=merged;
   if(!steps.length&&routeCoordsLL.length){ steps=[{distance:(route.summary&&route.summary.lengthInMeters)||0,name:'',ll:routeCoordsLL[0],instr:'Comienza la ruta',maneuver:{type:'depart'},_min:1e9,_v:false},{distance:0,name:'',ll:routeCoordsLL[routeCoordsLL.length-1],instr:'Has llegado a tu destino',maneuver:{type:'arrive'},_min:1e9,_v:false}]; }
   stepIdx=0; routeSummary=route.summary||null; renderStep(true);
+  console.log('[NAV] navegación iniciada · routeOn='+routeOn+' · pasos='+steps.length+' · destino='+JSON.stringify(destLL));
 
   // ---- HUD 2: geometria real de la ruta + maniobras de TomTom ----
   try{
@@ -1283,13 +1291,18 @@ function showLanes(lanes){ if(!lanes||!lanes.length){ $('lanes').style.display='
 function hideLanes(){ const e=$('lanes'); if(e)e.style.display='none'; }
 function lanesHTML(lanes,hw){ return '<div class="lanerow">'+lanes.map(l=>laneArrow(l.dir,l.valid,hw)).join('')+'</div>'; }
 
-async function buildRoute(pts){ if(pts.length<2)return;
-  fetchLanes(pts);
+async function buildRoute(pts){
+  if(pts.length<2){ console.warn('[NAV] ABORTA: menos de 2 puntos'); return; }
+  try{ fetchLanes(pts); }catch(e){ console.warn('[NAV] carriles:', e.message); }
   try{ const locs=pts.map(p=>p[0]+','+p[1]).join(':');
     const av=[]; if(avoidTolls)av.push('tollRoads'); if(avoidMotorways)av.push('motorways'); if(avoidFerries)av.push('ferries');
     const url='https://api.tomtom.com/routing/1/calculateRoute/'+locs+'/json?key='+TT+'&traffic=true&travelMode=car&routeType='+routeType+'&sectionType=traffic&computeTravelTimeFor=all&maxAlternatives=2&instructionsType=text&language=es-ES'+av.map(a=>'&avoid='+a).join('');
-    const r=await fetch(url); const j=await r.json();
-    if(!j.routes||!j.routes.length){ $('status').textContent='Sin ruta'; return; }
+    const t0=performance.now();
+    const r=await fetch(url);
+    console.log('[NAV] respuesta ruta: HTTP', r.status, 'en', Math.round(performance.now()-t0), 'ms');
+    const j=await r.json();
+    if(!j.routes||!j.routes.length){ console.warn('[NAV] ABORTA: TomTom no devuelve rutas', j&&j.error?j.error:''); $('status').textContent='Sin ruta'; return; }
+    console.log('[NAV] rutas recibidas:', j.routes.length);
     destLL=pts[pts.length-1]; routeOn=true; offAcc=0;
     try{ publishRoute(destLL, ($('dest')&&$('dest').value)||''); }catch(e){} // compartir destino con el otro dispositivo
     const routes=j.routes; applyRoute(routes[0]);
@@ -1298,7 +1311,7 @@ async function buildRoute(pts){ if(pts.length<2)return;
     if(bestAlt && (routes[0].summary.travelTimeInSeconds - bestAlt.summary.travelTimeInSeconds)>60){ const save=Math.round((routes[0].summary.travelTimeInSeconds-bestAlt.summary.travelTimeInSeconds)/60); rr._alt=bestAlt; rr.textContent='⚠ Evitar atasco · −'+save+' min'; rr.style.display='block'; }
     else { rr.style.display='none'; rr._alt=null; }
     $('searchBar').style.display='none'; $('navbanner').style.display='flex'; hideSuggest();
-  }catch(e){ $('status').textContent='Error de ruta'; }
+  }catch(e){ console.error('[NAV] ERROR de ruta:', e && e.message, e); $('status').textContent='Error de ruta: '+(e&&e.message||''); }
 }
 /* Ultimos destinos: se guardan al lanzar la ruta y se ofrecen al tocar el
    buscador, antes de escribir nada. Evita teclear conduciendo lo que ya has
@@ -1313,9 +1326,12 @@ function addReciente(ll, nombre){
     localStorage.setItem('recientes', JSON.stringify(r.slice(0,5)));
   }catch(e){}
 }
-async function routeTo(dest, nombre){ if(!raw){ $('status').textContent='Sin GPS todavía'; return; }
-  addReciente(dest, nombre || $('dest').value);
-  buildRoute([[raw.lat,raw.lon],dest]); }
+async function routeTo(dest, nombre){
+  console.log('[NAV] coordenadas destino:', dest, '·', nombre||$('dest').value||'(sin nombre)');
+  if(!raw){ console.warn('[NAV] ABORTA: sin GPS todavía'); $('status').textContent='Sin GPS todavía'; return; }
+  try{ addReciente(dest, nombre || $('dest').value); }catch(e){ console.warn('[NAV] recientes:', e.message); }
+  console.log('[NAV] solicitando ruta: desde', [raw.lat,raw.lon]);
+  return buildRoute([[raw.lat,raw.lon],dest]); }
 function addWaypoint(ll){ if(!raw)return; if(routeOn&&destLL) buildRoute([[raw.lat,raw.lon],ll,destLL]); else routeTo(ll); }
 function renderStep(say){ const s=steps[stepIdx]; if(!s)return; const hw=isHighway(s); $('navbanner').classList.toggle('hw',hw); $('arrow').innerHTML=maneuverSVG(s,hw); $('navsub').textContent=s.name||shortHint(s); if(say)speak(s.instr);
   const mm=s.maneuver||{};
