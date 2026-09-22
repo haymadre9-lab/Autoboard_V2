@@ -323,7 +323,7 @@ const MT_STYLES={
         maxTileCacheSize:60, refreshExpiredTiles:false, antialias:false});
       try{ this._m.touchZoomRotate.disableRotation(); }catch(e){}
       try{ this._m.setMaxPitch(70); }catch(e){}
-      this.raw=this._m; this.ready=false; this.q=[]; this._overlays=[]; this._polys=[]; this._baseKey=(new Date().getHours()>=21||new Date().getHours()<7)?'night':'day';
+      this.raw=this._m; this.ready=false; this.q=[]; this._overlays=[]; this._polys=[]; this._symGroups=[]; this._fcs=[]; this._baseKey=(new Date().getHours()>=21||new Date().getHours()<7)?'night':'day';
       this._m.on('load',()=>{ this.ready=true; this.q.forEach(f=>{try{f();}catch(e){}}); this.q=[]; });
 
       /* ---- Vigilancia del mapa en blanco -------------------------------
@@ -359,7 +359,8 @@ const MT_STYLES={
       this._m.on('style.load',()=>{ this._reAdd(); }); // tras setStyle: re-añade overlays y rutas
     }
     run(f){ if(this.ready && this._m.isStyleLoaded()){ try{f();}catch(e){} } else this.q.push(f); }
-    _reAdd(){ this._overlays.forEach(o=>this._mountOverlay(o)); this._polys.forEach(p=>this._mountPoly(p)); }
+    // tras setStyle se pierden fuentes, capas e IMAGENES: se vuelven a montar todas
+    _reAdd(){ this._overlays.forEach(o=>this._mountOverlay(o)); this._polys.forEach(p=>this._mountPoly(p)); this._symGroups.forEach(g=>this._mountSym(g)); this._fcs.forEach(o=>this._mountFC(o)); }
     // ---- cámara / métodos Leaflet ----
     setView(ll,z,o){ this.run(()=>this._m.jumpTo({center:D2(ll), zoom:(z!=null?z:this._m.getZoom())})); return this; }
     setZoom(z){ this.run(()=>this._m.setZoom(z)); return this; }
@@ -367,6 +368,39 @@ const MT_STYLES={
     getCenter(){ const c=this._m.getCenter(); return {lat:c.lat,lng:c.lng}; }
     invalidateSize(){ try{this._m.resize();}catch(e){} return this; }
     closePopup(p){ if(p&&p.remove)p.remove(); }
+    _mountSym(g){
+      const m=this._m; if(!this.ready){ this.run(()=>this._mountSym(g)); return; }
+      const feats=[]; let pendientes=0;
+      const fin=()=>{
+        try{
+          for(const [k,v] of _iconCache) if(!m.hasImage(k)) m.addImage(k,{width:v.w,height:v.h,data:v.data.data},{pixelRatio:2});
+          const gj={type:'FeatureCollection',features:feats};
+          if(!m.getSource(g.id)) m.addSource(g.id,{type:'geojson',data:gj});
+          else m.getSource(g.id).setData(gj);
+          if(!m.getLayer(g.id)){
+            m.addLayer({id:g.id,type:'symbol',source:g.id,layout:{
+              'icon-image':['get','ic'],'icon-allow-overlap':true,'icon-ignore-placement':true,
+              'icon-anchor':'center'}});
+            // un solo listener por grupo; el indice apunta al marcador original
+            m.on('click',g.id,e=>{ const f=e.features&&e.features[0]; if(!f)return;
+              const mk=g.items[f.properties.i]; if(mk&&mk._h.click) mk._h.click.forEach(cb=>{ try{cb(e);}catch(_){}}); });
+            m.on('mouseenter',g.id,()=>{ m.getCanvas().style.cursor='pointer'; });
+            m.on('mouseleave',g.id,()=>{ m.getCanvas().style.cursor=''; });
+          }
+        }catch(e){ console.warn('[sym]',g.id,e.message); }
+      };
+      g.items.forEach((mk,i)=>{
+        const spec=mk.opts.icon||{html:'',size:[24,24]};
+        pendientes++;
+        _rasterIcon(spec, key=>{
+          if(key) feats.push({type:'Feature',geometry:{type:'Point',coordinates:D2(mk.ll)},properties:{i,ic:key}});
+          if(--pendientes===0) fin();
+        });
+      });
+      if(!g.items.length) fin();
+    }
+    _unmountSym(g){ const m=this._m; this._symGroups=this._symGroups.filter(x=>x!==g);
+      try{ if(m.getLayer(g.id))m.removeLayer(g.id); if(m.getSource(g.id))m.removeSource(g.id); }catch(e){} }
     hasLayer(l){ return !!(l&&l._added); }
     removeLayer(l){ if(l&&l._remove)l._remove(); }
     on(evt,cb){
@@ -389,12 +423,37 @@ const MT_STYLES={
     _overlayToFront(o){ try{ if(this._m.getLayer(o.id))this._m.moveLayer(o.id); }catch(e){} }
     // ---- polilíneas (ruta) como GeoJSON ----
     _addPoly(p){ p._map=this; this._polys.push(p); p._added=true; this.run(()=>this._mountPoly(p)); }
-    _mountPoly(p){ const m=this._m; const gj={type:'Feature',geometry:{type:'LineString',coordinates:(p.coords||[]).map(D2)}};
-      try{ if(!m.getSource(p.id)) m.addSource(p.id,{type:'geojson',data:gj}); else m.getSource(p.id).setData(gj);
-        if(!m.getLayer(p.id)) m.addLayer({id:p.id,type:'line',source:p.id,layout:{'line-join':'round','line-cap':'round'},paint:{'line-color':p.opts.color||'#4c8dff','line-width':p.opts.weight||6,'line-opacity':(p.opts.opacity!=null?p.opts.opacity:1)}}); }catch(e){} }
-    _updatePoly(p){ const m=this._m; try{ const s=m.getSource(p.id); if(s)s.setData({type:'Feature',geometry:{type:'LineString',coordinates:(p.coords||[]).map(D2)}}); }catch(e){} }
-    _polyToFront(p){ try{ if(this._m.getLayer(p.id))this._m.moveLayer(p.id); }catch(e){} }
-    _removePoly(p){ p._added=false; this._polys=this._polys.filter(x=>x!==p); const m=this._m; try{ if(m.getLayer(p.id))m.removeLayer(p.id); if(m.getSource(p.id))m.removeSource(p.id); }catch(e){} }
+    // Coordenadas: si la polilinea ya las trae en [lng,lat] (p.lngLat), no se
+    // vuelve a crear un array entero en cada actualizacion.
+    _gj(p){ const c=p.lngLat ? (p.coords||[]) : (p.coords||[]).map(D2);
+      return {type:'Feature',geometry:{type:'LineString',coordinates:c}}; }
+    _mountPoly(p){ const m=this._m; const gj=this._gj(p);
+      try{
+        // tolerance: geojson-vt simplifica la linea POR ZOOM al teselarla.
+        // Subirla de 0.375 a 1.2 hace que a zoom lejano se dibujen muchos menos
+        // vertices sin que se note; a zoom de navegacion apenas cambia.
+        if(!m.getSource(p.id)) m.addSource(p.id,{type:'geojson',data:gj,tolerance:(p.opts.tolerance!=null?p.opts.tolerance:0.375),lineMetrics:false});
+        else m.getSource(p.id).setData(gj);
+        const lay={'line-join':'round','line-cap':'round'};
+        // Borde en la MISMA fuente: una sola geometria, dos capas. Antes eran dos
+        // polilineas con la ruta duplicada y dos re-teselados por actualizacion.
+        if(p.opts.casing && !m.getLayer(p.id+'-c'))
+          m.addLayer({id:p.id+'-c',type:'line',source:p.id,layout:lay,paint:{'line-color':p.opts.casing,'line-width':p.opts.casingWeight||12,'line-opacity':(p.opts.casingOpacity!=null?p.opts.casingOpacity:0.9)}});
+        if(!m.getLayer(p.id)) m.addLayer({id:p.id,type:'line',source:p.id,layout:lay,paint:{'line-color':p.opts.color||'#4c8dff','line-width':p.opts.weight||6,'line-opacity':(p.opts.opacity!=null?p.opts.opacity:1)}});
+      }catch(e){} }
+    _updatePoly(p){ const m=this._m; try{ const s=m.getSource(p.id); if(s)s.setData(this._gj(p)); }catch(e){} }
+    // Coleccion de lineas con color por propiedad: una fuente, una capa.
+    _mountFC(o){ const m=this._m;
+      try{ const gj={type:'FeatureCollection',features:o.feats};
+        if(!m.getSource(o.id)) m.addSource(o.id,{type:'geojson',data:gj,tolerance:1.2}); else m.getSource(o.id).setData(gj);
+        if(!m.getLayer(o.id)) m.addLayer({id:o.id,type:'line',source:o.id,layout:{'line-join':'round','line-cap':'round'},
+          paint:{'line-color':['get','c'],'line-width':o.opts.weight||6,'line-opacity':(o.opts.opacity!=null?o.opts.opacity:1)}});
+      }catch(e){} }
+    _addFC(o){ o._map=this; this._fcs.push(o); o._added=true; this.run(()=>this._mountFC(o)); }
+    _removeFC(o){ o._added=false; this._fcs=this._fcs.filter(x=>x!==o); const m=this._m;
+      try{ if(m.getLayer(o.id))m.removeLayer(o.id); if(m.getSource(o.id))m.removeSource(o.id); }catch(e){} }
+    _polyToFront(p){ try{ if(this._m.getLayer(p.id+'-c'))this._m.moveLayer(p.id+'-c'); if(this._m.getLayer(p.id))this._m.moveLayer(p.id); }catch(e){} }
+    _removePoly(p){ p._added=false; this._polys=this._polys.filter(x=>x!==p); const m=this._m; try{ if(m.getLayer(p.id))m.removeLayer(p.id); if(m.getLayer(p.id+'-c'))m.removeLayer(p.id+'-c'); if(m.getSource(p.id))m.removeSource(p.id); }catch(e){} }
   }
 
   class TileOverlay{ constructor(url,opts){ this.url=url; this.opts=opts||{}; this.id='ovl_'+(++uid); this._added=false; }
@@ -417,22 +476,66 @@ const MT_STYLES={
     clearLayers(){ this.items.forEach(m=>m._detach()); this.items=[]; }
     on(){ return this; }
   }
-  class Mk{ constructor(latlng,opts){ this.ll=latlng; this.opts=opts||{}; const spec=this.opts.icon;
+  // Marcador PEREZOSO: el div y el maplibregl.Marker solo se crean al engancharlo
+  // al mapa. Si va a una capa de simbolos (SymGroup), nunca llegan a existir.
+  class Mk{ constructor(latlng,opts){ this.ll=latlng; this.opts=opts||{}; this._added=false; this._h={}; this.el=null; this._mk=null; }
+    _build(){ if(this._mk) return;
+      const spec=this.opts.icon;
       const el=document.createElement('div'); el.style.lineHeight='0'; el.style.cursor=(this.opts.interactive===false?'default':'pointer');
       if(spec){ el.innerHTML=spec.html||''; if(spec.size){ el.style.width=spec.size[0]+'px'; el.style.height=spec.size[1]+'px'; } }
-      this.el=el; this._icon=el; this._added=false;
+      this.el=el; this._icon=el;
       if(this.opts.interactive!==false){ // que el toque/clic sobre el marcador NO llegue al mapa (si llega, MapLibre lo trata como clic y cierra la ficha)
         const stop=e=>e.stopPropagation();
         el.addEventListener('touchstart',stop,{passive:true}); el.addEventListener('pointerdown',stop); el.addEventListener('mousedown',stop); el.addEventListener('click',stop);
       }
-      this._mk=new maplibregl.Marker({element:el, anchor:'center'}).setLngLat(D2(latlng));
+      for(const ev in this._h) this._h[ev].forEach(cb=>el.addEventListener(ev,cb));
+      this._mk=new maplibregl.Marker({element:el, anchor:'center'}).setLngLat(D2(this.ll));
     }
-    _attach(map){ if(!this._added){ this._map=map; this._mk.addTo(map._m); this._added=true; } }
+    _attach(map){ if(!this._added){ this._build(); this._map=map; this._mk.addTo(map._m); this._added=true; } }
     _detach(){ if(this._added){ this._mk.remove(); this._added=false; } }
     addTo(target){ if(target && target._isGroup){ target.add(this); } else { this._attach(target); } return this; }
-    setLatLng(a){ this.ll=a; this._mk.setLngLat(D2(a)); return this; }
-    on(evt,cb){ this.el.addEventListener(evt,cb); return this; }
+    setLatLng(a){ this.ll=a; if(this._mk) this._mk.setLngLat(D2(a)); return this; }
+    on(evt,cb){ (this._h[evt]=this._h[evt]||[]).push(cb); if(this.el) this.el.addEventListener(evt,cb); return this; }
     remove(){ this._detach(); return this; }
+  }
+
+  /* ---- SymGroup: los marcadores se dibujan en GPU como UNA capa de simbolos --
+     Con marcadores DOM, MapLibre recoloca cada div por CSS en cada frame de
+     movimiento: con 150 radares y cargadores eran 150 transformaciones por
+     frame al hacer zoom. Aqui van todos en una fuente GeoJSON y una capa
+     'symbol', con los MISMOS iconos rasterizados (incluida su sombra).      */
+  const _iconCache=new Map();     // clave -> {w,h,data:ImageData}
+  function _iconKey(spec){ let h=0; const s=spec.html||''; for(let k=0;k<s.length;k++){ h=((h<<5)-h+s.charCodeAt(k))|0; } return 'ic'+(h>>>0)+'_'+(spec.size?spec.size.join('x'):''); }
+  function _iconSrc(html){
+    const mi=html.match(/<img[^>]+src="([^"]+)"/); if(mi) return mi[1];
+    const ms=html.match(/<svg[\s\S]*<\/svg>/); if(ms) return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(ms[0]);
+    return null;
+  }
+  function _rasterIcon(spec, cb){
+    const key=_iconKey(spec); if(_iconCache.has(key)){ cb(key); return; }
+    const src=_iconSrc(spec.html||''); if(!src){ cb(null); return; }
+    const im=new Image();
+    im.onload=()=>{
+      const sz=spec.size||[24,24], PR=2, pad=4;
+      const cv=document.createElement('canvas'); cv.width=(sz[0]+pad*2)*PR; cv.height=(sz[1]+pad*2)*PR;
+      const c=cv.getContext('2d'); c.scale(PR,PR);
+      c.shadowColor='rgba(0,0,0,.55)'; c.shadowBlur=3; c.shadowOffsetY=1;   // la sombra del drop-shadow original
+      c.drawImage(im, pad, pad, sz[0], sz[1]);
+      _iconCache.set(key,{w:cv.width,h:cv.height,data:c.getImageData(0,0,cv.width,cv.height)});
+      cb(key);
+    };
+    im.onerror=()=>cb(null);
+    im.src=src;
+  }
+  class SymGroup{ constructor(name){ this._isGroup=true; this._sym=true; this.items=[]; this.id='sym_'+name; this._map=null; this._added=false; this._pend=false; }
+    addTo(map){ this._map=map; this._added=true; if(map._symGroups.indexOf(this)<0) map._symGroups.push(this); this._sched(); return this; }
+    add(m){ this.items.push(m); this._sched(); }
+    clearLayers(){ this.items=[]; this._sched(); }
+    on(){ return this; }
+    // Se agrupan todos los cambios de un mismo frame en un unico setData.
+    _sched(){ if(this._pend||!this._map) return; this._pend=true;
+      requestAnimationFrame(()=>{ this._pend=false; if(this._map&&this._added) this._map._mountSym(this); }); }
+    _remove(){ this._added=false; if(this._map) this._map._unmountSym(this); }
   }
   class Popup{ constructor(opts){ this._p=new maplibregl.Popup({maxWidth:((opts&&opts.maxWidth)||280)+'px', closeButton:true, closeOnClick:true}); }
     setLatLng(a){ this._ll=D2(a); return this; }
@@ -447,6 +550,14 @@ const MT_STYLES={
     marker:(ll,opts)=>new Mk(ll,opts),
     divIcon:(o)=>({html:(o&&o.html)||'', size:(o&&o.iconSize)||[24,24], anchor:(o&&o.iconAnchor)||null}),
     layerGroup:()=>new Group(),
+    symbolGroup:(n)=>new SymGroup(n),
+    // feats: [{coords:[[lat,lng]...], color:'#..'}]
+    lineCollection:(n,feats,opts)=>{ const o={id:'fc_'+n+'_'+(++uid), opts:opts||{}, _added:false,
+        feats:(feats||[]).map(f=>({type:'Feature',properties:{c:f.color},geometry:{type:'LineString',coordinates:f.coords.map(D2)}}))};
+      o.addTo=map=>{ map._addFC(o); return o; };
+      o._remove=()=>{ if(o._map) o._map._removeFC(o); };
+      o.bringToFront=()=>{ try{ if(o._map&&o._map._m.getLayer(o.id)) o._map._m.moveLayer(o.id); }catch(e){} return o; };
+      return o; },
     polyline:(ll,opts)=>new Poly(ll,opts),
     popup:(opts)=>new Popup(opts),
     control:{ attribution:()=>({ addAttribution:()=>({ addTo:()=>{} }) }) }
@@ -580,9 +691,40 @@ function segDistM(p,a,b){const mx=111320*Math.cos(p[0]*Math.PI/180),my=110540;co
 const rot={'straight':0,'slight right':40,'right':90,'sharp right':135,'uturn':180,'sharp left':-135,'left':-90,'slight left':-40};
 function arrowSVG(mod,col,w){col=col||'#0a8a34';w=w||7.5;return '<svg viewBox="0 0 48 52"><path d="M24 7 L24 45 M24 7 L12 21 M24 7 L36 21" fill="none" stroke="'+col+'" stroke-width="'+w+'" stroke-linecap="round" stroke-linejoin="round" transform="rotate('+(rot[mod]||0)+' 24 26)"/></svg>';}
 function arrowHead(x,y,t,c){const a1=t+2.55,a2=t-2.55,l=6.5;return '<path d="M'+x.toFixed(1)+' '+y.toFixed(1)+' L'+(x+Math.sin(a1)*l).toFixed(1)+' '+(y-Math.cos(a1)*l).toFixed(1)+' M'+x.toFixed(1)+' '+y.toFixed(1)+' L'+(x+Math.sin(a2)*l).toFixed(1)+' '+(y-Math.cos(a2)*l).toFixed(1)+'" stroke="'+c+'" stroke-width="4" stroke-linecap="round"/>';}
-function roundaboutSVG(exit,mod,col){const c=col||'#0a8a34',g='#9aa3b2',cx=24,cy=26,r=9;const n=parseInt(exit,10);const deg=n===1?90:n===2?0:n===3?-90:180;const t=deg*Math.PI/180;const ex=cx+Math.sin(t)*r,ey=cy-Math.cos(t)*r,ox=cx+Math.sin(t)*(r+13),oy=cy-Math.cos(t)*(r+13);return '<svg viewBox="0 0 48 52"><circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+g+'" stroke-width="3.6"/><path d="M'+cx+' 50 L'+cx+' '+(cy+r)+'" stroke="'+g+'" stroke-width="4.2" stroke-linecap="round"/><path d="M'+ex.toFixed(1)+' '+ey.toFixed(1)+' L'+ox.toFixed(1)+' '+oy.toFixed(1)+'" stroke="'+c+'" stroke-width="4.6" stroke-linecap="round"/>'+arrowHead(ox,oy,t,c)+(exit?'<circle cx="39" cy="12" r="9.5" fill="#39d98a"/><text x="39" y="16.5" text-anchor="middle" font-size="13" font-weight="800" fill="#04130c">'+exit+'</text>':'')+'</svg>';}
+function roundaboutSVG(exit,mod,col){
+  // Rotonda con TODAS las salidas: entrada abajo, circulacion antihoraria, la
+  // salida elegida resaltada con flecha y el numero en una insignia.
+  const c=col||'#0a8a34', g='#9aa3b2', cx=24, cy=24, r=9.5;
+  const n=Math.max(1,Math.min(6,parseInt(exit,10)||1));
+  const total=Math.max(3,n+1);                        // salidas visibles alrededor
+  const ang=k=>Math.PI/2 - (k+1)*(2*Math.PI/(total+1)); // desde la entrada, sentido antihorario visto en planta
+  let s='<svg viewBox="0 0 48 52"><circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+g+'" stroke-width="3.4"/>';
+  s+='<path d="M'+cx+' 50 L'+cx+' '+(cy+r)+'" stroke="'+c+'" stroke-width="4.4" stroke-linecap="round"/>';
+  for(let k=0;k<total;k++){ const a=-ang(k), x1=cx+Math.cos(a)*r, y1=cy+Math.sin(a)*r, x2=cx+Math.cos(a)*(r+8.5), y2=cy+Math.sin(a)*(r+8.5);
+    const sel=(k===n-1);
+    s+='<path d="M'+x1.toFixed(1)+' '+y1.toFixed(1)+' L'+x2.toFixed(1)+' '+y2.toFixed(1)+'" stroke="'+(sel?c:g)+'" stroke-width="'+(sel?4.6:2.6)+'" stroke-linecap="round"/>';
+    if(sel){ // arco recorrido desde la entrada hasta la salida
+      const a0=Math.PI/2, a1=a, large=((a0-a1+2*Math.PI)%(2*Math.PI))>Math.PI?1:0;
+      s+='<path d="M'+cx+' '+(cy+r)+' A'+r+' '+r+' 0 '+large+' 1 '+x1.toFixed(1)+' '+y1.toFixed(1)+'" fill="none" stroke="'+c+'" stroke-width="4.4" stroke-linecap="round"/>';
+      s+=arrowHead(x2,y2,Math.atan2(x2-cx,-(y2-cy)),c); }
+  }
+  s+='<circle cx="40" cy="10" r="8.5" fill="#39d98a"/><text x="40" y="14" text-anchor="middle" font-size="12" font-weight="800" fill="#04130c">'+n+'</text></svg>';
+  return s;
+}
 function isHighway(st){const n=(((st&&st.name)||'')+'').toUpperCase();return /\b(A|AP|E)-?\d/.test(n)||n.indexOf('AUTOV')>=0||n.indexOf('AUTOP')>=0||n.indexOf('MOTORWAY')>=0;}
-function maneuverSVG(st,hw){const m=st.maneuver||{};const col=hw?'#ffffff':'#0a8a34';if(m.type==='roundabout'||m.type==='rotary')return roundaboutSVG(m.exit,m.modifier,col);return arrowSVG(m.modifier,col,7.5);}
+function maneuverSVG(st,hw){const m=st.maneuver||{};const col=hw?'#ffffff':'#0a8a34';
+  if(m.type==='roundabout'||m.type==='rotary')return roundaboutSVG(m.exit,m.modifier,col);
+  if(m.type==='arrive')return '<svg viewBox="0 0 48 52"><path d="M24 6c-7 0-12 5-12 12 0 9 12 26 12 26s12-17 12-26c0-7-5-12-12-12z" fill="'+col+'"/><circle cx="24" cy="18" r="4.5" fill="#fff"/></svg>';
+  if(m.type==='fork'||m.type==='off ramp'){ // bifurcacion / salida: tronco + dos ramas, la tuya marcada
+    const izq=(m.modifier||'').indexOf('left')>=0, g='#9aa3b2';
+    return '<svg viewBox="0 0 48 52"><path d="M24 48 L24 28" stroke="'+col+'" stroke-width="7" stroke-linecap="round"/>'
+      +'<path d="M24 28 L'+(izq?36:12)+' 10" stroke="'+g+'" stroke-width="5" stroke-linecap="round"/>'
+      +'<path d="M24 28 L'+(izq?12:36)+' 10" stroke="'+col+'" stroke-width="7" stroke-linecap="round"/>'
+      +arrowHead(izq?12:36,10,izq?-0.6:0.6,col)+'</svg>'; }
+  if(m.type==='merge'||m.type==='on ramp'){ const izq=(m.modifier||'').indexOf('left')>=0;
+    return '<svg viewBox="0 0 48 52"><path d="M'+(izq?34:14)+' 48 L'+(izq?34:14)+' 6" stroke="#9aa3b2" stroke-width="5" stroke-linecap="round"/>'
+      +'<path d="M'+(izq?12:36)+' 48 Q'+(izq?14:34)+' 26 '+(izq?30:18)+' 14" fill="none" stroke="'+col+'" stroke-width="7" stroke-linecap="round"/></svg>'; }
+  return arrowSVG(m.modifier,col,7.5);}
 function shortHint(st){const m=st.maneuver||{},t=m.type,mod=m.modifier;if(t==='roundabout'||t==='rotary')return 'Rotonda'+(m.exit?' · salida '+m.exit:'');if(t==='off ramp')return 'Salida';if(t==='on ramp'||t==='merge')return 'Incorpórate';if(t==='arrive')return 'Destino';if(t==='depart')return 'Inicio';const mm={'left':'Izquierda','right':'Derecha','slight left':'Izq. suave','slight right':'Dcha. suave','sharp left':'Izq. cerrada','sharp right':'Dcha. cerrada','straight':'Recto','uturn':'Cambio de sentido'};return mm[mod]||'Sigue';}
 function instrES(s){const m=s.maneuver||{},mod=m.modifier,type=m.type,name=s.name||'';const dir={'left':'gira a la izquierda','right':'gira a la derecha','slight left':'ligeramente a la izquierda','slight right':'ligeramente a la derecha','sharp left':'giro cerrado a la izquierda','sharp right':'giro cerrado a la derecha','straight':'sigue recto','uturn':'haz el cambio de sentido'};if(type==='depart')return 'Comienza la ruta'+(name?' por '+name:'');if(type==='arrive')return 'Has llegado a tu destino';if(type==='roundabout'||type==='rotary')return 'En la rotonda, toma la salida '+(m.exit||'');if(type==='merge')return 'Incorpórate'+(name?' a '+name:'');if(type==='on ramp')return 'Toma la incorporación'+(name?' a '+name:'');if(type==='off ramp')return 'Toma la salida'+(name?' hacia '+name:'');if(type==='fork')return (mod&&mod.indexOf('left')>=0)?'En la bifurcación, mantente a la izquierda':'En la bifurcación, mantente a la derecha';const d=dir[mod]||'continúa';return d.charAt(0).toUpperCase()+d.slice(1)+(name?' por '+name:'');}
 
@@ -596,9 +738,10 @@ let baseSat=false, mapNite=false, curBase={redraw(){},on(){}}, trafficLayer=null
 let tilt=false, minKw=0, showRadars=true, showChargers=true, evListHidden=false, avoidTolls=false, avoidMotorways=false, avoidFerries=false, routeType="fastest";
 const carIcon=L.divIcon({className:'',html:'<div id="carrot"><svg width="38" height="38" viewBox="0 0 24 24"><path d="M12 2 L20 21 L12 15.5 L4 21 Z" fill="#ff2d2d" stroke="#fff" stroke-width="1.3"/></svg></div>',iconSize:[38,38],iconAnchor:[19,19]});
 const carMk=L.marker([43.26,-2.93],{icon:carIcon,interactive:false,keyboard:false,zIndexOffset:1000}).addTo(map);
-const chargerGroup=L.layerGroup().addTo(map);
-const radarGroup=L.layerGroup().addTo(map);
-const favGroup=L.layerGroup().addTo(map);
+// Capas de simbolos en GPU en vez de marcadores DOM (ver SymGroup).
+const chargerGroup=L.symbolGroup('cargadores').addTo(map);
+const radarGroup=L.symbolGroup('radares').addTo(map);
+const favGroup=L.symbolGroup('favoritos').addTo(map);
 let routeCasing=null, routeLine=null;
 
 // ===== estado =====
@@ -885,17 +1028,60 @@ function updateRadar(){
 // ===== navegación (Nominatim + TomTom routing con tráfico) =====
 let routeOn=false, steps=[], stepIdx=0, destLL=null, routeCoordsLL=[], routeProgIdx=0, offAcc=0, lastRecalc=0, lastTrim=0;
 let trafficSegs=[], routeSummary=null;
+/* ---- Geometria de DIBUJO, separada de la de NAVEGACION ---------------------
+   routeCoordsLL conserva todos los puntos de TomTom: con ellos se calcula la
+   posicion, el progreso y el fuera de ruta. routeDraw es una copia simplificada
+   con Douglas-Peucker que SOLO sirve para pintar la linea. Cada punto dibujado
+   recuerda su indice en la ruta completa (routeDrawIdx) para poder recortarla. */
+let routeDraw=[], routeDrawIdx=[];
+function simplificarDP(pts, tolM){
+  const n=pts.length; if(n<3) return {p:pts.map(q=>[q[1],q[0]]), i:pts.map((_,k)=>k)};
+  const lat0=pts[0][0]*Math.PI/180, mx=111320*Math.cos(lat0), my=110540;
+  const X=new Float64Array(n), Y=new Float64Array(n);
+  for(let k=0;k<n;k++){ X[k]=pts[k][1]*mx; Y[k]=pts[k][0]*my; }
+  const keep=new Uint8Array(n); keep[0]=keep[n-1]=1;
+  const pila=[0,n-1], t2=tolM*tolM;
+  while(pila.length){
+    const b=pila.pop(), a=pila.pop();
+    const dx=X[b]-X[a], dy=Y[b]-Y[a], L2=dx*dx+dy*dy;
+    let dm=0, im=-1;
+    for(let k=a+1;k<b;k++){
+      let d;
+      if(L2===0){ const ex=X[k]-X[a], ey=Y[k]-Y[a]; d=ex*ex+ey*ey; }
+      else { const c=((X[k]-X[a])*dy-(Y[k]-Y[a])*dx); d=c*c/L2; }
+      if(d>dm){ dm=d; im=k; }
+    }
+    if(im>=0 && dm>t2){ keep[im]=1; pila.push(a,im,im,b); }
+  }
+  const p=[], i=[];
+  for(let k=0;k<n;k++) if(keep[k]){ p.push([pts[k][1],pts[k][0]]); i.push(k); }   // ya en [lng,lat]
+  return {p, i};
+}
+
 function clearRouteLayers(){ if(routeCasing){map.removeLayer(routeCasing);routeCasing=null;} if(routeLine){map.removeLayer(routeLine);routeLine=null;} trafficSegs.forEach(l=>map.removeLayer(l)); trafficSegs=[]; }
 function drawRouteTT(route){
   const pts=[]; (route.legs||[]).forEach(l=>(l.points||[]).forEach(p=>pts.push([p.latitude,p.longitude])));
   routeCoordsLL=pts; routeProgIdx=0; clearRouteLayers();
-  routeCasing=L.polyline(pts,{color:'#0b3d91',weight:12,opacity:.9}).addTo(map);
-  routeLine=L.polyline(pts,{color:'#1a73e8',weight:7}).addTo(map);   // azul de navegación clásico
+  // Tolerancia de 3 m: a zoom 16 un pixel son ~2,4 m, asi que la diferencia no
+  // se ve. En tramos rectos de autopista se descartan casi todos los puntos.
+  const sim=simplificarDP(pts, 3); routeDraw=sim.p; routeDrawIdx=sim.i;
+  console.log('[ruta] puntos TomTom:', pts.length, '→ dibujados:', routeDraw.length,
+              '('+Math.round(100-routeDraw.length/Math.max(1,pts.length)*100)+'% menos)');
+  // UNA polilinea con borde integrado: misma fuente, dos capas.
+  routeCasing=null;
+  const rl=L.polyline(routeDraw,{color:'#1a73e8',weight:7,casing:'#0b3d91',casingWeight:12,casingOpacity:.9,tolerance:1.2});
+  rl.lngLat=true; routeLine=rl.addTo(map);
+  // Antes: una polilinea (fuente + capa) POR CADA tramo congestionado.
+  // Ahora: todos los tramos en una sola fuente y una sola capa, con el color
+  // como propiedad de cada tramo. Misma apariencia, una sola capa.
+  const segsT=[];
   (route.sections||[]).forEach(sec=>{ if(sec.sectionType!=='TRAFFIC')return; const a=sec.startPointIndex,b=sec.endPointIndex; if(a==null||b==null||b<=a)return;
     const seg=pts.slice(a,b+1); if(seg.length<2)return; const mag=sec.magnitudeOfDelay||0; let col=null;
     if(sec.simpleCategory==='ROAD_CLOSURE'||sec.effectiveSpeedInKmh===0)col='#ff2d2d'; else if(mag>=3)col='#ff2d2d'; else if(mag>=1)col='#ff9a1f';
-    if(col) trafficSegs.push(L.polyline(seg,{color:col,weight:6}).addTo(map));
+    if(col) segsT.push({coords:seg, color:col});
   });
+  if(segsT.length){ trafficSegs.push(L.lineCollection('trafico',segsT,{weight:6}).addTo(map));
+    console.log('[ruta] tramos de trafico:', segsT.length, '→ 1 capa'); }
 }
 function ttMan(it){ const m=(it.maneuver||it.instructionType||'').toString().toUpperCase(); const rb=it.roundaboutExitNumber;
   if(m.indexOf('ROUNDABOUT')>=0||m.indexOf('ROTARY')>=0) return {type:'roundabout',exit:rb,modifier:(m.indexOf('LEFT')>=0?'left':(m.indexOf('RIGHT')>=0?'right':'straight'))};
@@ -922,6 +1108,19 @@ function applyRoute(route){
 
   // ---- HUD 2: geometria real de la ruta + maniobras de TomTom ----
   try{
+    if(routeCoordsLL && routeCoordsLL.length>8 && !window.hud2){
+      // HUD aun no cargado: se preparan autovias y maniobras para cuando se abra
+      const autov=[]; let ini=null, off=0;
+      for(let i=0;i<instr.length;i++){ const it=instr[i], m0=it.routeOffsetInMeters||0;
+        const m1=(instr[i+1]&&instr[i+1].routeOffsetInMeters)||m0; const refs=(it.roadNumbers||[]).join(' ');
+        const hw=isHighway({name:it.street||''})||isHighway({name:refs})||/\b(A|AP|E)-?\d/i.test(refs);
+        if(hw&&ini===null) ini=m0; if(!hw&&ini!==null){ if(m0-ini>150) autov.push([ini,m0]); ini=null; } off=m1; }
+      if(ini!==null&&off-ini>150) autov.push([ini,off]);
+      window.__hud2Autov=autov; window.__hud2Pasos=[];
+      for(const it of instr){ const mv=ttMan(it)||{}, tp=mv.type||'', mo=mv.modifier||'';
+        const tipo=/roundabout|rotary/.test(tp)?'roundabout':mo.indexOf('left')>=0?'left':mo.indexOf('right')>=0?'right':null;
+        const metro=it.routeOffsetInMeters||0; if(tipo&&metro>5) window.__hud2Pasos.push({metro,tipo,calle:it.street||'',salida:mv.exit}); }
+    }
     if(window.hud2 && routeCoordsLL && routeCoordsLL.length>8){
       // Tramos de autovia: TomTom no da road_class, pero tu isHighway() ya
       // reconoce A-8, AP-8, "Autovia", "Autopista"... Se marcan por offset.
@@ -939,6 +1138,7 @@ function applyRoute(route){
         off=m1;
       }
       if(ini!==null && off-ini>150) autov.push([ini,off]);
+      window.__hud2Autov=autov;
       hud2.setRoute(routeCoordsLL, {motorway:autov});
       if(autov.length) console.log('[hud2] tramos de autovia:', autov.length);
       const pasos=[];
@@ -950,16 +1150,25 @@ function applyRoute(route){
         const metro = it.routeOffsetInMeters||0;
         if(tipo && metro>5) pasos.push({metro:metro, tipo:tipo, calle:it.street||'', salida:mv.exit});
       }
+      window.__hud2Pasos=pasos;
       if(pasos.length) hud2.setManeuvers(pasos);
       if(typeof radarDB!=='undefined' && radarDB && radarDB.length) hud2.radares(radarDB);
     }
   }catch(e){ console.warn('[hud2] applyRoute:', e.message); }
 }
-function clearRoute(){ clearRouteLayers(); routeCoordsLL=[]; const rr=$('reroute'); if(rr)rr.style.display='none'; }
-function trimRoute(){ if(!routeCoordsLL.length||!disp)return; const nowp=performance.now(); if(nowp-lastTrim<1200)return; lastTrim=nowp;
+function clearRoute(){ clearRouteLayers(); routeCoordsLL=[]; routeDraw=[]; routeDrawIdx=[]; const rr=$('reroute'); if(rr)rr.style.display='none'; }
+function trimRoute(){ if(!routeCoordsLL.length||!disp)return; const nowp=performance.now(); if(nowp-lastTrim<3000)return; lastTrim=nowp;
   let bi=routeProgIdx,bd=1e9; const end=Math.min(routeCoordsLL.length,routeProgIdx+80);
   for(let i=routeProgIdx;i<end;i++){ const dd=dist([disp.lat,disp.lon],routeCoordsLL[i]); if(dd<bd){bd=dd;bi=i;} }
-  if(bi!==routeProgIdx){ routeProgIdx=bi; const ahead=[[disp.lat,disp.lon]].concat(routeCoordsLL.slice(routeProgIdx)); if(routeLine)routeLine.setLatLngs(ahead); if(routeCasing)routeCasing.setLatLngs(ahead); }
+  if(bi!==routeProgIdx){ routeProgIdx=bi;
+    // Se recorta la geometria de DIBUJO (cientos de puntos), no la completa
+    // (miles). Busqueda binaria del primer punto dibujado por delante.
+    if(routeLine && routeDraw.length){
+      let lo=0, hi=routeDrawIdx.length-1;
+      while(lo<hi){ const mid=(lo+hi)>>1; if(routeDrawIdx[mid]<routeProgIdx) lo=mid+1; else hi=mid; }
+      const ahead=routeDraw.slice(lo); ahead.unshift([disp.lon,disp.lat]);
+      routeLine.coords=ahead; if(routeLine._map) routeLine._map._updatePoly(routeLine);
+    } }
 }
 async function geocode(q){ try{ const r=await fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(q)+'&format=json&limit=1&countrycodes=es&accept-language=es'); const j=await r.json(); if(j&&j.length)return [parseFloat(j[0].lat),parseFloat(j[0].lon)]; }catch(e){} return null; }
 
@@ -1014,18 +1223,28 @@ async function routeTo(dest, nombre){ if(!raw){ $('status').textContent='Sin GPS
   buildRoute([[raw.lat,raw.lon],dest]); }
 function addWaypoint(ll){ if(!raw)return; if(routeOn&&destLL) buildRoute([[raw.lat,raw.lon],ll,destLL]); else routeTo(ll); }
 function renderStep(say){ const s=steps[stepIdx]; if(!s)return; const hw=isHighway(s); $('navbanner').classList.toggle('hw',hw); $('arrow').innerHTML=maneuverSVG(s,hw); $('navsub').textContent=s.name||shortHint(s); if(say)speak(s.instr);
-  const nx=steps[stepIdx+1]; if(nx){ $('navnext2').style.display='flex'; $('arrow2').innerHTML=maneuverSVG(nx,isHighway(nx)); $('nn2txt').textContent='Luego · '+shortHint(nx); } else $('navnext2').style.display='none'; }
+  const mm=s.maneuver||{};
+  if((mm.type==='roundabout'||mm.type==='rotary') && mm.exit) $('navsub').textContent=mm.exit+'ª salida'+(s.name?' · '+s.name:'');
+  const nx=steps[stepIdx+1]; if(nx){ $('navnext2').style.display='flex'; $('arrow2').innerHTML=maneuverSVG(nx,isHighway(nx)); $('nn2txt').textContent='Después · '+(nx.name||shortHint(nx)); } else $('navnext2').style.display='none'; }
 function endRoute(){ routeOn=false; steps=[]; osrmLanes=[]; hudTurnDist=null; hideLanes(); clearRoute(); $('navbanner').style.display='none'; $('navnext2').style.display='none'; $('trip').style.display='none'; $('searchBar').style.display='flex'; }
 function trackRoute(){ if(!routeOn||!disp||!steps.length)return; trimRoute();
   const here=[disp.lat,disp.lon]; let s=steps[stepIdx]; let d=dist(here,s.ll); s._min=Math.min(s._min,d);
   // fuera de ruta -> recalcular
-  let dr=1e9; for(let i=1;i<routeCoordsLL.length;i+=2){ const dd=dist(here,routeCoordsLL[i]); if(dd<dr)dr=dd; }
+  // Busqueda LOCAL alrededor del progreso actual. Antes se recorria la mitad de
+  // la ruta entera cada 120 ms. Solo si la ventana dice "fuera", se confirma con
+  // un barrido completo (raro) antes de recalcular.
+  let dr=1e9;
+  const i0=Math.max(0,routeProgIdx-40), i1=Math.min(routeCoordsLL.length,routeProgIdx+400);
+  for(let i=i0;i<i1;i++){ const dd=dist(here,routeCoordsLL[i]); if(dd<dr)dr=dd; }
+  if(dr>70 && offAcc>=3){ for(let i=0;i<routeCoordsLL.length;i+=3){ const dd=dist(here,routeCoordsLL[i]); if(dd<dr)dr=dd; } }
   if(dr>70)offAcc++; else offAcc=0;
   if(offAcc>3 && performance.now()-lastRecalc>8000){ lastRecalc=performance.now(); offAcc=0; speak('Recalculando ruta'); routeTo(destLL); return; }
   if(!s._v && d<320 && d>70){ s._v=true; speak('En '+fmtDist(d)+', '+s.instr); }
   const thr=Math.max(20,(raw.spd||0)*1.4); const passed=s._min<55&&d>s._min+15;
   if((d<thr||passed)&&stepIdx<steps.length-1){ stepIdx++; renderStep(true); s=steps[stepIdx]; d=dist(here,s.ll); }
-  const hw=isHighway(s); $('navbanner').classList.toggle('hw',hw); hudTurnType=(s.maneuver||{}).type; hudTurnMod=(s.maneuver||{}).modifier; hudTurnDist=d; hudTurnExit=(s.maneuver||{}).exit||1; const lanes=(d<600)?laneFor(s.ll):null; $('arrow').innerHTML = lanes? lanesHTML(lanes,hw) : maneuverSVG(s,hw);
+  const hw=isHighway(s); $('navbanner').classList.toggle('hw',hw); hudTurnType=(s.maneuver||{}).type; hudTurnMod=(s.maneuver||{}).modifier; hudTurnDist=d; hudTurnExit=(s.maneuver||{}).exit||1; const lanes=(d<600)?laneFor(s.ll):null;
+  // Solo se toca el DOM si la flecha cambia: antes se regeneraba el SVG cada 120 ms.
+  const clave=stepIdx+'|'+(lanes?'L':'M')+'|'+hw; if(clave!==window.__arrowKey){ window.__arrowKey=clave; $('arrow').innerHTML = lanes? lanesHTML(lanes,hw) : maneuverSVG(s,hw); }
   $('navdist').textContent='En '+fmtDist(d);
   let rem=0; for(let i=stepIdx;i<steps.length;i++) rem+=steps[i].distance; const mins=Math.max(1,Math.round(rem/(Math.max(8,speedKmh)/3.6)/60)); const eta=new Date(Date.now()+mins*60000);
   const tp=$('trip'); tp.style.display='block'; tp.textContent=fmtDist(rem)+' · '+(mins>=60?Math.floor(mins/60)+' h '+(mins%60)+' min':mins+' min')+' · llegada '+eta.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
@@ -1212,7 +1431,8 @@ if('serviceWorker' in navigator){
   const oldModes=document.querySelector('.ovl.modes'); if(oldModes) oldModes.style.display='none';
 
   const bar=document.createElement('div'); bar.className='ab-modes';
-  bar.innerHTML='<button data-m="hud">HUD 2</button><button data-m="split" class="on">Split</button><button data-m="map">Mapa</button><button data-m="faro" class="faro-btn">Faro</button>';
+  // Split eliminado: con mapa y HUD a la vez compiten por la misma GPU.
+  bar.innerHTML='<button data-m="map" class="on">Mapa</button><button data-m="hud">HUD 2</button><button data-m="faro" class="faro-btn">Faro</button>';
   app.appendChild(bar);
 
   function relayout(){
@@ -1226,9 +1446,12 @@ if('serviceWorker' in navigator){
     if(m==='map'){ document.body.classList.add('solo-map'); }
     else if(m==='hud'){ document.body.classList.add('solo-hud'); hudPane.style.flex='1 1 auto'; }
     else if(m==='faro'){ document.body.classList.add('faro'); }
-    else { hudPane.style.flex='0 0 '+savedSplitPct()+'%'; }
+    else { m='map'; document.body.classList.add('solo-map'); }   // cualquier modo desconocido (p.ej. 'split' guardado) cae en Mapa
     try{ hudOn = (m!=='map' && m!=='faro'); if(typeof updateHudCar==='function') updateHudCar(); }catch(e){}
-    try{ if(window.hud2){ hudOn ? hud2.abrir() : hud2.cerrar(); } }catch(e){}
+    try{
+      if(m==='hud') cargarHud2().then(h=>{ try{ window.__hud2Enganchar&&__hud2Enganchar(); h.abrir(); }catch(e){} });
+      else if(window.hud2) hud2.cerrar();
+    }catch(e){}
     bar.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
     LS.set('abMode',m);
     requestAnimationFrame(()=>{ relayout(); setTimeout(relayout,70); setTimeout(relayout,220); });
@@ -1239,6 +1462,7 @@ if('serviceWorker' in navigator){
   let dragging=false;
   function pct(x){ const r=app.getBoundingClientRect(); return Math.max(22,Math.min(78,(x-r.left)/r.width*100)); }
   function applyPct(p){ hudPane.style.flex='0 0 '+p+'%'; LS.set('abSplit',p); relayout(); }
+  try{ divider.style.display='none'; }catch(e){}   // sin Split no hay divisor
   divider.addEventListener('mousedown',e=>{e.preventDefault();dragging=true;divider.classList.add('drag');});
   window.addEventListener('mousemove',e=>{ if(dragging) applyPct(pct(e.clientX)); });
   window.addEventListener('mouseup',()=>{ if(dragging){dragging=false;divider.classList.remove('drag');setTimeout(relayout,70);} });
@@ -1247,8 +1471,9 @@ if('serviceWorker' in navigator){
   window.addEventListener('touchend',()=>{ if(dragging){dragging=false;divider.classList.remove('drag');setTimeout(relayout,70);} });
   window.addEventListener('resize',()=>setTimeout(relayout,60));
 
-  const sp=parseFloat(LS.get('abSplit')); if(sp>=22&&sp<=78) hudPane.style.flex='0 0 '+sp+'%';
-  setMode(LS.get('abMode')||'split');
+  // Si la ultima sesion quedo en Split, se arranca en Mapa.
+  let modoIni=LS.get('abMode'); if(!modoIni || modoIni==='split') modoIni='map';
+  setMode(modoIni);
   setTimeout(relayout,300); setTimeout(relayout,900); setTimeout(relayout,1800);
 })();
 </script>
@@ -1462,7 +1687,7 @@ if('serviceWorker' in navigator){
 
   // --- Parking (Overpass): azul = de pago, verde = libre; toggle en Ajustes ---
   let parkOn=false, parkGroup=null, _parkAt=0, _parkPos=null;
-  try{ if(typeof L!=='undefined'){ parkGroup=L.layerGroup(); } }catch(e){}
+  try{ if(typeof L!=='undefined'){ parkGroup=L.symbolGroup('aparcamientos'); } }catch(e){}
   try{
     const sg=document.querySelector('#settings .sgrid');
     if(sg && !$('setParking')){
@@ -1582,71 +1807,44 @@ if('serviceWorker' in navigator){
 })();
 </script>
 </body></html>
-<script type="module" src="./hud2-boot.js"></script>
 <script>
-/* ---- HUD 2: configuracion inicial ---------------------------------------
-   Se pinta dentro de #hudroad (un solo lienzo, un solo bucle) y se apaga su
-   superposicion propia: la velocidad, la maniobra y el radar los siguen
-   mostrando #spdHud, #navstack y #radarsign, que ya funcionan.            */
+/* FASE 4 — El HUD 2 se carga BAJO DEMANDA. Hasta que pulsas "HUD 2" no se
+   descarga ni se ejecuta nada suyo: ni JS, ni timers, ni GPS propio, ni
+   procesado de ruta. En modo Mapa o Faro, el HUD no existe.               */
+window.cargarHud2 = function(){
+  if(window.__hud2Promesa) return window.__hud2Promesa;
+  window.__hud2Promesa = import('./hud2-boot.js').then(()=>new Promise(res=>{
+    (function esperar(){ if(window.hud2) res(window.hud2); else setTimeout(esperar,60); })();
+  })).then(h=>{
+    try{
+      h.ajustar({ incrustado:true, destino:'#hudroad', hud:false });
+      // entregar lo que ya exista: ruta, maniobras y radares
+      if(typeof routeCoordsLL!=='undefined' && routeCoordsLL.length>8){
+        h.setRoute(routeCoordsLL, {motorway: window.__hud2Autov||[]});
+        if(window.__hud2Pasos && window.__hud2Pasos.length) h.setManeuvers(window.__hud2Pasos);
+      }
+      if(typeof radarDB!=='undefined' && radarDB && radarDB.length) h.radares(radarDB);
+    }catch(e){ console.warn('[hud2]', e.message); }
+    return h;
+  });
+  return window.__hud2Promesa;
+};
+</script>
+<script>
+/* ---- HUD 2: se configura al cargarse (ver cargarHud2). Aqui solo queda el
+   aviso de fuera de ruta, que se engancha si el HUD llega a cargarse.   */
 (function(){
-  function init(){
-    if(!window.hud2){ setTimeout(init,300); return; }
-    // SOLO lo estructural se impone en cada arranque. Lo demas (coche, color,
-    // carteles, escala, camara...) es tuyo: se aplicaba aqui en cada carga y por
-    // eso se perdia lo que ajustabas en el panel.
-    const fijo = { incrustado:true, destino:'#hudroad', hud:false };
-    // La primera vez, y solo la primera, se dejan unos valores de partida.
-    let primera = false;
-    try { primera = !localStorage.getItem('hud2.inicializado'); } catch(e){}
-    const inicial = primera ? {
-      carteles:true, abrirAlNavegar:false, escala:0.6,
-      correccion:0.6, zonaMuerta:10, giroMax:35, vista:1.25,
-      estilo:'suave', radioMin:130
-    } : {};
-    if(primera){ try{ localStorage.setItem('hud2.inicializado','1'); }catch(e){} }
-    const cfg = Object.assign({}, inicial, fijo);
-    if(typeof hud2.ajustar==='function') hud2.ajustar(cfg); else hud2.set(cfg);
-    if(typeof radarDB!=='undefined' && radarDB && radarDB.length) hud2.radares(radarDB);
-    if(typeof hudOn!=='undefined' && hudOn) hud2.abrir();
-
-    // Salirse de la ruta y seguir mostrandola era lo que volvia loca la escena:
-    // la distancia crecia hacia atras y la geometria daba saltos. Ahora el HUD 2
-    // avisa y se pide recalculo con la funcion de ruta que ya tiene la app.
-    // Ademas del aviso del HUD, un vigilante propio: si la distancia al trazado
-    // crece durante varios segundos seguidos, se recalcula aunque el HUD calle.
-    setInterval(function(){
+  function enganchar(){
+    if(!window.hud2) return;
+    hud2.onFueraDeRuta = function(desvio){
       try{
-        if(typeof routeOn==='undefined' || !routeOn || !disp || !routeCoordsLL) return;
-        // Muestreo grueso y acotado: recorrer 48.000 puntos cada 4 s en una ruta
-        // larga es trabajo inutil. Con 1 de cada 40 basta para saber si te has
-        // salido, y son unas decenas de comparaciones.
-        const paso=Math.max(1, Math.round(routeCoordsLL.length/400));
-        let mejor=Infinity;
-        for(let i=0;i<routeCoordsLL.length;i+=paso){
-          const d=dist([disp.lat,disp.lon], routeCoordsLL[i]);
-          if(d<mejor) mejor=d;
-        }
-        if(mejor>70 && Date.now()-(window.__hud2Recalc||0)>8000){
-          window.__hud2Recalc=Date.now();
-          $('status').textContent='Fuera de ruta ('+Math.round(mejor)+' m) · recalculando…';
-          if(typeof destLL!=='undefined' && destLL) routeTo(destLL);
+        if(typeof routeOn!=='undefined' && routeOn && typeof destLL!=='undefined' && destLL
+           && Date.now()-(window.__hud2Recalc||0) > 8000){
+          window.__hud2Recalc=Date.now(); $('status').textContent='Fuera de ruta · recalculando…'; routeTo(destLL);
         }
       }catch(e){}
-    }, 4000);
-
-    hud2.onFueraDeRuta = function(desvio){
-      console.warn('[hud2] fuera de ruta:', Math.round(desvio), 'm');
-      try{
-        if(typeof routeOn!=='undefined' && routeOn && typeof destLL!=='undefined' && destLL){
-          if(Date.now()-(window.__hud2Recalc||0) > 8000){    // reintento cada 8 s
-            window.__hud2Recalc=Date.now();
-            $('status').textContent='Fuera de ruta · recalculando…';
-            routeTo(destLL);
-          }
-        }
-      }catch(e){ console.warn('[hud2] recalculo:', e.message); }
     };
   }
-  init();
+  window.__hud2Enganchar=enganchar;
 })();
 </script>

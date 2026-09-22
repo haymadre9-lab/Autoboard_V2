@@ -92,8 +92,8 @@ function boot(){
   const btn = document.createElement('button');
   btn.textContent = 'HUD 2';
   // En modo incrustado manda la barra de modos de la app: nada de botón propio.
-  let incrustadoPrev = false;
-  try { incrustadoPrev = !!(JSON.parse(localStorage.getItem('hud2.cfg') || '{}').incrustado); } catch(e){}
+  // Modo incrustado siempre: el boton flotante propio ya no se crea nunca.
+  const incrustadoPrev = true;
   const faro = incrustadoPrev ? null : buscarFaro();
   if (faro && faro.parentNode){
     btn.className = faro.className;          // mismo aspecto que el resto de la barra
@@ -486,7 +486,11 @@ function boot(){
 
   // 1) respuestas del router
   let fetchOrig = null;
-  if (window.fetch){
+  // FASE 1: los interceptores de red y de MapLibre quedan DESACTIVADOS.
+  // applyRoute() ya entrega ruta, maniobras y radares directamente, asi que
+  // interceptar solo duplicaba trabajo (y con setData, cada 1,2 s).
+  const INTERCEPTAR = false;
+  if (INTERCEPTAR && window.fetch){
     const f0 = window.fetch;
     fetchOrig = f0;
     window.fetch = function(...a){
@@ -556,7 +560,7 @@ function boot(){
     };
     return true;
   }
-  if (!engancharMapLibre()){
+  if (INTERCEPTAR && !engancharMapLibre()){
     let intentos = 0;
     const t = setInterval(() => { if (engancharMapLibre() || ++intentos > 40) clearInterval(t); }, 500);
   }

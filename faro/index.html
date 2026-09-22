@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Faro · AutoBoard</title>
+<style>
+  /* FASE 5 — Modo Faro independiente. Sin MapLibre, sin MapTiler, sin tráfico,
+     radares, cargadores ni HUD. Solo GPS, velocidad y pantalla negra.        */
+  html,body{margin:0;height:100%;background:#000;color:#fff;overflow:hidden;
+    font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-user-select:none;user-select:none}
+  body{display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+  #v{font-size:min(46vw,58vh);font-weight:200;line-height:.82;letter-spacing:-.04em;
+    font-variant-numeric:tabular-nums;transition:color .3s}
+  #u{font-size:min(4.6vw,4vh);letter-spacing:.35em;color:#6b7680;margin-top:1.2vh}
+  #v.alto{color:#ff453a}
+  #info{position:fixed;left:0;right:0;bottom:calc(14px + env(safe-area-inset-bottom));
+    display:flex;justify-content:space-between;padding:0 18px;font-size:13px;color:#4a525a;
+    font-variant-numeric:tabular-nums;letter-spacing:.08em}
+  #gps.ok{color:#2ea96a} #gps.mal{color:#c98a2a}
+  #lim{position:fixed;top:calc(16px + env(safe-area-inset-top));right:18px;width:min(17vw,11vh);height:min(17vw,11vh);
+    border-radius:50%;border:min(1.7vw,1.1vh) solid #e0261f;background:#fff;color:#000;display:none;
+    align-items:center;justify-content:center;font-weight:800;font-size:min(6.5vw,4.2vh)}
+  #mapa{position:fixed;top:calc(16px + env(safe-area-inset-top));left:18px;color:#4a525a;font-size:13px;
+    text-decoration:none;letter-spacing:.08em}
+</style>
+</head>
+<body>
+<a id="mapa" href="../">← MAPA</a>
+<div id="lim"></div>
+<div id="v">0</div>
+<div id="u">KM/H</div>
+<div id="info"><span id="gps">buscando GPS…</span><span id="hora">--:--</span></div>
+<script>
+(function(){
+  const $=id=>document.getElementById(id);
+  let ult=null, vSuave=0, limite=null;
+
+  // Velocidad: la del receptor si la da; si no, por diferencia de posiciones.
+  function actualizar(p){
+    const c=p.coords, t=p.timestamp||Date.now();
+    let v=(c.speed!=null && !isNaN(c.speed) && c.speed>=0) ? c.speed : null;
+    if(v===null && ult){
+      const dt=(t-ult.t)/1000;
+      if(dt>0.2 && dt<10){
+        const R=6371000, la=c.latitude*Math.PI/180, dLa=(c.latitude-ult.lat)*Math.PI/180, dLo=(c.longitude-ult.lng)*Math.PI/180;
+        const d=2*R*Math.asin(Math.sqrt(Math.sin(dLa/2)**2+Math.cos(la)*Math.cos(ult.lat*Math.PI/180)*Math.sin(dLo/2)**2));
+        const bruto=d/dt; if(bruto<70) v=bruto;
+      }
+    }
+    ult={lat:c.latitude,lng:c.longitude,t};
+    if(v!==null){ vSuave += (v-vSuave)*0.5; }
+    const kmh=Math.round(vSuave*3.6);
+    if($('v').textContent!==String(kmh)) $('v').textContent=kmh;          // solo si cambia
+    $('v').classList.toggle('alto', limite!==null && kmh>limite+3);
+    const acc=Math.round(c.accuracy||0);
+    $('gps').textContent='GPS ±'+acc+' m'; $('gps').className=acc<=25?'ok':'mal';
+  }
+  if(navigator.geolocation){
+    navigator.geolocation.watchPosition(actualizar,
+      e=>{ $('gps').textContent='GPS: '+e.message; $('gps').className='mal'; },
+      {enableHighAccuracy:true, maximumAge:1000, timeout:20000});
+  } else $('gps').textContent='sin geolocalización';
+
+  // Hora, una vez por minuto basta
+  function hora(){ const d=new Date(); $('hora').textContent=d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0'); }
+  hora(); setInterval(hora, 20000);
+
+  // Pantalla siempre encendida
+  let lock=null;
+  async function despierto(){ try{ if('wakeLock' in navigator){ lock=await navigator.wakeLock.request('screen'); } }catch(e){} }
+  despierto(); document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') despierto(); });
+
+  // Limite opcional: ?lim=90 en la URL
+  const m=location.search.match(/[?&]lim=(\d+)/); if(m){ limite=+m[1]; $('lim').textContent=limite; $('lim').style.display='flex'; }
+})();
+</script>
+</body>
+</html>
