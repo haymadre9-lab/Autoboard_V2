@@ -393,6 +393,10 @@ const MT_STYLES={
          que saltaba en falso, recargaba, y de paso hacia desaparecer la ruta.
          La unica recuperacion automatica que queda es la del contexto WebGL,
          que si responde a un fallo real y no toca las capas.                  */
+      // Respaldo: si por lo que sea no llega 'style.load', 'styledata' con el
+      // estilo ya cargado sirve igual. Es idempotente: lo que pase primero manda.
+      this._m.on('styledata',()=>{ if(this._estiloOk) return;
+        try{ if(this._m.isStyleLoaded&&this._m.isStyleLoaded()) this._m.fire('style.load'); }catch(e){} });
       this._m.on('style.load',()=>{ clearTimeout(this._tEstilo); this._estiloOk=true;
         console.log('[STYLE] style.load · estilo actual:', this._elegido||'?'); console.log('[MAP] restaurando ruta');
         this._reAdd(); this._vaciar();
@@ -474,9 +478,13 @@ const MT_STYLES={
       // Quien pide el cambio: 3 niveles de la pila bastan para identificarlo.
       const quien=((new Error()).stack||'').split('\n').slice(2,5).map(l=>l.trim().replace(/^at\s+/,'').split(' ')[0]).join(' < ');
       console.log('[STYLE] solicitando: '+etiqueta+'  ← '+quien);
-      if(this._elegido && this._elegido!==etiqueta && !intento)
+      if(this._elegido && this._elegido!==etiqueta && intento)
         console.warn('[STYLE] CAMBIO NO SOLICITADO A '+etiqueta+' (estabas en '+this._elegido+')');
       if(!intento) this._elegido=etiqueta;
+      // Pedir el estilo que YA esta puesto no dispara style.load: el vigilante
+      // creia que habia fallado y volvia a pedirlo, en bucle. De ahi los
+      // "setStyle(MAPA)" repetidos cada 6 s.
+      if(this._urlEstilo===url && this._estiloOk){ console.log('[STYLE] ya estaba en '+etiqueta+', no se recarga'); return; }
       this.run(()=>{
         this._estiloOk=false; this._urlEstilo=url; this._intento=intento||0;
         console.log('[STYLE] setStyle('+etiqueta+')');
@@ -490,15 +498,61 @@ const MT_STYLES={
           if(etiqueta==='SATELITE' && !this._intento){
             console.warn('[MAP] probando satélite alternativo (Esri)');
             this._setBase(SAT_ALT, 1);
+          } else if(this._urlEstilo!==MT_STYLES.day){
+            console.warn('[STYLE] fallback a MAPA');
+            this._setBase(MT_STYLES.day, 2);
           } else {
-            console.warn('[MAP] fallback a MAPA');
-            this._setBase(MT_STYLES.day, 1);
+            console.warn('[STYLE] el mapa base tampoco confirma carga; se continua igualmente');
           }
         }, 6000);
-        this._m.setStyle(url);
+        /* diff:false OBLIGATORIO.
+           Por defecto setStyle() aplica el estilo nuevo por diferencias contra
+           el actual. Cuando lo consigue, MapLibre NO dispara 'style.load': el
+           mapa cambia pero nosotros no nos enteramos, asi que no se re-montan
+           las capas de la ruta (que el diff SI ha eliminado) y el vigilante
+           cree que el estilo fallo. Forzando la recarga completa, el evento
+           llega siempre y la restauracion funciona.                          */
+        this._m.setStyle(url, {diff:false});
       });
     }
     _polyToFront(p){ try{ if(this._m.getLayer(p.id+'-c'))this._m.moveLayer(p.id+'-c'); if(this._m.getLayer(p.id))this._m.moveLayer(p.id); }catch(e){} }
+    _addOverlay(o){ o._map=this; this._overlays.push(o); o._added=true; this.run(()=>this._mountOverlay(o)); }
+    _mountOverlay(o){ const m=this._m;
+      try{ if(!m.getSource(o.id)) m.addSource(o.id,{type:'raster',tiles:[o.url],tileSize:o.opts.tileSize||256,maxzoom:o.opts.maxNativeZoom||19});
+        if(!m.getLayer(o.id)) m.addLayer({id:o.id,type:'raster',source:o.id,paint:{'raster-opacity':(o.opts.opacity!=null?o.opts.opacity:1)}});
+      }catch(e){} }
+    _removeOverlay(o){ o._added=false; this._overlays=this._overlays.filter(x=>x!==o); const m=this._m;
+      try{ if(m.getLayer(o.id))m.removeLayer(o.id); if(m.getSource(o.id))m.removeSource(o.id); }catch(e){} }
+
+    _addPoly(p){ p._map=this; this._polys.push(p); p._added=true; this.run(()=>this._mountPoly(p)); }
+    // Coordenadas: si la polilinea ya las trae en [lng,lat] (p.lngLat), no se
+    // vuelve a crear un array entero en cada actualizacion.
+    _gj(p){ const c=p.lngLat ? (p.coords||[]) : (p.coords||[]).map(D2);
+      return {type:'Feature',geometry:{type:'LineString',coordinates:c}}; }
+    _mountPoly(p){ const m=this._m; const gj=this._gj(p);
+      try{
+        // tolerance: geojson-vt simplifica la linea POR ZOOM al teselarla.
+        if(!m.getSource(p.id)) m.addSource(p.id,{type:'geojson',data:gj,tolerance:(p.opts.tolerance!=null?p.opts.tolerance:0.375),lineMetrics:false});
+        else m.getSource(p.id).setData(gj);
+        const lay={'line-join':'round','line-cap':'round'};
+        // Borde en la MISMA fuente: una sola geometria, dos capas.
+        if(p.opts.casing && !m.getLayer(p.id+'-c'))
+          m.addLayer({id:p.id+'-c',type:'line',source:p.id,layout:lay,paint:{'line-color':p.opts.casing,'line-width':p.opts.casingWeight||12,'line-opacity':(p.opts.casingOpacity!=null?p.opts.casingOpacity:0.9)}});
+        if(!m.getLayer(p.id)) m.addLayer({id:p.id,type:'line',source:p.id,layout:lay,paint:{'line-color':p.opts.color||'#4c8dff','line-width':p.opts.weight||6,'line-opacity':(p.opts.opacity!=null?p.opts.opacity:1)}});
+      }catch(e){ console.warn('[mapa] _mountPoly:', e.message); } }
+    _updatePoly(p){ const m=this._m; try{ const s=m.getSource(p.id); if(s)s.setData(this._gj(p)); }catch(e){} }
+
+    // Coleccion de lineas con color por propiedad: una fuente, una capa.
+    _mountFC(o){ const m=this._m;
+      try{ const gj={type:'FeatureCollection',features:o.feats};
+        if(!m.getSource(o.id)) m.addSource(o.id,{type:'geojson',data:gj,tolerance:1.2}); else m.getSource(o.id).setData(gj);
+        if(!m.getLayer(o.id)) m.addLayer({id:o.id,type:'line',source:o.id,layout:{'line-join':'round','line-cap':'round'},
+          paint:{'line-color':['get','c'],'line-width':o.opts.weight||6,'line-opacity':(o.opts.opacity!=null?o.opts.opacity:1)}});
+      }catch(e){} }
+    _addFC(o){ o._map=this; this._fcs.push(o); o._added=true; this.run(()=>this._mountFC(o)); }
+    _removeFC(o){ o._added=false; this._fcs=this._fcs.filter(x=>x!==o); const m=this._m;
+      try{ if(m.getLayer(o.id))m.removeLayer(o.id); if(m.getSource(o.id))m.removeSource(o.id); }catch(e){} }
+
     _removePoly(p){ p._added=false; this._polys=this._polys.filter(x=>x!==p); const m=this._m; try{ if(m.getLayer(p.id))m.removeLayer(p.id); if(m.getLayer(p.id+'-c'))m.removeLayer(p.id+'-c'); if(m.getSource(p.id))m.removeSource(p.id); }catch(e){} }
   }
 
@@ -776,6 +830,18 @@ function instrES(s){const m=s.maneuver||{},mod=m.modifier,type=m.type,name=s.nam
 
 // ===== mapa Leaflet (raster, sin WebGL) =====
 const map=L.map('map',{zoomControl:false,attributionControl:false,preferCanvas:true,zoomSnap:0.5,fadeAnimation:false,inertia:true,minZoom:5,maxZoom:19});
+/* Red de seguridad: si al adaptador le faltara algun metodo (ha pasado al
+   reemplazar bloques de codigo), se ve AL ARRANCAR en vez de descubrirlo al
+   calcular una ruta con "map._addPoly is not a function". */
+setTimeout(()=>{ try{
+  const req=['_addPoly','_mountPoly','_updatePoly','_removePoly','_polyToFront','_addOverlay',
+             '_mountOverlay','_removeOverlay','_addFC','_mountFC','_removeFC','_mountSym',
+             '_unmountSym','_setBase','_reAdd','_vaciar','run'];
+  const faltan=req.filter(k=>typeof map[k]!=='function');
+  if(faltan.length){ console.error('[MAPA] FALTAN métodos del adaptador:', faltan.join(', '));
+    try{ $('status').textContent='Error interno: adaptador incompleto'; }catch(e){} }
+  else console.log('[MAPA] adaptador completo ('+req.length+' métodos)');
+}catch(e){} }, 0);
 let navZoom=16;
 map.setView([43.26,-2.93],navZoom);
 /* v2: la base es un ESTILO vectorial de MapTiler; estas quedan como referencias inertes */
