@@ -484,7 +484,10 @@ const MT_STYLES={
       // Pedir el estilo que YA esta puesto no dispara style.load: el vigilante
       // creia que habia fallado y volvia a pedirlo, en bucle. De ahi los
       // "setStyle(MAPA)" repetidos cada 6 s.
-      if(this._urlEstilo===url && this._estiloOk){ console.log('[STYLE] ya estaba en '+etiqueta+', no se recarga'); return; }
+      // Tambien se ignora si es el estilo que ya se esta cargando: al arrancar,
+      // loadSettings() pedia el mismo que el constructor y MapLibre abortaba el
+      // primero a medias ("AbortError: signal is aborted without reason").
+      if(this._urlEstilo===url){ console.log('[STYLE] ya '+(this._estiloOk?'estaba':'se estaba cargando')+' en '+etiqueta+', no se recarga'); return; }
       this.run(()=>{
         this._estiloOk=false; this._urlEstilo=url; this._intento=intento||0;
         console.log('[STYLE] setStyle('+etiqueta+')');
@@ -515,6 +518,12 @@ const MT_STYLES={
         this._m.setStyle(url, {diff:false});
       });
     }
+    // Recarga una capa raster (lluvia de RainViewer al cambiar de instante,
+    // trafico al refrescar): se quita y se vuelve a montar con la URL nueva.
+    _refreshOverlay(o){ const m=this._m;
+      try{ if(m.getLayer(o.id))m.removeLayer(o.id); if(m.getSource(o.id))m.removeSource(o.id); }catch(e){}
+      this.run(()=>this._mountOverlay(o)); }
+    _overlayToFront(o){ try{ if(this._m.getLayer(o.id)) this._m.moveLayer(o.id); }catch(e){} }
     _polyToFront(p){ try{ if(this._m.getLayer(p.id+'-c'))this._m.moveLayer(p.id+'-c'); if(this._m.getLayer(p.id))this._m.moveLayer(p.id); }catch(e){} }
     _addOverlay(o){ o._map=this; this._overlays.push(o); o._added=true; this.run(()=>this._mountOverlay(o)); }
     _mountOverlay(o){ const m=this._m;
@@ -836,7 +845,7 @@ const map=L.map('map',{zoomControl:false,attributionControl:false,preferCanvas:t
 setTimeout(()=>{ try{
   const req=['_addPoly','_mountPoly','_updatePoly','_removePoly','_polyToFront','_addOverlay',
              '_mountOverlay','_removeOverlay','_addFC','_mountFC','_removeFC','_mountSym',
-             '_unmountSym','_setBase','_reAdd','_vaciar','run'];
+             '_unmountSym','_setBase','_reAdd','_vaciar','run','_overlayToFront','_refreshOverlay','_gj'];
   const faltan=req.filter(k=>typeof map[k]!=='function');
   if(faltan.length){ console.error('[MAPA] FALTAN métodos del adaptador:', faltan.join(', '));
     try{ $('status').textContent='Error interno: adaptador incompleto'; }catch(e){} }
