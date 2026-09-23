@@ -351,7 +351,8 @@ const MT_STYLES={
         // Confirmado en el coche: las teselas negras aparecen TAMBIEN sin ruta y
         // en mapa vectorial, no solo en satelite; solo tarda mas. 60 seguia
         // siendo demasiado para el navegador del Tesla sostenido en el tiempo.
-        maxTileCacheSize:28, refreshExpiredTiles:false, antialias:false});
+        // Se sigue bloqueando incluso antes de los 6 min: se recorta mas fuerte.
+        maxTileCacheSize:18, refreshExpiredTiles:false, antialias:false});
       try{ this._m.touchZoomRotate.disableRotation(); }catch(e){}
       try{ this._m.setMaxPitch(70); }catch(e){}
       this.raw=this._m; this.ready=false; this._urlEstilo=_ini; this._tEstilo=null; this.q=[]; this._overlays=[]; this._polys=[]; this._symGroups=[]; this._fcs=[]; this._baseKey=(new Date().getHours()>=21||new Date().getHours()<7)?'night':'day';
@@ -399,28 +400,37 @@ const MT_STYLES={
          solo a mapa vectorial (mucho mas barato) y se avisa. El usuario puede
          volver a satelite cuando quiera; simplemente no se queda ahi para
          siempre acumulando.                                                  */
-      this._satMemN=0; this._satDesde=null;
+      this._satMemN=0; this._satDesde=null; this._satUltimoLatido=Date.now();
       setInterval(()=>{
         try{
           const enSat=(this._urlEstilo===MT_STYLES.sat||this._urlEstilo===SAT_ALT);
           if(enSat && this._satDesde===null) this._satDesde=Date.now();
           if(!enSat) this._satDesde=null;
           this._satMemN++;
+          if(this._satMemN%6===0){
           const st=this._m.getStyle?this._m.getStyle():null;
           const nSrc=st&&st.sources?Object.keys(st.sources).length:'?';
           const nLay=st&&st.layers?st.layers.length:'?';
-          console.log('[SAT-MEM] #'+this._satMemN+' t+'+(this._satMemN*30)+'s · estilo='+(enSat?'SATELITE':'otro')
+          console.log('[SAT-MEM] #'+(this._satMemN/6)+' t+'+(this._satMemN*5)+'s · estilo='+(enSat?'SATELITE':'otro')
             +' · fuentes(mapa)='+nSrc+' · capas(mapa)='+nLay
             +' · polys(app)='+this._polys.length+' · overlays(app)='+this._overlays.length
             +' · fc(app)='+this._fcs.length+' · symGroups(app)='+this._symGroups.length
             +' · setStyle_total='+(this._nSetStyle||0)+' · reAdd_total='+(this._nReAdd||0));
-          if(enSat && this._satDesde && (Date.now()-this._satDesde)>360000){
-            console.warn('[SAT-MEM] 6 min seguidos en satélite: se baja a mapa vectorial para liberar memoria de vídeo');
+          }
+          const sinLatido=Date.now()-(this._satUltimoLatido||Date.now());
+          if(enSat && sinLatido>8000){
+            // frame() lleva mas de 8 s sin ejecutarse: el mapa se ha quedado
+            // colgado (justo el bloqueo descrito). Forzar mapa sin esperar mas.
+            console.error('[SAT-MEM] sin respuesta '+Math.round(sinLatido/1000)+' s en satélite: forzando MAPA');
+            try{ $('status').textContent='Satélite bloqueado: recuperando mapa…'; }catch(e){}
+            this._satDesde=null; this._satUltimoLatido=Date.now(); baseSat=false; applyBase();
+          } else if(enSat && this._satDesde && (Date.now()-this._satDesde)>120000){
+            console.warn('[SAT-MEM] 2 min seguidos en satélite: se baja a mapa vectorial para liberar memoria de vídeo');
             try{ $('status').textContent='Satélite: cambiando a mapa para aliviar memoria'; }catch(e){}
             this._satDesde=null; baseSat=false; applyBase();
           }
         }catch(e){ console.warn('[SAT-MEM] error de medicion:', e.message); }
-      }, 30000);
+      }, 5000);
       // WebGL: perdida/recuperacion del contexto grafico, y errores de tile/recurso.
       try{
         const cv=this._m.getCanvas();
@@ -903,6 +913,8 @@ let navZoom=16;
 map.setView([43.26,-2.93],navZoom);
 /* v2: la base es un ESTILO vectorial de MapTiler; estas quedan como referencias inertes */
 const satLayer={on(){},redraw(){}}, streetDay={on(){},redraw(){}}, streetNight={on(){},redraw(){}};
+// El satelite nunca se recuerda entre sesiones: si bloqueo la app en satelite,
+// recargar/reabrir debe devolver el mapa, no repetir el bloqueo.
 let baseSat=false, mapNite=false, curBase={redraw(){},on(){}}, trafficLayer=null, trafficOn=false;
 let tilt=false, minKw=0, showRadars=true, showChargers=true, evListHidden=false, avoidTolls=false, avoidMotorways=false, avoidFerries=false, routeType="fastest";
 const carIcon=L.divIcon({className:'',html:'<div id="carrot"><svg width="38" height="38" viewBox="0 0 24 24"><path d="M12 2 L20 21 L12 15.5 L4 21 Z" fill="#ff2d2d" stroke="#fff" stroke-width="1.3"/></svg></div>',iconSize:[38,38],iconAnchor:[19,19]});
@@ -997,6 +1009,7 @@ function frame(now){
     }
     $('spd').textContent=Math.round(speedKmh);
     { var _s2=document.getElementById('spd2'); if(_s2)_s2.textContent=Math.round(speedKmh); }
+    if(map && map._satUltimoLatido!==undefined) map._satUltimoLatido=now;
     // ---- HUD 2: el dibujo lo lleva hud2.js dentro de #hudroad ----
     // Se sustituyen drawHudRoad, drawHudRain, las salpicaduras y los transform
     // de #hudcar y #beams. El bloque original queda al final del archivo,
@@ -1630,7 +1643,9 @@ $('traffic').onclick=()=>setTraffic(!trafficOn);
 function saveSettings(){ try{ localStorage.setItem('cfg',JSON.stringify({tilt,mapNite,baseSat,minKw,showRadars,showChargers,evListHidden,avoidTolls,avoidMotorways,avoidFerries,routeType,trafficOn,navZoom})); }catch(e){} }
 function loadSettings(){ try{ const c=JSON.parse(localStorage.getItem('cfg')||'{}');
   if(c.tilt===false){ tilt=false; const b=$('setTilt'); if(b)b.classList.remove('on'); }
-  if(c.baseSat===false) baseSat=false;
+  // El satelite deja de restaurarse al arrancar: si se bloqueo la app estando
+  // en satelite, recargar debe devolver el mapa, nunca repetir el bloqueo.
+  baseSat=false;
   if(c.mapNite) mapNite=true;
   applyBase();
   $('map').style.transform='perspective(1500px) rotateX('+(tilt?24:0)+'deg)';
