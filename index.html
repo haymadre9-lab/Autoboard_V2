@@ -418,7 +418,10 @@ const MT_STYLES={
             +' · setStyle_total='+(this._nSetStyle||0)+' · reAdd_total='+(this._nReAdd||0));
           }
           const sinLatido=Date.now()-(this._satUltimoLatido||Date.now());
-          if(enSat && sinLatido>8000){
+          // Solo se vigila el latido si el estilo YA esta cargado y quieto.
+          // Justo tras pedir el satelite, style.load puede tardar varios
+          // segundos por si mismo: eso no es un cuelgue, es carga normal.
+          if(enSat && this._estiloOk && sinLatido>20000){
             // frame() lleva mas de 8 s sin ejecutarse: el mapa se ha quedado
             // colgado (justo el bloqueo descrito). Forzar mapa sin esperar mas.
             console.error('[SAT-MEM] sin respuesta '+Math.round(sinLatido/1000)+' s en satélite: forzando MAPA');
@@ -454,6 +457,7 @@ const MT_STYLES={
       this._m.on('styledata',()=>{ if(this._estiloOk) return;
         try{ if(this._m.isStyleLoaded&&this._m.isStyleLoaded()) this._m.fire('style.load'); }catch(e){} });
       this._m.on('style.load',()=>{ clearTimeout(this._tEstilo); this._estiloOk=true;
+        this._satUltimoLatido=Date.now();  // el vigilante empieza a contar desde AHORA, no desde antes del cambio
         console.log('[STYLE] style.load · estilo actual:', this._elegido||'?'); console.log('[MAP] restaurando ruta');
         this._reAdd(); this._vaciar();
         // comprobacion: si alguna polilinea no volvio, se reintenta y se avisa
