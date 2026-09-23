@@ -1013,7 +1013,11 @@ function frame(now){
     }
     $('spd').textContent=Math.round(speedKmh);
     { var _s2=document.getElementById('spd2'); if(_s2)_s2.textContent=Math.round(speedKmh); }
-    if(map && map._satUltimoLatido!==undefined) map._satUltimoLatido=now;
+    // Antes: 'now' aqui es performance.now() (reloj de sesion), pero el
+    // vigilante lo comparaba contra Date.now() (reloj de epoca). Eran
+    // incompatibles: 'sinLatido' salia siempre gigantesco y el vigilante
+    // disparaba de inmediato, siempre, fuera cual fuera el estado real.
+    if(map && map._satUltimoLatido!==undefined) map._satUltimoLatido=Date.now();
     // ---- HUD 2: el dibujo lo lleva hud2.js dentro de #hudroad ----
     // Se sustituyen drawHudRoad, drawHudRain, las salpicaduras y los transform
     // de #hudcar y #beams. El bloque original queda al final del archivo,
