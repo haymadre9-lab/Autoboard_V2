@@ -348,7 +348,10 @@ const MT_STYLES={
         attributionControl:{compact:true}, dragRotate:false, pitchWithRotate:false, keyboard:false, fadeDuration:0, dragPan:true,
         // cache acotado: con el canvas del HUD 2 al lado, la memoria de video
         // va justa y es lo que provoca la perdida de contexto
-        maxTileCacheSize:60, refreshExpiredTiles:false, antialias:false});
+        // Confirmado en el coche: las teselas negras aparecen TAMBIEN sin ruta y
+        // en mapa vectorial, no solo en satelite; solo tarda mas. 60 seguia
+        // siendo demasiado para el navegador del Tesla sostenido en el tiempo.
+        maxTileCacheSize:28, refreshExpiredTiles:false, antialias:false});
       try{ this._m.touchZoomRotate.disableRotation(); }catch(e){}
       try{ this._m.setMaxPitch(70); }catch(e){}
       this.raw=this._m; this.ready=false; this._urlEstilo=_ini; this._tEstilo=null; this.q=[]; this._overlays=[]; this._polys=[]; this._symGroups=[]; this._fcs=[]; this._baseKey=(new Date().getHours()>=21||new Date().getHours()<7)?'night':'day';
@@ -386,23 +389,36 @@ const MT_STYLES={
         if(/tile|source|fetch|network|403|429/i.test(msg)) console.warn('[mapa] tesela:', msg.slice(0,90));
       });
 
-      /* [SAT-MEM] instrumentacion temporal: fotografia cada 30 s mientras el
-         estilo activo sea SATELITE. No descarta teselas ni cambia nada, solo
-         cuenta. Se apaga sola al volver a MAPA.                              */
-      this._satMemN=0;
+      /* No es un problema de ruta ni de satelite en concreto: se ha confirmado
+         en el coche que ocurre TAMBIEN sin ruta y en MAPA, solo que mas lento.
+         Es memoria de video acumulandose con las teselas segun se navega, y el
+         satelite lo agrava por pesar mas. La respuesta ya no es solo medir:
+         es AUTORREGULARSE antes de llegar al bloqueo.
+         [SAT-MEM] sigue registrando, cada 30 s en cualquier estilo, y ademas
+         actua: si esta en satelite y llevamos mas de 6 min seguidos, se baja
+         solo a mapa vectorial (mucho mas barato) y se avisa. El usuario puede
+         volver a satelite cuando quiera; simplemente no se queda ahi para
+         siempre acumulando.                                                  */
+      this._satMemN=0; this._satDesde=null;
       setInterval(()=>{
         try{
-          const etiquetaAhora=(this._urlEstilo===MT_STYLES.sat||this._urlEstilo===SAT_ALT)?'SATELITE':'otro';
-          if(etiquetaAhora!=='SATELITE') return;
+          const enSat=(this._urlEstilo===MT_STYLES.sat||this._urlEstilo===SAT_ALT);
+          if(enSat && this._satDesde===null) this._satDesde=Date.now();
+          if(!enSat) this._satDesde=null;
           this._satMemN++;
           const st=this._m.getStyle?this._m.getStyle():null;
           const nSrc=st&&st.sources?Object.keys(st.sources).length:'?';
           const nLay=st&&st.layers?st.layers.length:'?';
-          console.log('[SAT-MEM] #'+this._satMemN+' t+'+(this._satMemN*30)+'s'
+          console.log('[SAT-MEM] #'+this._satMemN+' t+'+(this._satMemN*30)+'s · estilo='+(enSat?'SATELITE':'otro')
             +' · fuentes(mapa)='+nSrc+' · capas(mapa)='+nLay
             +' · polys(app)='+this._polys.length+' · overlays(app)='+this._overlays.length
             +' · fc(app)='+this._fcs.length+' · symGroups(app)='+this._symGroups.length
             +' · setStyle_total='+(this._nSetStyle||0)+' · reAdd_total='+(this._nReAdd||0));
+          if(enSat && this._satDesde && (Date.now()-this._satDesde)>360000){
+            console.warn('[SAT-MEM] 6 min seguidos en satélite: se baja a mapa vectorial para liberar memoria de vídeo');
+            try{ $('status').textContent='Satélite: cambiando a mapa para aliviar memoria'; }catch(e){}
+            this._satDesde=null; baseSat=false; applyBase();
+          }
         }catch(e){ console.warn('[SAT-MEM] error de medicion:', e.message); }
       }, 30000);
       // WebGL: perdida/recuperacion del contexto grafico, y errores de tile/recurso.
