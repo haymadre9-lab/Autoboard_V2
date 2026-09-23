@@ -386,6 +386,36 @@ const MT_STYLES={
         if(/tile|source|fetch|network|403|429/i.test(msg)) console.warn('[mapa] tesela:', msg.slice(0,90));
       });
 
+      /* [SAT-MEM] instrumentacion temporal: fotografia cada 30 s mientras el
+         estilo activo sea SATELITE. No descarta teselas ni cambia nada, solo
+         cuenta. Se apaga sola al volver a MAPA.                              */
+      this._satMemN=0;
+      setInterval(()=>{
+        try{
+          const etiquetaAhora=(this._urlEstilo===MT_STYLES.sat||this._urlEstilo===SAT_ALT)?'SATELITE':'otro';
+          if(etiquetaAhora!=='SATELITE') return;
+          this._satMemN++;
+          const st=this._m.getStyle?this._m.getStyle():null;
+          const nSrc=st&&st.sources?Object.keys(st.sources).length:'?';
+          const nLay=st&&st.layers?st.layers.length:'?';
+          console.log('[SAT-MEM] #'+this._satMemN+' t+'+(this._satMemN*30)+'s'
+            +' · fuentes(mapa)='+nSrc+' · capas(mapa)='+nLay
+            +' · polys(app)='+this._polys.length+' · overlays(app)='+this._overlays.length
+            +' · fc(app)='+this._fcs.length+' · symGroups(app)='+this._symGroups.length
+            +' · setStyle_total='+(this._nSetStyle||0)+' · reAdd_total='+(this._nReAdd||0));
+        }catch(e){ console.warn('[SAT-MEM] error de medicion:', e.message); }
+      }, 30000);
+      // WebGL: perdida/recuperacion del contexto grafico, y errores de tile/recurso.
+      try{
+        const cv=this._m.getCanvas();
+        cv.addEventListener('webglcontextlost', ()=>{ console.error('[SAT-WEBGL] CONTEXT LOST', new Date().toLocaleTimeString()); }, false);
+        cv.addEventListener('webglcontextrestored', ()=>{ console.warn('[SAT-WEBGL] context restored', new Date().toLocaleTimeString()); }, false);
+      }catch(e){}
+      this._m.on('error', e=>{
+        const msg=(e&&e.error&&e.error.message)||'';
+        if(/tile|texture|memory|webgl|context/i.test(msg)) console.warn('[SAT-WEBGL] error:', msg.slice(0,140));
+      });
+
       /* NO hay perro guardian que recargue el estilo.
          Lo tuve puesto y era peor que la enfermedad: setStyle() borra TODAS las
          capas, incluida la linea de ruta, y con teselas vectoriales ya cacheadas
@@ -414,7 +444,8 @@ const MT_STYLES={
     run(f){ if(this.ready && this._estiloOk){ try{f();}catch(e){ console.warn('[mapa]',e.message); } } else this.q.push(f); }
     _vaciar(){ const q=this.q; this.q=[]; q.forEach(f=>{ try{f();}catch(e){ console.warn('[mapa]',e.message); } }); }
     // tras setStyle se pierden fuentes, capas e IMAGENES: se vuelven a montar todas
-    _reAdd(){ this._overlays.forEach(o=>this._mountOverlay(o)); this._polys.forEach(p=>this._mountPoly(p)); this._symGroups.forEach(g=>this._mountSym(g)); this._fcs.forEach(o=>this._mountFC(o)); }
+    _reAdd(){ this._nReAdd=(this._nReAdd||0)+1;
+      this._overlays.forEach(o=>this._mountOverlay(o)); this._polys.forEach(p=>this._mountPoly(p)); this._symGroups.forEach(g=>this._mountSym(g)); this._fcs.forEach(o=>this._mountFC(o)); }
     // ---- cámara / métodos Leaflet ----
     setView(ll,z,o){ this.run(()=>this._m.jumpTo({center:D2(ll), zoom:(z!=null?z:this._m.getZoom())})); return this; }
     setZoom(z){ this.run(()=>this._m.setZoom(z)); return this; }
@@ -488,6 +519,7 @@ const MT_STYLES={
       // loadSettings() pedia el mismo que el constructor y MapLibre abortaba el
       // primero a medias ("AbortError: signal is aborted without reason").
       if(this._urlEstilo===url){ console.log('[STYLE] ya '+(this._estiloOk?'estaba':'se estaba cargando')+' en '+etiqueta+', no se recarga'); return; }
+      this._nSetStyle=(this._nSetStyle||0)+0; // se incrementa justo antes de llamar de verdad, ver abajo
       this.run(()=>{
         this._estiloOk=false; this._urlEstilo=url; this._intento=intento||0;
         console.log('[STYLE] setStyle('+etiqueta+')');
@@ -515,7 +547,7 @@ const MT_STYLES={
            las capas de la ruta (que el diff SI ha eliminado) y el vigilante
            cree que el estilo fallo. Forzando la recarga completa, el evento
            llega siempre y la restauracion funciona.                          */
-        this._m.setStyle(url, {diff:false});
+        this._nSetStyle=(this._nSetStyle||0)+1; this._m.setStyle(url, {diff:false});
       });
     }
     // Recarga una capa raster (lluvia de RainViewer al cambiar de instante,
@@ -883,6 +915,15 @@ if(!window.isSecureContext){ $('status').innerHTML='⚠ Ábrelo con <b>https://<
 function locate(){ if(navigator.geolocation) navigator.geolocation.getCurrentPosition(()=>{},e=>{$('status').textContent='GPS: '+e.message;},{enableHighAccuracy:true,timeout:20000}); }
 navigator.geolocation && navigator.geolocation.watchPosition(p=>{
   const c=p.coords, now=p.timestamp;
+  // [GPS] instrumentacion temporal, no toca ningun umbral ni logica.
+  {
+    const edadMs=Date.now()-p.timestamp;
+    console.log('[GPS] fix', new Date().toLocaleTimeString(),
+      '· lat/lon', c.latitude.toFixed(6)+','+c.longitude.toFixed(6),
+      '· p.timestamp', p.timestamp, '· edad', edadMs+' ms',
+      '· accuracy', Math.round(c.accuracy||0)+' m',
+      '· speed', c.speed!=null?(c.speed*3.6).toFixed(1)+' km/h':'null');
+  }
   let v=c.speed; if(v==null||isNaN(v)){ if(raw){const dt=(now-raw.t)/1000; v=dt>0?dist([raw.lat,raw.lon],[c.latitude,c.longitude])/dt:0;} else v=0; }
   let head=c.heading; if(head==null||isNaN(head)){ if(raw&&v>1) head=bearing([raw.lat,raw.lon],[c.latitude,c.longitude]); else head=raw?raw.head:0; }
   speedKmh=Math.max(0,v*3.6);
@@ -1415,6 +1456,7 @@ function renderStep(say){ const s=steps[stepIdx]; if(!s)return; const hw=isHighw
   const nx=steps[stepIdx+1]; if(nx){ $('navnext2').style.display='flex'; $('arrow2').innerHTML=maneuverSVG(nx,isHighway(nx)); $('nn2txt').textContent='Después · '+(nx.name||shortHint(nx)); } else $('navnext2').style.display='none'; }
 function endRoute(){ routeOn=false; steps=[]; osrmLanes=[]; hudTurnDist=null; hideLanes(); clearRoute(); $('navbanner').style.display='none'; $('navnext2').style.display='none'; $('trip').style.display='none'; $('searchBar').style.display='flex'; }
 function trackRoute(){ if(!routeOn||!disp||!steps.length)return; trimRoute();
+  const __t0=performance.now();
   const here=[disp.lat,disp.lon]; let s=steps[stepIdx]; let d=dist(here,s.ll); s._min=Math.min(s._min,d);
   // fuera de ruta -> recalcular
   // Busqueda LOCAL alrededor del progreso actual. Antes se recorria la mitad de
@@ -1429,8 +1471,19 @@ function trackRoute(){ if(!routeOn||!disp||!steps.length)return; trimRoute();
   const i0=Math.max(1,routeProgIdx-40), i1=Math.min(routeCoordsLL.length,routeProgIdx+400);
   for(let i=i0;i<i1;i++){ const dd=seg(i); if(dd<dr)dr=dd; }
   if(dr>70 && offAcc>=3){ for(let i=1;i<routeCoordsLL.length;i++){ const dd=seg(i); if(dd<dr)dr=dd; if(dr<=70)break; } }
+  // [OFFROUTE] instrumentacion temporal. NO se toca ningun umbral: dr>70,
+  // offAcc>3 y los 8000 ms siguen exactamente igual que antes.
+  const __offAccAntes=offAcc;
   if(dr>70)offAcc++; else offAcc=0;
+  if(offAcc!==__offAccAntes){
+    const desdeRecalc=Math.round((performance.now()-lastRecalc)/1000);
+    if(offAcc>0) console.log('[OFFROUTE] detección '+offAcc+'/4 · dr='+Math.round(dr)+' m · desde último recálculo '+desdeRecalc+' s');
+    else if(__offAccAntes>0) console.log('[OFFROUTE] de vuelta en ruta (contador a 0) · dr='+Math.round(dr)+' m');
+  }
   if(offAcc>3 && performance.now()-lastRecalc>8000){
+    console.log('[OFFROUTE] RECALCULANDO', new Date().toLocaleTimeString(),
+      '· dr='+Math.round(dr)+' m · offAcc='+offAcc+' · lastRecalc hace', Math.round((performance.now()-lastRecalc)/1000)+' s',
+      '· progreso', routeProgIdx+'/'+routeCoordsLL.length);
     lastRecalc=performance.now(); offAcc=0;
     console.warn('[ruta] recalculo: a', Math.round(dr), 'm de la ruta, progreso', routeProgIdx+'/'+routeCoordsLL.length);
     speak('Recalculando ruta'); routeTo(destLL); return; }
