@@ -1384,6 +1384,11 @@ function drawRouteTT(route){
   if(segsT.length){ trafficSegs.push(L.lineCollection('trafico',segsT,{weight:6}).addTo(map));
     console.log('[ruta] tramos de trafico:', segsT.length, '→ 1 capa'); }
 }
+/* isHighway(): se perdio en una edicion anterior de esta sesion (se llamaba
+   en 6 sitios del archivo pero ya no existia su definicion). La reconstruyo:
+   reconoce "Autopista", "Autovia" (con o sin tilde) y referencias A-8/AP-8. */
+function isHighway(st){ const n=((st&&st.name)||'').toLowerCase();
+  return /autopista|autov[ií]a|\b(a|ap)-?\d/.test(n); }
 function ttMan(it){ const m=(it.maneuver||it.instructionType||'').toString().toUpperCase(); const rb=it.roundaboutExitNumber;
   if(m.indexOf('ROUNDABOUT')>=0||m.indexOf('ROTARY')>=0) return {type:'roundabout',exit:rb,modifier:(m.indexOf('LEFT')>=0?'left':(m.indexOf('RIGHT')>=0?'right':'straight'))};
   if(m.indexOf('ARRIVE')>=0)return {type:'arrive'}; if(m.indexOf('DEPART')>=0)return {type:'depart'};
