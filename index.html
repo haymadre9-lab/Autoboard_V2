@@ -427,8 +427,8 @@ const MT_STYLES={
             console.error('[SAT-MEM] sin respuesta '+Math.round(sinLatido/1000)+' s en satélite: forzando MAPA');
             try{ $('status').textContent='Satélite bloqueado: recuperando mapa…'; }catch(e){}
             this._satDesde=null; this._satUltimoLatido=Date.now(); baseSat=false; applyBase();
-          } else if(enSat && this._satDesde && (Date.now()-this._satDesde)>120000){
-            console.warn('[SAT-MEM] 2 min seguidos en satélite: se baja a mapa vectorial para liberar memoria de vídeo');
+          } else if(enSat && this._satDesde && (Date.now()-this._satDesde)>240000){
+            console.warn('[SAT-MEM] 4 min seguidos en satélite: se baja a mapa vectorial para liberar memoria de vídeo');
             try{ $('status').textContent='Satélite: cambiando a mapa para aliviar memoria'; }catch(e){}
             this._satDesde=null; baseSat=false; applyBase();
           }
@@ -859,30 +859,104 @@ function fmtDist(m){return m>=1000?(m/1000).toFixed(1).replace('.',',')+' km':Ma
 function moveLL(lat,lon,head,dm){const R=6371000,d=dm/R,h=head*Math.PI/180,la=lat*Math.PI/180,lo=lon*Math.PI/180;const la2=Math.asin(Math.sin(la)*Math.cos(d)+Math.cos(la)*Math.sin(d)*Math.cos(h));const lo2=lo+Math.atan2(Math.sin(h)*Math.sin(d)*Math.cos(la),Math.cos(d)-Math.sin(la)*Math.sin(la2));return [la2*180/Math.PI,lo2*180/Math.PI];}
 function angLerp(a,b,t){let d=((b-a+540)%360)-180;return (a+d*t+360)%360;}
 function segDistM(p,a,b){const mx=111320*Math.cos(p[0]*Math.PI/180),my=110540;const px=p[1]*mx,py=p[0]*my,ax=a.lon*mx,ay=a.lat*my,bx=b.lon*mx,by=b.lat*my;const dx=bx-ax,dy=by-ay,L2=dx*dx+dy*dy;let t=L2?((px-ax)*dx+(py-ay)*dy)/L2:0;t=Math.max(0,Math.min(1,t));return Math.hypot(px-(ax+t*dx),py-(ay+t*dy));}
-const rot={'straight':0,'slight right':40,'right':90,'sharp right':135,'uturn':180,'sharp left':-135,'left':-90,'slight left':-40};
-function arrowSVG(mod,col,w){col=col||'#0a8a34';w=w||7.5;return '<svg viewBox="0 0 48 52"><path d="M24 7 L24 45 M24 7 L12 21 M24 7 L36 21" fill="none" stroke="'+col+'" stroke-width="'+w+'" stroke-linecap="round" stroke-linejoin="round" transform="rotate('+(rot[mod]||0)+' 24 26)"/></svg>';}
-function arrowHead(x,y,t,c){const a1=t+2.55,a2=t-2.55,l=6.5;return '<path d="M'+x.toFixed(1)+' '+y.toFixed(1)+' L'+(x+Math.sin(a1)*l).toFixed(1)+' '+(y-Math.cos(a1)*l).toFixed(1)+' M'+x.toFixed(1)+' '+y.toFixed(1)+' L'+(x+Math.sin(a2)*l).toFixed(1)+' '+(y-Math.cos(a2)*l).toFixed(1)+'" stroke="'+c+'" stroke-width="4" stroke-linecap="round"/>';}
+/* Geometria compartida de las flechas de maniobra: antes eran una linea recta
+   rotada un angulo fijo (poco realista); ahora es una curva real que imita el
+   trazado de la carretera, con la misma geometria para el icono grande y para
+   los carriles pequenos. */
+const TURN_GEOM = {
+  'straight':     {turn:0,   R:0},
+  'slight right': {turn:35,  R:26},
+  'right':        {turn:90,  R:15},
+  'sharp right':  {turn:150, R:10},
+  'uturn':        {turn:178, R:9},
+  'sharp left':   {turn:-150,R:10},
+  'left':         {turn:-90, R:15},
+  'slight left':  {turn:-35, R:26},
+};
+function triHead(x,y,t,c,len,hw){
+  len=len||9; hw=hw||5.5;
+  const tan={x:Math.sin(t),y:-Math.cos(t)}, lat={x:Math.cos(t),y:Math.sin(t)};
+  const bx=x-tan.x*len, by=y-tan.y*len;
+  const l={x:bx+lat.x*hw, y:by+lat.y*hw}, r={x:bx-lat.x*hw, y:by-lat.y*hw};
+  return '<path d="M'+x.toFixed(1)+' '+y.toFixed(1)+' L'+l.x.toFixed(1)+' '+l.y.toFixed(1)
+    +' L'+r.x.toFixed(1)+' '+r.y.toFixed(1)+' Z" fill="'+c+'"/>';
+}
+function turnPath(mod, n){
+  n=n||14;
+  const g=TURN_GEOM[mod]||TURN_GEOM.straight, P0={x:24,y:46};
+  if(!g.turn) return { pts:[P0,{x:24,y:10}], brg:0 };
+  const right=g.turn>0, R=g.R, Cx=right?24+R:24-R, C={x:Cx,y:46};
+  const a0=right?180:0, a1=right?a0+g.turn:a0-Math.abs(g.turn);
+  const pts=[];
+  for(let i=0;i<=n;i++){ const a=(a0+(a1-a0)*i/n)*Math.PI/180;
+    pts.push({x:C.x+R*Math.cos(a), y:C.y+R*Math.sin(a)}); }
+  return { pts, brg: g.turn };
+}
+// Solo el trazo de la curva, sin punta: la punta va aparte con arrowHead(),
+// que ya usan rotonda/bifurcacion/incorporacion. Con un desplazamiento FIJO en
+// vez de proporcional al radio, no se rompe en los giros cerrados (donde un
+// desplazamiento grande "hacia atras" acaba cruzando la propia curva).
+function turnSVGPath(mod){
+  const {pts}=turnPath(mod);
+  return 'M'+pts.map(p=>p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' L');
+}
+function arrowSVG(mod,col,w){col=col||'#0a8a34';w=w||9.5;
+  const g=turnPath(mod), tip=g.pts[g.pts.length-1], rad=g.brg*Math.PI/180;
+  return '<svg viewBox="0 0 48 52"><path d="'+turnSVGPath(mod)+'" fill="none" stroke="'+col+'" stroke-width="'+w+'" stroke-linecap="round" stroke-linejoin="round"/>'
+    +arrowHead(tip.x,tip.y,rad,col,w*0.58)+'</svg>';}
+function arrowHead(x,y,t,c,sw,l){const a1=t+2.55,a2=t-2.55;sw=sw||4;l=l||6.5;return '<path d="M'+x.toFixed(1)+' '+y.toFixed(1)+' L'+(x+Math.sin(a1)*l).toFixed(1)+' '+(y-Math.cos(a1)*l).toFixed(1)+' M'+x.toFixed(1)+' '+y.toFixed(1)+' L'+(x+Math.sin(a2)*l).toFixed(1)+' '+(y-Math.cos(a2)*l).toFixed(1)+'" stroke="'+c+'" stroke-width="'+sw+'" stroke-linecap="round"/>';}
 function roundaboutSVG(exit,mod,col){
-  // Anillo exterior grueso + isla central + todas las salidas, con la tuya
-  // resaltada y el numero DENTRO de la isla. Pensado para leerse de lejos.
-  const c=col||'#39d98a', g='#8b95a4', cx=26, cy=26, r=13;
-  const n=Math.max(1,Math.min(6,parseInt(exit,10)||1));
-  const total=Math.max(3,n+1);
-  const ang=k=>Math.PI/2-(k+1)*(2*Math.PI/(total+1));
+  // El tramo de rotonda que se recorre (entrada -> tu salida) se pinta como un
+  // arco blanco grueso: se lee la forma de un vistazo, sin depender de un
+  // numero pequeno.
+  // Angulos de salida FIJOS (no dependen de cual sea tu salida): 6 huecos
+  // repartidos en 300 grados, dejando 60 grados libres junto a la entrada. El
+  // esquema anterior calculaba el reparto a partir de tu propia salida y eso
+  // hacia que la salida 2 diera SIEMPRE un arco de longitud cero (justo la
+  // maniobra mas habitual, "sigue recto en la rotonda"): un fallo real, no solo
+  // de estetica.
+  const g='#6b7480', cx=26, cy=26, r=13, grosor=6.5, NMAX=6, pasoDeg=300/NMAX;
+  const n=Math.max(1,Math.min(NMAX,parseInt(exit,10)||1));
+  const a0=Math.PI/2;                        // entrada, siempre abajo
+  const aDe=k=>a0-(k*pasoDeg)*Math.PI/180;    // angulo de la salida k (1..NMAX)
   let s='<svg viewBox="0 0 52 52">';
-  s+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+g+'" stroke-width="5" opacity=".55"/>';
-  s+='<circle cx="'+cx+'" cy="'+cy+'" r="'+(r-5.5)+'" fill="'+g+'" opacity=".22"/>';   // isla central
-  s+='<path d="M'+cx+' 52 L'+cx+' '+(cy+r)+'" stroke="'+c+'" stroke-width="5.5" stroke-linecap="round"/>'; // entrada
-  for(let k=0;k<total;k++){ const a=-ang(k), x1=cx+Math.cos(a)*r, y1=cy+Math.sin(a)*r,
-      x2=cx+Math.cos(a)*(r+10), y2=cy+Math.sin(a)*(r+10), sel=(k===n-1);
-    s+='<path d="M'+x1.toFixed(1)+' '+y1.toFixed(1)+' L'+x2.toFixed(1)+' '+y2.toFixed(1)+'" stroke="'+(sel?c:g)+'" stroke-width="'+(sel?5.5:3)+'" stroke-linecap="round" opacity="'+(sel?1:.5)+'"/>';
-    if(sel){ const a0=Math.PI/2, large=((a0-a+2*Math.PI)%(2*Math.PI))>Math.PI?1:0;
-      s+='<path d="M'+cx+' '+(cy+r)+' A'+r+' '+r+' 0 '+large+' 1 '+x1.toFixed(1)+' '+y1.toFixed(1)+'" fill="none" stroke="'+c+'" stroke-width="5.5" stroke-linecap="round"/>';
-      s+=arrowHead(x2,y2,Math.atan2(x2-cx,-(y2-cy)),c); } }
-  s+='<text x="'+cx+'" y="'+(cy+4.5)+'" text-anchor="middle" font-size="13" font-weight="800" fill="'+c+'">'+n+'</text>';
+  s+='<circle cx="'+cx+'" cy="'+cy+'" r="'+(r-grosor/2-1)+'" fill="'+g+'" opacity=".18"/>';
+  s+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+g+'" stroke-width="3" opacity=".45"/>';
+  // entrada, en gris: aun no estas circulando por la rotonda
+  s+='<path d="M'+cx+' 52 L'+cx+' '+(cy+r)+'" stroke="'+g+'" stroke-width="'+grosor+'" stroke-linecap="round" opacity=".55"/>';
+  // las demas salidas, apenas insinuadas
+  for(let k=1;k<=NMAX;k++){ if(k===n) continue; const a=aDe(k);
+    const x1=cx+Math.cos(a)*r, y1=cy+Math.sin(a)*r, x2=cx+Math.cos(a)*(r+7), y2=cy+Math.sin(a)*(r+7);
+    s+='<path d="M'+x1.toFixed(1)+' '+y1.toFixed(1)+' L'+x2.toFixed(1)+' '+y2.toFixed(1)+'" stroke="'+g+'" stroke-width="2.4" stroke-linecap="round" opacity=".4"/>'; }
+  // ARCO relleno (blanco, grueso) del tramo real, desde la entrada hasta tu salida
+  const aSel=aDe(n);
+  // El arco NO se dibuja con el comando "A" de SVG: sus banderas large/sweep
+  // eligen entre dos centros posibles, y si no coinciden EXACTAMENTE con mi
+  // centro real (cx,cy) el arco se hincha hacia fuera en vez de seguir la
+  // circunferencia (era justo el fallo: salidas 5 y 6 desplazadas hacia fuera).
+  // En vez de adivinar las banderas, se muestrean puntos directamente sobre MI
+  // circulo -mismo criterio ya usado y probado en las flechas de giro-, lo que
+  // garantiza que el arco se ciñe siempre al aro real.
+  const xs=cx+Math.cos(aSel)*r, ys=cy+Math.sin(aSel)*r;
+  let dArco='M'+cx+' '+(cy+r);
+  for(let i=1;i<=24;i++){ const a=a0-(a0-aSel)*i/24;
+    dArco+=' L'+(cx+Math.cos(a)*r).toFixed(1)+' '+(cy+Math.sin(a)*r).toFixed(1); }
+  const col2='#ffb020';   // ambar: se diferencia bien tanto del aro gris-azulado como de un panel azul de autopista, cosa que el blanco no hacia
+  s+='<path d="'+dArco+'" fill="none" stroke="'+col2+'" stroke-width="'+grosor+'" stroke-linecap="round" stroke-linejoin="round"/>';
+  // Salida: trazo hacia fuera que se PARA en la base del triangulo, no en la
+  // punta. Si llegara hasta la punta, su extremo redondeado (stroke-linecap
+  // round) quedaria justo encima del vertice y lo desdibujaria; parando antes,
+  // el redondeo queda tapado bajo el propio relleno del triangulo y la punta
+  // sale limpia y afilada.
+  const largo=9;
+  const xo=cx+Math.cos(aSel)*(r+largo), yo=cy+Math.sin(aSel)*(r+largo);
+  const brg=Math.atan2(xo-cx,-(yo-cy));
+  const bx=xo-Math.sin(brg)*largo, by=yo+Math.cos(brg)*largo;   // base del triangulo
+  s+='<path d="M'+xs.toFixed(1)+' '+ys.toFixed(1)+' L'+bx.toFixed(1)+' '+by.toFixed(1)+'" stroke="'+col2+'" stroke-width="'+grosor+'" stroke-linecap="round"/>';
+  s+=triHead(xo,yo,brg,col2,largo,5.5);
   return s+'</svg>';
 }
-function isHighway(st){const n=(((st&&st.name)||'')+'').toUpperCase();return /\b(A|AP|E)-?\d/.test(n)||n.indexOf('AUTOV')>=0||n.indexOf('AUTOP')>=0||n.indexOf('MOTORWAY')>=0;}
+
 function maneuverSVG(st,hw){const m=st.maneuver||{};const col=hw?'#ffffff':'#0a8a34';
   if(m.type==='roundabout'||m.type==='rotary')return roundaboutSVG(m.exit,m.modifier,col);
   if(m.type==='arrive')return '<svg viewBox="0 0 48 52"><path d="M24 6c-7 0-12 5-12 12 0 9 12 26 12 26s12-17 12-26c0-7-5-12-12-12z" fill="'+col+'"/><circle cx="24" cy="18" r="4.5" fill="#fff"/></svg>';
@@ -1438,8 +1512,10 @@ async function fetchLanes(pts){ osrmLanes=[]; try{ const coords=pts.map(p=>p[1]+
   osrmLanes=out;
 }catch(e){} }
 function laneFor(ll){ let best=null,bd=170; for(const e of osrmLanes){ const dd=dist(ll,e.ll); if(dd<bd){bd=dd;best=e;} } return best?best.lanes:null; }
-function laneArrow(dir,valid,hw){ const rot={'left':-90,'slight left':-40,'straight':0,'slight right':40,'right':90,'sharp left':-135,'sharp right':135,'uturn':180}; const col=valid?(hw?'#ffffff':'#0a8a34'):(hw?'#000000':'#9aa3b2');
-  return '<div class="lane"><svg viewBox="0 0 48 52"><path d="M24 7 L24 45 M24 7 L12 21 M24 7 L36 21" fill="none" stroke="'+col+'" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" transform="rotate('+(rot[dir]||0)+' 24 26)"/></svg></div>'; }
+function laneArrow(dir,valid,hw){ const col=valid?(hw?'#ffffff':'#0a8a34'):(hw?'#000000':'#9aa3b2');
+  const g=turnPath(dir), tip=g.pts[g.pts.length-1], rad=g.brg*Math.PI/180;
+  return '<div class="lane"><svg viewBox="0 0 48 52"><path d="'+turnSVGPath(dir)+'" fill="none" stroke="'+col+'" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>'
+    +arrowHead(tip.x,tip.y,rad,col,5)+'</svg></div>'; }
 function showLanes(lanes){ if(!lanes||!lanes.length){ $('lanes').style.display='none'; return; } $('lanes').innerHTML=lanes.map(l=>laneArrow(l.dir,l.valid)).join(''); $('lanes').style.display='flex'; }
 function hideLanes(){ const e=$('lanes'); if(e)e.style.display='none'; }
 function lanesHTML(lanes,hw){ return '<div class="lanerow">'+lanes.map(l=>laneArrow(l.dir,l.valid,hw)).join('')+'</div>'; }
