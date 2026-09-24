@@ -5,7 +5,7 @@
      momento y la app sigue abriendo sin conexion.
    - Teselas de mapa y APIs externas: NO se cachean aqui (las gestiona el
      navegador y MapLibre; cachearlas llenaba el almacenamiento del Tesla).  */
-const C='autoboard-v5-6';
+const C='autoboard-v5-9';
 const BASE=['./','./index.html','./hud2.js','./hud2-boot.js','./coche.png','./faro/','./faro/index.html','./radares.json','./manifest.webmanifest'];
 
 self.addEventListener('install', e=>{

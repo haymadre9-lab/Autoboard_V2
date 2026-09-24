@@ -862,7 +862,7 @@ function triHead(x,y,t,c,len,hw){
 function turnPath(mod, n){
   n=n||14;
   const g=TURN_GEOM[mod]||TURN_GEOM.straight, P0={x:24,y:46};
-  if(!g.turn) return { pts:[P0,{x:24,y:10}], brg:0 };
+  if(!g.turn){ const pts=[]; for(let i=0;i<=n;i++) pts.push({x:24, y:P0.y-(P0.y-10)*i/n}); return { pts, brg:0 }; }
   const right=g.turn>0, R=g.R, Cx=right?24+R:24-R, C={x:Cx,y:46};
   const a0=right?180:0, a1=right?a0+g.turn:a0-Math.abs(g.turn);
   const pts=[];
@@ -874,14 +874,45 @@ function turnPath(mod, n){
 // que ya usan rotonda/bifurcacion/incorporacion. Con un desplazamiento FIJO en
 // vez de proporcional al radio, no se rompe en los giros cerrados (donde un
 // desplazamiento grande "hacia atras" acaba cruzando la propia curva).
+// La curva se dibuja hasta la BASE del triangulo, no hasta la punta: si
+// llegara hasta la punta, el extremo redondeado del trazo (stroke-linecap
+// round) se posaria justo encima del vertice y lo desdibujaria -- el mismo
+// fallo ya corregido en la rotonda, aqui con el mismo arreglo.
+// Flecha como UNA SOLA FORMA RELLENA: cuerpo estrecho que se ensancha hacia la
+// punta y cierra en un vertice. Ni trazo grueso ni triangulo pegado encima:
+// eso es lo que se veia como un bulto en vez de una punta.
+function turnArrowFill(mod, shaftHW, headHW, headLen){
+  shaftHW=shaftHW||4.2; headHW=headHW||8.5; headLen=headLen||13;
+  const {pts}=turnPath(mod,28);
+  const N=pts.length, distDesdePunta=new Array(N); distDesdePunta[N-1]=0;
+  for(let i=N-2;i>=0;i--){ const dx=pts[i+1].x-pts[i].x, dy=pts[i+1].y-pts[i].y;
+    distDesdePunta[i]=distDesdePunta[i+1]+Math.hypot(dx,dy); }
+  const tang=i=>{ const a=pts[Math.max(0,i-1)], b=pts[Math.min(N-1,i+1)];
+    const dx=b.x-a.x, dy=b.y-a.y, L=Math.hypot(dx,dy)||1; return {x:dx/L,y:dy/L}; };
+  const left=[], right=[]; let tip=null;
+  for(let i=0;i<N;i++){
+    const t=tang(i), lat={x:-t.y,y:t.x}, d=distDesdePunta[i];
+    if(d<=0){ tip={x:pts[i].x,y:pts[i].y}; continue; }
+    const hw = d<headLen ? headHW*(d/headLen) : shaftHW;
+    left.push({x:pts[i].x+lat.x*hw, y:pts[i].y+lat.y*hw});
+    right.push({x:pts[i].x-lat.x*hw, y:pts[i].y-lat.y*hw});
+  }
+  const poly=[...left, tip, ...right.reverse()];
+  return 'M'+poly.map(p=>p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' L')+' Z';
+}
+function turnSVGPathRecortado(mod, pullback){
+  const g=turnPath(mod), pts=g.pts.slice(), rad=g.brg*Math.PI/180;
+  const tan={x:Math.sin(rad), y:-Math.cos(rad)};
+  const tip=pts[pts.length-1];
+  pts[pts.length-1]={x:tip.x-tan.x*pullback, y:tip.y-tan.y*pullback};
+  return 'M'+pts.map(p=>p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' L');
+}
 function turnSVGPath(mod){
   const {pts}=turnPath(mod);
   return 'M'+pts.map(p=>p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' L');
 }
-function arrowSVG(mod,col,w){col=col||'#0a8a34';w=w||9.5;
-  const g=turnPath(mod), tip=g.pts[g.pts.length-1], rad=g.brg*Math.PI/180;
-  return '<svg viewBox="0 0 48 52"><path d="'+turnSVGPath(mod)+'" fill="none" stroke="'+col+'" stroke-width="'+w+'" stroke-linecap="round" stroke-linejoin="round"/>'
-    +arrowHead(tip.x,tip.y,rad,col,w*0.58)+'</svg>';}
+function arrowSVG(mod,col,w){col=col||'#0a8a34';
+  return '<svg viewBox="0 0 48 52"><path d="'+turnArrowFill(mod,4.6,9.5,9)+'" fill="'+col+'"/></svg>';}
 function arrowHead(x,y,t,c,sw,l){const a1=t+2.55,a2=t-2.55;sw=sw||4;l=l||6.5;return '<path d="M'+x.toFixed(1)+' '+y.toFixed(1)+' L'+(x+Math.sin(a1)*l).toFixed(1)+' '+(y-Math.cos(a1)*l).toFixed(1)+' M'+x.toFixed(1)+' '+y.toFixed(1)+' L'+(x+Math.sin(a2)*l).toFixed(1)+' '+(y-Math.cos(a2)*l).toFixed(1)+'" stroke="'+c+'" stroke-width="'+sw+'" stroke-linecap="round"/>';}
 function roundaboutSVG(exit,mod,col){
   // El tramo de rotonda que se recorre (entrada -> tu salida) se pinta como un
@@ -1495,9 +1526,7 @@ async function fetchLanes(pts){ osrmLanes=[]; try{ const coords=pts.map(p=>p[1]+
 }catch(e){} }
 function laneFor(ll){ let best=null,bd=170; for(const e of osrmLanes){ const dd=dist(ll,e.ll); if(dd<bd){bd=dd;best=e;} } return best?best.lanes:null; }
 function laneArrow(dir,valid,hw){ const col=valid?(hw?'#ffffff':'#0a8a34'):(hw?'#000000':'#9aa3b2');
-  const g=turnPath(dir), tip=g.pts[g.pts.length-1], rad=g.brg*Math.PI/180;
-  return '<div class="lane"><svg viewBox="0 0 48 52"><path d="'+turnSVGPath(dir)+'" fill="none" stroke="'+col+'" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>'
-    +arrowHead(tip.x,tip.y,rad,col,5)+'</svg></div>'; }
+  return '<div class="lane"><svg viewBox="0 0 48 52"><path d="'+turnArrowFill(dir,4.0,8.2,8)+'" fill="'+col+'"/></svg></div>'; }
 function showLanes(lanes){ if(!lanes||!lanes.length){ $('lanes').style.display='none'; return; } $('lanes').innerHTML=lanes.map(l=>laneArrow(l.dir,l.valid)).join(''); $('lanes').style.display='flex'; }
 function hideLanes(){ const e=$('lanes'); if(e)e.style.display='none'; }
 function lanesHTML(lanes,hw){ return '<div class="lanerow">'+lanes.map(l=>laneArrow(l.dir,l.valid,hw)).join('')+'</div>'; }
