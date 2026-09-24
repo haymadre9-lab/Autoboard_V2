@@ -390,60 +390,12 @@ const MT_STYLES={
         if(/tile|source|fetch|network|403|429/i.test(msg)) console.warn('[mapa] tesela:', msg.slice(0,90));
       });
 
-      /* No es un problema de ruta ni de satelite en concreto: se ha confirmado
-         en el coche que ocurre TAMBIEN sin ruta y en MAPA, solo que mas lento.
-         Es memoria de video acumulandose con las teselas segun se navega, y el
-         satelite lo agrava por pesar mas. La respuesta ya no es solo medir:
-         es AUTORREGULARSE antes de llegar al bloqueo.
-         [SAT-MEM] sigue registrando, cada 30 s en cualquier estilo, y ademas
-         actua: si esta en satelite y llevamos mas de 6 min seguidos, se baja
-         solo a mapa vectorial (mucho mas barato) y se avisa. El usuario puede
-         volver a satelite cuando quiera; simplemente no se queda ahi para
-         siempre acumulando.                                                  */
-      this._satMemN=0; this._satDesde=null; this._satUltimoLatido=Date.now();
-      setInterval(()=>{
-        try{
-          const enSat=(this._urlEstilo===MT_STYLES.sat||this._urlEstilo===SAT_ALT);
-          if(enSat && this._satDesde===null) this._satDesde=Date.now();
-          if(!enSat) this._satDesde=null;
-          this._satMemN++;
-          if(this._satMemN%6===0){
-          const st=this._m.getStyle?this._m.getStyle():null;
-          const nSrc=st&&st.sources?Object.keys(st.sources).length:'?';
-          const nLay=st&&st.layers?st.layers.length:'?';
-          console.log('[SAT-MEM] #'+(this._satMemN/6)+' t+'+(this._satMemN*5)+'s · estilo='+(enSat?'SATELITE':'otro')
-            +' · fuentes(mapa)='+nSrc+' · capas(mapa)='+nLay
-            +' · polys(app)='+this._polys.length+' · overlays(app)='+this._overlays.length
-            +' · fc(app)='+this._fcs.length+' · symGroups(app)='+this._symGroups.length
-            +' · setStyle_total='+(this._nSetStyle||0)+' · reAdd_total='+(this._nReAdd||0));
-          }
-          const sinLatido=Date.now()-(this._satUltimoLatido||Date.now());
-          // Solo se vigila el latido si el estilo YA esta cargado y quieto.
-          // Justo tras pedir el satelite, style.load puede tardar varios
-          // segundos por si mismo: eso no es un cuelgue, es carga normal.
-          if(enSat && this._estiloOk && sinLatido>20000){
-            // frame() lleva mas de 8 s sin ejecutarse: el mapa se ha quedado
-            // colgado (justo el bloqueo descrito). Forzar mapa sin esperar mas.
-            console.error('[SAT-MEM] sin respuesta '+Math.round(sinLatido/1000)+' s en satélite: forzando MAPA');
-            try{ $('status').textContent='Satélite bloqueado: recuperando mapa…'; }catch(e){}
-            this._satDesde=null; this._satUltimoLatido=Date.now(); baseSat=false; applyBase();
-          } else if(enSat && this._satDesde && (Date.now()-this._satDesde)>240000){
-            console.warn('[SAT-MEM] 4 min seguidos en satélite: se baja a mapa vectorial para liberar memoria de vídeo');
-            try{ $('status').textContent='Satélite: cambiando a mapa para aliviar memoria'; }catch(e){}
-            this._satDesde=null; baseSat=false; applyBase();
-          }
-        }catch(e){ console.warn('[SAT-MEM] error de medicion:', e.message); }
-      }, 5000);
-      // WebGL: perdida/recuperacion del contexto grafico, y errores de tile/recurso.
-      try{
-        const cv=this._m.getCanvas();
-        cv.addEventListener('webglcontextlost', ()=>{ console.error('[SAT-WEBGL] CONTEXT LOST', new Date().toLocaleTimeString()); }, false);
-        cv.addEventListener('webglcontextrestored', ()=>{ console.warn('[SAT-WEBGL] context restored', new Date().toLocaleTimeString()); }, false);
-      }catch(e){}
-      this._m.on('error', e=>{
-        const msg=(e&&e.error&&e.error.message)||'';
-        if(/tile|texture|memory|webgl|context/i.test(msg)) console.warn('[SAT-WEBGL] error:', msg.slice(0,140));
-      });
+      /* Watchdogs y temporizadores de satelite: RETIRADOS.
+         Con la arquitectura nueva (satelite = capa raster encima del mismo
+         estilo vectorial, sin setStyle) no hay reconstruccion del mapa por
+         cambiar de modo, asi que no hay memoria creciente que vigilar ni
+         cuelgues de carga de estilo que esperar: se ataca la causa, no el
+         sintoma.                                                            */
 
       /* NO hay perro guardian que recargue el estilo.
          Lo tuve puesto y era peor que la enfermedad: setStyle() borra TODAS las
@@ -457,7 +409,6 @@ const MT_STYLES={
       this._m.on('styledata',()=>{ if(this._estiloOk) return;
         try{ if(this._m.isStyleLoaded&&this._m.isStyleLoaded()) this._m.fire('style.load'); }catch(e){} });
       this._m.on('style.load',()=>{ clearTimeout(this._tEstilo); this._estiloOk=true;
-        this._satUltimoLatido=Date.now();  // el vigilante empieza a contar desde AHORA, no desde antes del cambio
         console.log('[STYLE] style.load · estilo actual:', this._elegido||'?'); console.log('[MAP] restaurando ruta');
         this._reAdd(); this._vaciar();
         // comprobacion: si alguna polilinea no volvio, se reintenta y se avisa
@@ -1091,7 +1042,6 @@ function frame(now){
     // vigilante lo comparaba contra Date.now() (reloj de epoca). Eran
     // incompatibles: 'sinLatido' salia siempre gigantesco y el vigilante
     // disparaba de inmediato, siempre, fuera cual fuera el estado real.
-    if(map && map._satUltimoLatido!==undefined) map._satUltimoLatido=Date.now();
     // ---- HUD 2: el dibujo lo lleva hud2.js dentro de #hudroad ----
     // Se sustituyen drawHudRoad, drawHudRain, las salpicaduras y los transform
     // de #hudcar y #beams. El bloque original queda al final del archivo,
@@ -1687,31 +1637,36 @@ async function renderSuggest(q){ const box=$('suggest');
 
 // ===== día/noche + tráfico =====
 function bringOverlaysFront(){ if(trafficLayer)trafficLayer.bringToFront(); if(routeCasing)routeCasing.bringToFront(); if(routeLine)routeLine.bringToFront(); }
+/* ARQUITECTURA NUEVA para MAPA <-> SATELITE, sin setStyle().
+   Antes: activar satelite llamaba a setStyle() -> MapLibre destruia TODO
+   (fuentes, capas, imagenes) y lo reconstruia desde cero via _reAdd(). Cada
+   cambio era, en la practica, un mapa nuevo: de ahi el consumo de memoria
+   creciente que forzaba watchdogs y temporizadores para salir del atasco.
+   Ahora: el estilo vectorial NO se toca nunca. Satelite es solo una capa
+   raster (Esri World Imagery, sin clave) montada ENCIMA con el mismo
+   mecanismo que ya usan lluvia y trafico (_addOverlay/_mountOverlay). Activar
+   o desactivar satelite es mostrar u ocultar esa capa: la ruta, el trafico y
+   los POIs no se enteran, porque nunca se destruyen.                        */
+let satOverlay=null;
+function capaSatelite(){
+  if(!satOverlay){
+    satOverlay=L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      {tileSize:256, maxNativeZoom:19, opacity:1});
+  }
+  return satOverlay;
+}
 function applyBase(){
-  const key = baseSat ? 'sat' : (mapNite ? 'night' : 'day');
-  if(map._baseKey!==key){ map._baseKey=key;
-    if(key==='sat') ponerSatelite(); else map._setBase(MT_STYLES[key], 0); }
+  // El estilo vectorial de base ya no cambia por satelite: solo por dia/noche.
+  const key = mapNite ? 'night' : 'day';
+  if(map._baseKey!==key){ map._baseKey=key; map._setBase(MT_STYLES[key], 0); }
+  const cap = capaSatelite();
+  if(baseSat){ if(!map.hasLayer(cap)) cap.addTo(map); cap.bringToFront(); }
+  else { if(map.hasLayer(cap)) map.removeLayer(cap); }
   $('map').classList.remove('nite'); // el estilo vectorial ya trae su noche
   $('daynight').textContent=baseSat?'🗺️':'🛰️';
   {const _mn=$('mapnight'); if(_mn)_mn.classList.toggle('on',mapNite);}
   bringOverlaysFront();
-}
-/* SATELITE SIN ESPERA.
-   Antes se pedia el estilo a MapTiler y, si fallaba, habia que aguardar 9 s al
-   vigilante para saltar al alternativo: de ahi la tardanza. Ahora se comprueba
-   el style.json con una peticion corta (3 s) ANTES de cambiar, y se va directo
-   al que funcione. El resultado se recuerda: el segundo cambio es inmediato.  */
-let _satOk=null;
-async function ponerSatelite(){
-  if(_satOk===null){
-    const t0=performance.now();
-    try{
-      const ctl=new AbortController(), to=setTimeout(()=>ctl.abort(),3000);
-      const r=await fetch(MT_STYLES.sat,{signal:ctl.signal}); clearTimeout(to);
-      _satOk=r.ok; console.log('[MAP] comprobación satélite MapTiler: HTTP '+r.status+' en '+Math.round(performance.now()-t0)+' ms');
-    }catch(e){ _satOk=false; console.warn('[MAP] satélite MapTiler no responde ('+(e.name||'error')+')'); }
-  }
-  map._setBase(_satOk ? MT_STYLES.sat : SAT_ALT, _satOk?0:1);
 }
 function setBase(sat){ baseSat=sat; applyBase(); }
 $('daynight').textContent='🗺️';
