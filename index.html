@@ -131,7 +131,10 @@
   .navbanner.hw{background:#1558d6;border-color:#0d3ea0;}
   .navbanner .navd{font-weight:900;font-size:19px;color:#111;line-height:1;}
   .navbanner.hw .navd{color:#fff;}
-  .navbanner .arrow{min-width:58px;height:62px;flex:0 0 auto;} .navbanner .arrow>svg{width:58px;height:62px;display:block;}
+  /* Icono principal de maniobra: 58x62 se leia demasiado pequeño desde el
+     asiento del conductor. Sube un 35% aprox., proporcional al tamaño del
+     badge circular de rotonda (104px) que ya iba bien. */
+  .navbanner .arrow{min-width:78px;height:84px;flex:0 0 auto;} .navbanner .arrow>svg{width:78px;height:84px;display:block;}
   .lanerow{display:flex;gap:2px;align-items:center;height:62px;} .lanerow .lane{width:22px;height:40px;} .lanerow .lane svg{width:100%;height:100%;display:block;}
   .navtext{display:flex;flex-direction:column;} .navd{font-size:30px;font-weight:800;line-height:1;color:#fff;font-variant-numeric:tabular-nums;}
   .navsub{font-size:13px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42vw;margin-top:3px;font-weight:600;}
@@ -555,12 +558,22 @@ const MT_STYLES={
       this.run(()=>this._mountOverlay(o)); }
     // Muestra u oculta las capas del estilo vectorial base (no las nuestras:
     // ruta, trafico, simbolos y overlays quedan siempre intactas y visibles).
-    _setCapasBaseVisibles(vis){
+    // NO usa this.run()/la cola general: esa cola solo se vacia cuando llega
+    // un nuevo style.load, y satelite ya NO dispara ninguno. Si la orden caia
+    // en la cola justo cuando el estilo no estaba "listo" (p.ej. coincidiendo
+    // con un cambio dia/noche), se quedaba esperando un evento que no iba a
+    // llegar nunca -- exactamente lo que se vio en el coche: al volver a Mapa
+    // las carreteras no volvian hasta recargar la pagina. Aqui se reintenta
+    // por su cuenta, acotado, sin depender de esa cola.
+    _setCapasBaseVisibles(vis, intentos){
       this._satOn = !vis;
-      this.run(()=>{
-        (this._capasBase||[]).forEach(id=>{
-          try{ this._m.setLayoutProperty(id, 'visibility', vis?'visible':'none'); }catch(e){}
-        });
+      intentos = intentos||0;
+      if(!this._capasBase || !this._capasBase.length || !(this._m.isStyleLoaded&&this._m.isStyleLoaded())){
+        if(intentos<20) setTimeout(()=>this._setCapasBaseVisibles(vis, intentos+1), 150);
+        return;
+      }
+      this._capasBase.forEach(id=>{
+        try{ this._m.setLayoutProperty(id, 'visibility', vis?'visible':'none'); }catch(e){}
       });
     }
     _overlayToFront(o){ try{ if(this._m.getLayer(o.id)) this._m.moveLayer(o.id); }catch(e){} }
@@ -952,17 +965,24 @@ function roundaboutSVG(exit,mod,col){
     dArco+=' L'+(cx+Math.cos(a)*r).toFixed(1)+' '+(cy+Math.sin(a)*r).toFixed(1); }
   const col2='#ffb020';   // ambar: se diferencia bien tanto del aro gris-azulado como de un panel azul de autopista, cosa que el blanco no hacia
   s+='<path d="'+dArco+'" fill="none" stroke="'+col2+'" stroke-width="'+grosor+'" stroke-linecap="round" stroke-linejoin="round"/>';
-  // Salida: trazo hacia fuera que se PARA en la base del triangulo, no en la
-  // punta. Si llegara hasta la punta, su extremo redondeado (stroke-linecap
-  // round) quedaria justo encima del vertice y lo desdibujaria; parando antes,
-  // el redondeo queda tapado bajo el propio relleno del triangulo y la punta
-  // sale limpia y afilada.
-  const largo=9;
+  // Salida: MISMA TECNICA que las flechas de giro (forma rellena, sin trazo
+  // pegado). Un trazo + un triangulo suelto encima siempre se leia como "un
+  // pegote puesto"; una unica forma que nace del propio grosor del arco,
+  // se ensancha y cierra en punta, se lee como una flecha de verdad.
+  const largo=11;
   const xo=cx+Math.cos(aSel)*(r+largo), yo=cy+Math.sin(aSel)*(r+largo);
   const brg=Math.atan2(xo-cx,-(yo-cy));
-  const bx=xo-Math.sin(brg)*largo, by=yo+Math.cos(brg)*largo;   // base del triangulo
-  s+='<path d="M'+xs.toFixed(1)+' '+ys.toFixed(1)+' L'+bx.toFixed(1)+' '+by.toFixed(1)+'" stroke="'+col2+'" stroke-width="'+grosor+'" stroke-linecap="round"/>';
-  s+=triHead(xo,yo,brg,col2,largo,5.5);
+  const tan={x:Math.sin(brg),y:-Math.cos(brg)}, lat={x:Math.cos(brg),y:Math.sin(brg)};
+  const shaftHW=grosor/2, headHW=7.5, hombro=0.5;   // 0..1: donde esta el ensanche maximo
+  const hx=xs+(xo-xs)*hombro, hy=ys+(yo-ys)*hombro;
+  const poly=[
+    {x:xs+lat.x*shaftHW, y:ys+lat.y*shaftHW},
+    {x:hx+lat.x*headHW,  y:hy+lat.y*headHW},
+    {x:xo, y:yo},
+    {x:hx-lat.x*headHW,  y:hy-lat.y*headHW},
+    {x:xs-lat.x*shaftHW, y:ys-lat.y*shaftHW},
+  ];
+  s+='<path d="M'+poly.map(p=>p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' L')+' Z" fill="'+col2+'"/>';
   return s+'</svg>';
 }
 
@@ -1090,8 +1110,22 @@ function frame(now){
         { const d=(routeOn&&follow&&hudTurnDist!=null)?hudTurnDist:1e9;
           const obj=(d<250&&d>-20)?1.1*Math.min(1,(250-d)/210):0;
           window.__zoomMan=(window.__zoomMan||0)+(obj-(window.__zoomMan||0))*0.08; }
-        try{ map.raw.jumpTo({ center:[clon,clat], zoom:navZoom+(window.__zoomMan||0), bearing:bearing, pitch:(tilt?55:0),
-              padding:{top:Math.round(paneH*0.52),bottom:0,left:0,right:0} }); }catch(e){}   // 0.52 -> coche justo encima del radar
+        // Solo se llama a jumpTo() si algo cambio de verdad. Antes se llamaba
+        // 20 veces por segundo SIEMPRE, incluso con el coche parado o entre dos
+        // posiciones de GPS identicas: cada llamada obliga a MapLibre a
+        // recalcular y repintar el fotograma entero para nada.
+        const zNueva=navZoom+(window.__zoomMan||0);
+        const cambia = !window.__camPrev
+          || Math.abs(window.__camPrev.lat-clat)>0.0000015
+          || Math.abs(window.__camPrev.lon-clon)>0.0000015
+          || Math.abs(window.__camPrev.zoom-zNueva)>0.01
+          || Math.abs(window.__camPrev.bearing-bearing)>0.05
+          || window.__camPrev.pitch!==(tilt?55:0);
+        if(cambia){
+          window.__camPrev={lat:clat,lon:clon,zoom:zNueva,bearing:bearing,pitch:(tilt?55:0)};
+          try{ map.raw.jumpTo({ center:[clon,clat], zoom:zNueva, bearing:bearing, pitch:(tilt?55:0),
+                padding:{top:Math.round(paneH*0.52),bottom:0,left:0,right:0} }); }catch(e){}   // 0.52 -> coche justo encima del radar
+        }
       }
     }
     $('spd').textContent=Math.round(speedKmh);
@@ -1551,6 +1585,21 @@ async function buildRoute(pts){
     if(bestAlt && (routes[0].summary.travelTimeInSeconds - bestAlt.summary.travelTimeInSeconds)>60){ const save=Math.round((routes[0].summary.travelTimeInSeconds-bestAlt.summary.travelTimeInSeconds)/60); rr._alt=bestAlt; rr.textContent='⚠ Evitar atasco · −'+save+' min'; rr.style.display='block'; }
     else { rr.style.display='none'; rr._alt=null; }
     $('searchBar').style.display='none'; $('navbanner').style.display='flex'; hideSuggest();
+    // Vista inicial de la ruta: antes no existia ningun ajuste, asi que se
+    // veia lo que hubiera antes de calcular. Un fitBounds con margen, mostrado
+    // 2,5 s antes de que el seguimiento normal retome el zoom de conduccion:
+    // rutas cortas quedan bastante cerca, largas se alejan lo justo para
+    // entrar enteras.
+    try{
+      if(routeCoordsLL && routeCoordsLL.length>1){
+        let minLa=90,maxLa=-90,minLo=180,maxLo=-180;
+        for(const p of routeCoordsLL){ if(p[0]<minLa)minLa=p[0]; if(p[0]>maxLa)maxLa=p[0]; if(p[1]<minLo)minLo=p[1]; if(p[1]>maxLo)maxLo=p[1]; }
+        follow=false;   // si no, el jumpTo() de seguimiento lo pisa en el siguiente frame
+        map.raw.fitBounds([[minLo,minLa],[maxLo,maxLa]], {padding:70, maxZoom:16, duration:600});
+        clearTimeout(window.__fitBoundsT);
+        window.__fitBoundsT=setTimeout(()=>{ follow=true; }, 2500);
+      }
+    }catch(e){}
   }catch(e){ console.error('[NAV] ERROR de ruta:', e && e.message, e); $('status').textContent='Error de ruta: '+(e&&e.message||''); }
 }
 /* Ultimos destinos: se guardan al lanzar la ruta y se ofrecen al tocar el
@@ -1617,9 +1666,15 @@ function trackRoute(){ if(!routeOn||!disp||!steps.length)return; trimRoute();
   const hw=isHighway(s); $('navbanner').classList.toggle('hw',hw); hudTurnType=(s.maneuver||{}).type; hudTurnMod=(s.maneuver||{}).modifier; hudTurnDist=d; hudTurnExit=(s.maneuver||{}).exit||1; const lanes=(d<600)?laneFor(s.ll):null;
   // Solo se toca el DOM si la flecha cambia: antes se regeneraba el SVG cada 120 ms.
   const clave=stepIdx+'|'+(lanes?'L':'M')+'|'+hw; if(clave!==window.__arrowKey){ window.__arrowKey=clave; $('arrow').innerHTML = lanes? lanesHTML(lanes,hw) : maneuverSVG(s,hw); }
-  $('navdist').textContent='En '+fmtDist(d);
+  // Igual que la flecha (ya optimizada): el DOM solo se toca si el texto
+  // realmente cambio. Antes se reescribia 8,3 veces por segundo aunque
+  // mostrara exactamente los mismos caracteres.
+  const txtDist='En '+fmtDist(d);
+  if(txtDist!==window.__navdistPrev){ window.__navdistPrev=txtDist; $('navdist').textContent=txtDist; }
   let rem=0; for(let i=stepIdx;i<steps.length;i++) rem+=steps[i].distance; const mins=Math.max(1,Math.round(rem/(Math.max(8,speedKmh)/3.6)/60)); const eta=new Date(Date.now()+mins*60000);
-  const tp=$('trip'); tp.style.display='block'; tp.textContent=fmtDist(rem)+' · '+(mins>=60?Math.floor(mins/60)+' h '+(mins%60)+' min':mins+' min')+' · llegada '+eta.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  const txtTrip=fmtDist(rem)+' · '+(mins>=60?Math.floor(mins/60)+' h '+(mins%60)+' min':mins+' min')+' · llegada '+eta.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  const tp=$('trip'); tp.style.display='block';
+  if(txtTrip!==window.__tripPrev){ window.__tripPrev=txtTrip; tp.textContent=txtTrip; }
   if(stepIdx===steps.length-1 && dist(here,destLL)<40){ speak('Has llegado a tu destino'); endRoute(); }
 }
 
