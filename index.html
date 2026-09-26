@@ -805,8 +805,12 @@ const MT_STYLES={
       // teselas de Leaflet. Es una aproximacion (invertir+rotar tono), no
       // un estilo oscuro real como el de MapTiler; se documenta como tal.
       try{
+        // Invertir colores sobre un mapa mayormente BLANCO (las teselas de
+        // OSM) da un resultado mayormente NEGRO: eso era justo lo que se
+        // veia, no un fallo de carga. Se sustituye por un oscurecido suave
+        // (sin invertir tono), que atenua sin volver el mapa negro.
         const pane = this._m.getPane && this._m.getPane('tilePane');
-        if (pane) pane.style.filter = esNoche ? 'invert(1) hue-rotate(180deg) brightness(.92) contrast(.9)' : '';
+        if (pane) pane.style.filter = esNoche ? 'brightness(.62) saturate(.75)' : '';
       }catch(e){}
       this._baseKey = esSatelite ? 'sat' : 'day';
       console.log('[ENGINE][leaflet] base ->', this._baseKey, esNoche?'(noche, filtro CSS)':'');
