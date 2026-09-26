@@ -748,6 +748,13 @@ const MT_STYLES={
       this._base = null; this._baseKey = null;
       this._sat = null; this._satOn = false;
       this._polys = [];
+      // Estas tres las tocan directamente otras clases desde fuera
+      // (SymGroup.addTo, TileOverlay, lineCollection): sin inicializarlas
+      // aqui, el primer L.symbolGroup(...).addTo(map) de la app -- que se
+      // ejecuta SIEMPRE al cargar, diga lo que diga la URL -- revienta con
+      // una excepcion no capturada y para el resto del script. Era esto,
+      // no un problema de que los cargadores 'no estuvieran portados'.
+      this._symGroups = []; this._overlays = []; this._fcs = [];
       // "raw": mismo NOMBRE de metodos que usa el resto de la app sobre
       // map.raw con MapLibre, traducidos a Leaflet. Bearing/pitch no
       // existen en Leaflet sin plugin: se ignoran (mapa siempre norte-arriba,
