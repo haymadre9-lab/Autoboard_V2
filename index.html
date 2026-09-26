@@ -659,7 +659,7 @@ const MT_STYLES={
   // Marcador PEREZOSO: el div y el maplibregl.Marker solo se crean al engancharlo
   // al mapa. Si va a una capa de simbolos (SymGroup), nunca llegan a existir.
   class Mk{ constructor(latlng,opts){ this.ll=latlng; this.opts=opts||{}; this._added=false; this._h={}; this.el=null; this._mk=null; }
-    _build(){ if(this._mk) return;
+    _build(map){ if(this._mk) return;
       const spec=this.opts.icon;
       const el=document.createElement('div'); el.style.lineHeight='0'; el.style.cursor=(this.opts.interactive===false?'default':'pointer');
       if(spec){ el.innerHTML=spec.html||''; if(spec.size){ el.style.width=spec.size[0]+'px'; el.style.height=spec.size[1]+'px'; } }
@@ -669,12 +669,22 @@ const MT_STYLES={
         el.addEventListener('touchstart',stop,{passive:true}); el.addEventListener('pointerdown',stop); el.addEventListener('mousedown',stop); el.addEventListener('click',stop);
       }
       for(const ev in this._h) this._h[ev].forEach(cb=>el.addEventListener(ev,cb));
-      this._mk=new maplibregl.Marker({element:el, anchor:'center'}).setLngLat(D2(this.ll));
+      // Esta clase creaba SIEMPRE un maplibregl.Marker, sin mirar el motor
+      // activo. Bajo ?engine=leaflet, "map._m" es un mapa de Leaflet de
+      // verdad: anadirle un marcador de MapLibre revienta, porque las APIs
+      // son incompatibles (era el fallo del coche en el mapa: el mismo
+      // patron que "setView", pero en la clase base de marcador).
+      if (typeof ENGINE!=='undefined' && ENGINE==='leaflet'){
+        const ic = LEAFLET_REAL.divIcon({ className:'', html:el, iconSize:null });
+        this._mk = LEAFLET_REAL.marker([this.ll[1],this.ll[0]], { icon:ic, interactive:this.opts.interactive!==false, keyboard:false });
+      } else {
+        this._mk=new maplibregl.Marker({element:el, anchor:'center'}).setLngLat(D2(this.ll));
+      }
     }
-    _attach(map){ if(!this._added){ this._build(); this._map=map; this._mk.addTo(map._m); this._added=true; } }
-    _detach(){ if(this._added){ this._mk.remove(); this._added=false; } }
+    _attach(map){ if(!this._added){ this._build(map); this._map=map; this._mk.addTo(map._m); this._added=true; } }
+    _detach(){ if(this._added){ if(this._map && typeof this._mk.remove==='function') this._mk.remove(); this._added=false; } }
     addTo(target){ if(target && target._isGroup){ target.add(this); } else { this._attach(target); } return this; }
-    setLatLng(a){ this.ll=a; if(this._mk) this._mk.setLngLat(D2(a)); return this; }
+    setLatLng(a){ this.ll=a; if(this._mk){ if(typeof this._mk.setLatLng==='function') this._mk.setLatLng([a[1],a[0]]); else this._mk.setLngLat(D2(a)); } return this; }
     on(evt,cb){ (this._h[evt]=this._h[evt]||[]).push(cb); if(this.el) this.el.addEventListener(evt,cb); return this; }
     remove(){ this._detach(); return this; }
   }
