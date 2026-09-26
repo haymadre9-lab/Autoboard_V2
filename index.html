@@ -758,6 +758,14 @@ const MT_STYLES={
       // una excepcion no capturada y para el resto del script. Era esto,
       // no un problema de que los cargadores 'no estuvieran portados'.
       this._symGroups = []; this._overlays = []; this._fcs = [];
+      // El arranque llama a "map.setView(...)" DIRECTAMENTE sobre el objeto
+      // devuelto por L.map(), no sobre map.raw -- MapWrap ya tenia su propio
+      // setView() para eso; a LeafletMapWrap le faltaba. Sin el, esa llamada
+      // (justo despues de construir el mapa) reventaba sin try/catch y paraba
+      // el script entero ahi mismo: por eso "mapNite" se quedaba en su zona
+      // muerta para siempre, applyBase() nunca corria, y no se pedia ni una
+      // sola tesela. Era esto, no un problema de Leaflet ni de OSM.
+      this.setView = (latlng, zoom) => { m.setView([latlng[1], latlng[0]], zoom!=null?zoom:m.getZoom()); };
       // "raw": mismo NOMBRE de metodos que usa el resto de la app sobre
       // map.raw con MapLibre, traducidos a Leaflet. Bearing/pitch no
       // existen en Leaflet sin plugin: se ignoran (mapa siempre norte-arriba,
