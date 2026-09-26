@@ -170,6 +170,14 @@
   <div id="divider"><div class="grip"></div></div>
   <div id="mapPane">
   <div id="map"></div>
+<div id="memReload" style="position:fixed;inset:0;z-index:99999;display:none;
+  background:#0b0e12;color:#e8eef2;flex-direction:column;align-items:center;justify-content:center;
+  font-family:-apple-system,'Segoe UI',Roboto,sans-serif;text-align:center;gap:10px">
+  <div style="width:34px;height:34px;border:3px solid #232c33;border-top-color:#5fd0e0;
+    border-radius:50%;animation:memspin .8s linear infinite"></div>
+  <div id="memReloadTxt" style="font-size:14px;color:#9aa7b2">Liberando memoria…</div>
+</div>
+<style>@keyframes memspin{to{transform:rotate(360deg)}}</style>
   <div class="spdmap"><b id="spd2">0</b><small>KM/H</small></div>
 
   <div class="ovl modes"><button id="mMap" class="on">Mapa</button><button id="mHud">HUD</button></div>
@@ -318,6 +326,13 @@
   });
 })();
 </script>
+<!-- Leaflet real, para la Fase 3 experimental (?engine=leaflet). Se carga
+     siempre (40 KB, coste insignificante) pero solo se USA si la URL lo pide;
+     con MapLibre (por defecto) se queda sin usar, cero impacto. -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
 <script>
 /* ================= Adaptador MapLibre (emula la API de Leaflet que usa la app) ================= */
@@ -706,8 +721,103 @@ const MT_STYLES={
     remove(){ this._p.remove(); }
   }
 
+  /* ===================================================================
+     FASE 3 — motor de mapa conmutable. Por defecto ("engine" ausente en la
+     URL) esto no cambia NADA: MapWrap/MapLibre siguen siendo la unica ruta
+     de codigo que se ejecuta. Solo con ?engine=leaflet en la URL entra en
+     juego LeafletMapWrap.
+     El resto de la app sigue llamando a L.marker/L.polyline/L.map igual que
+     siempre: window.L es y sigue siendo NUESTRO adaptador (para no romper
+     nada que ya llama a esa API); lo unico que cambia con el flag es que
+     el factory L.map() construye un LeafletMapWrap en vez de un MapWrap.  */
+  const ENGINE = (new URLSearchParams(location.search).get('engine')==='leaflet') ? 'leaflet' : 'maplibre';
+  const LEAFLET_REAL = window.L;   // Leaflet real, capturado ANTES de que la linea de abajo lo pise
+  if (ENGINE==='leaflet') console.log('[ENGINE] Fase 3: usando Leaflet en vez de MapLibre');
+
+  /* Adaptador Leaflet: implementa el mismo "contrato" que MapWrap para lo que
+     ya cubre la Fase 3 (mapa, dia/noche, satelite, ruta, camara). El resto
+     (radar, cargadores, trafico, lluvia -- Fase 4) queda en stubs seguros
+     que avisan por consola en vez de fallar, para no romper el resto de la
+     app si esta corriendo con ?engine=leaflet.                            */
+  class LeafletMapWrap{
+    constructor(id, opts){
+      this._m = LEAFLET_REAL.map(id, {
+        zoomControl:false, attributionControl:false, zoomSnap:0.5,
+        fadeAnimation:false, inertia:true, minZoom:(opts&&opts.minZoom)||5, maxZoom:(opts&&opts.maxZoom)||19
+      });
+      this._base = null; this._baseKey = null;
+      this._sat = null; this._satOn = false;
+      this._polys = [];
+      // "raw": mismo NOMBRE de metodos que usa el resto de la app sobre
+      // map.raw con MapLibre, traducidos a Leaflet. Bearing/pitch no
+      // existen en Leaflet sin plugin: se ignoran (mapa siempre norte-arriba,
+      // limitacion conocida y aceptada de este motor experimental).
+      const m = this._m;
+      this.raw = {
+        jumpTo: o => { if(o && o.center) m.setView([o.center[1], o.center[0]], o.zoom!=null?o.zoom:m.getZoom(), {animate:false}); },
+        getZoom: () => m.getZoom(),
+        setZoom: z => m.setZoom(z),
+        on: (evt, cb) => m.on(evt, e => cb({ originalEvent: e.originalEvent||null, lngLat: e.latlng?{lat:e.latlng.lat,lng:e.latlng.lng}:null })),
+        fitBounds: (b, o) => { try{ m.fitBounds(LEAFLET_REAL.latLngBounds(b.map(p=>[p[1],p[0]])), {padding:[(o&&o.padding)||40,(o&&o.padding)||40], maxZoom:(o&&o.maxZoom)||16}); }catch(e){} },
+        getCanvasContainer: () => m.getContainer(),
+        unproject: px => { const ll = m.containerPointToLatLng(px); return [ll.lng, ll.lat]; },
+        isStyleLoaded: () => true,
+        setMaxPitch: () => {},
+        touchZoomRotate: { disableRotation(){} },
+        getStyle: () => ({ layers: [] }),
+        setLayoutProperty: () => {}
+      };
+    }
+    // ---- capas base: dia/noche/satelite, TODO por intercambio de TileLayer.
+    // Esta es justo la ventaja que señalaba el plan: cambiar de capa no
+    // destruye el mapa ni la ruta, al contrario que setStyle() en MapLibre. */
+    _setBase(urlOrSpec, intento){
+      const esRaster = urlOrSpec && (urlOrSpec.tiles || typeof urlOrSpec === 'object');
+      const tileUrl = esRaster ? (urlOrSpec.tiles ? urlOrSpec.tiles[0] : urlOrSpec.url) : urlOrSpec;
+      const esSatelite = /arcgisonline|World_Imagery|hybrid|satellite/i.test(String(tileUrl));
+      if (this._base) this._m.removeLayer(this._base);
+      this._base = LEAFLET_REAL.tileLayer(tileUrl.replace('{s}','{s}'), { maxZoom:19, keepBuffer:2, updateWhenZooming:false });
+      this._base.addTo(this._m);
+      this._baseKey = esSatelite ? 'sat' : 'day';
+      console.log('[ENGINE][leaflet] base ->', this._baseKey);
+    }
+    _setCapasBaseVisibles(){ /* no hace falta: en Leaflet cambiar de TileLayer ya no deja el vectorial debajo */ }
+    // ---- ruta: mismo patron que MapWrap (Poly con .addTo(map)) ------------
+    _addPoly(p){ p._map=this; this._polys.push(p); p._added=true; this._mountPoly(p); }
+    _mountPoly(p){
+      try{
+        const coords = (p.lngLat ? p.coords : p.coords.map(c=>[c[1],c[0]])).map(c=>[c[1],c[0]]);
+        if (p.opts.casing && !p._llCasing) p._llCasing = LEAFLET_REAL.polyline(coords, {color:p.opts.casing, weight:p.opts.casingWeight||12, opacity:p.opts.casingOpacity!=null?p.opts.casingOpacity:0.9}).addTo(this._m);
+        else if (p._llCasing) p._llCasing.setLatLngs(coords);
+        if (!p._ll) p._ll = LEAFLET_REAL.polyline(coords, {color:p.opts.color||'#4c8dff', weight:p.opts.weight||6, opacity:p.opts.opacity!=null?p.opts.opacity:1}).addTo(this._m);
+        else p._ll.setLatLngs(coords);
+      }catch(e){ console.warn('[ENGINE][leaflet] _mountPoly', e.message); }
+    }
+    _updatePoly(p){ this._mountPoly(p); }
+    _removePoly(p){ p._added=false; this._polys=this._polys.filter(x=>x!==p);
+      try{ if(p._ll) this._m.removeLayer(p._ll); if(p._llCasing) this._m.removeLayer(p._llCasing); }catch(e){} }
+    _polyToFront(p){ try{ if(p._llCasing) p._llCasing.bringToFront(); if(p._ll) p._ll.bringToFront(); }catch(e){} }
+    // ---- todavia no portado a Leaflet (Fase 4): avisan una vez y no hacen nada ----
+    _addOverlay(){ this._avisoFase4('overlays (trafico/lluvia)'); }
+    _mountOverlay(){} _removeOverlay(){} _refreshOverlay(){} _overlayToFront(){}
+    _mountSym(){ this._avisoFase4('simbolos (radares/cargadores)'); }
+    _unmountSym(){}
+    _addFC(){ this._avisoFase4('colecciones de lineas (trafico)'); }
+    _mountFC(){} _removeFC(){}
+    _avisoFase4(que){ if(!this['_avisado_'+que]){ this['_avisado_'+que]=true; console.warn('[ENGINE][leaflet] '+que+' aun no portado (Fase 4)'); } }
+    _reAdd(){ this._polys.forEach(p=>this._mountPoly(p)); }
+    _vaciar(){}
+    run(fn){ try{ fn(); }catch(e){ console.warn('[ENGINE][leaflet]', e.message); } }  // Leaflet no tiene "estilo cargando": todo esta listo siempre
+    hasLayer(l){ return !!(l && l._added); }
+    removeLayer(l){ if(l && l._remove) l._remove(); }
+    on(evt, cb){
+      if (evt==='contextmenu'){ this._m.on('contextmenu', e=>cb({latlng:{lat:e.latlng.lat,lng:e.latlng.lng}})); return; }
+      this._m.on(evt, cb);
+    }
+  }
+
   window.L={
-    map:(id,opts)=>new MapWrap(id,opts),
+    map:(id,opts)=> ENGINE==='leaflet' ? new LeafletMapWrap(id,opts) : new MapWrap(id,opts),
     tileLayer:(url,opts)=>new TileOverlay(url,opts),
     marker:(ll,opts)=>new Mk(ll,opts),
     divIcon:(o)=>({html:(o&&o.html)||'', size:(o&&o.iconSize)||[24,24], anchor:(o&&o.iconAnchor)||null}),
@@ -1063,7 +1173,21 @@ navigator.geolocation && navigator.geolocation.watchPosition(p=>{
   let head=c.heading; if(head==null||isNaN(head)){ if(raw&&v>1) head=bearing([raw.lat,raw.lon],[c.latitude,c.longitude]); else head=raw?raw.head:0; }
   speedKmh=Math.max(0,v*3.6);
   raw={lat:c.latitude,lon:c.longitude,head:head||0,spd:v||0,t:now};
-  if(!disp) disp={lat:raw.lat,lon:raw.lon,head:raw.head};
+  if(!disp){
+    disp={lat:raw.lat,lon:raw.lon,head:raw.head};
+    // Si venimos de una recarga por memoria, restaurar el viaje en cuanto hay
+    // GPS: satelite/mapa y, si habia destino, recalcular la ruta desde aqui.
+    if(window.__memReloadRestore){
+      const g=window.__memReloadRestore; window.__memReloadRestore=null;
+      try{
+        if(typeof baseSat!=='undefined'){ baseSat=!!g.baseSat; if(typeof applyBase==='function') applyBase(); }
+        if(g.routeOn && g.destLL && typeof routeTo==='function'){
+          console.log('[MEM] restaurando viaje tras recarga controlada');
+          routeTo(g.destLL);
+        }
+      }catch(e){}
+    }
+  }
   const acc=Math.round(c.accuracy||0);
   $('status').textContent='GPS '+c.latitude.toFixed(4)+', '+c.longitude.toFixed(4)+' · ±'+acc+' m'+(acc>800?' (impreciso)':' ✔');
   const here=[raw.lat,raw.lon];
@@ -2257,6 +2381,64 @@ if('serviceWorker' in navigator){
   }catch(e){}
   try{ const t=$('setTilt'); if(t) t.addEventListener('click',()=>setTimeout(onLayout,60)); }catch(e){} // al cambiar inclinación, re-dimensiona el mapa
   setTimeout(()=>{ sizeMapSquare(); positionNav(); fixMap(); },600);
+})();
+</script>
+
+<script>
+/* ---- Red de seguridad por memoria: recarga controlada, no parches de mas ----
+   Inspirado en una tecnica documentada publicamente por otro navegador para
+   Tesla (BoardingGate): en vez de perseguir cada fuga o esperar a que el
+   navegador se quede sin memoria de vidrio (lo que ya vimos que rompe el
+   mapa y obliga a recargar A MANO), se vigila el propio uso de memoria de
+   JS y, si se acerca de verdad al limite, se guarda el viaje y se recarga
+   SOLA antes de que llegue a romperse. No sustituye nada de lo ya hecho
+   (capa raster oculta el vectorial, cache de teselas recortado): es un
+   ultimo recurso, pensado para no disparar nunca en una sesion normal.   */
+(function(){
+  if(!performance.memory) return;               // solo Chromium (el navegador del Tesla lo es); en otros, no hace nada
+  const UMBRAL = 0.90;                            // 90% del limite de heap disponible
+  const MIN_SEGUNDOS_VIVA = 120;                   // no actua en los primeros 2 min, para no confundir un pico de arranque
+  let avisado = false;
+  const t0 = Date.now();
+
+  function guardarViaje(){
+    try{
+      const datos = {
+        t: Date.now(),
+        destLL: (typeof destLL!=='undefined') ? destLL : null,
+        routeOn: (typeof routeOn!=='undefined') ? routeOn : false,
+        baseSat: (typeof baseSat!=='undefined') ? baseSat : false,
+        lastFix: (typeof raw!=='undefined' && raw) ? {lat:raw.lat, lon:raw.lon} : null
+      };
+      localStorage.setItem('autoboard.memReload', JSON.stringify(datos));
+    }catch(e){}
+  }
+
+  function comprobar(){
+    try{
+      const m = performance.memory;
+      if(!m.jsHeapSizeLimit) return;
+      const uso = m.usedJSHeapSize / m.jsHeapSizeLimit;
+      if(uso > UMBRAL && !avisado && (Date.now()-t0) > MIN_SEGUNDOS_VIVA*1000){
+        avisado = true;
+        console.warn('[MEM] uso de heap al '+Math.round(uso*100)+'%: recarga controlada');
+        guardarViaje();
+        const ov=document.getElementById('memReload');
+        if(ov) ov.style.display='flex';
+        setTimeout(()=>location.reload(), 250);   // deja pintar el overlay antes de recargar
+      }
+    }catch(e){}
+  }
+  setInterval(comprobar, 10000);   // comprobacion barata, cada 10 s: no es un bucle de alta frecuencia
+
+  // al arrancar, si venimos de una recarga por este motivo, se restaura el viaje
+  try{
+    const guardado = JSON.parse(localStorage.getItem('autoboard.memReload')||'null');
+    if(guardado && (Date.now()-guardado.t) < 15000){   // solo si la recarga fue hace segundos, no un dato viejo
+      localStorage.removeItem('autoboard.memReload');
+      window.__memReloadRestore = guardado;
+    }
+  }catch(e){}
 })();
 </script>
 </body></html>
