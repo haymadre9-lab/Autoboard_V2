@@ -766,6 +766,21 @@ const MT_STYLES={
         zoomControl:false, attributionControl:false, zoomSnap:0.5,
         fadeAnimation:false, inertia:true, minZoom:(opts&&opts.minZoom)||5, maxZoom:(opts&&opts.maxZoom)||19
       });
+      /* Fallo clasico y muy documentado de Leaflet ("map container size not
+         valid at initialization", varios issues abiertos en su propio repo):
+         si el contenedor no tiene TODAVIA su tamaño definitivo en el instante
+         de construir el mapa (este script corre de forma sincrona, antes de
+         que el navegador termine de asentar el layout), Leaflet se queda con
+         una foto vieja del tamaño y no la actualiza sola. Eso explica a la
+         vez la franja negra que se desplazaba, que el zoom se quedara corto,
+         y que el marcador del coche apareciera mal situado/oculto: los tres
+         dependen del mismo calculo interno de tamaño. invalidateSize() le
+         dice a Leaflet que vuelva a medir. Se llama dos veces (pronto y algo
+         mas tarde) porque el momento exacto en que el layout se asienta
+         varia segun el dispositivo.                                        */
+      setTimeout(()=>{ try{ this._m.invalidateSize(false); }catch(e){} }, 60);
+      setTimeout(()=>{ try{ this._m.invalidateSize(false); }catch(e){} }, 500);
+      try{ window.addEventListener('resize', ()=>{ try{ this._m.invalidateSize(false); }catch(e){} }); }catch(e){}
       this._base = null; this._baseKey = null;
       this._sat = null; this._satOn = false;
       this._polys = [];
