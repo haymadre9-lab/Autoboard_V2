@@ -779,14 +779,34 @@ const MT_STYLES={
     // Esta es justo la ventaja que señalaba el plan: cambiar de capa no
     // destruye el mapa ni la ruta, al contrario que setStyle() en MapLibre. */
     _setBase(urlOrSpec, intento){
-      const esRaster = urlOrSpec && (urlOrSpec.tiles || typeof urlOrSpec === 'object');
-      const tileUrl = esRaster ? (urlOrSpec.tiles ? urlOrSpec.tiles[0] : urlOrSpec.url) : urlOrSpec;
-      const esSatelite = /arcgisonline|World_Imagery|hybrid|satellite/i.test(String(tileUrl));
+      // MT_STYLES.day/.night/.sat son style.json VECTORIALES, pensados para
+      // MapLibre -- Leaflet no puede consumirlos como plantilla de tesela.
+      // Aqui se traducen a un proveedor raster propio, independiente de
+      // MapTiler: la BASE de que "no hay mapa" era exactamente esto, pasarle
+      // el style.json tal cual a L.tileLayer() y no cargar ni una tesela.
+      const esSpec = urlOrSpec && typeof urlOrSpec === 'object' && urlOrSpec.tiles;
+      let tileUrl, esSatelite, esNoche = false;
+      if (esSpec){
+        tileUrl = urlOrSpec.tiles[0]; esSatelite = true;
+      } else if (urlOrSpec === MT_STYLES.sat){
+        tileUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+        esSatelite = true;
+      } else {
+        tileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+        esSatelite = false; esNoche = (urlOrSpec === MT_STYLES.night);
+      }
       if (this._base) this._m.removeLayer(this._base);
-      this._base = LEAFLET_REAL.tileLayer(tileUrl.replace('{s}','{s}'), { maxZoom:19, keepBuffer:2, updateWhenZooming:false });
+      this._base = LEAFLET_REAL.tileLayer(tileUrl, { maxZoom:19, keepBuffer:2, updateWhenZooming:false });
       this._base.addTo(this._m);
+      // Modo noche sin segundo proveedor: filtro CSS sobre el panel de
+      // teselas de Leaflet. Es una aproximacion (invertir+rotar tono), no
+      // un estilo oscuro real como el de MapTiler; se documenta como tal.
+      try{
+        const pane = this._m.getPane && this._m.getPane('tilePane');
+        if (pane) pane.style.filter = esNoche ? 'invert(1) hue-rotate(180deg) brightness(.92) contrast(.9)' : '';
+      }catch(e){}
       this._baseKey = esSatelite ? 'sat' : 'day';
-      console.log('[ENGINE][leaflet] base ->', this._baseKey);
+      console.log('[ENGINE][leaflet] base ->', this._baseKey, esNoche?'(noche, filtro CSS)':'');
     }
     _setCapasBaseVisibles(){ /* no hace falta: en Leaflet cambiar de TileLayer ya no deja el vectorial debajo */ }
     // ---- ruta: mismo patron que MapWrap (Poly con .addTo(map)) ------------
@@ -804,9 +824,19 @@ const MT_STYLES={
     _removePoly(p){ p._added=false; this._polys=this._polys.filter(x=>x!==p);
       try{ if(p._ll) this._m.removeLayer(p._ll); if(p._llCasing) this._m.removeLayer(p._llCasing); }catch(e){} }
     _polyToFront(p){ try{ if(p._llCasing) p._llCasing.bringToFront(); if(p._ll) p._ll.bringToFront(); }catch(e){} }
-    // ---- todavia no portado a Leaflet (Fase 4): avisan una vez y no hacen nada ----
-    _addOverlay(){ this._avisoFase4('overlays (trafico/lluvia)'); }
-    _mountOverlay(){} _removeOverlay(){} _refreshOverlay(){} _overlayToFront(){}
+    // ---- overlays raster (satelite, trafico, lluvia): TileOverlay ya trae
+    //      una URL de teselas real, sin el problema del style.json vectorial.
+    _addOverlay(o){ o._map=this; this._overlays.push(o); o._added=true; this._mountOverlay(o); }
+    _mountOverlay(o){
+      try{
+        if (o._ll) this._m.removeLayer(o._ll);
+        o._ll = LEAFLET_REAL.tileLayer(o.url, { maxZoom:19, opacity:(o.opts.opacity!=null?o.opts.opacity:1) }).addTo(this._m);
+      }catch(e){ console.warn('[ENGINE][leaflet] _mountOverlay', e.message); }
+    }
+    _removeOverlay(o){ o._added=false; this._overlays=this._overlays.filter(x=>x!==o);
+      try{ if(o._ll) this._m.removeLayer(o._ll); }catch(e){} }
+    _refreshOverlay(o){ this._mountOverlay(o); }
+    _overlayToFront(o){ try{ if(o._ll) o._ll.bringToFront(); }catch(e){} }
     _mountSym(){ this._avisoFase4('simbolos (radares/cargadores)'); }
     _unmountSym(){}
     _addFC(){ this._avisoFase4('colecciones de lineas (trafico)'); }
