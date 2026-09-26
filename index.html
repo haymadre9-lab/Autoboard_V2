@@ -675,7 +675,15 @@ const MT_STYLES={
       // son incompatibles (era el fallo del coche en el mapa: el mismo
       // patron que "setView", pero en la clase base de marcador).
       if (typeof ENGINE!=='undefined' && ENGINE==='leaflet'){
-        const ic = LEAFLET_REAL.divIcon({ className:'', html:el, iconSize:null });
+        // "iconSize:null" descartaba el tamano real que ya envia la app
+        // (p.ej. el coche: iconSize:[38,38], iconAnchor:[19,19], en
+        // "carIcon"). Sin tamano, Leaflet no sabe como colocar el icono y
+        // acababa recortandolo a 0x0 en cuanto el mapa terminaba de
+        // asentarse -- por eso la flecha se veia al principio y desaparecia
+        // al cargar el mapa de verdad.
+        const iw = spec && spec.iconSize ? spec.iconSize : (spec && spec.size ? spec.size : [26,26]);
+        const ia = spec && spec.iconAnchor ? spec.iconAnchor : [iw[0]/2, iw[1]/2];
+        const ic = LEAFLET_REAL.divIcon({ className:'', html:el, iconSize:iw, iconAnchor:ia });
         this._mk = LEAFLET_REAL.marker([this.ll[1],this.ll[0]], { icon:ic, interactive:this.opts.interactive!==false, keyboard:false });
       } else {
         this._mk=new maplibregl.Marker({element:el, anchor:'center'}).setLngLat(D2(this.ll));
@@ -1348,7 +1356,29 @@ requestAnimationFrame(frame);
    'interactT' se refresca mientras el gesto sigue vivo; si deja de llegar
    senal 4 s, frame() libera 'interacting' aunque falte el zoomend/dragend.   */
 let interactT=0;
-const esUsuario=e=>!!(e&&e.originalEvent);
+/* Leaflet NO rellena "originalEvent" en sus eventos de zoom/arrastre de forma
+   fiable (confirmado: es un fallo documentado y abierto en el propio
+   repositorio de Leaflet, issues #5884 y #6953) -- con MapLibre, esUsuario()
+   ya funcionaba bien porque MapLibre si lo incluye. Bajo Leaflet, sin esto,
+   la app nunca detectaba un pellizco de zoom real, "follow" seguia activo, y
+   la camara automatica deshacia el zoom en el siguiente fotograma: era eso
+   lo que se veia como "no amplia, vuelve a su sitio". Se añade una señal de
+   respaldo -- tocar el propio contenedor del mapa -- que no depende de
+   originalEvent y funciona igual en los dos motores.                       */
+let __tocandoMapa=false, __tocT=0;
+try{
+  const cont = map.raw.getCanvasContainer ? map.raw.getCanvasContainer() : null;
+  if (cont){
+    const on=()=>{ __tocandoMapa=true; __tocT=performance.now(); };
+    const off=()=>{ __tocandoMapa=false; };
+    cont.addEventListener('touchstart', on, {passive:true});
+    cont.addEventListener('mousedown', on);
+    cont.addEventListener('wheel', on, {passive:true});
+    cont.addEventListener('touchend', off, {passive:true});
+    cont.addEventListener('mouseup', off);
+  }
+}catch(e){}
+const esUsuario=e=>!!(e&&e.originalEvent) || (__tocandoMapa && performance.now()-__tocT<800);
 map.raw.on('dragstart',e=>{ if(esUsuario(e)){ follow=false; interacting=true; interactT=performance.now(); } });
 map.raw.on('drag',     e=>{ if(esUsuario(e)) interactT=performance.now(); });
 map.raw.on('dragend',  e=>{ if(esUsuario(e)) interacting=false; });
