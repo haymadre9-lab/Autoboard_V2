@@ -328,11 +328,14 @@
 </script>
 <!-- Leaflet real, para la Fase 3 experimental (?engine=leaflet). Se carga
      siempre (40 KB, coste insignificante) pero solo se USA si la URL lo pide;
-     con MapLibre (por defecto) se queda sin usar, cero impacto. -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+     con MapLibre (por defecto) se queda sin usar, cero impacto.
+     IMPORTANTE: cdnjs.cloudflare.com, el MISMO dominio que ya usa MapLibre
+     mas abajo -- es el unico CDN que llevamos toda la sesion comprobando
+     que el navegador del Tesla alcanza sin problemas. La primera version
+     usaba unpkg.com, un dominio nuevo sin probar: [Probable] era la causa
+     real de que no cargara ningun mapa, no las URLs de teselas. -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
 <script>
 /* ================= Adaptador MapLibre (emula la API de Leaflet que usa la app) ================= */
