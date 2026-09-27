@@ -76,11 +76,25 @@ function radarColor(t){ return t==='fijo'?'#e01d1d': t==='movil'?'#2f6bff': t===
 // el tipo -- a cambio de que reposicionar cientos de radares en el mapa sea
 // cosa del canvas, no de mover elementos del DOM uno a uno. Reversible en
 // cualquier momento: basta con volver a esta funcion tal como estaba antes.
+// Triangulo pequeño en metros reales alrededor del radar (no en pixeles):
+// sigue siendo una forma de lienzo, ligera, sin necesitar volver a
+// dibujarla en cada cambio de zoom -- a cambio, crece o encoge un poco con
+// el zoom, igual que cualquier otro elemento real del mapa.
+function trianguloLL(centro, metros){
+  const mx = 111320*Math.cos(centro[0]*Math.PI/180), my=110540;
+  const dy = metros/my, dx = metros/mx;
+  return [
+    [centro[0]+dy, centro[1]],
+    [centro[0]-dy*0.6, centro[1]-dx*0.9],
+    [centro[0]-dy*0.6, centro[1]+dx*0.9]
+  ];
+}
+
 function drawRadars(){
   radarGroup.clearLayers(); if(!showRadars)return;
   for(const p of radars){
-    L.circleMarker([p.ll[0],p.ll[1]], {
-      radius: 8, color:'#fff', weight:2, fillColor: radarColor(p.t), fillOpacity: 1, interactive:false
+    L.polygon(trianguloLL(p.ll, 14), {
+      color:'#fff', weight:2, fillColor: radarColor(p.t), fillOpacity: 1, interactive:false
     }).addTo(radarGroup);
   }
 }
@@ -396,6 +410,7 @@ let routeDraw = [];       // copia simplificada SOLO para dibujar (igual criteri
 let routeDrawIdx = [];
 let routeCumDist = [];    // distancia acumulada real hasta cada punto de routeCoordsLL, en metros
 let steps = [], stepIdx = 0, destLL = null, routeOn = false, routeProgIdx = 0;
+let trafficSegs = [];
 let offAcc = 0, lastRecalc = 0;
 let follow = true, lastFix = null, heading = 0, speedKmh = 0;
 
@@ -539,7 +554,7 @@ async function irA(destino, nombre){
   try{
     const locs = lastFix.lat+','+lastFix.lon+':'+destino[0]+','+destino[1];
     const url = 'https://api.tomtom.com/routing/1/calculateRoute/'+locs+'/json?key='+TT
-      +'&traffic=true&travelMode=car&instructionsType=text&language=es-ES';
+      +'&traffic=true&travelMode=car&instructionsType=text&language=es-ES&sectionType=traffic';
     const r = await fetch(url);
     const j = await r.json();
     if (!j.routes || !j.routes.length){ setStatus('Sin ruta'); return; }
@@ -558,6 +573,18 @@ async function irA(destino, nombre){
 
     if (routeLine) map.removeLayer(routeLine);
     routeLine = L.polyline(routeDraw.map(p=>[p[1],p[0]]), { color:'#1e88e5', weight:6 }).addTo(map);
+
+    // Tramos de congestion sobre la propia ruta, extraido literal de AutoBoard.
+    trafficSegs.forEach(s => map.removeLayer(s)); trafficSegs = [];
+    (route.sections||[]).forEach(sec => { if (sec.sectionType!=='TRAFFIC') return;
+      const a=sec.startPointIndex, b=sec.endPointIndex; if (a==null||b==null||b<=a) return;
+      const seg = pts.slice(a,b+1); if (seg.length<2) return;
+      const mag = sec.magnitudeOfDelay||0; let col=null;
+      if (sec.simpleCategory==='ROAD_CLOSURE'||sec.effectiveSpeedInKmh===0) col='#ff2d2d';
+      else if (mag>=3) col='#ff2d2d'; else if (mag>=1) col='#ff9a1f';
+      if (col) trafficSegs.push(L.polyline(seg.map(p=>[p[0],p[1]]), {color:col, weight:6}).addTo(map));
+    });
+    if (trafficSegs.length) console.log('[ruta] tramos de trafico:', trafficSegs.length);
 
     steps = (route.guidance && route.guidance.instructions || []).map(it => ({
       metro: it.routeOffsetInMeters||0, calle: it.street||'', msg: it.message||'',
@@ -622,6 +649,27 @@ function renderRecientes(){
     const f = r[+el.dataset.i]; $('settings').classList.remove('open'); irA(f.ll, f.nombre);
   });
 }
+
+
+/* ==== capa general de flujo de trafico: mismo mecanismo que satelite --
+   un TileLayer que se añade o se quita, nada mas. Dentro de ajustes, no
+   como cuarto icono suelto, para respetar los "solo 3" en la pantalla
+   principal. Usa la misma clave de TomTom que ya tiene la app. */
+let trafficLayer = null, trafficOn = false;
+function setTraffic(on){
+  if (on){
+    if (!trafficLayer) trafficLayer = L.tileLayer(
+      'https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key='+TT+'&tileSize=256',
+      { opacity:0.9 });
+    trafficLayer.addTo(map);
+    trafficOn = true;
+  } else {
+    if (trafficLayer && map.hasLayer(trafficLayer)) map.removeLayer(trafficLayer);
+    trafficOn = false;
+  }
+  $('trafficBtn').classList.toggle('on', trafficOn);
+}
+$('trafficBtn').onclick = () => setTraffic(!trafficOn);
 
 $('go').onclick = async () => {
   const q = $('q').value.trim(); if (!q) return;
