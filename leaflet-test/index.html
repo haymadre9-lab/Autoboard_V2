@@ -19,6 +19,7 @@
 </div>
 
 <div id="map"></div>
+<div id="radaredge"></div>
 <div class="radarsign" id="radarsign"><div class="rs-c"><span id="rsmax">80</span></div><div class="rs-p"></div><div class="rs-d" id="rsdist">500 m</div></div>
 <div id="navbanner">
   <div class="arrow" id="navarrow"></div>
@@ -47,6 +48,7 @@
   <div class="shead"><span>Ajustes</span><button id="closeSettings">✕</button></div>
   <button class="setbtn" id="mapnight">🌙 Noche</button>
   <button class="setbtn" id="trafficBtn">🚦 Tráfico</button>
+  <button class="setbtn" id="rotateBtn">🧭 Girar mapa (a prueba)</button>
   <div class="srow" style="margin-top:16px">
     <span>Favoritos</span>
     <div id="favList"></div>
@@ -60,6 +62,11 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
   integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<!-- leaflet-rotate: experimental, a prueba. Si el archivo no carga o el
+     metodo que necesita no existe, el ajuste de "girar mapa" simplemente
+     no hace nada -- no hay ningun sitio del codigo que dependa de que esto
+     funcione para lo demas. -->
+<script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
 <script src="./leaflet-map.js"></script>
 </body>
 </html>

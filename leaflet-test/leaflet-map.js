@@ -112,6 +112,7 @@ function updateRadar(){
   const over = !!(best && best.dist<500 && best.max && speedKmh > best.max+2);
   if(over){ if(!radarAlerted){ radarAlerted=true; radarBeep(); } }
   if(!best || best.dist>560) radarAlerted=false;
+  const edge=$('radaredge'); if (edge) edge.classList.toggle('show', over);
   const el=$('radarsign'); if(!best){el.classList.remove('show');return;}
   $('rsmax').textContent=best.max||'⚠'; $('rsdist').textContent=fmtDist(Math.max(0,best.dist));
   const rsc=el.querySelector('.rs-c'); if(rsc) rsc.style.borderColor=radarColor(best.t);
@@ -386,11 +387,17 @@ function simplificarDP(pts, tolM){
 }
 // ---------------------------------------------------------------------------
 
+// "rotate:true" se pide siempre -- si el complemento no cargo, Leaflet
+// simplemente ignora una opcion que no reconoce, sin romper nada.
 const map = L.map('map', {
   zoomControl: true, attributionControl: true,
   center: [43.30, -2.98], zoom: 14,
-  fadeAnimation: true, zoomAnimation: true, preferCanvas: true
+  fadeAnimation: true, zoomAnimation: true, preferCanvas: true,
+  rotate: true, rotateControl: false, touchRotate: false
 });
+const girarMapaDisponible = typeof map.setBearing === 'function';
+if (!girarMapaDisponible) console.warn('[girar mapa] leaflet-rotate no cargo o no expone setBearing(): el ajuste quedara sin efecto');
+let girarMapaOn = false;
 radarGroup = L.layerGroup().addTo(map);
 chargerGroup.addTo(map);
 aplicarBase();
@@ -413,6 +420,7 @@ let steps = [], stepIdx = 0, destLL = null, routeOn = false, routeProgIdx = 0;
 let trafficSegs = [];
 let offAcc = 0, lastRecalc = 0;
 let follow = true, lastFix = null, heading = 0, speedKmh = 0;
+let navZoom = 17;   // zoom real de conduccion; el encuadre inicial de la ruta se aleja a proposito, pero el seguimiento no debe heredar ese alejamiento
 
 function fmtDist(m){ return m<1000 ? Math.round(m)+' m' : (m/1000).toFixed(1)+' km'; }
 function setStatus(t){ $('status').textContent = t; }
@@ -433,14 +441,22 @@ if (navigator.geolocation){
     lastFix = now;
     carMk.setLatLng([now.lat, now.lon]);
     const el = carMk.getElement();
-    if (el){ const svg = el.querySelector('svg'); if (svg) svg.style.transform = 'rotate('+heading+'deg)'; }
+    if (girarMapaOn && girarMapaDisponible){
+      // El mapa gira con el rumbo: la flecha se queda fija apuntando arriba,
+      // igual que en AutoBoard real.
+      if (el){ const svg = el.querySelector('svg'); if (svg) svg.style.transform = ''; }
+    } else {
+      // El mapa se queda fijo al norte: es la flecha la que gira.
+      if (el){ const svg = el.querySelector('svg'); if (svg) svg.style.transform = 'rotate('+heading+'deg)'; }
+    }
     // El coche pegado al centro exacto de la pantalla deja ver poco de la
     // carretera por delante. Se centra el mapa un poco por ENCIMA del coche
     // en terminos de pixeles (no de coordenadas), asi el coche cae mas abajo
     // en la pantalla y se ve mas via por delante -- tecnica estandar de
     // Leaflet via project()/unproject(), no una aproximacion por coordenadas.
     if (follow){
-      const z = map.getZoom();
+      const z = navZoom;
+      if (girarMapaOn && girarMapaDisponible){ try{ map.setBearing(-heading); }catch(e){} }
       const px = map.project([now.lat, now.lon], z);
       const centro = map.unproject([px.x, px.y - 110], z);
       map.setView(centro, z, { animate: true, duration: 0.3 });
@@ -671,6 +687,13 @@ function setTraffic(on){
   $('trafficBtn').classList.toggle('on', trafficOn);
 }
 $('trafficBtn').onclick = () => setTraffic(!trafficOn);
+
+$('rotateBtn').onclick = () => {
+  if (!girarMapaDisponible){ setStatus('Girar mapa: el complemento no cargó, sigue en modo fijo'); return; }
+  girarMapaOn = !girarMapaOn;
+  $('rotateBtn').classList.toggle('on', girarMapaOn);
+  if (!girarMapaOn){ try{ map.setBearing(0); }catch(e){} const el=carMk.getElement(); if(el){ const svg=el.querySelector('svg'); if(svg) svg.style.transform='rotate('+heading+'deg)'; } }
+};
 
 /* ==== buscador plegable, extraido literal de AutoBoard =====================
    Lupa arriba a la derecha que abre/cierra la barra; al abrir, si el campo
