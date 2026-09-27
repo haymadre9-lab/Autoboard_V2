@@ -398,6 +398,40 @@ const map = L.map('map', {
 const girarMapaDisponible = typeof map.setBearing === 'function';
 if (!girarMapaDisponible) console.warn('[girar mapa] leaflet-rotate no cargo o no expone setBearing(): el ajuste quedara sin efecto');
 let girarMapaOn = false;
+
+/* ==== suavizado de rumbo, inspirado en el follow-camera de femto-car-launcher
+   (github.com/seijikohara/femto-car-launcher, verificado real) ==============
+   Sin esto, girar el mapa en cada fix de GPS con el rumbo crudo tiembla: el
+   propio GPS oscila unos grados aunque vayas en linea recta. La idea, tal
+   como la tienen ellos:
+     - cambios pequeños -> media movil exponencial al 50%
+     - cambios de mas de 45 grados -> giro real, seguir de inmediato
+     - zona muerta de 4 grados: un desvio menor no mueve el mapa
+     - "settle": si un error pequeño (>=1.5 grados) persiste 3 segundos
+       seguidos, se corrige con un solo giro, en vez de quedarse desviado
+       para siempre.
+   Es matematica pura, sin nada de Leaflet ni DOM -- se puede probar sola. */
+let bearingMostrado = 0, bearingPendienteDesde = null, bearingPendienteT = 0;
+function diffAngulo(a, b){ return ((b - a + 540) % 360) - 180; }   // diferencia mas corta, -180..180
+function bearingSuavizado(mostrado, crudo){
+  const delta = diffAngulo(mostrado, crudo);
+  if (Math.abs(delta) > 45) return crudo;         // giro real: seguir de inmediato
+  return mostrado + delta * 0.5;                   // cambio pequeño: EMA al 50%
+}
+function actualizarBearing(crudo, ahora){
+  const suavizado = bearingSuavizado(bearingMostrado, crudo);
+  const delta = diffAngulo(bearingMostrado, suavizado);
+  if (Math.abs(delta) < 4){                          // zona muerta de 4 grados
+    if (Math.abs(delta) >= 1.5){
+      if (bearingPendienteDesde === null){ bearingPendienteDesde = suavizado; bearingPendienteT = ahora; }
+      else if (ahora - bearingPendienteT >= 3000){ bearingPendienteDesde = null; bearingMostrado = suavizado; }
+    } else bearingPendienteDesde = null;
+    return bearingMostrado;
+  }
+  bearingPendienteDesde = null;
+  bearingMostrado = suavizado;
+  return bearingMostrado;
+}
 radarGroup = L.layerGroup().addTo(map);
 chargerGroup.addTo(map);
 aplicarBase();
@@ -456,7 +490,10 @@ if (navigator.geolocation){
     // Leaflet via project()/unproject(), no una aproximacion por coordenadas.
     if (follow){
       const z = navZoom;
-      if (girarMapaOn && girarMapaDisponible){ try{ map.setBearing(-heading); }catch(e){} }
+      if (girarMapaOn && girarMapaDisponible){
+      const bs = actualizarBearing(heading, now.t);   // rumbo suavizado, no el crudo -- evita el temblor del ruido de GPS
+      try{ map.setBearing(-bs); }catch(e){}
+    }
       const px = map.project([now.lat, now.lon], z);
       const centro = map.unproject([px.x, px.y - 110], z);
       map.setView(centro, z, { animate: true, duration: 0.3 });
@@ -692,7 +729,7 @@ $('rotateBtn').onclick = () => {
   if (!girarMapaDisponible){ setStatus('Girar mapa: el complemento no cargó, sigue en modo fijo'); return; }
   girarMapaOn = !girarMapaOn;
   $('rotateBtn').classList.toggle('on', girarMapaOn);
-  if (!girarMapaOn){ try{ map.setBearing(0); }catch(e){} const el=carMk.getElement(); if(el){ const svg=el.querySelector('svg'); if(svg) svg.style.transform='rotate('+heading+'deg)'; } }
+  if (!girarMapaOn){ try{ map.setBearing(0); }catch(e){} bearingMostrado=0; bearingPendienteDesde=null; const el=carMk.getElement(); if(el){ const svg=el.querySelector('svg'); if(svg) svg.style.transform='rotate('+heading+'deg)'; } }
 };
 
 /* ==== buscador plegable, extraido literal de AutoBoard =====================
