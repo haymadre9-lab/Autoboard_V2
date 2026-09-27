@@ -140,7 +140,7 @@ function drawChargers(){
   for (const p of pois){ if (p.type!=='charge') continue;
     L.circleMarker([p.ll[0],p.ll[1]], {
       radius: 7, color:'#fff', weight:2,
-      fillColor: isTesla(p) ? '#e01d1d' : '#22c55e', fillOpacity: 1
+      fillColor: isTesla(p) ? '#0d5c33' : '#22c55e', fillOpacity: 1   // Tesla en verde OSCURO, no rojo -- el rojo ya lo usan los radares fijos
     }).bindPopup((p.name||'Punto de carga')+(p.kw?' · '+p.kw+' kW':'')).addTo(chargerGroup);
   }
 }
@@ -446,6 +446,7 @@ if (navigator.geolocation){
       map.setView(centro, z, { animate: true, duration: 0.3 });
     }
     $('spd').textContent = Math.round(speedKmh)+' km/h';
+    $('spd2').textContent = Math.round(speedKmh);
     $('acc').textContent = Math.round(c.accuracy||0)+' m';
     if (routeOn) trackRoute();
     // Los radares no se mueven: repasar la base entera cada segundo, aunque

@@ -12,10 +12,19 @@ html,body{margin:0;height:100%;background:#0b0e12;color:#e8eef2;
 
 /* buscador simple, abajo */
 /* buscador plegable arriba, extraido literal de AutoBoard */
-#searchToggle{position:fixed;z-index:920;top:12px;right:12px;width:48px;height:48px;
+/* Lupa y velocimetro, uno junto a otro, DEBAJO de la barra tecnica de arriba
+   -- si se quedan a top:12px como antes, se solapan con #hud (que ocupa
+   todo el ancho) y tapan los fps. El velocimetro reutiliza el diseño real
+   de AutoBoard (.spdmap), pensado para leerse de un vistazo conduciendo. */
+#searchToggle{position:fixed;z-index:920;top:52px;right:82px;width:48px;height:48px;
   border-radius:50%;background:#2f6bff;border:2px solid rgba(255,255,255,.25);
   color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer}
-#bar{position:fixed;left:10px;right:70px;top:12px;z-index:915;display:none;flex-direction:column;gap:0}
+#spdmap{position:fixed;z-index:900;top:52px;right:12px;background:rgba(12,16,22,.88);
+  border:1px solid #1e2836;border-radius:14px;padding:6px 14px;display:flex;
+  flex-direction:column;align-items:center;line-height:1}
+#spdmap b{font-size:26px;font-weight:800;color:#eef3fb}
+#spdmap small{font-size:9px;color:#8b98ad;letter-spacing:2px;margin-top:2px}
+#bar{position:fixed;left:10px;right:140px;top:52px;z-index:915;display:none;flex-direction:column;gap:0}
 .searchrow{display:flex;gap:8px}
 .searchrow input{flex:1;background:#12161c;border:1px solid #232c33;border-radius:10px;color:#e8eef2;
   font-size:15px;padding:12px 14px;min-width:0}
