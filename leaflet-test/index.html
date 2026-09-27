@@ -16,8 +16,6 @@
   <span id="spd">0 km/h</span>
   <span id="acc">— m</span>
   <span id="fps">— fps</span>
-  <button id="sat" style="background:none;border:1px solid #232c33;border-radius:8px;color:#e8eef2;font-size:16px;padding:2px 8px;cursor:pointer">🛰️</button>
-  <button id="mapnight" style="background:none;border:1px solid #232c33;border-radius:8px;color:#e8eef2;font-size:16px;padding:2px 8px;cursor:pointer">🌙</button>
 </div>
 
 <div id="map"></div>
@@ -32,7 +30,25 @@
 <div id="bar">
   <input id="q" type="text" placeholder="Destino…" autocomplete="off">
   <button id="go">Ir</button>
-  <button id="recenter">📍</button>
+</div>
+
+<!-- Tres iconos abajo a la derecha, mismo sitio y orden que AutoBoard real -->
+<button id="recenter" class="ovl">🎯</button>
+<button id="sat" class="ovl">🛰️</button>
+<button id="gear" class="ovl">⚙️</button>
+
+<div id="settings">
+  <div class="shead"><span>Ajustes</span><button id="closeSettings">✕</button></div>
+  <button class="setbtn" id="mapnight">🌙 Noche</button>
+  <div class="srow" style="margin-top:16px">
+    <span>Favoritos</span>
+    <div id="favList"></div>
+    <div class="favrow" id="addFavBtn" style="color:#5fd0e0">⭐ Guardar destino actual como favorito</div>
+  </div>
+  <div class="srow">
+    <span>Últimas direcciones</span>
+    <div id="recentList"></div>
+  </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"

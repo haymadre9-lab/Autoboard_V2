@@ -37,6 +37,7 @@ const URL_SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imag
    existe de verdad en la libreria, no hay que emularlo.                   */
 const RADAR_ICON='<svg width="26" height="26" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#e01d1d" stroke="#fff" stroke-width="1.6"/><rect x="6" y="9" width="8" height="6" rx="1" fill="#fff"/><circle cx="10" cy="12" r="1.7" fill="#e01d1d"/><path d="M14 10.3 L18 8.5 L18 15.5 L14 13.7 Z" fill="#fff"/></svg>';
 let radarDB=[], radars=[], radarAlerted=false, showRadars=true;
+let lastRadarPos=null, lastRadarAt=0, lastOcmPos=null, lastOcmAt=0;
 let radarGroup;   // se crea DESPUES de construir el mapa (ver mas abajo) -- usarlo antes reventaba el script entero, igual que ya paso en index.html
 
 function bearing(a,b){const y=Math.sin((b[1]-a[1])*Math.PI/180)*Math.cos(b[0]*Math.PI/180),x=Math.cos(a[0]*Math.PI/180)*Math.sin(b[0]*Math.PI/180)-Math.sin(a[0]*Math.PI/180)*Math.cos(b[0]*Math.PI/180)*Math.cos((b[1]-a[1])*Math.PI/180);return (Math.atan2(y,x)*180/Math.PI+360)%360;}
@@ -104,6 +105,75 @@ function updateRadar(){
 }
 
 fetch('../radares.json').then(r=>r.json()).then(d=>{ radarDB=d; console.log('[POIs] radares:', d.length); if(lastFix) refreshRadars([lastFix.lat,lastFix.lon]); }).catch(e=>console.warn('[radares]', e.message));
+
+
+/* ==== cargadores: fetchPois() extraida literalmente de AutoBoard, con toda
+   su logica de reintento y cache -- no es una version simplificada, es la
+   misma que ya resolvio en produccion el problema real de OpenChargeMap
+   (524 de Cloudflare, ~35 s de respuesta en esta zona). Dibujo en circulos
+   ligeros desde el principio esta vez, no con imagenes PNG como el original,
+   aprendiendo de lo que hicimos con radares.
+   NO incluye mergeGoingElectric() (una segunda fuente opcional que necesita
+   su propia clave aparte) -- se puede anadir despues si hace falta. */
+const OCM_KEY = "b5874662-3951-4da6-90ba-ad65ed1c0156";
+let pois = [], poisEnCurso = false;
+const chargerGroup = L.layerGroup();
+
+function isTesla(p){ return /tesla|supercharger/i.test((p.op||'')+' '+(p.name||'')); }
+
+function drawChargers(){
+  chargerGroup.clearLayers();
+  for (const p of pois){ if (p.type!=='charge') continue;
+    L.circleMarker([p.ll[0],p.ll[1]], {
+      radius: 7, color:'#fff', weight:2,
+      fillColor: isTesla(p) ? '#e01d1d' : '#22c55e', fillOpacity: 1
+    }).bindPopup((p.name||'Punto de carga')+(p.kw?' · '+p.kw+' kW':'')).addTo(chargerGroup);
+  }
+}
+
+async function fetchPois(ll){
+  if (poisEnCurso){ console.log('[POIs] ya hay una peticion en curso; se omite'); return; }
+  poisEnCurso = true;
+  try{
+    const pedir = async (n,comp,ms) => {
+      const u = 'https://api.openchargemap.io/v3/poi/?output=json&latitude='+ll[0]+'&longitude='+ll[1]
+        +'&distance=6&distanceunit=KM&maxresults='+n+'&compact='+comp+'&verbose=false&key='+OCM_KEY;
+      const ctl = new AbortController(), to = setTimeout(()=>ctl.abort(), ms);
+      try{ const res = await fetch(u, {signal: ctl.signal}); clearTimeout(to); return res; }
+      catch(e){ clearTimeout(to); return null; }
+    };
+    let r = await pedir(25,'true',45000);
+    if (!r || !r.ok) r = await pedir(10,'true',30000);
+    if (!r || !r.ok){
+      const cod = r ? r.status : 'sin respuesta';
+      console.warn('[POIs] OpenChargeMap no responde ('+cod+'); se mantienen los '+pois.length+' anteriores');
+      if (!pois.length){
+        try{
+          const c = JSON.parse(localStorage.getItem('poisCacheLT')||'null');
+          if (c && c.arr && c.arr.length && dist(ll,c.ll)<20000){
+            pois = c.arr; drawChargers();
+            console.log('[POIs] usando cache de hace', Math.round((Date.now()-c.t)/60000), 'min:', pois.length, 'cargadores');
+          }
+        }catch(e){}
+      }
+      return;
+    }
+    const j = await r.json(); const arr = [];
+    for (const poi of (j||[])){ const ai = poi.AddressInfo; if (!ai) continue;
+      const conns = poi.Connections||[]; let kw=0; const socks=[];
+      for (const c of conns){ if (c.PowerKW && c.PowerKW>kw) kw=c.PowerKW;
+        const tt = c.ConnectionType && c.ConnectionType.Title;
+        if (tt){ let n=tt.replace('CCS (Type 2)','CCS').replace('Type 2','Tipo 2'); if (socks.indexOf(n)<0) socks.push(n); } }
+      arr.push({ type:'charge', ll:[ai.Latitude, ai.Longitude], name: ai.Title||'Punto de carga',
+        op: (poi.OperatorInfo && poi.OperatorInfo.Title) || '', kw: kw?Math.round(kw):0, socks });
+    }
+    if (!arr.length && pois.length){ console.warn('[POIs] OCM devolvio 0; se mantienen los anteriores'); return; }
+    pois = arr; drawChargers();
+    console.log('[POIs] cargadores:', arr.length);
+    try{ localStorage.setItem('poisCacheLT', JSON.stringify({t:Date.now(), ll, arr})); }catch(e){}
+  }catch(e){ console.warn('[POIs] fallo:', e.message); }
+  finally{ poisEnCurso = false; }
+}
 
 let mapNite = (()=>{ const h=new Date().getHours(); return (h>=21||h<7); })();   // mismo criterio horario que AutoBoard
 let baseSat = false;
@@ -308,6 +378,7 @@ const map = L.map('map', {
   fadeAnimation: true, zoomAnimation: true, preferCanvas: true
 });
 radarGroup = L.layerGroup().addTo(map);
+chargerGroup.addTo(map);
 aplicarBase();
 
 $('sat').onclick = () => { baseSat = !baseSat; aplicarBase(); };
@@ -348,18 +419,36 @@ if (navigator.geolocation){
     carMk.setLatLng([now.lat, now.lon]);
     const el = carMk.getElement();
     if (el){ const svg = el.querySelector('svg'); if (svg) svg.style.transform = 'rotate('+heading+'deg)'; }
-    if (follow) map.setView([now.lat, now.lon], map.getZoom(), { animate: true, duration: 0.3 });
+    // El coche pegado al centro exacto de la pantalla deja ver poco de la
+    // carretera por delante. Se centra el mapa un poco por ENCIMA del coche
+    // en terminos de pixeles (no de coordenadas), asi el coche cae mas abajo
+    // en la pantalla y se ve mas via por delante -- tecnica estandar de
+    // Leaflet via project()/unproject(), no una aproximacion por coordenadas.
+    if (follow){
+      const z = map.getZoom();
+      const px = map.project([now.lat, now.lon], z);
+      const centro = map.unproject([px.x, px.y - 110], z);
+      map.setView(centro, z, { animate: true, duration: 0.3 });
+    }
     $('spd').textContent = Math.round(speedKmh)+' km/h';
     $('acc').textContent = Math.round(c.accuracy||0)+' m';
     if (routeOn) trackRoute();
     // Los radares no se mueven: repasar la base entera cada segundo, aunque
     // apenas te hayas desplazado unos metros, es trabajo repetido para el
     // mismo resultado. Se repasa solo si te has movido de verdad.
-    if (radarDB.length && (!window.__radarRefAt || dist([now.lat,now.lon], window.__radarRefAt) > 150)){
-      window.__radarRefAt = [now.lat, now.lon];
+    // Umbrales tal como los tiene AutoBoard real: radares 800 m/60 s (son
+    // locales y baratos), cargadores 3 km/180 s (cada consulta a OpenChargeMap
+    // tarda decenas de segundos, no tiene sentido pedirla mas a menudo).
+    const ahora = Date.now();
+    if (radarDB.length && (!lastRadarPos || dist([now.lat,now.lon], lastRadarPos) > 800 || ahora-lastRadarAt > 60000)){
+      lastRadarAt = ahora; lastRadarPos = [now.lat, now.lon];
       refreshRadars([now.lat, now.lon]);
     }
     updateRadar();
+    if (!lastOcmPos || dist([now.lat,now.lon], lastOcmPos) > 3000 || ahora-lastOcmAt > 180000){
+      lastOcmAt = ahora; lastOcmPos = [now.lat, now.lon];
+      fetchPois([now.lat, now.lon]);
+    }
   }, e => setStatus('GPS: '+e.message), { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
 }
 
@@ -441,7 +530,9 @@ function trimRoute(){
 }
 
 /* ---- ruta: mismo endpoint y parametros que AutoBoard, con guidance ------ */
-async function irA(destino){
+let destNombre = '';
+async function irA(destino, nombre){
+  destNombre = nombre || '';
   if (!lastFix){ setStatus('Sin GPS todavia'); return; }
   setStatus('Calculando ruta…');
   const t0 = performance.now();
@@ -482,7 +573,54 @@ async function irA(destino){
 
     const ms = Math.round(performance.now()-t0);
     setStatus('Ruta: '+fmtDist(route.summary.lengthInMeters)+' · '+Math.round(route.summary.travelTimeInSeconds/60)+' min · ('+ms+' ms)');
+    if (destNombre) guardarReciente(destNombre, destino);
   }catch(e){ setStatus('Error de ruta: '+e.message); }
+}
+
+
+/* ==== ajustes, favoritos y ultimas direcciones =============================
+   Los AJUSTES (dia/noche, satelite) NO se guardan de sesion a sesion, tal
+   como se pidio -- cada carga empieza de cero. Favoritos y ultimas
+   direcciones SI usan localStorage: es lo unico que de verdad ahorra tiempo
+   de una sesion a otra (si no persistieran, guardar un favorito no serviria
+   para nada la proxima vez que abras la app).                             */
+$('gear').onclick = () => { $('settings').classList.add('open'); renderFavs(); renderRecientes(); };
+$('closeSettings').onclick = () => { $('settings').classList.remove('open'); };
+
+function cargarFavs(){ try{ return JSON.parse(localStorage.getItem('favoritosLT')||'[]'); }catch(e){ return []; } }
+function guardarFavs(f){ try{ localStorage.setItem('favoritosLT', JSON.stringify(f)); }catch(e){} }
+function renderFavs(){
+  const favs = cargarFavs();
+  $('favList').innerHTML = favs.map((f,i) =>
+    '<div class="favrow" data-i="'+i+'">⭐ '+(f.nombre||'Favorito')+'<span style="margin-left:auto;color:#9aa7b2" data-del="'+i+'">✕</span></div>'
+  ).join('') || '<div style="color:#9aa7b2;font-size:12px;padding:6px">Sin favoritos todavia</div>';
+  $('favList').querySelectorAll('[data-i]').forEach(el => el.onclick = (e) => {
+    if (e.target.dataset.del !== undefined && e.target.dataset.del !== ''){
+      const favs2 = cargarFavs(); favs2.splice(+e.target.dataset.del, 1); guardarFavs(favs2); renderFavs(); return;
+    }
+    const f = favs[+el.dataset.i]; $('settings').classList.remove('open'); irA(f.ll, f.nombre);
+  });
+}
+$('addFavBtn').onclick = () => {
+  if (!destLL){ setStatus('Primero calcula una ruta'); return; }
+  const nombre = destNombre || prompt('Nombre para este favorito:', '') || 'Favorito';
+  const favs = cargarFavs(); favs.push({nombre, ll: destLL}); guardarFavs(favs); renderFavs();
+};
+
+function cargarRecientes(){ try{ return JSON.parse(localStorage.getItem('recientesLT')||'[]'); }catch(e){ return []; } }
+function guardarReciente(nombre, ll){
+  let r = cargarRecientes().filter(x => x.nombre !== nombre);
+  r.unshift({nombre, ll}); r = r.slice(0, 5);
+  try{ localStorage.setItem('recientesLT', JSON.stringify(r)); }catch(e){}
+}
+function renderRecientes(){
+  const r = cargarRecientes();
+  $('recentList').innerHTML = r.map((f,i) =>
+    '<div class="favrow" data-i="'+i+'">🕓 '+f.nombre+'</div>'
+  ).join('') || '<div style="color:#9aa7b2;font-size:12px;padding:6px">Sin busquedas todavia</div>';
+  $('recentList').querySelectorAll('[data-i]').forEach(el => el.onclick = () => {
+    const f = r[+el.dataset.i]; $('settings').classList.remove('open'); irA(f.ll, f.nombre);
+  });
 }
 
 $('go').onclick = async () => {
@@ -492,7 +630,7 @@ $('go').onclick = async () => {
     const r = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(q));
     const j = await r.json();
     if (!j.length){ setStatus('No se ha encontrado "'+q+'"'); return; }
-    irA([parseFloat(j[0].lat), parseFloat(j[0].lon)]);
+    irA([parseFloat(j[0].lat), parseFloat(j[0].lon)], q);
   }catch(e){ setStatus('Error de busqueda: '+e.message); }
 };
 $('q').addEventListener('keydown', e => { if (e.key==='Enter') $('go').click(); });
