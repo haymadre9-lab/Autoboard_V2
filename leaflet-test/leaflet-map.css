@@ -28,3 +28,17 @@ html,body{margin:0;height:100%;background:#0b0e12;color:#e8eef2;
 
 .leaflet-control-attribution{font-size:9px!important;background:rgba(10,14,20,.6)!important;color:#7b8b96!important}
 .leaflet-control-attribution a{color:#9aa7b2!important}
+
+/* ==== panel de maniobra: CSS extraído literalmente de AutoBoard (index.html) ==== */
+#navbanner{position:fixed;left:10px;top:56px;z-index:900;display:none;align-items:center;gap:12px;
+  background:#ffffff;border:2px solid #cfd6e0;border-radius:18px;padding:9px 16px;box-shadow:0 5px 16px rgba(0,0,0,.4);}
+#navbanner.hw{background:#1558d6;border-color:#0d3ea0;}
+#navbanner .navd{font-weight:900;font-size:19px;color:#111;line-height:1;}
+#navbanner.hw .navd{color:#fff;}
+#navbanner .arrow{min-width:78px;height:84px;flex:0 0 auto;} #navbanner .arrow>svg{width:78px;height:84px;display:block;}
+#navbanner .navtext{display:flex;flex-direction:column;}
+#navbanner .navd{font-size:30px;font-weight:800;line-height:1;color:#111;font-variant-numeric:tabular-nums;}
+#navbanner.hw .navd{color:#fff;}
+#navbanner .navsub{font-size:13px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42vw;margin-top:3px;font-weight:600;}
+#navbanner.hw .navsub{color:#dbe6ff;}
+#navbanner .navx{background:transparent;border:0;color:#9aa7b2;font-size:20px;cursor:pointer;padding:0 4px;margin-left:4px;}

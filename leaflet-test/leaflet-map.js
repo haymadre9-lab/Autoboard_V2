@@ -20,6 +20,153 @@ const TILE_URL = 'https://api.maptiler.com/maps/streets-v2/256/{z}/{x}/{y}.png?k
 const TILE_ATTR = '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 const $ = id => document.getElementById(id);
 
+/* ==== funciones de icono de maniobra, extraidas literalmente de AutoBoard (index.html) ==== */
+
+const TURN_GEOM = {
+  'straight':     {turn:0,   R:0},
+  'slight right': {turn:35,  R:26},
+  'right':        {turn:90,  R:15},
+  'sharp right':  {turn:150, R:10},
+  'uturn':        {turn:178, R:9},
+  'sharp left':   {turn:-150,R:10},
+  'left':         {turn:-90, R:15},
+  'slight left':  {turn:-35, R:26},
+};
+function triHead(x,y,t,c,len,hw){
+  len=len||9; hw=hw||5.5;
+  const tan={x:Math.sin(t),y:-Math.cos(t)}, lat={x:Math.cos(t),y:Math.sin(t)};
+  const bx=x-tan.x*len, by=y-tan.y*len;
+  const l={x:bx+lat.x*hw, y:by+lat.y*hw}, r={x:bx-lat.x*hw, y:by-lat.y*hw};
+  return '<path d="M'+x.toFixed(1)+' '+y.toFixed(1)+' L'+l.x.toFixed(1)+' '+l.y.toFixed(1)
+    +' L'+r.x.toFixed(1)+' '+r.y.toFixed(1)+' Z" fill="'+c+'"/>';
+}
+
+function turnPath(mod, n){
+  n=n||14;
+  const g=TURN_GEOM[mod]||TURN_GEOM.straight, P0={x:24,y:46};
+  if(!g.turn){ const pts=[]; for(let i=0;i<=n;i++) pts.push({x:24, y:P0.y-(P0.y-10)*i/n}); return { pts, brg:0 }; }
+  const right=g.turn>0, R=g.R, Cx=right?24+R:24-R, C={x:Cx,y:46};
+  const a0=right?180:0, a1=right?a0+g.turn:a0-Math.abs(g.turn);
+  const pts=[];
+  for(let i=0;i<=n;i++){ const a=(a0+(a1-a0)*i/n)*Math.PI/180;
+    pts.push({x:C.x+R*Math.cos(a), y:C.y+R*Math.sin(a)}); }
+  return { pts, brg: g.turn };
+}
+
+function turnArrowFill(mod, shaftHW, headHW, headLen){
+  shaftHW=shaftHW||4.2; headHW=headHW||8.5; headLen=headLen||13;
+  const {pts}=turnPath(mod,28);
+  const N=pts.length, distDesdePunta=new Array(N); distDesdePunta[N-1]=0;
+  for(let i=N-2;i>=0;i--){ const dx=pts[i+1].x-pts[i].x, dy=pts[i+1].y-pts[i].y;
+    distDesdePunta[i]=distDesdePunta[i+1]+Math.hypot(dx,dy); }
+  const tang=i=>{ const a=pts[Math.max(0,i-1)], b=pts[Math.min(N-1,i+1)];
+    const dx=b.x-a.x, dy=b.y-a.y, L=Math.hypot(dx,dy)||1; return {x:dx/L,y:dy/L}; };
+  const left=[], right=[]; let tip=null;
+  for(let i=0;i<N;i++){
+    const t=tang(i), lat={x:-t.y,y:t.x}, d=distDesdePunta[i];
+    if(d<=0){ tip={x:pts[i].x,y:pts[i].y}; continue; }
+    const hw = d<headLen ? headHW*(d/headLen) : shaftHW;
+    left.push({x:pts[i].x+lat.x*hw, y:pts[i].y+lat.y*hw});
+    right.push({x:pts[i].x-lat.x*hw, y:pts[i].y-lat.y*hw});
+  }
+  const poly=[...left, tip, ...right.reverse()];
+  return 'M'+poly.map(p=>p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' L')+' Z';
+}
+
+function arrowSVG(mod,col,w){col=col||'#0a8a34';
+  return '<svg viewBox="0 0 48 52"><path d="'+turnArrowFill(mod,4.6,9.5,9)+'" fill="'+col+'"/></svg>';}
+
+function laneArrow(dir,valid,hw){ const col=valid?(hw?'#ffffff':'#0a8a34'):(hw?'#000000':'#9aa3b2');
+  return '<div class="lane"><svg viewBox="0 0 48 52"><path d="'+turnArrowFill(dir,4.0,8.2,8)+'" fill="'+col+'"/></svg></div>'; }
+
+function roundaboutSVG(exit,mod,col){
+  // El tramo de rotonda que se recorre (entrada -> tu salida) se pinta como un
+  // arco blanco grueso: se lee la forma de un vistazo, sin depender de un
+  // numero pequeno.
+  // Angulos de salida FIJOS (no dependen de cual sea tu salida): 6 huecos
+  // repartidos en 300 grados, dejando 60 grados libres junto a la entrada. El
+  // esquema anterior calculaba el reparto a partir de tu propia salida y eso
+  // hacia que la salida 2 diera SIEMPRE un arco de longitud cero (justo la
+  // maniobra mas habitual, "sigue recto en la rotonda"): un fallo real, no solo
+  // de estetica.
+  const g='#6b7480', cx=26, cy=26, r=13, grosor=6.5, NMAX=6, pasoDeg=300/NMAX;
+  const n=Math.max(1,Math.min(NMAX,parseInt(exit,10)||1));
+  const a0=Math.PI/2;                        // entrada, siempre abajo
+  const aDe=k=>a0-(k*pasoDeg)*Math.PI/180;    // angulo de la salida k (1..NMAX)
+  let s='<svg viewBox="0 0 52 52">';
+  s+='<circle cx="'+cx+'" cy="'+cy+'" r="'+(r-grosor/2-1)+'" fill="'+g+'" opacity=".18"/>';
+  s+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+g+'" stroke-width="3" opacity=".45"/>';
+  // entrada, en gris: aun no estas circulando por la rotonda
+  s+='<path d="M'+cx+' 52 L'+cx+' '+(cy+r)+'" stroke="'+g+'" stroke-width="'+grosor+'" stroke-linecap="round" opacity=".55"/>';
+  // las demas salidas, apenas insinuadas
+  for(let k=1;k<=NMAX;k++){ if(k===n) continue; const a=aDe(k);
+    const x1=cx+Math.cos(a)*r, y1=cy+Math.sin(a)*r, x2=cx+Math.cos(a)*(r+7), y2=cy+Math.sin(a)*(r+7);
+    s+='<path d="M'+x1.toFixed(1)+' '+y1.toFixed(1)+' L'+x2.toFixed(1)+' '+y2.toFixed(1)+'" stroke="'+g+'" stroke-width="2.4" stroke-linecap="round" opacity=".4"/>'; }
+  // ARCO relleno (blanco, grueso) del tramo real, desde la entrada hasta tu salida
+  const aSel=aDe(n);
+  // El arco NO se dibuja con el comando "A" de SVG: sus banderas large/sweep
+  // eligen entre dos centros posibles, y si no coinciden EXACTAMENTE con mi
+  // centro real (cx,cy) el arco se hincha hacia fuera en vez de seguir la
+  // circunferencia (era justo el fallo: salidas 5 y 6 desplazadas hacia fuera).
+  // En vez de adivinar las banderas, se muestrean puntos directamente sobre MI
+  // circulo -mismo criterio ya usado y probado en las flechas de giro-, lo que
+  // garantiza que el arco se ciñe siempre al aro real.
+  const xs=cx+Math.cos(aSel)*r, ys=cy+Math.sin(aSel)*r;
+  let dArco='M'+cx+' '+(cy+r);
+  for(let i=1;i<=24;i++){ const a=a0-(a0-aSel)*i/24;
+    dArco+=' L'+(cx+Math.cos(a)*r).toFixed(1)+' '+(cy+Math.sin(a)*r).toFixed(1); }
+  const col2='#ffb020';   // ambar: se diferencia bien tanto del aro gris-azulado como de un panel azul de autopista, cosa que el blanco no hacia
+  s+='<path d="'+dArco+'" fill="none" stroke="'+col2+'" stroke-width="'+grosor+'" stroke-linecap="round" stroke-linejoin="round"/>';
+  // Salida: MISMA TECNICA que las flechas de giro (forma rellena, sin trazo
+  // pegado). Un trazo + un triangulo suelto encima siempre se leia como "un
+  // pegote puesto"; una unica forma que nace del propio grosor del arco,
+  // se ensancha y cierra en punta, se lee como una flecha de verdad.
+  const largo=11;
+  const xo=cx+Math.cos(aSel)*(r+largo), yo=cy+Math.sin(aSel)*(r+largo);
+  const brg=Math.atan2(xo-cx,-(yo-cy));
+  const tan={x:Math.sin(brg),y:-Math.cos(brg)}, lat={x:Math.cos(brg),y:Math.sin(brg)};
+  const shaftHW=grosor/2, headHW=7.5, hombro=0.5;   // 0..1: donde esta el ensanche maximo
+  const hx=xs+(xo-xs)*hombro, hy=ys+(yo-ys)*hombro;
+  const poly=[
+    {x:xs+lat.x*shaftHW, y:ys+lat.y*shaftHW},
+    {x:hx+lat.x*headHW,  y:hy+lat.y*headHW},
+    {x:xo, y:yo},
+    {x:hx-lat.x*headHW,  y:hy-lat.y*headHW},
+    {x:xs-lat.x*shaftHW, y:ys-lat.y*shaftHW},
+  ];
+  s+='<path d="M'+poly.map(p=>p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' L')+' Z" fill="'+col2+'"/>';
+  return s+'</svg>';
+}
+
+function maneuverSVG(st,hw){const m=st.maneuver||{};const col=hw?'#ffffff':'#0a8a34';
+  if(m.type==='roundabout'||m.type==='rotary')return roundaboutSVG(m.exit,m.modifier,col);
+  if(m.type==='arrive')return '<svg viewBox="0 0 48 52"><path d="M24 6c-7 0-12 5-12 12 0 9 12 26 12 26s12-17 12-26c0-7-5-12-12-12z" fill="'+col+'"/><circle cx="24" cy="18" r="4.5" fill="#fff"/></svg>';
+  if(m.type==='fork'||m.type==='off ramp'){ // bifurcacion / salida: tronco + dos ramas, la tuya marcada
+    const izq=(m.modifier||'').indexOf('left')>=0, g='#9aa3b2';
+    return '<svg viewBox="0 0 48 52"><path d="M24 48 L24 28" stroke="'+col+'" stroke-width="7" stroke-linecap="round"/>'
+      +'<path d="M24 28 L'+(izq?36:12)+' 10" stroke="'+g+'" stroke-width="5" stroke-linecap="round"/>'
+      +'<path d="M24 28 L'+(izq?12:36)+' 10" stroke="'+col+'" stroke-width="7" stroke-linecap="round"/>'
+      +arrowHead(izq?12:36,10,izq?-0.6:0.6,col)+'</svg>'; }
+  if(m.type==='merge'||m.type==='on ramp'){ const izq=(m.modifier||'').indexOf('left')>=0;
+    return '<svg viewBox="0 0 48 52"><path d="M'+(izq?34:14)+' 48 L'+(izq?34:14)+' 6" stroke="#9aa3b2" stroke-width="5" stroke-linecap="round"/>'
+      +'<path d="M'+(izq?12:36)+' 48 Q'+(izq?14:34)+' 26 '+(izq?30:18)+' 14" fill="none" stroke="'+col+'" stroke-width="7" stroke-linecap="round"/></svg>'; }
+  return arrowSVG(m.modifier,col,7.5);}
+
+function ttMan(it){ const m=(it.maneuver||it.instructionType||'').toString().toUpperCase(); const rb=it.roundaboutExitNumber;
+  if(m.indexOf('ROUNDABOUT')>=0||m.indexOf('ROTARY')>=0) return {type:'roundabout',exit:rb,modifier:(m.indexOf('LEFT')>=0?'left':(m.indexOf('RIGHT')>=0?'right':'straight'))};
+  if(m.indexOf('ARRIVE')>=0)return {type:'arrive'}; if(m.indexOf('DEPART')>=0)return {type:'depart'};
+  if(m.indexOf('EXIT')>=0||m.indexOf('RAMP')>=0)return {type:'off ramp',modifier:(m.indexOf('LEFT')>=0?'left':'right')};
+  if(m.indexOf('MERGE')>=0)return {type:'merge'};
+  let mod='straight';
+  if(m.indexOf('SHARP_LEFT')>=0)mod='sharp left'; else if(m.indexOf('SHARP_RIGHT')>=0)mod='sharp right';
+  else if(m.indexOf('BEAR_LEFT')>=0||m.indexOf('KEEP_LEFT')>=0||m.indexOf('SLIGHT_LEFT')>=0)mod='slight left';
+  else if(m.indexOf('BEAR_RIGHT')>=0||m.indexOf('KEEP_RIGHT')>=0||m.indexOf('SLIGHT_RIGHT')>=0)mod='slight right';
+  else if(m.indexOf('LEFT')>=0)mod='left'; else if(m.indexOf('RIGHT')>=0)mod='right'; else if(m.indexOf('UTURN')>=0||m.indexOf('U_TURN')>=0)mod='uturn';
+  return {type:'turn',modifier:mod};
+}
+
+/* ================================================================== */
+
 // ---- funciones identicas a index.html, copiadas literalmente -------------
 function dist(a,b){const R=6371000,dLat=(b[0]-a[0])*Math.PI/180,dLon=(b[1]-a[1])*Math.PI/180,la1=a[0]*Math.PI/180,la2=b[0]*Math.PI/180;const x=Math.sin(dLat/2)**2+Math.cos(la1)*Math.cos(la2)*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(x));}
 
@@ -73,6 +220,7 @@ let routeLine = null;
 let routeCoordsLL = [];   // TODOS los puntos de TomTom (navegacion), sin simplificar
 let routeDraw = [];       // copia simplificada SOLO para dibujar (igual criterio que AutoBoard)
 let routeDrawIdx = [];
+let routeCumDist = [];    // distancia acumulada real hasta cada punto de routeCoordsLL, en metros
 let steps = [], stepIdx = 0, destLL = null, routeOn = false, routeProgIdx = 0;
 let offAcc = 0, lastRecalc = 0;
 let follow = true, lastFix = null, heading = 0, speedKmh = 0;
@@ -127,13 +275,38 @@ function trackRoute(){
     console.log('[ruta] recalculo: a', Math.round(dr), 'm de la ruta');
     irA(destLL); return;
   }
-  // siguiente maniobra / paso actual, basico (Fase 4 hara el panel real)
-  while (stepIdx < steps.length-1 && (steps[stepIdx].metro||0) < (routeProgIdx*4) - 15) stepIdx++;
-  const s = steps[stepIdx];
-  if (s) $('nav').textContent = (isHighway(s)?'🛣️ ':'↱ ') + (s.msg||s.calle||'');
-  const dRem = routeCoordsLL.slice(routeProgIdx).reduce((a,_,i,arr)=> i? a+dist(arr[i-1],arr[i]) : a, 0);
+  // siguiente maniobra: avance de paso con la distancia RECORRIDA real,
+  // no una aproximacion -- routeCumDist se calcula una vez al recibir la
+  // ruta y aqui solo se consulta.
+  const recorrido = routeCumDist[routeProgIdx] || 0;
+  while (stepIdx < steps.length-1 && (steps[stepIdx+1].metro||0) <= recorrido) stepIdx++;
+  renderStep();
+  const dRem = Math.max(0, (routeCumDist[routeCumDist.length-1]||0) - recorrido);
   setStatus('Quedan ' + fmtDist(dRem));
 }
+
+/* ---- panel de maniobra: mismas funciones que AutoBoard (arrowSVG,
+   roundaboutSVG, maneuverSVG), sin ningun adaptador de por medio -- el SVG
+   generado se inyecta tal cual en el DOM.                                  */
+function renderStep(){
+  const s = steps[stepIdx]; if (!s) return;
+  const hw = isHighway(s);
+  const nb = $('navbanner');
+  nb.style.display = 'flex';
+  nb.classList.toggle('hw', hw);
+  $('navarrow').innerHTML = maneuverSVG(s, hw);
+  const distAquiA = Math.max(0, (s.metro||0) - (routeCumDist[routeProgIdx]||0));
+  $('navd').textContent = fmtDist(distAquiA);
+  $('navsub').textContent = s.calle || s.msg || '';
+}
+function endRoute(){
+  routeOn = false; steps = []; stepIdx = 0;
+  if (routeLine){ map.removeLayer(routeLine); routeLine = null; }
+  $('navbanner').style.display = 'none';
+  $('bar').style.display = 'flex';
+  setStatus('Ruta cancelada');
+}
+$('cancelRuta').onclick = endRoute;
 
 /* recorta la geometria de DIBUJO (pocos puntos), nunca la de navegacion
    (routeCoordsLL, que se queda intacta) -- mismo criterio que index.html   */
@@ -173,6 +346,9 @@ async function irA(destino){
     route.legs.forEach(leg => leg.points.forEach(p => pts.push([p.latitude, p.longitude])));
     routeCoordsLL = pts; routeProgIdx = 0; destLL = destino; routeOn = true;
 
+    routeCumDist = [0];
+    for (let i=1;i<pts.length;i++) routeCumDist.push(routeCumDist[i-1] + dist(pts[i-1], pts[i]));
+
     const sim = simplificarDP(pts, 3);
     routeDraw = sim.p; routeDrawIdx = sim.i;
     console.log('[ruta] puntos TomTom:', pts.length, '→ dibujados:', routeDraw.length,
@@ -182,9 +358,13 @@ async function irA(destino){
     routeLine = L.polyline(routeDraw.map(p=>[p[1],p[0]]), { color:'#1e88e5', weight:6 }).addTo(map);
 
     steps = (route.guidance && route.guidance.instructions || []).map(it => ({
-      metro: it.routeOffsetInMeters||0, calle: it.street||'', msg: it.message||''
+      metro: it.routeOffsetInMeters||0, calle: it.street||'', msg: it.message||'',
+      maneuver: ttMan(it)
     }));
     stepIdx = 0;
+
+    $('bar').style.display = 'none';
+    renderStep();
 
     map.fitBounds(L.latLngBounds(pts.map(p=>[p[0],p[1]])), { padding:[60,60], maxZoom:15 });
     setTimeout(() => { follow = true; }, 2000);
