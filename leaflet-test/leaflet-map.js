@@ -50,6 +50,7 @@ function ladoRuta(ll){
   return {d:best, der:cruz<0};
 }
 
+let _radarsHuella = '';
 function refreshRadars(here){ const out=[];
   for(const p of radarDB){ if(dist(here,[p.lat,p.lon])>5000)continue;
     if(routeOn && routeCoordsLL.length){
@@ -58,7 +59,13 @@ function refreshRadars(here){ const out=[];
       if(!l.der && l.d>8) continue;
     }
     out.push({ll:[p.lat,p.lon],max:p.max,t:p.t}); }
-  radars=out; drawRadars(); }
+  radars=out;
+  // Solo se reconstruyen los marcadores si el conjunto realmente cambio --
+  // si son los mismos radares que ya estaban dibujados, no hace falta
+  // destruirlos y volver a crearlos.
+  const huella = out.map(r=>r.ll[0]+','+r.ll[1]).join('|');
+  if (huella !== _radarsHuella){ _radarsHuella = huella; drawRadars(); }
+}
 
 function radarColor(t){ return t==='fijo'?'#e01d1d': t==='movil'?'#2f6bff': t==='tramo'?'#ff9a1f': t==='semaforo'?'#f5c518':'#e01d1d'; }
 
@@ -337,7 +344,13 @@ if (navigator.geolocation){
     $('spd').textContent = Math.round(speedKmh)+' km/h';
     $('acc').textContent = Math.round(c.accuracy||0)+' m';
     if (routeOn) trackRoute();
-    if (radarDB.length) refreshRadars([now.lat, now.lon]);
+    // Los radares no se mueven: repasar la base entera cada segundo, aunque
+    // apenas te hayas desplazado unos metros, es trabajo repetido para el
+    // mismo resultado. Se repasa solo si te has movido de verdad.
+    if (radarDB.length && (!window.__radarRefAt || dist([now.lat,now.lon], window.__radarRefAt) > 150)){
+      window.__radarRefAt = [now.lat, now.lon];
+      refreshRadars([now.lat, now.lon]);
+    }
     updateRadar();
   }, e => setStatus('GPS: '+e.message), { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
 }
