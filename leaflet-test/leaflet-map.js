@@ -69,11 +69,19 @@ function refreshRadars(here){ const out=[];
 
 function radarColor(t){ return t==='fijo'?'#e01d1d': t==='movil'?'#2f6bff': t==='tramo'?'#ff9a1f': t==='semaforo'?'#f5c518':'#e01d1d'; }
 
+// Circulos en vez de icono con divIcon: se dibujan sobre el <canvas> que ya
+// activamos con preferCanvas, sin crear ni un <div> por radar. Se pierde la
+// forma de camara -- queda un punto de color, mismo color que antes segun
+// el tipo -- a cambio de que reposicionar cientos de radares en el mapa sea
+// cosa del canvas, no de mover elementos del DOM uno a uno. Reversible en
+// cualquier momento: basta con volver a esta funcion tal como estaba antes.
 function drawRadars(){
   radarGroup.clearLayers(); if(!showRadars)return;
-  for(const p of radars){ const col=radarColor(p.t); const svg=RADAR_ICON.split('#e01d1d').join(col);
-    const ic=L.divIcon({className:'',html:'<div style="filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))">'+svg+'</div>',iconSize:[26,26],iconAnchor:[13,13]});
-    L.marker([p.ll[0],p.ll[1]],{icon:ic,interactive:false}).addTo(radarGroup); }
+  for(const p of radars){
+    L.circleMarker([p.ll[0],p.ll[1]], {
+      radius: 8, color:'#fff', weight:2, fillColor: radarColor(p.t), fillOpacity: 1, interactive:false
+    }).addTo(radarGroup);
+  }
 }
 
 let AC=null;
