@@ -42,3 +42,4 @@ html,body{margin:0;height:100%;background:#0b0e12;color:#e8eef2;
 #navbanner .navsub{font-size:13px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42vw;margin-top:3px;font-weight:600;}
 #navbanner.hw .navsub{color:#dbe6ff;}
 #navbanner .navx{background:transparent;border:0;color:#9aa7b2;font-size:20px;cursor:pointer;padding:0 4px;margin-left:4px;}
+#mapnight.on{background:#1558d6;border-color:#0d3ea0;color:#fff}

@@ -16,8 +16,34 @@ const TT = "zMPqeYVXNoQw4rJ1ycr8QdywkDFNx0tF";
 // adaptador de por medio: si aqui el mapa aguanta bien, el problema estaba
 // en la integracion (LeafletMapWrap), no en Leaflet+MapTiler en si.
 const MAPTILER_KEY = 'sG00UkBX9Ig2ifguvPgU';   // esta si es la clave de MapTiler; la anterior era la de TomTom, mismo error de copia
-const TILE_URL = 'https://api.maptiler.com/maps/streets-v2/256/{z}/{x}/{y}.png?key='+MAPTILER_KEY;
 const TILE_ATTR = '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+const SAT_ATTR = '&copy; Esri, Maxar, Earthstar Geographics';
+
+/* Base MAPA (dia/noche) + capa SATELITE por encima -- misma filosofia ya
+   probada en LeafletMapWrap/AutoBoard: cambiar de capa NUNCA destruye el
+   mapa ni la ruta, solo se anade o se quita una TileLayer. Aqui es aun mas
+   directo porque no hay ningun adaptador de por medio traduciendo nada. */
+function urlDia(noche){
+  const estilo = noche ? 'streets-v2-dark' : 'streets-v2';
+  return 'https://api.maptiler.com/maps/'+estilo+'/256/{z}/{x}/{y}.png?key='+MAPTILER_KEY;
+}
+const URL_SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+
+let mapNite = (()=>{ const h=new Date().getHours(); return (h>=21||h<7); })();   // mismo criterio horario que AutoBoard
+let baseSat = false;
+let capaBase = null, capaSat = null;
+
+function aplicarBase(){
+  if (capaBase) map.removeLayer(capaBase);
+  capaBase = L.tileLayer(urlDia(mapNite), { maxZoom:19, keepBuffer:2, updateWhenZooming:false, attribution:TILE_ATTR }).addTo(map);
+  if (baseSat){
+    if (!capaSat) capaSat = L.tileLayer(URL_SAT, { maxZoom:19, attribution:SAT_ATTR });
+    if (!map.hasLayer(capaSat)) capaSat.addTo(map);
+    capaSat.bringToFront();
+  } else if (capaSat && map.hasLayer(capaSat)) map.removeLayer(capaSat);
+  $('sat').textContent = baseSat ? '🗺️' : '🛰️';
+  $('mapnight').classList.toggle('on', mapNite);
+}
 const $ = id => document.getElementById(id);
 
 /* ==== funciones de icono de maniobra, extraidas literalmente de AutoBoard (index.html) ==== */
@@ -205,10 +231,10 @@ const map = L.map('map', {
   center: [43.30, -2.98], zoom: 14,
   fadeAnimation: true, zoomAnimation: true, preferCanvas: true
 });
-L.tileLayer(TILE_URL, {
-  attribution: TILE_ATTR, maxZoom: 19, keepBuffer: 2,
-  updateWhenZooming: false, updateWhenIdle: true
-}).addTo(map);
+aplicarBase();
+
+$('sat').onclick = () => { baseSat = !baseSat; aplicarBase(); };
+$('mapnight').onclick = () => { mapNite = !mapNite; aplicarBase(); };
 
 const carSVG = `<svg viewBox="0 0 24 24"><path d="M12 2 L20 20 L12 16 L4 20 Z" fill="#1e88e5" stroke="#ffffff" stroke-width="1.2"/></svg>`;
 const carIcon = L.divIcon({ className: 'car', html: carSVG, iconSize: [26,26], iconAnchor: [13,13] });
