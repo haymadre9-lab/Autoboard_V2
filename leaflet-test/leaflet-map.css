@@ -43,3 +43,14 @@ html,body{margin:0;height:100%;background:#0b0e12;color:#e8eef2;
 #navbanner.hw .navsub{color:#dbe6ff;}
 #navbanner .navx{background:transparent;border:0;color:#9aa7b2;font-size:20px;cursor:pointer;padding:0 4px;margin-left:4px;}
 #mapnight.on{background:#1558d6;border-color:#0d3ea0;color:#fff}
+
+/* ==== aviso de radar: extraido literalmente de AutoBoard ==== */
+.radarsign{position:fixed;left:50%;bottom:70px;z-index:950;display:none;flex-direction:column;
+  align-items:center;transform:translate(-50%,0);pointer-events:none}
+.radarsign.show{display:flex}
+.rs-c{width:70px;height:70px;border-radius:50%;background:#fff;border:9px solid #e01d1d;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(0,0,0,.65)}
+.rs-c span{font-size:28px;font-weight:800;color:#111}
+.rs-p{width:6px;height:24px;background:linear-gradient(#9aa1ab,#5c636d);border-radius:3px;margin-top:-2px}
+.rs-d{margin-top:4px;font-size:13px;font-weight:700;color:#fff;background:rgba(10,14,20,.75);
+  padding:2px 8px;border-radius:8px}

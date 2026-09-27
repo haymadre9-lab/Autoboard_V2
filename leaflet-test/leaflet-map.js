@@ -29,6 +29,67 @@ function urlDia(noche){
 }
 const URL_SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 
+
+/* ==== radares: mismo sistema que AutoBoard, funciones extraidas literalmente
+   (bearing, ladoRuta, refreshRadars, drawRadars, updateRadar, radarBeep,
+   beep), con radarGroup como L.layerGroup() nativo de Leaflet en vez del
+   grupo de simbolos por GPU que usa MapLibre -- aqui clearLayers() ya
+   existe de verdad en la libreria, no hay que emularlo.                   */
+const RADAR_ICON='<svg width="26" height="26" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#e01d1d" stroke="#fff" stroke-width="1.6"/><rect x="6" y="9" width="8" height="6" rx="1" fill="#fff"/><circle cx="10" cy="12" r="1.7" fill="#e01d1d"/><path d="M14 10.3 L18 8.5 L18 15.5 L14 13.7 Z" fill="#fff"/></svg>';
+let radarDB=[], radars=[], radarAlerted=false, showRadars=true;
+const radarGroup = L.layerGroup().addTo(map);
+
+function bearing(a,b){const y=Math.sin((b[1]-a[1])*Math.PI/180)*Math.cos(b[0]*Math.PI/180),x=Math.cos(a[0]*Math.PI/180)*Math.sin(b[0]*Math.PI/180)-Math.sin(a[0]*Math.PI/180)*Math.cos(b[0]*Math.PI/180)*Math.cos((b[1]-a[1])*Math.PI/180);return (Math.atan2(y,x)*180/Math.PI+360)%360;}
+
+function ladoRuta(ll){
+  let best=1e9, bi=-1; const i0=Math.max(1,routeProgIdx-20), n=routeCoordsLL.length;
+  for(let i=i0;i<n;i++){ const d=segDistM(ll,{lat:routeCoordsLL[i-1][0],lon:routeCoordsLL[i-1][1]},{lat:routeCoordsLL[i][0],lon:routeCoordsLL[i][1]}); if(d<best){best=d;bi=i;} }
+  if(bi<0) return {d:1e9,der:false};
+  const a=routeCoordsLL[bi-1], b=routeCoordsLL[bi], mx=Math.cos(a[0]*Math.PI/180);
+  const cruz=(b[1]-a[1])*mx*(ll[0]-a[0]) - (b[0]-a[0])*(ll[1]-a[1])*mx;
+  return {d:best, der:cruz<0};
+}
+
+function refreshRadars(here){ const out=[];
+  for(const p of radarDB){ if(dist(here,[p.lat,p.lon])>5000)continue;
+    if(routeOn && routeCoordsLL.length){
+      const l=ladoRuta([p.lat,p.lon]);
+      if(l.d>40) continue;
+      if(!l.der && l.d>8) continue;
+    }
+    out.push({ll:[p.lat,p.lon],max:p.max,t:p.t}); }
+  radars=out; drawRadars(); }
+
+function radarColor(t){ return t==='fijo'?'#e01d1d': t==='movil'?'#2f6bff': t==='tramo'?'#ff9a1f': t==='semaforo'?'#f5c518':'#e01d1d'; }
+
+function drawRadars(){
+  radarGroup.clearLayers(); if(!showRadars)return;
+  for(const p of radars){ const col=radarColor(p.t); const svg=RADAR_ICON.split('#e01d1d').join(col);
+    const ic=L.divIcon({className:'',html:'<div style="filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))">'+svg+'</div>',iconSize:[26,26],iconAnchor:[13,13]});
+    L.marker([p.ll[0],p.ll[1]],{icon:ic,interactive:false}).addTo(radarGroup); }
+}
+
+let AC=null;
+function initAudio(){ try{ if(!AC) AC=new (window.AudioContext||window.webkitAudioContext)(); if(AC.state==='suspended') AC.resume(); }catch(e){} }
+function beep(freq,dur,vol){ try{ if(!AC) initAudio(); if(!AC)return; const o=AC.createOscillator(),g=AC.createGain(); o.type='sine'; o.frequency.value=freq||880; o.connect(g); g.connect(AC.destination); g.gain.setValueAtTime(vol||0.16,AC.currentTime); o.start(); g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+(dur||0.15)); o.stop(AC.currentTime+(dur||0.15)); }catch(e){} }
+function radarBeep(){ beep(1100,0.14,0.2); setTimeout(()=>beep(1100,0.14,0.2),190); }
+
+function updateRadar(){
+  if(!lastFix||!showRadars){ $('radarsign').classList.remove('show'); return; }
+  let best=null;
+  for(const p of radars){ p.dist=dist([lastFix.lat,lastFix.lon],p.ll); const ah=Math.abs(((bearing([lastFix.lat,lastFix.lon],p.ll)-heading+540)%360)-180)<95; if(!ah)continue;
+    if(p.dist<800&&(!best||p.dist<best.dist))best=p; }
+  const over = !!(best && best.dist<500 && best.max && speedKmh > best.max+2);
+  if(over){ if(!radarAlerted){ radarAlerted=true; radarBeep(); } }
+  if(!best || best.dist>560) radarAlerted=false;
+  const el=$('radarsign'); if(!best){el.classList.remove('show');return;}
+  $('rsmax').textContent=best.max||'⚠'; $('rsdist').textContent=fmtDist(Math.max(0,best.dist));
+  const rsc=el.querySelector('.rs-c'); if(rsc) rsc.style.borderColor=radarColor(best.t);
+  el.classList.add('show');
+}
+
+fetch('../radares.json').then(r=>r.json()).then(d=>{ radarDB=d; console.log('[POIs] radares:', d.length); if(lastFix) refreshRadars([lastFix.lat,lastFix.lon]); }).catch(e=>console.warn('[radares]', e.message));
+
 let mapNite = (()=>{ const h=new Date().getHours(); return (h>=21||h<7); })();   // mismo criterio horario que AutoBoard
 let baseSat = false;
 let capaBase = null, capaSat = null;
@@ -275,6 +336,8 @@ if (navigator.geolocation){
     $('spd').textContent = Math.round(speedKmh)+' km/h';
     $('acc').textContent = Math.round(c.accuracy||0)+' m';
     if (routeOn) trackRoute();
+    if (radarDB.length) refreshRadars([now.lat, now.lon]);
+    updateRadar();
   }, e => setStatus('GPS: '+e.message), { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
 }
 
