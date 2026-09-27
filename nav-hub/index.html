@@ -1,1 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Nav Hub</title>
+<style>
+  :root{ --bd:#232c33; --dim:#9aa7b2; }
+  html,body{margin:0;height:100%;background:#0b0e12;color:#e8eef2;
+    font-family:-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+  body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+    padding:16px;box-sizing:border-box}
+  h1{font-size:15px;font-weight:600;color:var(--dim);letter-spacing:.04em;text-transform:uppercase;
+    margin:0 0 4px 0}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;width:100%;max-width:640px}
+  .tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+    border:1px solid var(--bd);border-radius:18px;padding:22px 10px;cursor:pointer;
+    background:#12161c;text-decoration:none;color:inherit;transition:transform .1s}
+  .tab:active{transform:scale(.96)}
+  .tab .ico{font-size:34px;line-height:1}
+  .tab .nombre{font-size:16px;font-weight:700}
+  .tab .sub{font-size:11px;color:var(--dim)}
+  .tab.autoboard{background:linear-gradient(160deg,#123a2a,#12161c);border-color:#1f5c3f}
+  .tab.waze{background:linear-gradient(160deg,#0f2a3a,#12161c);border-color:#1a4a63}
+  .tab.gmaps{background:linear-gradient(160deg,#1a2a12,#12161c);border-color:#3a5c1f}
+  .nota{max-width:640px;font-size:12px;color:var(--dim);text-align:center;line-height:1.5;padding:0 12px}
+  .nota b{color:#c7cdd3}
+</style>
+</head>
+<body>
 
+  <h1>Elige navegador</h1>
+  <div class="grid">
+    <a class="tab autoboard" href="../">
+      <div class="ico">🗺️</div>
+      <div class="nombre">AutoBoard</div>
+      <div class="sub">Nuestro navegador</div>
+    </a>
+    <a class="tab waze" href="https://www.waze.com/live-map">
+      <div class="ico">🟢</div>
+      <div class="nombre">Waze</div>
+      <div class="sub">Mapa en vivo</div>
+    </a>
+    <a class="tab gmaps" href="https://www.google.com/maps">
+      <div class="ico">🔵</div>
+      <div class="nombre">Google Maps</div>
+      <div class="sub">Mapa</div>
+    </a>
+  </div>
+
+  <div class="nota">
+    Para volver aquí, usa <b>atrás</b> en el navegador del Tesla, o guarda esta
+    página en <b>favoritos</b> para tenerla siempre a mano.<br>
+    TomTom no tiene navegador web público, solo app móvil — por eso no está aquí.
+  </div>
+
+</body>
+</html>
