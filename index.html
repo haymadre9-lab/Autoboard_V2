@@ -828,37 +828,31 @@ const MT_STYLES={
     // destruye el mapa ni la ruta, al contrario que setStyle() en MapLibre. */
     _setBase(urlOrSpec, intento){
       // MT_STYLES.day/.night/.sat son style.json VECTORIALES, pensados para
-      // MapLibre -- Leaflet no puede consumirlos como plantilla de tesela.
-      // Aqui se traducen a un proveedor raster propio, independiente de
-      // MapTiler: la BASE de que "no hay mapa" era exactamente esto, pasarle
-      // el style.json tal cual a L.tileLayer() y no cargar ni una tesela.
+      // MapLibre. Antes se traducian a OpenStreetMap directo -- pero su
+      // servidor publico es para uso ligero, no para una app real que lo
+      // machaca a peticiones en pruebas repetidas: era la causa de que el
+      // mapa cargara bien unas veces y se quedara en azul otras. Ahora se
+      // usa MapTiler, el mismo servicio que ya pagamos y usamos para el
+      // vectorial -- con estilo de noche real (streets-v2-dark), sin
+      // necesitar el filtro CSS de aproximacion que se usaba antes.
       const esSpec = urlOrSpec && typeof urlOrSpec === 'object' && urlOrSpec.tiles;
-      let tileUrl, esSatelite, esNoche = false;
+      let tileUrl, esSatelite;
       if (esSpec){
         tileUrl = urlOrSpec.tiles[0]; esSatelite = true;
       } else if (urlOrSpec === MT_STYLES.sat){
         tileUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
         esSatelite = true;
       } else {
-        tileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-        esSatelite = false; esNoche = (urlOrSpec === MT_STYLES.night);
+        const estilo = (urlOrSpec === MT_STYLES.night) ? 'streets-v2-dark' : 'streets-v2';
+        tileUrl = 'https://api.maptiler.com/maps/'+estilo+'/256/{z}/{x}/{y}.png?key='+MAPTILER_KEY;
+        esSatelite = false;
       }
       if (this._base) this._m.removeLayer(this._base);
       this._base = LEAFLET_REAL.tileLayer(tileUrl, { maxZoom:19, keepBuffer:2, updateWhenZooming:false });
       this._base.addTo(this._m);
-      // Modo noche sin segundo proveedor: filtro CSS sobre el panel de
-      // teselas de Leaflet. Es una aproximacion (invertir+rotar tono), no
-      // un estilo oscuro real como el de MapTiler; se documenta como tal.
-      try{
-        // Invertir colores sobre un mapa mayormente BLANCO (las teselas de
-        // OSM) da un resultado mayormente NEGRO: eso era justo lo que se
-        // veia, no un fallo de carga. Se sustituye por un oscurecido suave
-        // (sin invertir tono), que atenua sin volver el mapa negro.
-        const pane = this._m.getPane && this._m.getPane('tilePane');
-        if (pane) pane.style.filter = esNoche ? 'brightness(.62) saturate(.75)' : '';
-      }catch(e){}
+      try{ const pane = this._m.getPane && this._m.getPane('tilePane'); if (pane) pane.style.filter=''; }catch(e){}
       this._baseKey = esSatelite ? 'sat' : 'day';
-      console.log('[ENGINE][leaflet] base ->', this._baseKey, esNoche?'(noche, filtro CSS)':'');
+      console.log('[ENGINE][leaflet] base ->', this._baseKey);
     }
     _setCapasBaseVisibles(){ /* no hace falta: en Leaflet cambiar de TileLayer ya no deja el vectorial debajo */ }
     // ---- ruta: mismo patron que MapWrap (Poly con .addTo(map)) ------------
