@@ -37,7 +37,7 @@ const URL_SAT = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imag
    existe de verdad en la libreria, no hay que emularlo.                   */
 const RADAR_ICON='<svg width="26" height="26" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#e01d1d" stroke="#fff" stroke-width="1.6"/><rect x="6" y="9" width="8" height="6" rx="1" fill="#fff"/><circle cx="10" cy="12" r="1.7" fill="#e01d1d"/><path d="M14 10.3 L18 8.5 L18 15.5 L14 13.7 Z" fill="#fff"/></svg>';
 let radarDB=[], radars=[], radarAlerted=false, showRadars=true;
-const radarGroup = L.layerGroup().addTo(map);
+let radarGroup;   // se crea DESPUES de construir el mapa (ver mas abajo) -- usarlo antes reventaba el script entero, igual que ya paso en index.html
 
 function bearing(a,b){const y=Math.sin((b[1]-a[1])*Math.PI/180)*Math.cos(b[0]*Math.PI/180),x=Math.cos(a[0]*Math.PI/180)*Math.sin(b[0]*Math.PI/180)-Math.sin(a[0]*Math.PI/180)*Math.cos(b[0]*Math.PI/180)*Math.cos((b[1]-a[1])*Math.PI/180);return (Math.atan2(y,x)*180/Math.PI+360)%360;}
 
@@ -292,6 +292,7 @@ const map = L.map('map', {
   center: [43.30, -2.98], zoom: 14,
   fadeAnimation: true, zoomAnimation: true, preferCanvas: true
 });
+radarGroup = L.layerGroup().addTo(map);
 aplicarBase();
 
 $('sat').onclick = () => { baseSat = !baseSat; aplicarBase(); };
