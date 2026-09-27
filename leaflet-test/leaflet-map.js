@@ -9,8 +9,15 @@
    ========================================================================= */
 
 const TT = "zMPqeYVXNoQw4rJ1ycr8QdywkDFNx0tF";
-const TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-const TILE_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+// Teselas RASTER de MapTiler -- el mismo proveedor de pago que ya usa
+// AutoBoard para MapLibre, con la misma clave. Cambiado desde OpenStreetMap
+// (servidor publico, pensado para uso ligero) tras pruebas intermitentes
+// con AutoBoard integrado. Esta pagina usa Leaflet REAL, sin ningun
+// adaptador de por medio: si aqui el mapa aguanta bien, el problema estaba
+// en la integracion (LeafletMapWrap), no en Leaflet+MapTiler en si.
+const MAPTILER_KEY = 'zMPqeYVXNoQw4rJ1ycr8QdywkDFNx0tF';
+const TILE_URL = 'https://api.maptiler.com/maps/streets-v2/256/{z}/{x}/{y}.png?key='+MAPTILER_KEY;
+const TILE_ATTR = '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 const $ = id => document.getElementById(id);
 
 // ---- funciones identicas a index.html, copiadas literalmente -------------
