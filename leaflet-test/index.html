@@ -27,9 +27,14 @@
 </div>
 <div id="status">Leaflet real + MapTiler (token) — sin ningún adaptador de por medio</div>
 
+<button id="searchToggle">🔍</button>
 <div id="bar">
-  <input id="q" type="text" placeholder="Destino…" autocomplete="off">
-  <button id="go">Ir</button>
+  <div class="searchrow">
+    <button id="homeBtn" title="Casa (mantén pulsado para fijar)">🏠</button>
+    <input id="q" type="text" placeholder="¿A dónde vamos?" autocomplete="off">
+    <button id="go">Ir</button>
+  </div>
+  <div class="suggest" id="suggest"></div>
 </div>
 
 <!-- Tres iconos abajo a la derecha, mismo sitio y orden que AutoBoard real -->

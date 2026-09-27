@@ -93,8 +93,8 @@ function trianguloLL(centro, metros){
 function drawRadars(){
   radarGroup.clearLayers(); if(!showRadars)return;
   for(const p of radars){
-    L.polygon(trianguloLL(p.ll, 14), {
-      color:'#fff', weight:2, fillColor: radarColor(p.t), fillOpacity: 1, interactive:false
+    L.circleMarker([p.ll[0],p.ll[1]], {
+      radius: 8, color:'#fff', weight:2, fillColor: radarColor(p.t), fillOpacity: 1, interactive:false
     }).addTo(radarGroup);
   }
 }
@@ -518,7 +518,7 @@ function endRoute(){
   routeOn = false; steps = []; stepIdx = 0;
   if (routeLine){ map.removeLayer(routeLine); routeLine = null; }
   $('navbanner').style.display = 'none';
-  $('bar').style.display = 'flex';
+  cerrarBuscador();
   setStatus('Ruta cancelada');
 }
 $('cancelRuta').onclick = endRoute;
@@ -592,7 +592,7 @@ async function irA(destino, nombre){
     }));
     stepIdx = 0;
 
-    $('bar').style.display = 'none';
+    cerrarBuscador();
     renderStep();
 
     map.fitBounds(L.latLngBounds(pts.map(p=>[p[0],p[1]])), { padding:[60,60], maxZoom:15 });
@@ -671,6 +671,46 @@ function setTraffic(on){
 }
 $('trafficBtn').onclick = () => setTraffic(!trafficOn);
 
+/* ==== buscador plegable, extraido literal de AutoBoard =====================
+   Lupa arriba a la derecha que abre/cierra la barra; al abrir, si el campo
+   esta vacio, se listan recientes y favoritos; al escribir 3+ letras, se
+   piden sugerencias en vivo a Nominatim -- misma funcion renderSuggest()
+   que ya tiene AutoBoard, solo adaptada a los nombres de esta version. */
+function cerrarBuscador(){ $('bar').style.display='none'; $('searchToggle').textContent='🔍'; $('suggest').style.display='none'; }
+function abrirBuscador(){ $('bar').style.display='flex'; $('searchToggle').textContent='✕'; $('q').focus(); renderSuggest(''); }
+$('searchToggle').onclick = () => { if ($('bar').style.display==='flex') cerrarBuscador(); else abrirBuscador(); };
+
+async function renderSuggest(q){
+  const box = $('suggest');
+  if (!q){
+    const favs = cargarFavs(), rec = cargarRecientes();
+    if (!favs.length && !rec.length){ box.innerHTML = '<div class="sug"><span>Sin destinos recientes ni favoritos</span></div>'; box.style.display='block'; return; }
+    let html = '';
+    if (rec.length) html += rec.map((r,i) => '<div class="sug" data-rec="'+i+'"><span>🕘 '+r.nombre+'</span></div>').join('');
+    if (favs.length) html += favs.map((f,i) => '<div class="sug" data-fav="'+i+'"><span>⭐ '+f.nombre+'</span></div>').join('');
+    box.innerHTML = html; box.style.display = 'block';
+    box.querySelectorAll('.sug').forEach(el => { el.onclick = () => {
+      if (el.dataset.rec != null){ const r = cargarRecientes()[+el.dataset.rec]; cerrarBuscador(); irA(r.ll, r.nombre); return; }
+      const f = cargarFavs()[+el.dataset.fav]; cerrarBuscador(); irA(f.ll, f.nombre);
+    }; });
+    return;
+  }
+  if (q.length < 3){ box.style.display='none'; return; }
+  try{
+    const r = await fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(q)+'&format=json&limit=6&countrycodes=es&accept-language=es');
+    const j = await r.json();
+    if (!j || !j.length){ box.style.display='none'; return; }
+    box.innerHTML = j.map(it => '<div class="sug" data-lat="'+it.lat+'" data-lon="'+it.lon+'"><span>📍 '+it.display_name.split(',').slice(0,3).join(',')+'</span></div>').join('');
+    box.style.display = 'block';
+    box.querySelectorAll('.sug').forEach(el => { el.onclick = () => {
+      const nombre = el.textContent.replace('📍','').trim();
+      cerrarBuscador(); irA([parseFloat(el.dataset.lat), parseFloat(el.dataset.lon)], nombre);
+    }; });
+  }catch(e){ box.style.display='none'; }
+}
+$('q').addEventListener('input', () => renderSuggest($('q').value.trim()));
+$('q').addEventListener('focus', () => { if (!$('q').value.trim()) renderSuggest(''); });
+
 $('go').onclick = async () => {
   const q = $('q').value.trim(); if (!q) return;
   setStatus('Buscando "'+q+'"…');
@@ -678,10 +718,33 @@ $('go').onclick = async () => {
     const r = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(q));
     const j = await r.json();
     if (!j.length){ setStatus('No se ha encontrado "'+q+'"'); return; }
-    irA([parseFloat(j[0].lat), parseFloat(j[0].lon)], q);
+    cerrarBuscador(); irA([parseFloat(j[0].lat), parseFloat(j[0].lon)], q);
   }catch(e){ setStatus('Error de busqueda: '+e.message); }
 };
 $('q').addEventListener('keydown', e => { if (e.key==='Enter') $('go').click(); });
+
+/* Casa: pulsacion larga para fijarla, toque normal para ir directo -- mismo
+   patron que AutoBoard (600 ms de umbral entre "toque" y "mantener"). */
+function getHome(){ try{ return JSON.parse(localStorage.getItem('homeLT')||'null'); }catch(e){ return null; } }
+(function(){
+  const b = $('homeBtn'); let tmr=null, longed=false;
+  const doHome = () => { const h=getHome(); if (h){ cerrarBuscador(); irA([h.lat,h.lon], 'Casa'); } else setStatus('Mantén pulsado 🏠 para fijar tu casa'); };
+  const start = () => { longed=false; tmr=setTimeout(async () => {
+    longed=true;
+    const q = prompt('Fijar CASA — dirección (vacío = ubicación actual):','');
+    if (q===null) return;
+    let ll=null;
+    if (q.trim()){
+      try{ const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(q.trim())); const j=await r.json(); if (j.length) ll=[parseFloat(j[0].lat),parseFloat(j[0].lon)]; }catch(e){}
+    } else if (lastFix){ ll=[lastFix.lat,lastFix.lon]; }
+    if (ll){ localStorage.setItem('homeLT', JSON.stringify({lat:ll[0],lon:ll[1]})); setStatus('🏠 Casa fijada'); }
+    else setStatus('No se pudo fijar la casa');
+  }, 600); };
+  const cancel = () => { if (tmr){ clearTimeout(tmr); tmr=null; } };
+  b.addEventListener('touchstart', start, {passive:true}); b.addEventListener('touchmove', cancel, {passive:true});
+  b.addEventListener('touchend', () => { cancel(); if (!longed) doHome(); });
+  b.addEventListener('mousedown', start); b.addEventListener('mouseup', () => { cancel(); if (!longed) doHome(); }); b.addEventListener('mouseleave', cancel);
+})();
 
 (function(){
   let n=0, t=performance.now();
