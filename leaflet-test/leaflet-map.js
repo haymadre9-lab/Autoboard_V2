@@ -519,9 +519,11 @@ let steps = [], stepIdx = 0, destLL = null, routeOn = false, routeProgIdx = 0;
 let trafficSegs = [];
 let offAcc = 0, lastRecalc = 0;
 let follow = true, lastFix = null, heading = 0, speedKmh = 0;
-let hud2 = null, hudAbierto = false, hudCargando = false;   // HUD 2: no existe hasta que se abre por primera vez
+let hud2 = null, hudAbierto = false, hudCargando = false, hudDemo = false;   // HUD 2: no existe hasta que se abre por primera vez
 let navZoom = 17;   // zoom real de conduccion; el encuadre inicial de la ruta se aleja a proposito, pero el seguimiento no debe heredar ese alejamiento
 
+const VERSION = '2026.09.28-c';
+try{ $('ver').textContent = 'v'+VERSION; }catch(e){}
 function fmtDist(m){ return m<1000 ? Math.round(m)+' m' : (m/1000).toFixed(1)+' km'; }
 function setStatus(t){ $('status').textContent = t; }
 
@@ -555,7 +557,7 @@ if (navigator.geolocation){
       if (el){ const svg = el.querySelector('svg'); if (svg) svg.style.transform = 'rotate('+heading+'deg)'; }
     }
     if (follow && !hudAbierto) seguirCamara([now.lat, now.lon], dt);   // con el HUD abierto el mapa esta oculto: no se mueve
-    if (hudAbierto && hud2){ try{ hud2.setSpeed(speedKmh/3.6); hud2.syncPosition(now.lat, now.lon); }catch(e){} }
+    if (hudAbierto && hud2){ try{ hud2.setSpeed(hudDemo ? Math.max(speedKmh/3.6, 15) : speedKmh/3.6); if (!hudDemo) hud2.syncPosition(now.lat, now.lon); }catch(e){} }
     $('spd').textContent = Math.round(speedKmh)+' km/h';
     $('spd2').textContent = Math.round(speedKmh);
     $('acc').textContent = Math.round(c.accuracy||0)+' m';
@@ -724,13 +726,24 @@ async function irA(destino, nombre){
 
     steps = (route.guidance && route.guidance.instructions || []).map(it => {
       const refs = (it.roadNumbers||[]).join(' ');
+      // La posicion de la maniobra se mide sobre la MISMA geometria con la que se mide la
+      // distancia recorrida (routeCumDist), usando pointIndex. routeOffsetInMeters lo mide
+      // TomTom con su propia regla: si difiere aunque sea un 1 %, el error crece con los
+      // km recorridos y acaba recortando la distancia a "0 m" durante todo el tramo previo
+      // a cada maniobra. Solo se usa el desplazamiento de TomTom si pointIndex falta o no
+      // cuadra con el (por si en alguna ruta viniera relativo a otra cosa).
+      const off = it.routeOffsetInMeters, pi = it.pointIndex;
+      const porIndice = (Number.isInteger(pi) && pi >= 0 && pi < routeCumDist.length) ? routeCumDist[pi] : null;
+      const metroFinal = (porIndice !== null && (off == null || Math.abs(porIndice - off) <= Math.max(300, off*0.1))) ? porIndice : (off||0);
       return {
-        metro: it.routeOffsetInMeters||0, calle: it.street||'', name: it.street||'', msg: it.message||'',
+        metro: metroFinal, calle: it.street||'', name: it.street||'', msg: it.message||'',
         maneuver: ttMan(it),
         // igual que AutoBoard real: hay que mirar el nombre Y las referencias (A-8, AP-8...)
         hw: isHighway({name: it.street||''}) || isHighway({name: refs}) || /\b(A|AP|E)-?\d/i.test(refs)
       };
     });
+    console.log('[ruta] maniobras (m desde el inicio):', steps.map(s=>Math.round(s.metro)).join(' · '),
+      '| geometria:', Math.round(routeCumDist[routeCumDist.length-1]), 'm | TomTom dice:', route.summary.lengthInMeters, 'm');
     stepIdx = 0; avanzarPaso(0);   // se salta la instruccion de salida (punto a 0 m): se empieza en la primera maniobra real
 
     cerrarBuscador();
@@ -742,7 +755,7 @@ async function irA(destino, nombre){
     const ms = Math.round(performance.now()-t0);
     setStatus('Ruta: '+fmtDist(route.summary.lengthInMeters)+' · '+Math.round(route.summary.travelTimeInSeconds/60)+' min · ('+ms+' ms)');
     if (destNombre) guardarReciente(destNombre, destino);
-    if (hud2) ponerRutaEnHud();   // el HUD ya cargado recibe la ruta nueva (o el recalculo)
+    if (hud2){ if (hudAbierto) hudDemo = false; ponerRutaEnHud(); }   // el HUD ya cargado recibe la ruta nueva (o el recalculo); deja el trazado de ejemplo
   }catch(e){ setStatus('Error de ruta: '+e.message); }
 }
 
@@ -854,37 +867,67 @@ function ponerRutaEnHud(){
     if (radarDB.length) hud2.setRadars(radarDB);
   }catch(e){ console.warn('[hud2] ruta:', e.message); }
 }
+/* Trazado de ejemplo (el mismo de hud2-boot.js): recta larga y curvas amplias, sin
+   rotondas. Asi el HUD SIEMPRE dibuja algo al abrirlo, con o sin ruta activa, y se puede
+   comprobar el dibujo sin tener que calcular una ruta antes. */
+function rutaDemo(){
+  const R = 6378137, LAT0 = 43.3320, LNG0 = -3.1090, c0 = Math.cos(LAT0*Math.PI/180);
+  const toLL = (x,z) => [LAT0 + z/R*180/Math.PI, LNG0 + x/(R*c0)*180/Math.PI];
+  const d = []; let x = 0, z = 0, h = 0;
+  const tramo = (dist, k) => { const n = Math.round(dist/4); for (let i=0;i<n;i++){ h += k*4; x += Math.sin(h)*4; z += Math.cos(h)*4; d.push(toLL(x,z)); } };
+  d.push(toLL(0,0));
+  tramo(800,0); tramo(460,0.0011); tramo(340,0); tramo(420,-0.0013); tramo(300,0);
+  tramo(520,0.0008); tramo(360,-0.0009); tramo(400,0); tramo(440,0.0015); tramo(320,-0.0006); tramo(380,0.0010); tramo(300,-0.0012); tramo(700,0);
+  return d;
+}
+/* Cartel rojo con el error REAL. hud2.js avisa de sus fallos por api.onError; si nadie
+   escucha, solo van a la consola y el HUD se queda en una pantalla oscura sin explicacion
+   -- que es lo que pasaba. hud2-boot.js si lo escuchaba; el puente no. */
+function avisoHud(msg){ const e = $('hud2err'); if (e.textContent !== msg) e.textContent = msg; e.style.display = msg ? 'block' : 'none'; }
+function marcarPestana(cual){ ['tabMapa','tabHud'].forEach(id => $(id).classList.toggle('on', id === cual)); }
+
 async function abrirHud(){
   if (hudAbierto || hudCargando) return;
-  if (!routeOn || routeCoordsLL.length < 8){ setStatus('HUD 2: primero calcula una ruta'); return; }   // sin ruta no hay nada que pintar
-  hudCargando = true; setStatus('Cargando HUD 2…');
+  hudCargando = true; setStatus('Cargando HUD 2…'); avisoHud('');
   try{
     if (!hud2){
       const mod = await import('../hud2.js');
       hud2 = mod.createHud2($('hud2canvas'), { escala: 0.6 });   // 0,6 = el 36 % de los pixeles, como en AutoBoard
+      hud2.onError = err => { console.error('[hud2]', err); avisoHud('HUD 2: ' + (err && err.message ? err.message : err)); };
+      console.log('[hud2] motor version', hud2.version);
     }
-    $('hud2wrap').classList.add('on'); $('hud2back').style.display = 'block';
+    $('hud2wrap').classList.add('on');
     hudAbierto = true;
     $('map').style.visibility = 'hidden';                        // mapa fuera de juego mientras el HUD esta abierto
-    hud2.resize(); ponerRutaEnHud(); hud2.start();
-    if (lastFix){ hud2.setSpeed(speedKmh/3.6); hud2.syncPosition(lastFix.lat, lastFix.lon); }
-    $('hudBtn').classList.add('on'); $('settings').classList.remove('open');
-    setStatus('HUD 2 activo');
+    hud2.resize();
+    hudDemo = !(routeOn && routeCoordsLL.length >= 8);
+    if (hudDemo){ try{ hud2.setRoute(rutaDemo()); hud2.setManeuvers([]); }catch(e){ hud2.onError(e); } }
+    else ponerRutaEnHud();
+    hud2.start();
+    if (lastFix && !hudDemo){ hud2.setSpeed(speedKmh/3.6); hud2.syncPosition(lastFix.lat, lastFix.lon); }
+    marcarPestana('tabHud'); $('settings').classList.remove('open');
+    setStatus(hudDemo ? 'HUD 2: sin ruta activa, trazado de ejemplo' : 'HUD 2 activo');
   }catch(e){
     console.warn('[hud2]', e);
-    hudAbierto = false; $('hud2wrap').classList.remove('on'); $('hud2back').style.display = 'none'; $('map').style.visibility = '';
-    setStatus('HUD 2 no disponible: '+e.message);
+    hudAbierto = false; hudDemo = false; $('hud2wrap').classList.remove('on'); $('map').style.visibility = '';
+    marcarPestana('tabMapa');
+    avisoHud('No se pudo abrir el HUD 2: ' + e.message + '. Comprueba que hud2.js esta en la raiz del repositorio.');
+    setStatus('HUD 2 no disponible');
   }finally{ hudCargando = false; }
 }
 function cerrarHud(){
   if (!hudAbierto) return;
   try{ hud2.stop(); }catch(e){}
-  $('hud2wrap').classList.remove('on'); $('hud2back').style.display = 'none'; $('map').style.visibility = '';
-  hudAbierto = false; $('hudBtn').classList.remove('on');
+  $('hud2wrap').classList.remove('on'); $('map').style.visibility = ''; avisoHud('');
+  hudAbierto = false; hudDemo = false; marcarPestana('tabMapa');
   follow = true; zoomPendiente = true; if (lastFix) seguirCamara([lastFix.lat, lastFix.lon], 0);   // el mapa vuelve donde esta el coche
 }
-$('hudBtn').onclick = () => { if (hudAbierto) cerrarHud(); else abrirHud(); };
-$('hud2back').onclick = cerrarHud;
+/* Pestañas de modo, arriba a la izquierda: Mapa / HUD arriba, Faro debajo. Faro es una
+   pagina independiente que aun no se ha migrado, asi que por ahora se abre tal cual. */
+$('tabMapa').onclick = () => { if (hudAbierto) cerrarHud(); };
+$('tabHud').onclick  = () => { if (hudAbierto) return; abrirHud(); };
+$('tabFaro').onclick = () => { location.href = '../faro/'; };
+$('hud2err').onclick = () => avisoHud('');
 
 /* ==== buscador plegable, extraido literal de AutoBoard =====================
    Lupa arriba a la derecha que abre/cierra la barra; al abrir, si el campo
