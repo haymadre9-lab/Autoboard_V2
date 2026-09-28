@@ -132,17 +132,21 @@ fetch('../radares.json').then(r=>r.json()).then(d=>{ radarDB=d; console.log('[PO
    su propia clave aparte) -- se puede anadir despues si hace falta. */
 const OCM_KEY = "b5874662-3951-4da6-90ba-ad65ed1c0156";
 let pois = [], poisEnCurso = false;
+let listaCargOn = false, listaHuella = '', listaT = 0;   // lista de cargadores (Ajustes)
 const chargerGroup = L.layerGroup();
+let paradaGroup = null;   // se crea despues del mapa
 
 function isTesla(p){ return /tesla|supercharger/i.test((p.op||'')+' '+(p.name||'')); }
 
 function drawChargers(){
   chargerGroup.clearLayers();
+  if (listaCargOn) renderLista();
   for (const p of pois){ if (p.type!=='charge') continue;
     L.circleMarker([p.ll[0],p.ll[1]], {
-      radius: 7, color:'#fff', weight:2,
-      fillColor: isTesla(p) ? '#0d5c33' : '#22c55e', fillOpacity: 1   // Tesla en verde OSCURO, no rojo -- el rojo ya lo usan los radares fijos
-    }).bindPopup((p.name||'Punto de carga')+(p.kw?' · '+p.kw+' kW':'')).addTo(chargerGroup);
+      radius: 11, color:'#fff', weight:3,   // grandes: hay que acertar con el dedo conduciendo
+      fillColor: isTesla(p) ? '#0d5c33' : '#22c55e', fillOpacity: 1,   // Tesla en verde OSCURO, no rojo -- el rojo ya lo usan los radares fijos
+      interactive: false   // el toque se detecta por cercania (ver cargadorCerca): acertar a un circulo de 14 px con el dedo es dificil, y sin hit-testing el lienzo trabaja menos
+    }).addTo(chargerGroup);
   }
 }
 
@@ -342,7 +346,8 @@ function maneuverSVG(st,hw){const m=st.maneuver||{};const col=hw?'#ffffff':'#0a8
 
 function ttMan(it){ const m=(it.maneuver||it.instructionType||'').toString().toUpperCase(); const rb=it.roundaboutExitNumber;
   if(m.indexOf('ROUNDABOUT')>=0||m.indexOf('ROTARY')>=0) return {type:'roundabout',exit:rb,modifier:(m.indexOf('LEFT')>=0?'left':(m.indexOf('RIGHT')>=0?'right':'straight'))};
-  if(m.indexOf('ARRIVE')>=0)return {type:'arrive'}; if(m.indexOf('DEPART')>=0)return {type:'depart'};
+  // WAYPOINT_LEFT/RIGHT/REACHED es una PARADA intermedia: contiene 'LEFT'/'RIGHT' pero no es un giro; se muestra como llegada
+  if(m.indexOf('ARRIVE')>=0||m.indexOf('WAYPOINT')>=0)return {type:'arrive'}; if(m.indexOf('DEPART')>=0)return {type:'depart'};
   if(m.indexOf('EXIT')>=0||m.indexOf('RAMP')>=0)return {type:'off ramp',modifier:(m.indexOf('LEFT')>=0?'left':'right')};
   if(m.indexOf('MERGE')>=0)return {type:'merge'};
   let mod='straight';
@@ -410,7 +415,7 @@ const map = L.map('map', {
 });
 const girarMapaDisponible = typeof map.setBearing === 'function';
 if (!girarMapaDisponible) console.warn('[girar mapa] leaflet-rotate no cargo o no expone setBearing(): el ajuste quedara sin efecto');
-let girarMapaOn = false;
+let girarMapaOn = girarMapaDisponible;   // por defecto el mapa gira con el rumbo (si el complemento cargo); en Ajustes: "Quitar giro de mapa"
 
 /* ==== suavizado de rumbo, inspirado en el follow-camera de femto-car-launcher
    (github.com/seijikohara/femto-car-launcher, verificado real) ==============
@@ -499,6 +504,7 @@ function apuntarBearing(cssGrados){
 }
 radarGroup = L.layerGroup().addTo(map);
 chargerGroup.addTo(map);
+paradaGroup = L.layerGroup().addTo(map);
 aplicarBase();
 
 $('sat').onclick = () => { baseSat = !baseSat; aplicarBase(); };
@@ -517,12 +523,16 @@ let routeDrawIdx = [];
 let routeCumDist = [];    // distancia acumulada real hasta cada punto de routeCoordsLL, en metros
 let steps = [], stepIdx = 0, destLL = null, routeOn = false, routeProgIdx = 0;
 let trafficSegs = [];
+let avisoFijoHasta = 0;        // un aviso importante (parada alcanzada) no se pisa con "Quedan X km" durante unos segundos
+let wps = [], rutaVersion = 0;   // wps = paradas intermedias pendientes, ordenadas a lo largo de la ruta
 let offAcc = 0, lastRecalc = 0;
 let follow = true, lastFix = null, heading = 0, speedKmh = 0;
 let hud2 = null, hudAbierto = false, hudCargando = false, hudDemo = false;   // HUD 2: no existe hasta que se abre por primera vez
 let navZoom = 17;   // zoom real de conduccion; el encuadre inicial de la ruta se aleja a proposito, pero el seguimiento no debe heredar ese alejamiento
 
-const VERSION = '2026.09.28-c';
+const VERSION = '2026.09.28-e';
+// X dibujada: el caracter U+2715 no esta en la fuente del navegador y salia como un rectangulo
+const X_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>';
 try{ $('ver').textContent = 'v'+VERSION; }catch(e){}
 function fmtDist(m){ return m<1000 ? Math.round(m)+' m' : (m/1000).toFixed(1)+' km'; }
 function setStatus(t){ $('status').textContent = t; }
@@ -574,6 +584,7 @@ if (navigator.geolocation){
       refreshRadars([now.lat, now.lon]);
     }
     updateRadar();
+    if (listaCargOn && now.t - listaT > 4000){ listaT = now.t; renderLista(); }   // la lista sigue al coche, sin repintar en cada fix
     if (!lastOcmPos || dist([now.lat,now.lon], lastOcmPos) > 3000 || ahora-lastOcmAt > 180000){
       lastOcmAt = ahora; lastOcmPos = [now.lat, now.lon];
       fetchPois([now.lat, now.lon]);
@@ -602,16 +613,25 @@ function trackRoute(){
   if (offAcc>3 && performance.now()-lastRecalc>8000){
     lastRecalc=performance.now(); offAcc=0;
     console.log('[ruta] recalculo: a', Math.round(dr), 'm de la ruta');
-    irA(destLL); return;
+    irA(destLL, destNombre, { conservarParadas:true, sinEncuadre:true }); return;
   }
   // siguiente maniobra: avance de paso con la distancia RECORRIDA real,
   // no una aproximacion -- routeCumDist se calcula una vez al recibir la
   // ruta y aqui solo se consulta.
   const recorrido = recorridoAhora();
+  // Parada alcanzada: a menos de 50 m de sus coordenadas, O has pasado por su posicion sobre la
+  // ruta. Lo segundo es imprescindible: un cargador suele estar a 50-150 m de la carretera (en un
+  // aparcamiento) y la ruta llega a el por la via mas cercana, asi que solo mirar la distancia a
+  // sus coordenadas podia no cumplirse nunca y dejar la parada pendiente para siempre.
+  if (wps.length && (dist(here, wps[0].ll) < 50 || (wps[0].pos != null && recorrido >= wps[0].pos - 15))){
+    const w = wps.shift(); pintarParadas(); setStatus('Parada alcanzada: ' + (w.nombre||''));
+    avisoFijoHasta = performance.now() + 4000;   // sin esto, el "Quedan X km" de abajo lo borraba en el mismo instante
+    if (listaCargOn) renderLista();
+  }
   avanzarPaso(recorrido);
   renderStep();
   const dRem = Math.max(0, (routeCumDist[routeCumDist.length-1]||0) - recorrido);
-  setStatus('Quedan ' + fmtDist(dRem));
+  if (performance.now() > avisoFijoHasta) setStatus('Quedan ' + fmtDist(dRem));
 }
 
 /* ---- panel de maniobra: mismas funciones que AutoBoard (arrowSVG,
@@ -621,6 +641,44 @@ function trackRoute(){
    proyectada sobre el tramo actual. Usar solo el vertice mas cercano
    (routeCumDist[routeProgIdx]) da saltos del tamano de la separacion entre
    vertices: en autopista TomTom deja cientos de metros entre puntos. */
+/* Proyecta un punto sobre la ruta que queda por delante: distancia perpendicular y
+   posicion a lo largo de ella (m desde el inicio, misma geometria que routeCumDist).
+   Sirve para ordenar paradas y para saber que cargadores estan "en la ruta". */
+function proyectarEnRuta(ll, maxAdelanteM){
+  const n = routeCoordsLL.length; if (n < 2) return { d:1e9, along:0 };
+  const i0 = Math.max(0, routeProgIdx), lim = maxAdelanteM ? routeCumDist[i0] + maxAdelanteM : Infinity;
+  const mx = 111320*Math.cos(ll[0]*Math.PI/180), my = 110540, px = ll[1]*mx, py = ll[0]*my;
+  let bd = 1e9, ba = 0;
+  for (let i = i0; i < n-1; i++){
+    if (routeCumDist[i] > lim) break;
+    const a = routeCoordsLL[i], b = routeCoordsLL[i+1];
+    const ax = a[1]*mx, ay = a[0]*my, dx = b[1]*mx - ax, dy = b[0]*my - ay, L2 = dx*dx + dy*dy;
+    const tt = L2 ? Math.max(0, Math.min(1, ((px-ax)*dx + (py-ay)*dy)/L2)) : 0;
+    const d = Math.hypot(px - (ax + tt*dx), py - (ay + tt*dy));
+    if (d < bd){ bd = d; ba = routeCumDist[i] + tt*Math.sqrt(L2); }
+  }
+  return { d:bd, along:ba };
+}
+function pintarParadas(){
+  if (!paradaGroup) return;
+  paradaGroup.clearLayers();
+  wps.forEach(w => L.circleMarker(w.ll, { radius:12, color:'#fff', weight:3, fillColor:'#f5b301', fillOpacity:1, interactive:false }).addTo(paradaGroup));
+}
+/* Anade una parada intermedia. Sin ruta activa, el punto pasa a ser el destino. Se coloca
+   en el orden que le toca a lo largo de la ruta actual (no siempre la primera). Si TomTom
+   no consigue calcularla, la ruta anterior queda intacta. */
+async function anadirParada(ll, nombre){
+  if (!routeOn || !destLL) return irA(ll, nombre);
+  if (wps.some(w => dist(w.ll, ll) < 60) || dist(destLL, ll) < 60){ setStatus('Ya es una parada de la ruta'); return; }
+  const previas = wps.slice(), v0 = rutaVersion;
+  wps.forEach(w => { w.pos = proyectarEnRuta(w.ll).along; });
+  wps.push({ ll, nombre: nombre || 'Parada', pos: proyectarEnRuta(ll).along });
+  wps.sort((a, b) => a.pos - b.pos);
+  setStatus('Añadiendo parada: ' + (nombre || ''));
+  await irA(destLL, destNombre, { conservarParadas:true, sinEncuadre:true });
+  if (rutaVersion === v0){ wps = previas; pintarParadas(); setStatus('No se pudo añadir la parada'); }
+}
+
 function recorridoAhora(){
   const i = routeProgIdx;
   const base = routeCumDist[i] || 0;
@@ -653,7 +711,8 @@ function renderStep(){
 }
 function endRoute(){
   if (hudAbierto) cerrarHud();
-  routeOn = false; steps = []; stepIdx = 0;
+  wps = []; pintarParadas();
+  routeOn = false; if (listaCargOn) setTimeout(renderLista, 0); steps = []; stepIdx = 0;
   if (routeLine){ map.removeLayer(routeLine); routeLine = null; }
   $('navbanner').style.display = 'none';
   cerrarBuscador();
@@ -684,13 +743,19 @@ function trimRoute(){
 
 /* ---- ruta: mismo endpoint y parametros que AutoBoard, con guidance ------ */
 let destNombre = '';
-async function irA(destino, nombre){
+/* opc.conservarParadas: recalculo o parada nueva -> se mantienen las paradas pendientes.
+   Un destino NUEVO (buscador, favorito, "Ir") empieza un viaje nuevo y las borra.
+   opc.sinEncuadre: no alejar el mapa a ver la ruta entera (2 s de zoom fuera) -- para los
+   recalculos y las paradas que se anaden CONDUCIENDO, donde eso solo molesta. */
+async function irA(destino, nombre, opc){
+  opc = opc || {};
+  if (!opc.conservarParadas) wps = [];
   destNombre = nombre || '';
   if (!lastFix){ setStatus('Sin GPS todavia'); return; }
   setStatus('Calculando ruta…');
   const t0 = performance.now();
   try{
-    const locs = lastFix.lat+','+lastFix.lon+':'+destino[0]+','+destino[1];
+    const locs = lastFix.lat+','+lastFix.lon + wps.map(w => ':'+w.ll[0]+','+w.ll[1]).join('') + ':'+destino[0]+','+destino[1];
     const url = 'https://api.tomtom.com/routing/1/calculateRoute/'+locs+'/json?key='+TT
       +'&traffic=true&travelMode=car&instructionsType=text&language=es-ES&sectionType=traffic';
     const r = await fetch(url);
@@ -699,7 +764,7 @@ async function irA(destino, nombre){
     const route = j.routes[0];
     const pts = [];
     route.legs.forEach(leg => leg.points.forEach(p => pts.push([p.latitude, p.longitude])));
-    routeCoordsLL = pts; routeProgIdx = 0; destLL = destino; routeOn = true;
+    routeCoordsLL = pts; routeProgIdx = 0; destLL = destino; routeOn = true; rutaVersion++;
 
     routeCumDist = [0];
     for (let i=1;i<pts.length;i++) routeCumDist.push(routeCumDist[i-1] + dist(pts[i-1], pts[i]));
@@ -749,12 +814,16 @@ async function irA(destino, nombre){
     cerrarBuscador();
     renderStep();
 
-    map.fitBounds(L.latLngBounds(pts.map(p=>[p[0],p[1]])), { paddingTopLeft:[60,60], paddingBottomRight:[60,60+2*OFFSET_COCHE], maxZoom:15 });
-    setTimeout(() => { follow = true; zoomPendiente = true; }, 2000);
+    if (!opc.sinEncuadre){
+      map.fitBounds(L.latLngBounds(pts.map(p=>[p[0],p[1]])), { paddingTopLeft:[60,60], paddingBottomRight:[60,60+2*OFFSET_COCHE], maxZoom:15 });
+      setTimeout(() => { follow = true; zoomPendiente = true; }, 2000);
+    }
 
     const ms = Math.round(performance.now()-t0);
-    setStatus('Ruta: '+fmtDist(route.summary.lengthInMeters)+' · '+Math.round(route.summary.travelTimeInSeconds/60)+' min · ('+ms+' ms)');
-    if (destNombre) guardarReciente(destNombre, destino);
+    setStatus('Ruta: '+fmtDist(route.summary.lengthInMeters)+' · '+Math.round(route.summary.travelTimeInSeconds/60)+' min'+(wps.length ? ' · '+wps.length+(wps.length>1?' paradas':' parada') : '')+' · ('+ms+' ms)');
+    wps.forEach(w => { w.pos = proyectarEnRuta(w.ll).along; });   // donde cae cada parada sobre esta ruta
+    pintarParadas(); if (listaCargOn) renderLista();
+    if (destNombre && !opc.conservarParadas) guardarReciente(destNombre, destino);
     if (hud2){ if (hudAbierto) hudDemo = false; ponerRutaEnHud(); }   // el HUD ya cargado recibe la ruta nueva (o el recalculo); deja el trazado de ejemplo
   }catch(e){ setStatus('Error de ruta: '+e.message); }
 }
@@ -774,11 +843,12 @@ function guardarFavs(f){ try{ localStorage.setItem('favoritosLT', JSON.stringify
 function renderFavs(){
   const favs = cargarFavs();
   $('favList').innerHTML = favs.map((f,i) =>
-    '<div class="favrow" data-i="'+i+'">⭐ '+(f.nombre||'Favorito')+'<span style="margin-left:auto;color:#9aa7b2" data-del="'+i+'">✕</span></div>'
+    '<div class="favrow" data-i="'+i+'">⭐ '+(f.nombre||'Favorito')+'<span style="margin-left:auto;color:#9aa7b2;display:flex;padding:6px" data-del="'+i+'">'+X_SVG+'</span></div>'
   ).join('') || '<div style="color:#9aa7b2;font-size:12px;padding:6px">Sin favoritos todavia</div>';
   $('favList').querySelectorAll('[data-i]').forEach(el => el.onclick = (e) => {
-    if (e.target.dataset.del !== undefined && e.target.dataset.del !== ''){
-      const favs2 = cargarFavs(); favs2.splice(+e.target.dataset.del, 1); guardarFavs(favs2); renderFavs(); return;
+    const del = e.target.closest ? e.target.closest('[data-del]') : null;   // el toque cae en el svg, no en el span
+    if (del){
+      const favs2 = cargarFavs(); favs2.splice(+del.dataset.del, 1); guardarFavs(favs2); renderFavs(); return;
     }
     const f = favs[+el.dataset.i]; $('settings').classList.remove('open'); irA(f.ll, f.nombre);
   });
@@ -826,10 +896,17 @@ function setTraffic(on){
 }
 $('trafficBtn').onclick = () => setTraffic(!trafficOn);
 
+function pintarBotonGiro(){
+  const b = $('rotateBtn');
+  if (!girarMapaDisponible){ b.textContent = '🧭 Girar mapa (no disponible)'; b.classList.remove('on'); return; }
+  b.textContent = girarMapaOn ? '🧭 Quitar giro de mapa' : '🧭 Girar mapa';
+  b.classList.toggle('on', girarMapaOn);
+}
+pintarBotonGiro();
 $('rotateBtn').onclick = () => {
   if (!girarMapaDisponible){ setStatus('Girar mapa: el complemento no cargó, sigue en modo fijo'); return; }
   girarMapaOn = !girarMapaOn;
-  $('rotateBtn').classList.toggle('on', girarMapaOn);
+  pintarBotonGiro();
   if (!girarMapaOn){ if (bearingRaf){ cancelAnimationFrame(bearingRaf); bearingRaf=null; } bearingCSSObjetivo=0; try{ map.setBearing(0); }catch(e){} bearingMostrado=0; bearingPendienteDesde=null; const el=carMk.getElement(); if(el){ const svg=el.querySelector('svg'); if(svg) svg.style.transform='rotate('+heading+'deg)'; } }
 };
 
@@ -892,7 +969,7 @@ async function abrirHud(){
   try{
     if (!hud2){
       const mod = await import('../hud2.js');
-      hud2 = mod.createHud2($('hud2canvas'), { escala: 0.6 });   // 0,6 = el 36 % de los pixeles, como en AutoBoard
+      hud2 = mod.createHud2($('hud2canvas'), Object.assign({}, hudCfg));   // escala 0,6 = el 36 % de los pixeles, como en AutoBoard
       hud2.onError = err => { console.error('[hud2]', err); avisoHud('HUD 2: ' + (err && err.message ? err.message : err)); };
       console.log('[hud2] motor version', hud2.version);
     }
@@ -929,13 +1006,200 @@ $('tabHud').onclick  = () => { if (hudAbierto) return; abrirHud(); };
 $('tabFaro').onclick = () => { location.href = '../faro/'; };
 $('hud2err').onclick = () => avisoHud('');
 
+
+/* ==== mantener pulsado el mapa / tocar un cargador -> hoja con "Ir" ==========
+   Como en AutoBoard: pulsacion larga de 550 ms (se cancela si mueves el dedo mas de
+   10 px o si son dos dedos) y tocar un cargador. En vez de un popup de Leaflet, una
+   hoja inferior propia: queda siempre recta aunque el mapa gire, con botones grandes. */
+let pinTemp = null, tHoja = 0, tokenHoja = 0;
+function ponerPin(ll){
+  quitarPin();
+  pinTemp = L.circleMarker(ll, { radius:9, color:'#fff', weight:3, fillColor:'#2f6bff', fillOpacity:1, interactive:false }).addTo(map);
+}
+function quitarPin(){ if (pinTemp){ map.removeLayer(pinTemp); pinTemp = null; } }
+function abrirHoja(titulo, info, botones, ll){
+  tHoja = Date.now();
+  $('hojaTitulo').textContent = titulo;
+  $('hojaInfo').textContent = info || ''; $('hojaInfo').style.display = info ? 'block' : 'none';
+  const cont = $('hojaBtns'); cont.innerHTML = '';
+  botones.forEach(b => {
+    const el = document.createElement('button'); el.textContent = b.txt; el.className = 'hb ' + (b.clase||'');
+    el.onclick = () => { cerrarHoja(); b.fn(); }; cont.appendChild(el);
+  });
+  $('hoja').classList.add('on'); if (ll) ponerPin(ll);
+}
+function cerrarHoja(){ tokenHoja++; $('hoja').classList.remove('on'); quitarPin(); }
+$('hojaCerrar').onclick = cerrarHoja;
+function guardarFavDirecto(nombre, ll){
+  const f = cargarFavs(); if (!f.some(x => x.nombre === nombre)) { f.push({nombre, ll}); guardarFavs(f); }
+  setStatus('⭐ Guardado: ' + nombre);
+}
+// cargador mas cercano al punto tocado, a menos de px pixeles de PANTALLA (cuenta bien aunque el mapa este girado)
+function cargadorCerca(ll, px){
+  const c0 = map.latLngToContainerPoint(ll); let best = null, bd = px;
+  for (const p of pois){ if (p.type !== 'charge') continue;
+    const c = map.latLngToContainerPoint(p.ll); const d = Math.hypot(c.x-c0.x, c.y-c0.y);
+    if (d < bd){ bd = d; best = p; } }
+  return best;
+}
+function hojaCargador(p){
+  const partes = []; if (p.op) partes.push(p.op); if (p.kw) partes.push(p.kw+' kW'); if (p.socks && p.socks.length) partes.push(p.socks.slice(0,3).join(', '));
+  const nombre = p.name || 'Punto de carga';
+  abrirHoja(nombre, partes.join(' · ') || 'Sin datos de potencia ni compañía', [
+    { txt:'Ir', fn:() => irA(p.ll, nombre) },
+    ...(routeOn ? [{ txt:'+ Parada', clase:'sec', fn:() => anadirParada(p.ll, nombre) }] : []),
+    { txt:'⭐ Guardar', clase:'sec', fn:() => guardarFavDirecto(nombre, p.ll) }
+  ], p.ll);
+}
+function hojaPunto(lat, lon){
+  let nombre = 'Punto del mapa'; const tk = ++tokenHoja;
+  abrirHoja('Este punto', '', [
+    { txt:'Ir aquí', fn:() => irA([lat,lon], nombre) },
+    ...(routeOn ? [{ txt:'+ Parada', clase:'sec', fn:() => anadirParada([lat,lon], nombre) }] : []),
+    { txt:'⭐ Guardar', clase:'sec', fn:() => guardarFavDirecto(nombre, [lat,lon]) }
+  ], [lat,lon]);
+  tokenHoja = tk;   // abrirHoja no debe invalidar la busqueda de nombre que acabamos de lanzar
+  // nombre real de la calle, en segundo plano: la hoja ya esta abierta y usable
+  fetch('https://nominatim.openstreetmap.org/reverse?format=json&zoom=18&accept-language=es&lat='+lat+'&lon='+lon)
+    .then(r => r.json()).then(j => {
+      if (tk !== tokenHoja || !j || !j.display_name) return;
+      nombre = j.display_name.split(',').slice(0,3).join(',').trim(); $('hojaTitulo').textContent = nombre;
+    }).catch(() => {});
+}
+function pulsacionLarga(ll){
+  if (Date.now() - tHoja < 800) return;                 // touch + contextmenu disparan los dos: solo uno
+  const p = cargadorCerca(ll, 38);
+  if (p) hojaCargador(p); else hojaPunto(ll.lat, ll.lng);
+}
+map.on('click', e => {
+  if (Date.now() - tHoja < 700) return;                 // el "click" que algunos navegadores sueltan al levantar el dedo tras una pulsacion larga
+  const p = cargadorCerca(e.latlng, 36);
+  if (p) hojaCargador(p); else if ($('hoja').classList.contains('on')) cerrarHoja();
+});
+map.on('contextmenu', e => pulsacionLarga(e.latlng));   // raton (escritorio)
+(function(){                                            // tactil, igual que AutoBoard
+  const cont = map.getContainer(); let tmr = null, movido = false, sx = 0, sy = 0;
+  const limpiar = () => { if (tmr){ clearTimeout(tmr); tmr = null; } };
+  cont.addEventListener('touchstart', e => {
+    if (!e.touches || e.touches.length !== 1){ limpiar(); return; }
+    movido = false; const t0 = e.touches[0]; sx = t0.clientX; sy = t0.clientY; limpiar();
+    tmr = setTimeout(() => { if (movido) return; const r = cont.getBoundingClientRect(); pulsacionLarga(map.containerPointToLatLng([sx - r.left, sy - r.top])); }, 550);
+  }, {passive:true});
+  cont.addEventListener('touchmove', e => { const t1 = e.touches && e.touches[0]; if (t1 && (Math.abs(t1.clientX-sx) > 10 || Math.abs(t1.clientY-sy) > 10)){ movido = true; limpiar(); } }, {passive:true});
+  cont.addEventListener('touchend', limpiar, {passive:true}); cont.addEventListener('touchcancel', limpiar, {passive:true});
+})();
+
+/* ==== ajustes del HUD 2 (engranaje bajo "Mapa") ==============================
+   Solo los controles que se notan de verdad conduciendo, del panel original de
+   hud2-boot.js. Como el resto de ajustes de la app: valen para esta sesion, no se
+   guardan de un dia para otro. Se aplican en caliente con hud2.set(). */
+const HUD_DEF = { theme:'auto', maxFps:0, escala:0.6, perfil:'auto', estilo:'suave', radioMin:130,
+  carScale:1, hudScale:1, vista:1, hud:true, carteles:true, ambiente:true, detalleCoche:true,
+  rain:false, spray:true, rotondaInvertida:false, frenarCamara:false, traffic:'off' };
+const HUD_NUM = ['maxFps','escala'];
+let hudCfg = Object.assign({}, HUD_DEF);
+function hudSet(k, v){
+  hudCfg[k] = v;
+  if (hud2){ try{ hud2.set({[k]: v}); }catch(e){ if (hud2.onError) hud2.onError(e); } }
+}
+function pintarAjustesHud(){
+  const seg = (k, ops) => '<div class="seg" data-k="'+k+'">' + ops.map(o => '<button data-v="'+o[0]+'"'+(String(hudCfg[k])===String(o[0])?' class="on"':'')+'>'+o[1]+'</button>').join('') + '</div>';
+  const rng = (k, tx, mn, mx, st, u) => '<label class="hs-r"><span>'+tx+'</span><em id="hv_'+k+'">'+hudCfg[k]+(u||'')+'</em><input type="range" data-k="'+k+'" data-u="'+(u||'')+'" min="'+mn+'" max="'+mx+'" step="'+st+'" value="'+hudCfg[k]+'"></label>';
+  const chk = (k, tx) => '<label class="hs-c"><input type="checkbox" data-k="'+k+'"'+(hudCfg[k]?' checked':'')+'> '+tx+'</label>';
+  $('hudsetBody').innerHTML =
+      '<h4>Tema</h4>' + seg('theme', [['auto','Auto'],['day','Día'],['dusk','Tarde'],['night','Noche']])
+    + '<h4>Rendimiento</h4>'
+    + seg('escala', [[0.5,'Resolución 50 %'],[0.6,'60 %'],[0.8,'80 %'],[1,'100 %']])
+    + '<div style="height:6px"></div>' + seg('maxFps', [[0,'FPS libres'],[30,'30'],[45,'45'],[60,'60']])
+    + '<div style="height:6px"></div>' + seg('perfil', [['auto','Perfil auto'],['ligero','Ligero'],['completo','Completo']])
+    + '<h4>Trazado</h4>' + seg('estilo', [['suave','Suave'],['real','Real']])
+    + rng('radioMin', 'Radio mínimo de curva', 60, 400, 10, ' m')
+    + '<h4>Vista</h4>'
+    + rng('vista', 'Distancia de cámara', 1, 1.6, 0.1, '')
+    + rng('carScale', 'Tamaño del coche', 0.6, 1.6, 0.1, '')
+    + rng('hudScale', 'Tamaño de los textos', 0.7, 1.5, 0.1, '')
+    + '<h4>Tráfico en la escena</h4>' + seg('traffic', [['off','Sin'],['poca','Poco'],['normal','Normal'],['mucha','Mucho']])
+    + '<h4>Elementos</h4>'
+    + chk('hud','Maniobra, velocidad y límite') + chk('carteles','Carteles de dirección')
+    + chk('ambiente','Bruma, viñeteado y captafaros') + chk('detalleCoche','Detalles del coche')
+    + chk('rain','Lluvia') + chk('spray','Agua de las ruedas')
+    + chk('rotondaInvertida','Invertir lado de las rotondas') + chk('frenarCamara','Sujetar cámara en curva cerrada')
+    + '<button class="reset" id="hudReset">Restablecer valores</button>';
+}
+$('hudsetBody').addEventListener('click', e => {
+  if (e.target.id === 'hudReset'){ hudCfg = Object.assign({}, HUD_DEF); if (hud2){ try{ hud2.set(HUD_DEF); }catch(er){ if (hud2.onError) hud2.onError(er); } } pintarAjustesHud(); return; }
+  const b = e.target.closest ? e.target.closest('.seg button') : null; if (!b) return;
+  const g = b.parentNode, k = g.dataset.k; hudSet(k, HUD_NUM.indexOf(k) >= 0 ? +b.dataset.v : b.dataset.v);
+  g.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+});
+$('hudsetBody').addEventListener('input', e => {
+  const r = e.target; if (r.type !== 'range') return;
+  hudSet(r.dataset.k, +r.value); $('hv_'+r.dataset.k).textContent = r.value + (r.dataset.u||'');
+});
+$('hudsetBody').addEventListener('change', e => { const c = e.target; if (c.type === 'checkbox') hudSet(c.dataset.k, c.checked); });
+$('tabAjHud').onclick = () => { pintarAjustesHud(); $('hudset').classList.add('open'); };
+$('closeHudset').onclick = () => $('hudset').classList.remove('open');
+
+
+/* ==== lista de cargadores (Ajustes -> "Lista de cargadores") ================
+   5 como maximo. Con ruta: los que estan a menos de 1 km de la ruta que queda por
+   delante, por orden de recorrido. Sin ruta: los mas cercanos. Muestra compañia y
+   potencia si las hay (o solo una, o solo el nombre) y al tocar uno: parada intermedia
+   si hay ruta, destino si no. Fondo transparente para no tapar el mapa. */
+function cargadoresCandidatos(){
+  const cargs = pois.filter(p => p.type === 'charge');
+  if (!lastFix) return { modo:'cerca', items:[] };
+  if (routeOn && routeCoordsLL.length > 8){
+    const rec = recorridoAhora(), items = [];
+    for (const p of cargs){
+      const pr = proyectarEnRuta(p.ll, 40000);
+      if (pr.d <= 1000 && pr.along - rec > -30) items.push({ p, dist: Math.max(0, pr.along - rec) });
+    }
+    items.sort((a, b) => a.dist - b.dist);
+    return { modo:'ruta', items: items.slice(0, 5) };
+  }
+  const here = [lastFix.lat, lastFix.lon];
+  return { modo:'cerca', items: cargs.map(p => ({ p, dist: dist(here, p.ll) })).sort((a, b) => a.dist - b.dist).slice(0, 5) };
+}
+function textoCargador(p){          // compañia y potencia si hay; si falta una, la otra; si faltan las dos, el nombre
+  const partes = []; if (p.op) partes.push(p.op); if (p.kw) partes.push(p.kw + ' kW');
+  return partes.join(' · ') || p.name || 'Cargador';
+}
+function renderLista(){
+  const box = $('cargList');
+  if (!listaCargOn){ box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  const { modo, items } = cargadoresCandidatos();
+  const huella = modo + '|' + pois.length + '|' + wps.length + '|' + items.map(i => i.p.ll.join(',') + ':' + Math.round(i.dist/100)).join(';');
+  if (huella === listaHuella) return; listaHuella = huella;
+  let html = '<div class="cgh">⚡ ' + (modo === 'ruta' ? 'En la ruta' : 'Cerca') + '</div>';
+  if (!items.length) html += '<div class="cg vacio">' + (pois.length ? (modo === 'ruta' ? 'Sin cargadores en tu ruta cercana' : 'Sin cargadores cerca') : 'Buscando cargadores…') + '</div>';
+  items.forEach((it, i) => {
+    const ya = wps.some(w => dist(w.ll, it.p.ll) < 60);
+    html += '<div class="cg' + (ya ? ' ya' : '') + '" data-i="' + i + '"><i style="background:' + (isTesla(it.p) ? '#0d5c33' : '#22c55e') + '"></i>'
+          + '<div><b>' + textoCargador(it.p).replace(/</g, '&lt;') + '</b><span>' + (ya ? '✓ parada · ' : '') + fmtDist(it.dist) + '</span></div></div>';
+  });
+  box.innerHTML = html;
+  box._items = items;
+}
+$('cargList').addEventListener('click', e => {
+  const row = e.target.closest ? e.target.closest('.cg[data-i]') : null; if (!row) return;
+  const it = $('cargList')._items && $('cargList')._items[+row.dataset.i]; if (!it) return;
+  const nombre = it.p.name || it.p.op || 'Cargador';
+  if (routeOn) anadirParada(it.p.ll, nombre); else irA(it.p.ll, nombre);
+});
+$('cargBtn').onclick = () => {
+  listaCargOn = !listaCargOn; listaHuella = ''; $('cargBtn').classList.toggle('on', listaCargOn);
+  renderLista(); if (listaCargOn && lastFix && (!pois.length)) setStatus('Buscando cargadores…');
+};
+
 /* ==== buscador plegable, extraido literal de AutoBoard =====================
    Lupa arriba a la derecha que abre/cierra la barra; al abrir, si el campo
    esta vacio, se listan recientes y favoritos; al escribir 3+ letras, se
    piden sugerencias en vivo a Nominatim -- misma funcion renderSuggest()
    que ya tiene AutoBoard, solo adaptada a los nombres de esta version. */
 function cerrarBuscador(){ $('bar').style.display='none'; $('searchToggle').textContent='🔍'; $('suggest').style.display='none'; }
-function abrirBuscador(){ $('bar').style.display='flex'; $('searchToggle').textContent='✕'; $('q').focus(); renderSuggest(''); }
+function abrirBuscador(){ $('bar').style.display='flex'; $('searchToggle').innerHTML=X_SVG; $('q').focus(); renderSuggest(''); }
 $('searchToggle').onclick = () => { if ($('bar').style.display==='flex') cerrarBuscador(); else abrirBuscador(); };
 
 async function renderSuggest(q){
