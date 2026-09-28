@@ -196,12 +196,13 @@ let capaBase = null, capaSat = null;
 
 function aplicarBase(){
   if (capaBase) map.removeLayer(capaBase);
-  capaBase = L.tileLayer(urlDia(mapNite), { maxZoom:19, keepBuffer:2, updateWhenZooming:false, attribution:TILE_ATTR }).addTo(map);
+  capaBase = L.tileLayer(urlDia(mapNite), { maxZoom:19, keepBuffer:4, updateWhenZooming:false, attribution:TILE_ATTR }).addTo(map);
   if (baseSat){
     if (!capaSat) capaSat = L.tileLayer(URL_SAT, { maxZoom:19, attribution:SAT_ATTR });
     if (!map.hasLayer(capaSat)) capaSat.addTo(map);
     capaSat.bringToFront();
   } else if (capaSat && map.hasLayer(capaSat)) map.removeLayer(capaSat);
+  $('map').style.background = baseSat ? '#0b0e12' : (mapNite ? '#141a22' : '#e9e6df');
   $('sat').textContent = baseSat ? '🗺️' : '🛰️';
   $('mapnight').classList.toggle('on', mapNite);
 }
@@ -389,10 +390,22 @@ function simplificarDP(pts, tolM){
 
 // "rotate:true" se pide siempre -- si el complemento no cargo, Leaflet
 // simplemente ignora una opcion que no reconoce, sin romper nada.
+/* El coche debe verse por debajo del centro de la pantalla (mas carretera por
+   delante). Antes se desplazaba el CENTRO del mapa 110 px al norte en
+   coordenadas del mapa sin girar: con el mapa girado eso mandaba la flecha a
+   cualquier parte (comprobado con la libreria real: a 90 grados quedaba 110 px
+   a la izquierda, a 180 grados por ENCIMA del centro). Ahora el propio
+   contenedor del mapa se extiende OFFSET_COCHE*2 px por debajo de la pantalla:
+   su centro cae OFFSET_COCHE px mas abajo que el centro visible, el coche va
+   siempre en el centro del contenedor -- sin ninguna cuenta de desplazamiento
+   -- y el giro se hace alrededor del coche. */
+const OFFSET_COCHE = 110;
+$('map').style.bottom = (-2*OFFSET_COCHE) + 'px';
+
 const map = L.map('map', {
   zoomControl: true, attributionControl: true,
   center: [43.30, -2.98], zoom: 14,
-  fadeAnimation: true, zoomAnimation: true, preferCanvas: true,
+  fadeAnimation: false, zoomAnimation: true, preferCanvas: true,
   rotate: true, rotateControl: false, touchRotate: false
 });
 const girarMapaDisponible = typeof map.setBearing === 'function';
@@ -431,6 +444,58 @@ function actualizarBearing(crudo, ahora){
   bearingPendienteDesde = null;
   bearingMostrado = suavizado;
   return bearingMostrado;
+}
+
+/* ==== seguimiento de camara suave (idea de femto-car-launcher: la duracion del
+   movimiento sigue el intervalo REAL entre fixes de GPS, en tramos lineales
+   encadenados, y un hueco de senal se salta en vez de animarse) ==============
+   Antes: setView con duration fija de 0,3 s en cada fix (~1 Hz) -> la camara se
+   movia 0,3 s y se paraba 0,7 s ("va a saltos"), y el marcador saltaba de golpe
+   al fix nuevo mientras la camara le alcanzaba despues: la flecha daba un
+   tiron cada segundo. Ahora camara Y marcador recorren el mismo tramo, a la
+   misma velocidad lineal y durante el mismo tiempo: la flecha se queda quieta
+   en pantalla y es el mapa el que se desliza debajo. */
+let prevFixT = null, zoomPendiente = true, animMarcador = null;
+function moverMarcador(destino, dt){
+  const desde = carMk.getLatLng();
+  if (animMarcador){ cancelAnimationFrame(animMarcador); animMarcador = null; }
+  if (dt <= 0){ carMk.setLatLng(destino); return; }
+  const t0 = performance.now(), dur = dt*1000;
+  const paso = (ts) => {
+    const k = Math.min(1, ((ts||performance.now()) - t0) / dur);
+    carMk.setLatLng([desde.lat + (destino[0]-desde.lat)*k, desde.lng + (destino[1]-desde.lng)*k]);
+    animMarcador = (k < 1) ? requestAnimationFrame(paso) : null;
+  };
+  animMarcador = requestAnimationFrame(paso);
+}
+function seguirCamara(ll, dt){
+  // El coche va SIEMPRE en el centro del contenedor (que ya esta extendido para que
+  // ese centro caiga por debajo del centro visible), asi que basta centrar en el coche.
+  if (zoomPendiente || dt <= 0){
+    map.setView(ll, zoomPendiente ? navZoom : map.getZoom(), { animate:false });
+    zoomPendiente = false;
+  } else {
+    map.panTo(ll, { animate:true, duration:dt, easeLinearity:1 });   // easeLinearity 1 = lineal, sin acelerar ni frenar
+  }
+}
+
+/* Giro interpolado entre fixes: setBearing() es solo una transformacion CSS, barata,
+   pero llamarla una vez por segundo con el valor nuevo da un latigazo cada segundo.
+   Se acerca al objetivo con un filtro exponencial en el tiempo (constante 250 ms) y
+   el bucle se apaga solo al llegar: en recta no consume nada. */
+let bearingCSSObjetivo = 0, bearingRaf = null, bearingTPrev = 0;
+function pasoBearing(ts){
+  const dtMs = Math.min(100, Math.max(1, ts - bearingTPrev)); bearingTPrev = ts;
+  const cur = map.getBearing();
+  const d = diffAngulo(cur, bearingCSSObjetivo);
+  if (Math.abs(d) < 0.05){ try{ map.setBearing(bearingCSSObjetivo); }catch(e){} bearingRaf = null; return; }
+  const k = 1 - Math.exp(-dtMs/250);
+  try{ map.setBearing(cur + d*k); }catch(e){ bearingRaf = null; return; }
+  bearingRaf = requestAnimationFrame(pasoBearing);
+}
+function apuntarBearing(cssGrados){
+  bearingCSSObjetivo = ((cssGrados % 360) + 360) % 360;
+  if (!bearingRaf){ bearingTPrev = performance.now(); bearingRaf = requestAnimationFrame(pasoBearing); }
 }
 radarGroup = L.layerGroup().addTo(map);
 chargerGroup.addTo(map);
@@ -473,31 +538,22 @@ if (navigator.geolocation){
     }
     speedKmh = Math.max(0, v*3.6);
     lastFix = now;
-    carMk.setLatLng([now.lat, now.lon]);
+    // Intervalo real entre fixes; primer fix o senal perdida >10 s -> saltar (dt=0), no animar
+    // desde la posicion vieja atravesando el mapa.
+    const dtRaw = prevFixT ? (now.t - prevFixT)/1000 : null;
+    prevFixT = now.t;
+    const dt = (dtRaw === null || dtRaw > 10) ? 0 : Math.min(2, Math.max(0.1, dtRaw));
+    moverMarcador([now.lat, now.lon], dt);
     const el = carMk.getElement();
     if (girarMapaOn && girarMapaDisponible){
-      // El mapa gira con el rumbo: la flecha se queda fija apuntando arriba,
-      // igual que en AutoBoard real.
+      // El mapa gira con el rumbo: la flecha se queda fija apuntando arriba.
       if (el){ const svg = el.querySelector('svg'); if (svg) svg.style.transform = ''; }
+      apuntarBearing(-actualizarBearing(heading, now.t));   // rumbo suavizado, luego interpolado
     } else {
       // El mapa se queda fijo al norte: es la flecha la que gira.
       if (el){ const svg = el.querySelector('svg'); if (svg) svg.style.transform = 'rotate('+heading+'deg)'; }
     }
-    // El coche pegado al centro exacto de la pantalla deja ver poco de la
-    // carretera por delante. Se centra el mapa un poco por ENCIMA del coche
-    // en terminos de pixeles (no de coordenadas), asi el coche cae mas abajo
-    // en la pantalla y se ve mas via por delante -- tecnica estandar de
-    // Leaflet via project()/unproject(), no una aproximacion por coordenadas.
-    if (follow){
-      const z = navZoom;
-      if (girarMapaOn && girarMapaDisponible){
-      const bs = actualizarBearing(heading, now.t);   // rumbo suavizado, no el crudo -- evita el temblor del ruido de GPS
-      try{ map.setBearing(-bs); }catch(e){}
-    }
-      const px = map.project([now.lat, now.lon], z);
-      const centro = map.unproject([px.x, px.y - 110], z);
-      map.setView(centro, z, { animate: true, duration: 0.3 });
-    }
+    if (follow) seguirCamara([now.lat, now.lon], dt);
     $('spd').textContent = Math.round(speedKmh)+' km/h';
     $('spd2').textContent = Math.round(speedKmh);
     $('acc').textContent = Math.round(c.accuracy||0)+' m';
@@ -522,7 +578,7 @@ if (navigator.geolocation){
 }
 
 map.on('dragstart', () => { follow = false; });
-$('recenter').onclick = () => { follow = true; if (lastFix) map.setView([lastFix.lat, lastFix.lon], 16, {animate:true}); };
+$('recenter').onclick = () => { follow = true; zoomPendiente = true; if (lastFix) seguirCamara([lastFix.lat, lastFix.lon], 0); };
 
 /* ---- trackRoute(): MISMA estrategia que AutoBoard -- ventana local
    alrededor de routeProgIdx, nunca recorre toda la ruta, y solo recalcula
@@ -649,8 +705,8 @@ async function irA(destino, nombre){
     cerrarBuscador();
     renderStep();
 
-    map.fitBounds(L.latLngBounds(pts.map(p=>[p[0],p[1]])), { padding:[60,60], maxZoom:15 });
-    setTimeout(() => { follow = true; }, 2000);
+    map.fitBounds(L.latLngBounds(pts.map(p=>[p[0],p[1]])), { paddingTopLeft:[60,60], paddingBottomRight:[60,60+2*OFFSET_COCHE], maxZoom:15 });
+    setTimeout(() => { follow = true; zoomPendiente = true; }, 2000);
 
     const ms = Math.round(performance.now()-t0);
     setStatus('Ruta: '+fmtDist(route.summary.lengthInMeters)+' · '+Math.round(route.summary.travelTimeInSeconds/60)+' min · ('+ms+' ms)');
@@ -729,7 +785,7 @@ $('rotateBtn').onclick = () => {
   if (!girarMapaDisponible){ setStatus('Girar mapa: el complemento no cargó, sigue en modo fijo'); return; }
   girarMapaOn = !girarMapaOn;
   $('rotateBtn').classList.toggle('on', girarMapaOn);
-  if (!girarMapaOn){ try{ map.setBearing(0); }catch(e){} bearingMostrado=0; bearingPendienteDesde=null; const el=carMk.getElement(); if(el){ const svg=el.querySelector('svg'); if(svg) svg.style.transform='rotate('+heading+'deg)'; } }
+  if (!girarMapaOn){ if (bearingRaf){ cancelAnimationFrame(bearingRaf); bearingRaf=null; } bearingCSSObjetivo=0; try{ map.setBearing(0); }catch(e){} bearingMostrado=0; bearingPendienteDesde=null; const el=carMk.getElement(); if(el){ const svg=el.querySelector('svg'); if(svg) svg.style.transform='rotate('+heading+'deg)'; } }
 };
 
 /* ==== buscador plegable, extraido literal de AutoBoard =====================
