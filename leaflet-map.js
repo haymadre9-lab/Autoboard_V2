@@ -1,3 +1,12 @@
+/* Raiz del repositorio, sea cual sea la carpeta en la que viva esta app. Hoy vive en leaflet-test/ (RAIZ = '../'),
+   el dia del cambio definitivo se copiara a la raiz (RAIZ = './') y NO habra que tocar ni una linea de codigo:
+   los archivos compartidos (hud2.js, radares.json, coche.png) se piden siempre a traves de RAIZ.
+   Va en la primera linea a proposito: algo tan arriba como el fetch de radares.json la usa
+   inmediatamente al cargar el script, antes de que ninguna otra declaracion mas abajo exista
+   todavia (el mismo tipo de fallo de orden que ya dio problemas con chargerGroup/radarGroup). */
+const RAIZ = /\/(leaflet-test|app)\/[^/]*$/.test(location.pathname) ? '../' : './';
+const urlRepo = u => /^\.{1,2}\//.test(u) ? RAIZ + u.replace(/^(\.{1,2}\/)+/, '') : u;   // "../coche.png" o "./coche.png" -> la de esta instalacion
+
 /* ============================================================================
    FASE 2 — misma logica de ruta que AutoBoard, solo cambia el dibujo.
    No se recalcula nada aqui: dist(), segDistM(), isHighway() y
@@ -112,14 +121,17 @@ function updateRadar(){
   const over = !!(best && best.dist<500 && best.max && speedKmh > best.max+2);
   if(over){ if(!radarAlerted){ radarAlerted=true; radarBeep(); } }
   if(!best || best.dist>560) radarAlerted=false;
+  hudRadarEstado.active = over; hudRadarEstado.type = over ? best.t : null;   // lo lee tambien el modo Faro, sin duplicar esta cuenta
+  if (faroOn) pintarFaro();
   const edge=$('radaredge'); if (edge) edge.classList.toggle('show', over);
   const el=$('radarsign'); if(!best){el.classList.remove('show');return;}
   $('rsmax').textContent=best.max||'⚠'; $('rsdist').textContent=fmtDist(Math.max(0,best.dist));
   const rsc=el.querySelector('.rs-c'); if(rsc) rsc.style.borderColor=radarColor(best.t);
   el.classList.add('show');
 }
+let hudRadarEstado = { active:false, type:null };
 
-fetch('../radares.json').then(r=>r.json()).then(d=>{ radarDB=d; console.log('[POIs] radares:', d.length); if(lastFix) refreshRadars([lastFix.lat,lastFix.lon]); }).catch(e=>console.warn('[radares]', e.message));
+fetch(RAIZ + 'radares.json').then(r=>r.json()).then(d=>{ radarDB=d; console.log('[POIs] radares:', d.length); if(lastFix) refreshRadars([lastFix.lat,lastFix.lon]); }).catch(e=>console.warn('[radares]', e.message));
 
 
 /* ==== cargadores: fetchPois() extraida literalmente de AutoBoard, con toda
@@ -544,7 +556,7 @@ let hud2 = null, hudAbierto = false, hudCargando = false, hudDemo = false;   // 
    que 17,5 o mas ya pide las del 18 (el doble de teselas por pantalla). Por eso "Cerca" es 17,4. */
 let navZoom = 17.4;
 
-const VERSION = '2026.09.28-g';
+const VERSION = '2026.09.28-k';
 // X dibujada: el caracter U+2715 no esta en la fuente del navegador y salia como un rectangulo
 const X_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>';
 try{ $('ver').textContent = 'v'+VERSION; }catch(e){}
@@ -1002,14 +1014,15 @@ function rutaDemo(){
    escucha, solo van a la consola y el HUD se queda en una pantalla oscura sin explicacion
    -- que es lo que pasaba. hud2-boot.js si lo escuchaba; el puente no. */
 function avisoHud(msg){ const e = $('hud2err'); if (e.textContent !== msg) e.textContent = msg; e.style.display = msg ? 'block' : 'none'; }
-function marcarPestana(cual){ ['tabMapa','tabHud'].forEach(id => $(id).classList.toggle('on', id === cual)); }
+function marcarPestana(cual){ ['tabMapa','tabHud','tabFaro'].forEach(id => $(id).classList.toggle('on', id === cual)); }
 
 async function abrirHud(){
   if (hudAbierto || hudCargando) return;
+  if (faroOn) cerrarFaro();
   hudCargando = true; setStatus('Cargando HUD 2…'); avisoHud('');
   try{
     if (!hud2){
-      const mod = await import('../hud2.js');
+      const mod = await import(RAIZ + 'hud2.js');
       hud2 = mod.createHud2($('hud2canvas'), Object.assign({}, hudCfg));   // escala 0,6 = el 36 % de los pixeles, como en AutoBoard
       aplicarFotoAlMotor();                                                   // tu coche, si lo elegiste
       hud2.onError = err => { console.error('[hud2]', err); avisoHud('HUD 2: ' + (err && err.message ? err.message : err)); };
@@ -1041,11 +1054,46 @@ function cerrarHud(){
   hudAbierto = false; hudDemo = false; marcarPestana('tabMapa');
   follow = true; zoomPendiente = true; if (lastFix) seguirCamara([lastFix.lat, lastFix.lon], 0);   // el mapa vuelve donde esta el coche
 }
+
+/* ==== Faro: pantalla limpia, extraida de la version YA INTEGRADA de AutoBoard (el
+   body.faro/#hudclean real, no el archivo faro/index.html suelto, que es un secundario
+   mas simple). No navega a ningun sitio: alterna un estado dentro de la misma app, la
+   ruta sigue activa debajo. El numero se convierte en la propia senal de radar -- mismo
+   color por tipo, mismo parpadeo -- cuando vas por encima del limite cerca de uno, asi
+   que no hace falta el aviso aparte encima de una pantalla que ya deberia estar limpia. */
+let faroOn = false, faroBlinkT = 0;
+function pintarFaro(){
+  const spd = Math.round(speedKmh);
+  const wrap = $('fSpeed');
+  $('fNum').textContent = spd;
+  wrap.classList.toggle('sign', hudRadarEstado.active);
+  wrap.style.borderColor = hudRadarEstado.active ? radarColor(hudRadarEstado.type) : '';
+}
+function abrirFaro(){
+  if (faroOn) return;
+  if (hudAbierto) cerrarHud();
+  faroOn = true;
+  document.documentElement.classList.add('faromode');   // esconde todo lo demas por CSS: solo velocidad, radares y borde rojo
+  $('faroWrap').classList.add('on');
+  $('map').style.visibility = 'hidden';
+  pintarFaro();
+  marcarPestana('tabFaro');
+}
+function cerrarFaro(){
+  if (!faroOn) return;
+  faroOn = false;
+  document.documentElement.classList.remove('faromode');
+  $('faroWrap').classList.remove('on'); $('map').style.visibility = '';
+  marcarPestana('tabMapa');
+  follow = true; zoomPendiente = true; if (lastFix) seguirCamara([lastFix.lat, lastFix.lon], 0);
+}
+setInterval(() => { if (!faroOn) return; faroBlinkT = !faroBlinkT; $('fSpeed').classList.toggle('blink', faroBlinkT && $('fSpeed').classList.contains('sign')); }, 450);
+
 /* Pestañas de modo, arriba a la izquierda: Mapa / HUD arriba, Faro debajo. Faro es una
    pagina independiente que aun no se ha migrado, asi que por ahora se abre tal cual. */
-$('tabMapa').onclick = () => { if (hudAbierto) cerrarHud(); };
-$('tabHud').onclick  = () => { if (hudAbierto) return; abrirHud(); };
-$('tabFaro').onclick = () => { location.href = '../faro/'; };
+$('tabMapa').onclick = () => { if (hudAbierto) cerrarHud(); if (faroOn) cerrarFaro(); };
+$('tabHud').onclick  = () => { if (faroOn) cerrarFaro(); if (hudAbierto) return; abrirHud(); };
+$('tabFaro').onclick = () => { if (faroOn){ cerrarFaro(); return; } abrirFaro(); };
 $('hud2err').onclick = () => avisoHud('');
 
 
@@ -1145,7 +1193,7 @@ let hudCfg = Object.assign({}, HUD_DEF);
    fastidio, y es una preferencia de identidad mas que un ajuste. Una foto cargada desde el
    telefono se aplica solo en esta sesion: como PNG en base64 no cabe en localStorage
    (AutoBoard tampoco podia guardarla). */
-let hudFotoUrl = ''; try{ hudFotoUrl = localStorage.getItem('carFotoLT') || ''; }catch(e){}
+let hudFotoUrl = ''; try{ hudFotoUrl = urlRepo(localStorage.getItem('carFotoLT') || ''); }catch(e){}
 let hudFotoSesion = null, hudFotoOrig = null, hudFotoEstado = '';
 const HUD_COLORES = [['#eef1f4','Blanco'],['#c3c9ce','Aluminio'],['#8f979e','Gris'],['#5a6169','Grafito'],['#1d2126','Negro'],
                      ['#8d2b2b','Rojo'],['#22406e','Azul'],['#1f5b4a','Verde'],['#6d5a3c','Arena']];
@@ -1159,7 +1207,7 @@ function aplicarFotoAlMotor(){
   }catch(e){ if (hud2.onError) hud2.onError(e); }
 }
 function ponerFotoUrl(url){
-  hudFotoUrl = (url || '').trim(); hudFotoSesion = null; hudFotoOrig = null;
+  hudFotoUrl = urlRepo((url || '').trim()); hudFotoSesion = null; hudFotoOrig = null;
   try{ if (hudFotoUrl) localStorage.setItem('carFotoLT', hudFotoUrl); else localStorage.removeItem('carFotoLT'); }catch(e){}
   hudFotoEstado = hudFotoUrl ? 'Foto en uso: ' + hudFotoUrl : 'Sin foto · se usa el coche dibujado';
   aplicarFotoAlMotor(); pintarAjustesHud();
@@ -1252,7 +1300,7 @@ function pintarAjustesHud(){
     + rng('hudScale', 'Tamaño de los textos', 0.7, 1.5, 0.1, '')
     + '<h4>Tráfico en la escena</h4>' + seg('traffic', [['off','Sin'],['poca','Poco'],['normal','Normal'],['mucha','Mucho']])
     + '<h4>Foto del coche</h4>'
-    + '<div class="foto-fila"><input type="text" id="hfUrl" value="'+escAttr(hudFotoUrl)+'" placeholder="../coche.png">'
+    + '<div class="foto-fila"><input type="text" id="hfUrl" value="'+escAttr(hudFotoUrl)+'" placeholder="'+RAIZ+'coche.png">'
     + '<button id="hfMiCoche">Mi coche</button><button id="hfSin">Dibujado</button></div>'
     + '<input type="file" id="hfFile" accept="image/*" style="display:none">'
     + '<button class="reset" id="hfCargar" style="margin-top:8px">'+(hudFotoSesion ? 'Cambiar foto' : 'Cargar foto de tu coche')+'</button>'
@@ -1271,7 +1319,7 @@ function pintarAjustesHud(){
 }
 $('hudsetBody').addEventListener('click', e => {
   if (e.target.id === 'hudReset'){ hudCfg = Object.assign({}, HUD_DEF); if (hud2){ try{ hud2.set(HUD_DEF); }catch(er){ if (hud2.onError) hud2.onError(er); } } pintarAjustesHud(); return; }
-  if (e.target.id === 'hfMiCoche'){ ponerFotoUrl('../coche.png'); return; }      // el coche.png del repositorio (../ porque esta pagina vive en leaflet-test/)
+  if (e.target.id === 'hfMiCoche'){ ponerFotoUrl(RAIZ + 'coche.png'); return; }      // el coche.png del repositorio (../ porque esta pagina vive en leaflet-test/)
   if (e.target.id === 'hfSin'){ ponerFotoUrl(''); return; }
   if (e.target.id === 'hfCargar'){ $('hfFile').click(); return; }
   if (e.target.id === 'hfCortar'){ recortarFondo(+$('hfTol').value); return; }
