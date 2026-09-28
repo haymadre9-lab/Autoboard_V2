@@ -1,12 +1,14 @@
 /* Service worker de AutoBoard.
-   - Nombre de cache PROPIO (antes compartia 'teslanav-v61' con Tesla Nav y se
-     pisaban los archivos). Sube la version en cada subida a GitHub.
+   - Reescrito para el conjunto de archivos del motor Leaflet (antes cacheaba
+     index.html/hud2-boot.js/faro/index.html del AutoBoard con MapLibre, que
+     ya no existen). Nombre de cache subido a v8-0 para que el cambio de
+     motor no herede nada de la cache anterior.
    - HTML y JS: red primero, cache como respaldo. Asi cada subida llega al
      momento y la app sigue abriendo sin conexion.
    - Teselas de mapa y APIs externas: NO se cachean aqui (las gestiona el
-     navegador y MapLibre; cachearlas llenaba el almacenamiento del Tesla).  */
-const C='autoboard-v7-3';
-const BASE=['./','./index.html','./hud2.js','./hud2-boot.js','./coche.png','./faro/','./faro/index.html','./radares.json','./manifest.webmanifest'];
+     navegador y Leaflet; cachearlas llenaba el almacenamiento del Tesla).  */
+const C='autoboard-v8-0';
+const BASE=['./','./index.html','./leaflet-map.js','./leaflet-map.css','./hud2.js','./coche.png','./radares.json','./manifest.webmanifest'];
 
 self.addEventListener('install', e=>{
   e.waitUntil(caches.open(C).then(c=>Promise.all(BASE.map(u=>c.add(u).catch(()=>{})))).then(()=>self.skipWaiting()));
