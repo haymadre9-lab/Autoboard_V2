@@ -6,7 +6,7 @@
 <title>Leaflet Test · AutoBoard Fase 1</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
   integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-<link rel="stylesheet" href="./leaflet-map.css?v=20260928b">
+<link rel="stylesheet" href="./leaflet-map.css?v=20260928g">
 </head>
 <body>
 
@@ -20,13 +20,29 @@
 
 <div id="map"></div>
 <div id="hud2wrap"><canvas id="hud2canvas"></canvas></div>
-<button id="hud2back">← Mapa</button>
+<div id="tabs">
+  <button id="tabMapa" class="modo on">🗺️ Mapa</button>
+  <button id="tabHud" class="modo">🚗 HUD</button>
+  <button id="tabAjHud" class="modo" aria-label="Ajustes del HUD">⚙️</button>
+  <button id="tabFaro" class="modo">💡 Faro</button>
+</div>
+<div id="hud2err"></div>
+<div id="cargList"></div>
+<div id="hudset">
+  <div class="shead"><span>Ajustes HUD 2</span><button id="closeHudset" aria-label="Cerrar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg></button></div>
+  <div id="hudsetBody"></div>
+</div>
+<div id="hoja">
+  <div class="hh"><span id="hojaTitulo"></span><button id="hojaCerrar" aria-label="Cerrar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg></button></div>
+  <div id="hojaInfo"></div>
+  <div id="hojaBtns"></div>
+</div>
 <div id="radaredge"></div>
 <div class="radarsign" id="radarsign"><div class="rs-c"><span id="rsmax">80</span></div><div class="rs-d" id="rsdist">500 m</div></div>
 <div id="navbanner">
   <div class="arrow" id="navarrow"></div>
   <div class="navtext"><div class="navd" id="navd"></div><div class="navsub" id="navsub"></div></div>
-  <button class="navx" id="cancelRuta">✕</button>
+  <button class="navx" id="cancelRuta" aria-label="Cerrar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg></button>
 </div>
 <div id="status">Leaflet real + MapTiler (token) — sin ningún adaptador de por medio</div>
 
@@ -47,11 +63,14 @@
 <button id="gear" class="ovl">⚙️</button>
 
 <div id="settings">
-  <div class="shead"><span>Ajustes</span><button id="closeSettings">✕</button></div>
+  <div class="shead"><span>Ajustes</span><button id="closeSettings" aria-label="Cerrar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg></button></div>
+  <div class="srow"><span>Zoom de conducción</span>
+    <div class="seg" id="zoomSeg"><button data-z="17">Lejos</button><button data-z="17.4" class="on">Cerca</button><button data-z="18">Muy cerca</button></div>
+  </div>
   <button class="setbtn" id="mapnight">🌙 Noche</button>
   <button class="setbtn" id="trafficBtn">🚦 Tráfico</button>
-  <button class="setbtn" id="rotateBtn">🧭 Girar mapa (a prueba)</button>
-  <button class="setbtn" id="hudBtn">🚗 HUD 2</button>
+  <button class="setbtn on" id="rotateBtn">🧭 Quitar giro de mapa</button>
+  <button class="setbtn" id="cargBtn">⚡ Lista de cargadores</button>
   <div class="srow" style="margin-top:16px">
     <span>Favoritos</span>
     <div id="favList"></div>
@@ -70,7 +89,7 @@
      no hace nada -- no hay ningun sitio del codigo que dependa de que esto
      funcione para lo demas. -->
 <script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
-<script src="./leaflet-map.js?v=20260928b"></script>
+<script src="./leaflet-map.js?v=20260928g"></script>
 <script>if(/[?&]debug=1/.test(location.search)){var e=document.createElement("script");e.src="https://cdn.jsdelivr.net/npm/eruda";e.onload=function(){eruda.init()};document.head.appendChild(e);}</script>
 </body>
 </html>
