@@ -1,3 +1,12 @@
+/* Raiz del repositorio, sea cual sea la carpeta en la que viva esta app. Hoy vive en leaflet-test/ (RAIZ = '../'),
+   el dia del cambio definitivo se copiara a la raiz (RAIZ = './') y NO habra que tocar ni una linea de codigo:
+   los archivos compartidos (hud2.js, radares.json, coche.png) se piden siempre a traves de RAIZ.
+   Va en la primera linea a proposito: algo tan arriba como el fetch de radares.json la usa
+   inmediatamente al cargar el script, antes de que ninguna otra declaracion mas abajo exista
+   todavia (el mismo tipo de fallo de orden que ya dio problemas con chargerGroup/radarGroup). */
+const RAIZ = /\/(leaflet-test|app)\/[^/]*$/.test(location.pathname) ? '../' : './';
+const urlRepo = u => /^\.{1,2}\//.test(u) ? RAIZ + u.replace(/^(\.{1,2}\/)+/, '') : u;   // "../coche.png" o "./coche.png" -> la de esta instalacion
+
 /* ============================================================================
    FASE 2 — misma logica de ruta que AutoBoard, solo cambia el dibujo.
    No se recalcula nada aqui: dist(), segDistM(), isHighway() y
@@ -119,7 +128,7 @@ function updateRadar(){
   el.classList.add('show');
 }
 
-fetch('../radares.json').then(r=>r.json()).then(d=>{ radarDB=d; console.log('[POIs] radares:', d.length); if(lastFix) refreshRadars([lastFix.lat,lastFix.lon]); }).catch(e=>console.warn('[radares]', e.message));
+fetch(RAIZ + 'radares.json').then(r=>r.json()).then(d=>{ radarDB=d; console.log('[POIs] radares:', d.length); if(lastFix) refreshRadars([lastFix.lat,lastFix.lon]); }).catch(e=>console.warn('[radares]', e.message));
 
 
 /* ==== cargadores: fetchPois() extraida literalmente de AutoBoard, con toda
@@ -411,6 +420,7 @@ const map = L.map('map', {
   zoomControl: true, attributionControl: true,
   center: [43.30, -2.98], zoom: 14,
   fadeAnimation: false, zoomAnimation: true, preferCanvas: true,
+  zoomSnap: 0.1,   // zoom fraccionario: permite "un poco mas de zoom" sin saltar de nivel entero
   rotate: true, rotateControl: false, touchRotate: false
 });
 const girarMapaDisponible = typeof map.setBearing === 'function';
@@ -436,7 +446,16 @@ function bearingSuavizado(mostrado, crudo){
   if (Math.abs(delta) > 45) return crudo;         // giro real: seguir de inmediato
   return mostrado + delta * 0.5;                   // cambio pequeño: EMA al 50%
 }
+let bearingSalto = null;   // candidato a giro brusco esperando confirmacion
 function actualizarBearing(crudo, ahora){
+  // Un dato suelto que salta mas de 45 grados casi siempre es un fallo del GPS, no un giro real
+  // (un giro real de 90 grados dura varios segundos y lo confirma el fix siguiente): se espera
+  // un segundo dato coherente antes de girar el mapa de golpe.
+  if (Math.abs(diffAngulo(bearingMostrado, crudo)) > 45){
+    if (bearingSalto !== null && Math.abs(diffAngulo(bearingSalto, crudo)) < 25){ bearingSalto = null; bearingPendienteDesde = null; bearingMostrado = crudo; return bearingMostrado; }
+    bearingSalto = crudo; return bearingMostrado;
+  }
+  bearingSalto = null;
   const suavizado = bearingSuavizado(bearingMostrado, crudo);
   const delta = diffAngulo(bearingMostrado, suavizado);
   if (Math.abs(delta) < 4){                          // zona muerta de 4 grados
@@ -528,12 +547,40 @@ let wps = [], rutaVersion = 0;   // wps = paradas intermedias pendientes, ordena
 let offAcc = 0, lastRecalc = 0;
 let follow = true, lastFix = null, heading = 0, speedKmh = 0;
 let hud2 = null, hudAbierto = false, hudCargando = false, hudDemo = false;   // HUD 2: no existe hasta que se abre por primera vez
-let navZoom = 17;   // zoom real de conduccion; el encuadre inicial de la ruta se aleja a proposito, pero el seguimiento no debe heredar ese alejamiento
+/* Zoom real de conduccion (el encuadre inicial de la ruta se aleja a proposito, pero el seguimiento
+   no debe heredar ese alejamiento). Leaflet pide las teselas del nivel ENTERO mas cercano al zoom:
+   17,4 sigue usando las teselas del 17 (solo se ven mas grandes: mismo coste que antes), mientras
+   que 17,5 o mas ya pide las del 18 (el doble de teselas por pantalla). Por eso "Cerca" es 17,4. */
+let navZoom = 17.4;
 
-const VERSION = '2026.09.28-f';
+const VERSION = '2026.09.28-i';
 // X dibujada: el caracter U+2715 no esta en la fuente del navegador y salia como un rectangulo
 const X_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>';
 try{ $('ver').textContent = 'v'+VERSION; }catch(e){}
+/* ---- Rumbo del GPS ---------------------------------------------------------
+   ANTES: bearing entre este fix y el anterior (1 s antes). Con 1-2 m de ruido de posicion y
+   14 m recorridos, eso baila 5-10 grados cada segundo -- medido en simulacion: una sacudida
+   de mas de 2 grados cada 2 s en recta, y a paso lento el mapa daba vueltas (error de hasta
+   160 grados). El suavizado solo se tragaba una parte. Era el "pequeno giro continuo".
+   AHORA:
+     1) el rumbo del propio receptor (coords.heading, por efecto Doppler: 1-3 grados de error),
+        a partir de 1,5 m/s;
+     2) si el navegador no lo da: bearing sobre una BASE LARGA (20-35 m, segun la velocidad),
+        no entre dos fixes seguidos, y solo a partir de 3 m/s;
+     3) si no hay rumbo fiable (parado, muy despacio) devuelve null y se conserva el anterior. */
+let histFixes = [];
+function rumboDelGPS(c, now, v){
+  histFixes.push(now); if (histFixes.length > 14) histFixes.shift();
+  if (Number.isFinite(c.heading) && v >= 1.5) return ((c.heading % 360) + 360) % 360;
+  if (v < 3) return null;
+  const base = Math.min(35, Math.max(20, v*4));
+  for (let i = histFixes.length-2; i >= 0; i--){
+    const f = histFixes[i];
+    if (now.t - f.t > 12000) break;
+    if (dist([f.lat, f.lon], [now.lat, now.lon]) >= base) return bearing([f.lat, f.lon], [now.lat, now.lon]);
+  }
+  return null;
+}
 function fmtDist(m){ return m<1000 ? Math.round(m)+' m' : (m/1000).toFixed(1)+' km'; }
 function setStatus(t){ $('status').textContent = t; }
 
@@ -543,12 +590,8 @@ if (navigator.geolocation){
     const c = p.coords;
     const now = { lat: c.latitude, lon: c.longitude, t: p.timestamp };
     let v = c.speed; if (v==null || isNaN(v)){ if (lastFix){ const dt=(now.t-lastFix.t)/1000; v = dt>0.2 ? dist([lastFix.lat,lastFix.lon],[now.lat,now.lon])/dt : speedKmh/3.6; } else v = 0; }
-    if (lastFix){
-      const la1=lastFix.lat*Math.PI/180, la2=now.lat*Math.PI/180, dLon=(now.lon-lastFix.lon)*Math.PI/180;
-      const y=Math.sin(dLon)*Math.cos(la2), x=Math.cos(la1)*Math.sin(la2)-Math.sin(la1)*Math.cos(la2)*Math.cos(dLon);
-      const brg=(Math.atan2(y,x)*180/Math.PI+360)%360;
-      if (v>1) heading = brg;
-    }
+    const rumbo = rumboDelGPS(c, now, v);
+    if (rumbo !== null) heading = rumbo;      // si no hay un rumbo fiable, se conserva el anterior (el mapa no se mueve)
     speedKmh = Math.max(0, v*3.6);
     lastFix = now;
     // Intervalo real entre fixes; primer fix o senal perdida >10 s -> saltar (dt=0), no animar
@@ -903,6 +946,13 @@ function pintarBotonGiro(){
   b.classList.toggle('on', girarMapaOn);
 }
 pintarBotonGiro();
+$('zoomSeg').onclick = e => {
+  const b = e.target.closest ? e.target.closest('button') : null; if (!b) return;
+  navZoom = +b.dataset.z;
+  $('zoomSeg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+  zoomPendiente = true;                                            // el siguiente seguimiento fuerza el zoom nuevo
+  if (follow && lastFix && !hudAbierto) seguirCamara([lastFix.lat, lastFix.lon], 0);   // y si estas siguiendo, se aplica ya
+};
 $('rotateBtn').onclick = () => {
   if (!girarMapaDisponible){ setStatus('Girar mapa: el complemento no cargó, sigue en modo fijo'); return; }
   girarMapaOn = !girarMapaOn;
@@ -968,7 +1018,7 @@ async function abrirHud(){
   hudCargando = true; setStatus('Cargando HUD 2…'); avisoHud('');
   try{
     if (!hud2){
-      const mod = await import('../hud2.js');
+      const mod = await import(RAIZ + 'hud2.js');
       hud2 = mod.createHud2($('hud2canvas'), Object.assign({}, hudCfg));   // escala 0,6 = el 36 % de los pixeles, como en AutoBoard
       aplicarFotoAlMotor();                                                   // tu coche, si lo elegiste
       hud2.onError = err => { console.error('[hud2]', err); avisoHud('HUD 2: ' + (err && err.message ? err.message : err)); };
@@ -1004,7 +1054,7 @@ function cerrarHud(){
    pagina independiente que aun no se ha migrado, asi que por ahora se abre tal cual. */
 $('tabMapa').onclick = () => { if (hudAbierto) cerrarHud(); };
 $('tabHud').onclick  = () => { if (hudAbierto) return; abrirHud(); };
-$('tabFaro').onclick = () => { location.href = '../faro/'; };
+$('tabFaro').onclick = () => { location.href = RAIZ + 'faro/'; };
 $('hud2err').onclick = () => avisoHud('');
 
 
@@ -1104,7 +1154,7 @@ let hudCfg = Object.assign({}, HUD_DEF);
    fastidio, y es una preferencia de identidad mas que un ajuste. Una foto cargada desde el
    telefono se aplica solo en esta sesion: como PNG en base64 no cabe en localStorage
    (AutoBoard tampoco podia guardarla). */
-let hudFotoUrl = ''; try{ hudFotoUrl = localStorage.getItem('carFotoLT') || ''; }catch(e){}
+let hudFotoUrl = ''; try{ hudFotoUrl = urlRepo(localStorage.getItem('carFotoLT') || ''); }catch(e){}
 let hudFotoSesion = null, hudFotoOrig = null, hudFotoEstado = '';
 const HUD_COLORES = [['#eef1f4','Blanco'],['#c3c9ce','Aluminio'],['#8f979e','Gris'],['#5a6169','Grafito'],['#1d2126','Negro'],
                      ['#8d2b2b','Rojo'],['#22406e','Azul'],['#1f5b4a','Verde'],['#6d5a3c','Arena']];
@@ -1118,7 +1168,7 @@ function aplicarFotoAlMotor(){
   }catch(e){ if (hud2.onError) hud2.onError(e); }
 }
 function ponerFotoUrl(url){
-  hudFotoUrl = (url || '').trim(); hudFotoSesion = null; hudFotoOrig = null;
+  hudFotoUrl = urlRepo((url || '').trim()); hudFotoSesion = null; hudFotoOrig = null;
   try{ if (hudFotoUrl) localStorage.setItem('carFotoLT', hudFotoUrl); else localStorage.removeItem('carFotoLT'); }catch(e){}
   hudFotoEstado = hudFotoUrl ? 'Foto en uso: ' + hudFotoUrl : 'Sin foto · se usa el coche dibujado';
   aplicarFotoAlMotor(); pintarAjustesHud();
@@ -1211,7 +1261,7 @@ function pintarAjustesHud(){
     + rng('hudScale', 'Tamaño de los textos', 0.7, 1.5, 0.1, '')
     + '<h4>Tráfico en la escena</h4>' + seg('traffic', [['off','Sin'],['poca','Poco'],['normal','Normal'],['mucha','Mucho']])
     + '<h4>Foto del coche</h4>'
-    + '<div class="foto-fila"><input type="text" id="hfUrl" value="'+escAttr(hudFotoUrl)+'" placeholder="../coche.png">'
+    + '<div class="foto-fila"><input type="text" id="hfUrl" value="'+escAttr(hudFotoUrl)+'" placeholder="'+RAIZ+'coche.png">'
     + '<button id="hfMiCoche">Mi coche</button><button id="hfSin">Dibujado</button></div>'
     + '<input type="file" id="hfFile" accept="image/*" style="display:none">'
     + '<button class="reset" id="hfCargar" style="margin-top:8px">'+(hudFotoSesion ? 'Cambiar foto' : 'Cargar foto de tu coche')+'</button>'
@@ -1230,7 +1280,7 @@ function pintarAjustesHud(){
 }
 $('hudsetBody').addEventListener('click', e => {
   if (e.target.id === 'hudReset'){ hudCfg = Object.assign({}, HUD_DEF); if (hud2){ try{ hud2.set(HUD_DEF); }catch(er){ if (hud2.onError) hud2.onError(er); } } pintarAjustesHud(); return; }
-  if (e.target.id === 'hfMiCoche'){ ponerFotoUrl('../coche.png'); return; }      // el coche.png del repositorio (../ porque esta pagina vive en leaflet-test/)
+  if (e.target.id === 'hfMiCoche'){ ponerFotoUrl(RAIZ + 'coche.png'); return; }      // el coche.png del repositorio (../ porque esta pagina vive en leaflet-test/)
   if (e.target.id === 'hfSin'){ ponerFotoUrl(''); return; }
   if (e.target.id === 'hfCargar'){ $('hfFile').click(); return; }
   if (e.target.id === 'hfCortar'){ recortarFondo(+$('hfTol').value); return; }

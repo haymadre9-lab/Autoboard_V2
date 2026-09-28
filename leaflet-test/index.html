@@ -1,22 +1,19 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+<script>if(/[?&]debug=1/.test(location.search))document.documentElement.classList.add("debug");</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Leaflet Test · AutoBoard Fase 1</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
   integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-<link rel="stylesheet" href="./leaflet-map.css?v=20260928f">
+<link rel="stylesheet" href="./leaflet-map.css?v=20260928i">
 </head>
 <body>
 
-<div id="hud">
-  <span>Motor: <b>Leaflet</b> · <span id="ver">(js antiguo)</span></span>
-  <span class="sp"></span>
-  <span id="spd">0 km/h</span>
-  <span id="acc">— m</span>
-  <span id="fps">— fps</span>
-</div>
+<span id="spd" hidden>0 km/h</span>
+<span id="acc" hidden>— m</span>
+<div id="fps">— fps</div>
 
 <div id="map"></div>
 <div id="hud2wrap"><canvas id="hud2canvas"></canvas></div>
@@ -63,7 +60,10 @@
 <button id="gear" class="ovl">⚙️</button>
 
 <div id="settings">
-  <div class="shead"><span>Ajustes</span><button id="closeSettings" aria-label="Cerrar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg></button></div>
+  <div class="shead"><span>Ajustes <small id="ver">(js antiguo)</small></span><button id="closeSettings" aria-label="Cerrar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg></button></div>
+  <div class="srow"><span>Zoom de conducción</span>
+    <div class="seg" id="zoomSeg"><button data-z="17">Lejos</button><button data-z="17.4" class="on">Cerca</button><button data-z="18">Muy cerca</button></div>
+  </div>
   <button class="setbtn" id="mapnight">🌙 Noche</button>
   <button class="setbtn" id="trafficBtn">🚦 Tráfico</button>
   <button class="setbtn on" id="rotateBtn">🧭 Quitar giro de mapa</button>
@@ -86,7 +86,7 @@
      no hace nada -- no hay ningun sitio del codigo que dependa de que esto
      funcione para lo demas. -->
 <script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
-<script src="./leaflet-map.js?v=20260928f"></script>
+<script src="./leaflet-map.js?v=20260928i"></script>
 <script>if(/[?&]debug=1/.test(location.search)){var e=document.createElement("script");e.src="https://cdn.jsdelivr.net/npm/eruda";e.onload=function(){eruda.init()};document.head.appendChild(e);}</script>
 </body>
 </html>

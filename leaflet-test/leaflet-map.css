@@ -4,9 +4,12 @@ html,body{margin:0;height:100%;background:#0b0e12;color:#e8eef2;
 #map{position:fixed;inset:0}
 
 /* estado arriba: motor / puntos / fps aproximados, para comparar con AutoBoard */
-#hud{position:fixed;top:0;left:0;right:0;z-index:900;display:flex;gap:10px;align-items:center;
-  padding:10px 14px;background:rgba(10,14,20,.82);backdrop-filter:blur(6px);
-  font-size:13px;font-variant-numeric:tabular-nums}
+/* Los fps, solos, encima del mapa, sin barra ni fondo detras -- lo unico que se
+   quita es la barra entera (fondo, desenfoque y el texto "Motor: Leaflet"),
+   spd y acc siguen existiendo (el velocimetro y el codigo ya los usan) pero
+   ocultos, porque duplicaban el velocimetro grande y no aportaban nada aqui. */
+#fps{position:fixed;top:8px;left:12px;z-index:895;color:#8b98a5;font:600 11px/1 ui-monospace,monospace;
+  text-shadow:0 1px 3px rgba(0,0,0,.9);pointer-events:none}
 #hud b{color:#5fd0e0}
 #hud .sp{flex:1}
 
@@ -198,3 +201,15 @@ html,body{margin:0;height:100%;background:#0b0e12;color:#e8eef2;
 .sw{flex:0 0 calc(33.3% - 4px);border-radius:8px;padding:12px 0;font:700 12px system-ui,sans-serif;cursor:pointer;
   border:2px solid transparent;box-sizing:border-box}
 .sw.on{border-color:#5fd0e0}
+
+/* barra tecnica (velocidad, precision, fps) y su desenfoque de fondo: solo con ?debug=1 */
+html.debug #hud{display:flex}
+#ver{font-size:10px;font-weight:600;color:#6b7680;margin-left:6px}
+
+/* Control de zoom propio de Leaflet: por defecto vertical, arriba a la izquierda -- ahi
+   quedaba tapado detras de las pestañas Mapa/HUD/Faro. Se mueve al hueco que dejo "Motor:
+   Leaflet" (arriba, centrado) y se pone en horizontal: solo un cambio de disposicion, los
+   botones y su comportamiento son los mismos que trae Leaflet. */
+.leaflet-top.leaflet-left{top:8px;left:50%;transform:translateX(-50%);right:auto}
+.leaflet-control-zoom{display:flex}
+.leaflet-control-zoom a{float:none}
