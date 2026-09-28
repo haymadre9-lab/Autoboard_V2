@@ -530,7 +530,7 @@ let follow = true, lastFix = null, heading = 0, speedKmh = 0;
 let hud2 = null, hudAbierto = false, hudCargando = false, hudDemo = false;   // HUD 2: no existe hasta que se abre por primera vez
 let navZoom = 17;   // zoom real de conduccion; el encuadre inicial de la ruta se aleja a proposito, pero el seguimiento no debe heredar ese alejamiento
 
-const VERSION = '2026.09.28-e';
+const VERSION = '2026.09.28-f';
 // X dibujada: el caracter U+2715 no esta en la fuente del navegador y salia como un rectangulo
 const X_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>';
 try{ $('ver').textContent = 'v'+VERSION; }catch(e){}
@@ -970,6 +970,7 @@ async function abrirHud(){
     if (!hud2){
       const mod = await import('../hud2.js');
       hud2 = mod.createHud2($('hud2canvas'), Object.assign({}, hudCfg));   // escala 0,6 = el 36 % de los pixeles, como en AutoBoard
+      aplicarFotoAlMotor();                                                   // tu coche, si lo elegiste
       hud2.onError = err => { console.error('[hud2]', err); avisoHud('HUD 2: ' + (err && err.message ? err.message : err)); };
       console.log('[hud2] motor version', hud2.version);
     }
@@ -1094,10 +1095,100 @@ map.on('contextmenu', e => pulsacionLarga(e.latlng));   // raton (escritorio)
    hud2-boot.js. Como el resto de ajustes de la app: valen para esta sesion, no se
    guardan de un dia para otro. Se aplican en caliente con hud2.set(). */
 const HUD_DEF = { theme:'auto', maxFps:0, escala:0.6, perfil:'auto', estilo:'suave', radioMin:130,
-  carScale:1, hudScale:1, vista:1, hud:true, carteles:true, ambiente:true, detalleCoche:true,
+  carScale:1, hudScale:1, vista:1, hud:false, carteles:true, carColor:'#eef1f4', ambiente:true, detalleCoche:true,
   rain:false, spray:true, rotondaInvertida:false, frenarCamara:false, traffic:'off' };
 const HUD_NUM = ['maxFps','escala'];
 let hudCfg = Object.assign({}, HUD_DEF);
+/* Foto del coche, como en AutoBoard. Lo unico que se recuerda de un dia para otro es la URL
+   de la foto del repositorio (una cadena corta): repetir la eleccion cada vez seria un
+   fastidio, y es una preferencia de identidad mas que un ajuste. Una foto cargada desde el
+   telefono se aplica solo en esta sesion: como PNG en base64 no cabe en localStorage
+   (AutoBoard tampoco podia guardarla). */
+let hudFotoUrl = ''; try{ hudFotoUrl = localStorage.getItem('carFotoLT') || ''; }catch(e){}
+let hudFotoSesion = null, hudFotoOrig = null, hudFotoEstado = '';
+const HUD_COLORES = [['#eef1f4','Blanco'],['#c3c9ce','Aluminio'],['#8f979e','Gris'],['#5a6169','Grafito'],['#1d2126','Negro'],
+                     ['#8d2b2b','Rojo'],['#22406e','Azul'],['#1f5b4a','Verde'],['#6d5a3c','Arena']];
+const escAttr = s => String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+function aplicarFotoAlMotor(){
+  if (!hud2) return;
+  try{
+    if (hudFotoSesion) hud2.setCarPhoto(hudFotoSesion);
+    else if (hudFotoUrl) hud2.setCarPhotoUrl(hudFotoUrl);
+    else hud2.setCarPhoto(null);
+  }catch(e){ if (hud2.onError) hud2.onError(e); }
+}
+function ponerFotoUrl(url){
+  hudFotoUrl = (url || '').trim(); hudFotoSesion = null; hudFotoOrig = null;
+  try{ if (hudFotoUrl) localStorage.setItem('carFotoLT', hudFotoUrl); else localStorage.removeItem('carFotoLT'); }catch(e){}
+  hudFotoEstado = hudFotoUrl ? 'Foto en uso: ' + hudFotoUrl : 'Sin foto · se usa el coche dibujado';
+  aplicarFotoAlMotor(); pintarAjustesHud();
+}
+/* Recorte de fondo, tal cual el de AutoBoard, pero como funcion PURA sobre los pixeles (D = RGBA,
+   se modifica el alfa): se parte de los bordes de la imagen, se toma su color medio como "fondo" y se
+   inunda hacia dentro mientras el color se parezca (tol). Devuelve la fraccion de pixeles opacos. */
+function recortarFondoPx(D, w, h, tol){
+  let sr = 0, sg = 0, sb = 0, n = 0;
+  const smp = (x, y) => { const i = (y*w+x)*4; sr += D[i]; sg += D[i+1]; sb += D[i+2]; n++; };
+  for (let x = 0; x < w; x += 3){ smp(x, 0); smp(x, h-1); }
+  for (let y = 0; y < h; y += 3){ smp(0, y); smp(w-1, y); }
+  sr /= n; sg /= n; sb /= n;
+  const seen = new Uint8Array(w*h), q = new Int32Array(w*h); let hd = 0, tl = 0;
+  const push2 = p => { if (!seen[p]){ seen[p] = 1; q[tl++] = p; } };
+  for (let x = 0; x < w; x++){ push2(x); push2((h-1)*w+x); }
+  for (let y = 0; y < h; y++){ push2(y*w); push2(y*w+w-1); }
+  while (hd < tl){
+    const p = q[hd++], i = p*4, r = D[i], g = D[i+1], b = D[i+2];
+    if (Math.abs(r-sr) + Math.abs(g-sg) + Math.abs(b-sb) > tol*7.8) continue;
+    D[i+3] = 0;
+    const x = p % w, y = (p/w)|0;
+    const nb = (nx, ny) => { if (nx < 0 || ny < 0 || nx >= w || ny >= h) return;
+      const np = ny*w+nx; if (seen[np]) return; const j = np*4;
+      if (Math.abs(D[j]-r) + Math.abs(D[j+1]-g) + Math.abs(D[j+2]-b) <= tol*3) push2(np); };
+    nb(x+1, y); nb(x-1, y); nb(x, y+1); nb(x, y-1);
+  }
+  const A = new Uint8ClampedArray(w*h);
+  for (let p = 0; p < w*h; p++) A[p] = D[p*4+3];
+  for (let y = 1; y < h-1; y++) for (let x = 1; x < w-1; x++){        // borde suavizado
+    const p = y*w+x; if (!A[p]) continue;
+    const s4 = A[p-1] + A[p+1] + A[p-w] + A[p+w];
+    if (s4 < 1020) D[p*4+3] = Math.round((A[p]*2 + s4/2)/4);
+  }
+  let opacos = 0; for (let p = 0; p < w*h; p++) if (D[p*4+3] > 40) opacos++;
+  return opacos/(w*h);
+}
+function recortarFondo(tol){
+  if (!hudFotoOrig) return;
+  const w = hudFotoOrig.width, h = hudFotoOrig.height;
+  const cn = document.createElement('canvas'); cn.width = w; cn.height = h;
+  const c2 = cn.getContext('2d', { willReadFrequently:true }); c2.drawImage(hudFotoOrig, 0, 0);
+  const img = c2.getImageData(0, 0, w, h);
+  const pct = recortarFondoPx(img.data, w, h, tol);
+  if (pct < 0.08){    // salvaguarda: si se ha comido el coche, se descarta en vez de dejar un sprite invisible
+    hudFotoEstado = 'Tolerancia demasiado alta: el recorte se ha comido el coche (' + Math.round(pct*100) + ' % visible). Bájala y vuelve a probar.';
+    pintarAjustesHud(); return;
+  }
+  c2.putImageData(img, 0, 0);
+  hudFotoSesion = cn.toDataURL('image/png');
+  hudFotoEstado = 'Fondo recortado · ' + Math.round(pct*100) + ' % del cuadro visible · solo para esta sesión';
+  aplicarFotoAlMotor(); pintarAjustesHud();
+}
+async function cargarFotoArchivo(f){
+  const adopta = (bmp, w, h) => {
+    const sc = Math.min(1, 560/w), cn = document.createElement('canvas');
+    cn.width = Math.round(w*sc); cn.height = Math.round(h*sc);
+    cn.getContext('2d').drawImage(bmp, 0, 0, cn.width, cn.height);
+    hudFotoOrig = cn; hudFotoSesion = cn.toDataURL('image/png');
+    hudFotoEstado = 'Foto cargada (solo esta sesión). Si tiene fondo, usa "Quitar fondo".';
+    aplicarFotoAlMotor(); pintarAjustesHud();
+  };
+  try{ const b = await createImageBitmap(f); adopta(b, b.width, b.height); }
+  catch(e){
+    const u = URL.createObjectURL(f), im = new Image();
+    im.onload = () => { adopta(im, im.naturalWidth, im.naturalHeight); URL.revokeObjectURL(u); };
+    im.onerror = () => { URL.revokeObjectURL(u); hudFotoEstado = 'Formato no soportado. Usa PNG o JPG (el HEIC del iPhone no vale).'; pintarAjustesHud(); };
+    im.src = u;
+  }
+}
 function hudSet(k, v){
   hudCfg[k] = v;
   if (hud2){ try{ hud2.set({[k]: v}); }catch(e){ if (hud2.onError) hud2.onError(e); } }
@@ -1119,8 +1210,19 @@ function pintarAjustesHud(){
     + rng('carScale', 'Tamaño del coche', 0.6, 1.6, 0.1, '')
     + rng('hudScale', 'Tamaño de los textos', 0.7, 1.5, 0.1, '')
     + '<h4>Tráfico en la escena</h4>' + seg('traffic', [['off','Sin'],['poca','Poco'],['normal','Normal'],['mucha','Mucho']])
+    + '<h4>Foto del coche</h4>'
+    + '<div class="foto-fila"><input type="text" id="hfUrl" value="'+escAttr(hudFotoUrl)+'" placeholder="../coche.png">'
+    + '<button id="hfMiCoche">Mi coche</button><button id="hfSin">Dibujado</button></div>'
+    + '<input type="file" id="hfFile" accept="image/*" style="display:none">'
+    + '<button class="reset" id="hfCargar" style="margin-top:8px">'+(hudFotoSesion ? 'Cambiar foto' : 'Cargar foto de tu coche')+'</button>'
+    + '<div class="hs-nota" id="hfEstado">'+escAttr(hudFotoEstado || (hudFotoUrl ? 'Foto en uso: '+hudFotoUrl : 'Sin foto · se usa el coche dibujado'))+'</div>'
+    + (hudFotoOrig ? '<label class="hs-r"><span>Tolerancia del recorte</span><em id="hfTolV">28</em><input type="range" id="hfTol" min="6" max="90" value="28"></label>'
+                   + '<button class="reset" id="hfCortar" style="margin-top:0">Quitar fondo</button>' : '')
+    + '<h4>Color del coche (si no hay foto)</h4><div class="sws">'
+    + HUD_COLORES.map(c => '<button class="sw'+(hudCfg.carColor===c[0]?' on':'')+'" data-v="'+c[0]+'" style="background:'+c[0]+';color:'+(['#eef1f4','#c3c9ce','#8f979e'].indexOf(c[0])>=0?'#111':'#fff')+'">'+c[1]+'</button>').join('')
+    + '</div>'
     + '<h4>Elementos</h4>'
-    + chk('hud','Maniobra, velocidad y límite') + chk('carteles','Carteles de dirección')
+    + chk('hud','Panel propio del motor: maniobra, velocidad y límite (repite los de la app)') + chk('carteles','Carteles de dirección')
     + chk('ambiente','Bruma, viñeteado y captafaros') + chk('detalleCoche','Detalles del coche')
     + chk('rain','Lluvia') + chk('spray','Agua de las ruedas')
     + chk('rotondaInvertida','Invertir lado de las rotondas') + chk('frenarCamara','Sujetar cámara en curva cerrada')
@@ -1128,15 +1230,27 @@ function pintarAjustesHud(){
 }
 $('hudsetBody').addEventListener('click', e => {
   if (e.target.id === 'hudReset'){ hudCfg = Object.assign({}, HUD_DEF); if (hud2){ try{ hud2.set(HUD_DEF); }catch(er){ if (hud2.onError) hud2.onError(er); } } pintarAjustesHud(); return; }
+  if (e.target.id === 'hfMiCoche'){ ponerFotoUrl('../coche.png'); return; }      // el coche.png del repositorio (../ porque esta pagina vive en leaflet-test/)
+  if (e.target.id === 'hfSin'){ ponerFotoUrl(''); return; }
+  if (e.target.id === 'hfCargar'){ $('hfFile').click(); return; }
+  if (e.target.id === 'hfCortar'){ recortarFondo(+$('hfTol').value); return; }
+  const sw = e.target.closest ? e.target.closest('.sw') : null;
+  if (sw){ hudSet('carColor', sw.dataset.v); $('hudsetBody').querySelectorAll('.sw').forEach(x => x.classList.toggle('on', x === sw)); return; }
   const b = e.target.closest ? e.target.closest('.seg button') : null; if (!b) return;
   const g = b.parentNode, k = g.dataset.k; hudSet(k, HUD_NUM.indexOf(k) >= 0 ? +b.dataset.v : b.dataset.v);
   g.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
 });
 $('hudsetBody').addEventListener('input', e => {
   const r = e.target; if (r.type !== 'range') return;
+  if (r.id === 'hfTol'){ $('hfTolV').textContent = r.value; return; }   // el deslizador de tolerancia no es un ajuste del motor
   hudSet(r.dataset.k, +r.value); $('hv_'+r.dataset.k).textContent = r.value + (r.dataset.u||'');
 });
-$('hudsetBody').addEventListener('change', e => { const c = e.target; if (c.type === 'checkbox') hudSet(c.dataset.k, c.checked); });
+$('hudsetBody').addEventListener('change', e => {
+  const c = e.target;
+  if (c.id === 'hfUrl'){ ponerFotoUrl(c.value); return; }
+  if (c.id === 'hfFile'){ if (c.files && c.files[0]) cargarFotoArchivo(c.files[0]); return; }
+  if (c.type === 'checkbox') hudSet(c.dataset.k, c.checked);
+});
 $('tabAjHud').onclick = () => { pintarAjustesHud(); $('hudset').classList.add('open'); };
 $('closeHudset').onclick = () => $('hudset').classList.remove('open');
 
