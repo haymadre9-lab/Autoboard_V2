@@ -121,12 +121,15 @@ function updateRadar(){
   const over = !!(best && best.dist<500 && best.max && speedKmh > best.max+2);
   if(over){ if(!radarAlerted){ radarAlerted=true; radarBeep(); } }
   if(!best || best.dist>560) radarAlerted=false;
+  hudRadarEstado.active = over; hudRadarEstado.type = over ? best.t : null;   // lo lee tambien el modo Faro, sin duplicar esta cuenta
+  if (faroOn) pintarFaro();
   const edge=$('radaredge'); if (edge) edge.classList.toggle('show', over);
   const el=$('radarsign'); if(!best){el.classList.remove('show');return;}
   $('rsmax').textContent=best.max||'⚠'; $('rsdist').textContent=fmtDist(Math.max(0,best.dist));
   const rsc=el.querySelector('.rs-c'); if(rsc) rsc.style.borderColor=radarColor(best.t);
   el.classList.add('show');
 }
+let hudRadarEstado = { active:false, type:null };
 
 fetch(RAIZ + 'radares.json').then(r=>r.json()).then(d=>{ radarDB=d; console.log('[POIs] radares:', d.length); if(lastFix) refreshRadars([lastFix.lat,lastFix.lon]); }).catch(e=>console.warn('[radares]', e.message));
 
@@ -553,7 +556,7 @@ let hud2 = null, hudAbierto = false, hudCargando = false, hudDemo = false;   // 
    que 17,5 o mas ya pide las del 18 (el doble de teselas por pantalla). Por eso "Cerca" es 17,4. */
 let navZoom = 17.4;
 
-const VERSION = '2026.09.28-i';
+const VERSION = '2026.09.28-j';
 // X dibujada: el caracter U+2715 no esta en la fuente del navegador y salia como un rectangulo
 const X_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>';
 try{ $('ver').textContent = 'v'+VERSION; }catch(e){}
@@ -1011,10 +1014,11 @@ function rutaDemo(){
    escucha, solo van a la consola y el HUD se queda en una pantalla oscura sin explicacion
    -- que es lo que pasaba. hud2-boot.js si lo escuchaba; el puente no. */
 function avisoHud(msg){ const e = $('hud2err'); if (e.textContent !== msg) e.textContent = msg; e.style.display = msg ? 'block' : 'none'; }
-function marcarPestana(cual){ ['tabMapa','tabHud'].forEach(id => $(id).classList.toggle('on', id === cual)); }
+function marcarPestana(cual){ ['tabMapa','tabHud','tabFaro'].forEach(id => $(id).classList.toggle('on', id === cual)); }
 
 async function abrirHud(){
   if (hudAbierto || hudCargando) return;
+  if (faroOn) cerrarFaro();
   hudCargando = true; setStatus('Cargando HUD 2…'); avisoHud('');
   try{
     if (!hud2){
@@ -1050,11 +1054,44 @@ function cerrarHud(){
   hudAbierto = false; hudDemo = false; marcarPestana('tabMapa');
   follow = true; zoomPendiente = true; if (lastFix) seguirCamara([lastFix.lat, lastFix.lon], 0);   // el mapa vuelve donde esta el coche
 }
+
+/* ==== Faro: pantalla limpia, extraida de la version YA INTEGRADA de AutoBoard (el
+   body.faro/#hudclean real, no el archivo faro/index.html suelto, que es un secundario
+   mas simple). No navega a ningun sitio: alterna un estado dentro de la misma app, la
+   ruta sigue activa debajo. El numero se convierte en la propia senal de radar -- mismo
+   color por tipo, mismo parpadeo -- cuando vas por encima del limite cerca de uno, asi
+   que no hace falta el aviso aparte encima de una pantalla que ya deberia estar limpia. */
+let faroOn = false, faroBlinkT = 0;
+function pintarFaro(){
+  const spd = Math.round(speedKmh);
+  const wrap = $('fSpeed');
+  $('fNum').textContent = spd;
+  wrap.classList.toggle('sign', hudRadarEstado.active);
+  wrap.style.borderColor = hudRadarEstado.active ? radarColor(hudRadarEstado.type) : '';
+}
+function abrirFaro(){
+  if (faroOn) return;
+  if (hudAbierto) cerrarHud();
+  faroOn = true;
+  $('faroWrap').classList.add('on');
+  $('map').style.visibility = 'hidden';
+  pintarFaro();
+  marcarPestana('tabFaro');
+}
+function cerrarFaro(){
+  if (!faroOn) return;
+  faroOn = false;
+  $('faroWrap').classList.remove('on'); $('map').style.visibility = '';
+  marcarPestana('tabMapa');
+  follow = true; zoomPendiente = true; if (lastFix) seguirCamara([lastFix.lat, lastFix.lon], 0);
+}
+setInterval(() => { if (!faroOn) return; faroBlinkT = !faroBlinkT; $('fSpeed').classList.toggle('blink', faroBlinkT && $('fSpeed').classList.contains('sign')); }, 450);
+
 /* Pestañas de modo, arriba a la izquierda: Mapa / HUD arriba, Faro debajo. Faro es una
    pagina independiente que aun no se ha migrado, asi que por ahora se abre tal cual. */
-$('tabMapa').onclick = () => { if (hudAbierto) cerrarHud(); };
-$('tabHud').onclick  = () => { if (hudAbierto) return; abrirHud(); };
-$('tabFaro').onclick = () => { location.href = RAIZ + 'faro/'; };
+$('tabMapa').onclick = () => { if (hudAbierto) cerrarHud(); if (faroOn) cerrarFaro(); };
+$('tabHud').onclick  = () => { if (faroOn) cerrarFaro(); if (hudAbierto) return; abrirHud(); };
+$('tabFaro').onclick = () => { if (faroOn){ cerrarFaro(); return; } abrirFaro(); };
 $('hud2err').onclick = () => avisoHud('');
 
 

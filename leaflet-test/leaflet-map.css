@@ -213,3 +213,15 @@ html.debug #hud{display:flex}
 .leaflet-top.leaflet-left{top:8px;left:50%;transform:translateX(-50%);right:auto}
 .leaflet-control-zoom{display:flex}
 .leaflet-control-zoom a{float:none}
+
+/* ==== Faro: pantalla limpia, CSS extraido literal de AutoBoard (body.faro/#hudclean) ==== */
+#faroWrap{position:fixed;inset:0;z-index:850;display:none;background:#000}
+#faroWrap.on{display:block}
+#fSpeed{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;
+  flex-direction:column;align-items:center;justify-content:center;box-sizing:border-box}
+#fSpeed .n{font:800 40vh/0.82 system-ui,sans-serif;color:#fff;font-variant-numeric:tabular-nums}
+#fSpeed .u{font:700 5vh/1 system-ui,sans-serif;letter-spacing:5px;color:#cfd6e0;margin-top:1.2vh}
+#fSpeed.sign{width:52vh;height:52vh;border-radius:50%;background:#fff;border:5vh solid #e01d1d}
+#fSpeed.sign .n{color:#111;font-size:26vh}
+#fSpeed.sign .u{display:none}
+#fSpeed.sign.blink{filter:brightness(.5)}
