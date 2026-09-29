@@ -121,8 +121,7 @@ function updateRadar(){
   const over = !!(best && best.dist<500 && best.max && speedKmh > best.max+2);
   if(over){ if(!radarAlerted){ radarAlerted=true; radarBeep(); } }
   if(!best || best.dist>560) radarAlerted=false;
-  hudRadarEstado.active = over; hudRadarEstado.type = over ? best.t : null;   // lo lee tambien el modo Faro, sin duplicar esta cuenta
-  if (faroOn) pintarFaro();
+  hudRadarEstado.active = over; hudRadarEstado.type = over ? best.t : null;
   const edge=$('radaredge'); if (edge) edge.classList.toggle('show', over);
   const el=$('radarsign'); if(!best){el.classList.remove('show');return;}
   $('rsmax').textContent=best.max||'⚠'; $('rsdist').textContent=fmtDist(Math.max(0,best.dist));
@@ -570,7 +569,7 @@ function actualizarZoomManiobra(distSiguiente, tipoSiguiente){
   try{ map.setZoom(z, { animate:true }); }catch(e){}
 }
 
-const VERSION = '2026.09.28-l';
+const VERSION = '2026.09.28-m';
 // X dibujada: el caracter U+2715 no esta en la fuente del navegador y salia como un rectangulo
 const X_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>';
 try{ $('ver').textContent = 'v'+VERSION; }catch(e){}
@@ -638,6 +637,11 @@ if (navigator.geolocation){
       if (follow) seguirCamara([now.lat, now.lon], dt);
     }
     if (hudAbierto && hud2){ try{ hud2.setSpeed(hudDemo ? Math.max(speedKmh/3.6, 15) : speedKmh/3.6); if (!hudDemo) hud2.syncPosition(now.lat, now.lon); }catch(e){} }
+    // La velocidad de Faro se pinta aqui, donde se acaba de calcular speedKmh -- no depende
+    // de que updateRadar() (que puede salir antes por otro motivo) llegue hasta el final.
+    // El anillo/color de radar de Faro (hudRadarEstado) si sigue viniendo de updateRadar(),
+    // porque esa parte SI es del sistema de radares.
+    if (faroOn) pintarFaro();
     $('spd').textContent = Math.round(speedKmh)+' km/h';
     $('spd2').textContent = Math.round(speedKmh);
     $('acc').textContent = Math.round(c.accuracy||0)+' m';
