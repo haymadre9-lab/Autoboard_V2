@@ -121,7 +121,7 @@ function updateRadar(){
   const over = !!(best && best.dist<500 && best.max && speedKmh > best.max+2);
   if(over){ if(!radarAlerted){ radarAlerted=true; radarBeep(); } }
   if(!best || best.dist>560) radarAlerted=false;
-  hudRadarEstado.active = over; hudRadarEstado.type = over ? best.t : null;
+  hudRadarEstado.active = over; hudRadarEstado.cerca = !!best; hudRadarEstado.type = best ? best.t : null;
   const edge=$('radaredge'); if (edge) edge.classList.toggle('show', over);
   const el=$('radarsign'); if(!best){el.classList.remove('show');return;}
   $('rsmax').textContent=best.max||'⚠'; $('rsdist').textContent=fmtDist(Math.max(0,best.dist));
@@ -133,7 +133,7 @@ function updateRadar(){
   el.classList.toggle('alerta', over);
   el.classList.add('show');
 }
-let hudRadarEstado = { active:false, type:null };
+let hudRadarEstado = { active:false, cerca:false, type:null };
 
 fetch(RAIZ + 'radares.json').then(r=>r.json()).then(d=>{ radarDB=d; console.log('[POIs] radares:', d.length); if(lastFix) refreshRadars([lastFix.lat,lastFix.lon]); }).catch(e=>console.warn('[radares]', e.message));
 
@@ -580,7 +580,7 @@ function actualizarZoomManiobra(distSiguiente, tipoSiguiente){
   try{ map.setZoom(z, { animate:true }); }catch(e){}
 }
 
-const VERSION = '2026.09.28-p';
+const VERSION = '2026.09.28-r';
 // X dibujada: el caracter U+2715 no esta en la fuente del navegador y salia como un rectangulo
 const X_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>';
 try{ $('ver').textContent = 'v'+VERSION; }catch(e){}
@@ -648,11 +648,6 @@ if (navigator.geolocation){
       if (follow) seguirCamara([now.lat, now.lon], dt);
     }
     if (hudAbierto && hud2){ try{ hud2.setSpeed(hudDemo ? Math.max(speedKmh/3.6, 15) : speedKmh/3.6); if (!hudDemo) hud2.syncPosition(now.lat, now.lon); }catch(e){} }
-    // La velocidad de Faro se pinta aqui, donde se acaba de calcular speedKmh -- no depende
-    // de que updateRadar() (que puede salir antes por otro motivo) llegue hasta el final.
-    // El anillo/color de radar de Faro (hudRadarEstado) si sigue viniendo de updateRadar(),
-    // porque esa parte SI es del sistema de radares.
-    if (faroOn) pintarFaro();
     $('spd').textContent = Math.round(speedKmh)+' km/h';
     $('spd2').textContent = Math.round(speedKmh);
     // Discreta: solo aparece cuando la precision es mala de verdad -- por debajo de
@@ -676,6 +671,11 @@ if (navigator.geolocation){
       refreshRadars([now.lat, now.lon]);
     }
     updateRadar();
+    // La velocidad Y el anillo de radar de Faro se pintan juntos, AQUI, justo despues de
+    // updateRadar(): antes se pintaba la velocidad mas arriba, once lineas antes de que
+    // hudRadarEstado se recalculara para este mismo tick -- llegaba siempre con el dato
+    // de la posicion anterior, un paso tarde.
+    if (faroOn) pintarFaro();
     if (listaCargOn && now.t - listaT > 4000){ listaT = now.t; renderLista(); }   // la lista sigue al coche, sin repintar en cada fix
     if (!lastOcmPos || dist([now.lat,now.lon], lastOcmPos) > 3000 || ahora-lastOcmAt > 180000){
       lastOcmAt = ahora; lastOcmPos = [now.lat, now.lon];
@@ -805,25 +805,51 @@ function avanzarPaso(recorrido){
   while (stepIdx < steps.length-1 && (steps[stepIdx].metro||0) <= recorrido + 15) stepIdx++;
 }
 
-let ultimoStepPintado = -1;   // -1 fuerza el primer dibujo; se resetea al calcular ruta nueva
+
+/* ==== carriles: extraido literal de AutoBoard. Fuente APARTE de TomTom: una consulta
+   de solo lectura al router publico de OSRM, pidiendo unicamente los cruces con
+   informacion de carril (valido/no valido por carril, direccion de cada uno). No pide
+   ruta -sigue siendo TomTom quien decide por donde ir-, solo la geometria de carriles
+   en los cruces. Sin clave, gratuito, mismo servicio que ya usaba AutoBoard. */
+let osrmLanes = [];
+function pickDir(inds){ if(!inds||!inds.length)return 'straight'; let d=inds[inds.length-1]; if(d==='none')d=inds[0]; if(!d||d==='none')return 'straight'; d=d.replace('merge to left','slight left').replace('merge to right','slight right'); return d; }
+async function fetchLanes(pts){
+  osrmLanes = [];
+  try{
+    const coords = pts.map(p=>p[1]+','+p[0]).join(';');
+    const r = await fetch('https://router.project-osrm.org/route/v1/driving/'+coords+'?overview=false&steps=true');
+    const j = await r.json();
+    if (!j.routes || !j.routes.length) return;
+    const out = [];
+    j.routes[0].legs.forEach(l => l.steps.forEach(st => (st.intersections||[]).forEach(it => {
+      if (it.lanes && it.lanes.length) out.push({ ll:[it.location[1],it.location[0]], lanes: it.lanes.map(la=>({valid:!!la.valid, dir:pickDir(la.indications)})) });
+    })));
+    osrmLanes = out;
+    console.log('[carriles] cruces con datos de carril:', out.length);
+  }catch(e){ console.warn('[carriles]', e.message); }
+}
+function laneFor(ll){ if (!ll) return null; let best=null, bd=170; for (const e of osrmLanes){ const dd=dist(ll,e.ll); if(dd<bd){bd=dd;best=e;} } return best?best.lanes:null; }
+function lanesHTML(lanes,hw){ return '<div class="lanerow">'+lanes.map(l=>laneArrow(l.dir,l.valid,hw)).join('')+'</div>'; }
+
+let ultimoStepPintado = '';   // cadena vacia fuerza el primer dibujo; se resetea al calcular ruta nueva
 function renderStep(){
   const s = steps[stepIdx]; if (!s) return;
   const nb = $('navbanner');
   nb.style.display = 'flex';
-  // El SVG de la flecha/rotonda y el nombre de la calle estan atados al PASO, no al
-  // fix de GPS: mientras stepIdx no cambie, siguen siendo exactamente los mismos.
-  // Antes se regeneraba el SVG entero en cada posicion -varios <path> y calculo
-  // trigonometrico en una rotonda- para pintar, la mayoria de las veces, el mismo
-  // dibujo que ya habia. Ahora solo se toca el DOM de la flecha cuando de verdad
-  // cambia de maniobra; en cada fix normal solo se actualiza el numero de metros.
-  if (stepIdx !== ultimoStepPintado){
-    ultimoStepPintado = stepIdx;
-    const hw = !!s.hw || isHighway(s);
+  const hw = !!s.hw || isHighway(s);
+  const distAquiA = Math.max(0, (s.metro||0) - recorridoAhora());
+  const lanes = (distAquiA < 600) ? laneFor(s.ll) : null;   // solo cerca de la maniobra: mas lejos no aporta y tapa la calle
+  // El SVG (flecha/rotonda o carriles) y el nombre de la calle estan atados al PASO
+  // y a si hay carriles o no -- mientras esa combinacion no cambie, siguen siendo
+  // exactamente los mismos. Antes se regeneraba el SVG entero en cada posicion para
+  // pintar, la mayoria de las veces, el mismo dibujo que ya habia.
+  const clave = stepIdx + '|' + (lanes ? 'L' : 'M') + '|' + hw;
+  if (clave !== ultimoStepPintado){
+    ultimoStepPintado = clave;
     nb.classList.toggle('hw', hw);
-    $('navarrow').innerHTML = maneuverSVG(s, hw);
+    $('navarrow').innerHTML = lanes ? lanesHTML(lanes, hw) : maneuverSVG(s, hw);
     $('navsub').textContent = s.calle || s.msg || '';
   }
-  const distAquiA = Math.max(0, (s.metro||0) - recorridoAhora());
   $('navd').textContent = fmtDist(distAquiA);
 }
 function endRoute(){
@@ -919,14 +945,14 @@ async function irA(destino, nombre, opc){
       const metroFinal = (porIndice !== null && (off == null || Math.abs(porIndice - off) <= Math.max(300, off*0.1))) ? porIndice : (off||0);
       return {
         metro: metroFinal, calle: it.street||'', name: it.street||'', msg: it.message||'',
-        maneuver: ttMan(it),
+        maneuver: ttMan(it), ll: it.point ? [it.point.latitude, it.point.longitude] : null,
         // igual que AutoBoard real: hay que mirar el nombre Y las referencias (A-8, AP-8...)
         hw: isHighway({name: it.street||''}) || isHighway({name: refs}) || /\b(A|AP|E)-?\d/i.test(refs)
       };
     });
     console.log('[ruta] maniobras (m desde el inicio):', steps.map(s=>Math.round(s.metro)).join(' · '),
       '| geometria:', Math.round(routeCumDist[routeCumDist.length-1]), 'm | TomTom dice:', route.summary.lengthInMeters, 'm');
-    stepIdx = 0; ultimoStepPintado = -1; avanzarPaso(0);   // se salta la instruccion de salida (punto a 0 m): se empieza en la primera maniobra real -- ultimoStepPintado se resetea para que un recalculo SIEMPRE redibuje, aunque stepIdx vuelva a coincidir con el mismo numero de antes
+    stepIdx = 0; ultimoStepPintado = ''; avanzarPaso(0);   // se salta la instruccion de salida (punto a 0 m): se empieza en la primera maniobra real -- ultimoStepPintado se resetea para que un recalculo SIEMPRE redibuje, aunque stepIdx vuelva a coincidir con el mismo numero de antes
 
     cerrarBuscador();
     renderStep();
@@ -938,6 +964,7 @@ async function irA(destino, nombre, opc){
 
     const ms = Math.round(performance.now()-t0);
     rutaDistTotal = route.summary.lengthInMeters || 1; rutaTiempoTotal = route.summary.travelTimeInSeconds || 0;
+    try{ fetchLanes(pts); }catch(e){ console.warn('[carriles]', e.message); }
     setStatus('Ruta calculada en '+ms+' ms'+(wps.length ? ' · '+wps.length+(wps.length>1?' paradas':' parada') : ''));
     actualizarEta(rutaDistTotal, rutaTiempoTotal);
     wps.forEach(w => { w.pos = proyectarEnRuta(w.ll).along; });   // donde cae cada parada sobre esta ruta
@@ -1140,8 +1167,9 @@ function pintarFaro(){
   const spd = Math.round(speedKmh);
   const wrap = $('fSpeed');
   $('fNum').textContent = spd;
-  wrap.classList.toggle('sign', hudRadarEstado.active);
-  wrap.style.borderColor = hudRadarEstado.active ? radarColor(hudRadarEstado.type) : '';
+  wrap.classList.toggle('sign', hudRadarEstado.cerca);              // radar cerca: se convierte en senal (con o sin exceso)
+  wrap.classList.toggle('alerta', hudRadarEstado.active);           // exceso real: parpadea en rojo
+  wrap.style.borderColor = hudRadarEstado.active ? radarColor(hudRadarEstado.type) : (hudRadarEstado.cerca ? '#8a939c' : '');
 }
 function abrirFaro(){
   if (faroOn) return;
@@ -1162,7 +1190,7 @@ function cerrarFaro(){
   fpsArrancar();
   follow = true; zoomPendiente = true; if (lastFix) seguirCamara([lastFix.lat, lastFix.lon], 0);
 }
-setInterval(() => { if (!faroOn) return; faroBlinkT = !faroBlinkT; $('fSpeed').classList.toggle('blink', faroBlinkT && $('fSpeed').classList.contains('sign')); }, 450);
+setInterval(() => { if (!faroOn) return; faroBlinkT = !faroBlinkT; $('fSpeed').classList.toggle('blink', faroBlinkT && $('fSpeed').classList.contains('alerta')); }, 450);
 
 /* Pestañas de modo, arriba a la izquierda: Mapa / HUD arriba, Faro debajo. Faro es una
    pagina independiente que aun no se ha migrado, asi que por ahora se abre tal cual. */
