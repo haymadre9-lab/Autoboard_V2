@@ -574,7 +574,7 @@ function actualizarZoomManiobra(distSiguiente, tipoSiguiente){
   try{ map.setZoom(z, { animate:true }); }catch(e){}
 }
 
-const VERSION = '2026.09.28-n';
+const VERSION = '2026.09.28-o';
 // X dibujada: el caracter U+2715 no esta en la fuente del navegador y salia como un rectangulo
 const X_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>';
 try{ $('ver').textContent = 'v'+VERSION; }catch(e){}
@@ -1222,7 +1222,11 @@ const HUD_DEF = { theme:'auto', maxFps:0, escala:0.6, perfil:'auto', estilo:'sua
   carScale:1, hudScale:1, vista:1, hud:false, carteles:true, carColor:'#eef1f4', ambiente:true, detalleCoche:true,
   rain:false, spray:true, rotondaInvertida:false, frenarCamara:false, traffic:'off' };
 const HUD_NUM = ['maxFps','escala'];
-let hudCfg = Object.assign({}, HUD_DEF);
+function cargarHudCfg(){
+  try{ const g = JSON.parse(localStorage.getItem('hudCfgLT')||'null'); return g ? Object.assign({}, HUD_DEF, g) : Object.assign({}, HUD_DEF); }
+  catch(e){ return Object.assign({}, HUD_DEF); }
+}
+let hudCfg = cargarHudCfg();   // la configuracion del HUD se guarda de una sesion a otra -- tamano, coche, todo
 /* Foto del coche, como en AutoBoard. Lo unico que se recuerda de un dia para otro es la URL
    de la foto del repositorio (una cadena corta): repetir la eleccion cada vez seria un
    fastidio, y es una preferencia de identidad mas que un ajuste. Una foto cargada desde el
@@ -1315,6 +1319,7 @@ async function cargarFotoArchivo(f){
 }
 function hudSet(k, v){
   hudCfg[k] = v;
+  try{ localStorage.setItem('hudCfgLT', JSON.stringify(hudCfg)); }catch(e){}
   if (hud2){ try{ hud2.set({[k]: v}); }catch(e){ if (hud2.onError) hud2.onError(e); } }
 }
 function pintarAjustesHud(){
@@ -1353,7 +1358,7 @@ function pintarAjustesHud(){
     + '<button class="reset" id="hudReset">Restablecer valores</button>';
 }
 $('hudsetBody').addEventListener('click', e => {
-  if (e.target.id === 'hudReset'){ hudCfg = Object.assign({}, HUD_DEF); if (hud2){ try{ hud2.set(HUD_DEF); }catch(er){ if (hud2.onError) hud2.onError(er); } } pintarAjustesHud(); return; }
+  if (e.target.id === 'hudReset'){ hudCfg = Object.assign({}, HUD_DEF); try{ localStorage.removeItem('hudCfgLT'); }catch(e){} if (hud2){ try{ hud2.set(HUD_DEF); }catch(er){ if (hud2.onError) hud2.onError(er); } } pintarAjustesHud(); return; }
   if (e.target.id === 'hfMiCoche'){ ponerFotoUrl(RAIZ + 'coche.png'); return; }      // el coche.png del repositorio (../ porque esta pagina vive en leaflet-test/)
   if (e.target.id === 'hfSin'){ ponerFotoUrl(''); return; }
   if (e.target.id === 'hfCargar'){ $('hfFile').click(); return; }
