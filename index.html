@@ -7,7 +7,7 @@
 <title>Leaflet Test · AutoBoard Fase 1</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
   integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-<link rel="stylesheet" href="./leaflet-map.css?v=20260928u">
+<link rel="stylesheet" href="./leaflet-map.css?v=20260929a">
 </head>
 <body>
 
@@ -88,7 +88,47 @@
      no hace nada -- no hay ningun sitio del codigo que dependa de que esto
      funcione para lo demas. -->
 <script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
-<script src="./leaflet-map.js?v=20260928u"></script>
+<script src="./leaflet-map.js?v=20260929a"></script>
 <script>if(/[?&]debug=1/.test(location.search)){var e=document.createElement("script");e.src="https://cdn.jsdelivr.net/npm/eruda";e.onload=function(){eruda.init()};document.head.appendChild(e);}</script>
 </body>
+<script>
+/* Registro del service worker: cache con nombre propio ("autoboard"), se
+   borran los caches con nombre ajeno, se pide actualizacion al SW y, si entra
+   uno nuevo, se recarga una sola vez. Asi deja de servir versiones viejas.
+   Extraido literal del index.html anterior -- sin esto, sw.js nunca llega a
+   registrarse y la app no funciona sin conexion. */
+if('serviceWorker' in navigator){
+  addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+  let _r=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(_r)return; _r=true; location.reload(); });
+}
+(function(){
+  const MIO = 'autoboard';          // los caches que NO empiecen asi, se borran
+  if(!('serviceWorker' in navigator)) return;
+  addEventListener('load', async () => {
+    try{
+      if(window.caches){
+        const ns = await caches.keys();
+        for(const n of ns) if(n.indexOf(MIO)!==0){ await caches.delete(n); console.log('[sw] cache ajeno borrado:', n); }
+      }
+      const rs = await navigator.serviceWorker.getRegistrations();
+      for(const r of rs){
+        r.update();
+        r.addEventListener('updatefound', () => {
+          const nuevo = r.installing;
+          if(!nuevo) return;
+          nuevo.addEventListener('statechange', () => {
+            if(nuevo.state==='installed' && navigator.serviceWorker.controller
+               && !sessionStorage.getItem('swRecargado')){
+              sessionStorage.setItem('swRecargado','1');
+              console.log('[sw] version nueva instalada; recargando');
+              location.reload();
+            }
+          });
+        });
+      }
+    }catch(e){ console.warn('[sw]', e.message); }
+  });
+})();
+</script>
 </html>

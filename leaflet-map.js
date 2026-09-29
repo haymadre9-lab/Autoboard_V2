@@ -580,7 +580,7 @@ function actualizarZoomManiobra(distSiguiente, tipoSiguiente){
   try{ map.setZoom(z, { animate:true }); }catch(e){}
 }
 
-const VERSION = '2026.09.28-u';
+const VERSION = '2026.09.29-a';
 // X dibujada: el caracter U+2715 no esta en la fuente del navegador y salia como un rectangulo
 const X_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>';
 try{ $('ver').textContent = 'v'+VERSION; }catch(e){}
@@ -1163,6 +1163,11 @@ async function abrirHud(){
     $('hud2wrap').classList.add('on');
     hudAbierto = true;
     $('map').style.visibility = 'hidden';                        // mapa fuera de juego mientras el HUD esta abierto
+    // Si al cerrar la ultima vez se encogio el lienzo a 1x1 para liberar memoria de
+    // video (ver cerrarHud), hay que devolverle su tamano real ANTES de resize(), o
+    // reconstruiria el buffer con un lienzo practicamente vacio.
+    const cv = $('hud2canvas');
+    if (cv && cv.width <= 2 && cv.__w){ try{ cv.width = cv.__w; cv.height = cv.__h; }catch(e){} }
     hud2.resize();
     hudDemo = !(routeOn && routeCoordsLL.length >= 8);
     if (hudDemo){ try{ hud2.setRoute(rutaDemo()); hud2.setManeuvers([]); }catch(e){ hud2.onError(e); } }
@@ -1182,6 +1187,13 @@ async function abrirHud(){
 function cerrarHud(){
   if (!hudAbierto) return;
   try{ hud2.stop(); }catch(e){}
+  // LIBERAR MEMORIA DE VIDEO: parar el bucle no basta, el lienzo sigue reservando su
+  // buffer entero aunque este oculto. Encogerlo a 1x1 devuelve esa memoria al
+  // navegador -- esto es lo que hacia el hud2-boot.js original y a mi puente se le
+  // habia quedado fuera. Sin esto, cada apertura/cierre del HUD dejaba el buffer
+  // completo reservado, sin liberar nunca nada.
+  const cv = $('hud2canvas');
+  if (cv){ try{ cv.__w = cv.width; cv.__h = cv.height; cv.width = 1; cv.height = 1; }catch(e){} }
   $('hud2wrap').classList.remove('on'); $('map').style.visibility = ''; avisoHud('');
   hudAbierto = false; hudDemo = false; marcarPestana('tabMapa');
   follow = true; zoomPendiente = true; if (lastFix) seguirCamara([lastFix.lat, lastFix.lon], 0);   // el mapa vuelve donde esta el coche
