@@ -125,7 +125,12 @@ function updateRadar(){
   const edge=$('radaredge'); if (edge) edge.classList.toggle('show', over);
   const el=$('radarsign'); if(!best){el.classList.remove('show');return;}
   $('rsmax').textContent=best.max||'⚠'; $('rsdist').textContent=fmtDist(Math.max(0,best.dist));
-  const rsc=el.querySelector('.rs-c'); if(rsc) rsc.style.borderColor=radarColor(best.t);
+  // Como una senal de carretera de verdad: gris/neutra mientras solo avisa de que
+  // hay un radar delante, y roja de verdad SOLO cuando hay alerta real -vas por
+  // encima del limite cerca de el-. Antes se coloreaba siempre segun el tipo de
+  // radar, aunque fueras dentro del limite -- gritaba sin necesidad.
+  const rsc=el.querySelector('.rs-c'); if(rsc) rsc.style.borderColor = over ? radarColor(best.t) : '#8a939c';
+  el.classList.toggle('alerta', over);
   el.classList.add('show');
 }
 let hudRadarEstado = { active:false, type:null };
@@ -550,6 +555,7 @@ let routeCumDist = [];    // distancia acumulada real hasta cada punto de routeC
 let steps = [], stepIdx = 0, destLL = null, routeOn = false, routeProgIdx = 0;
 let trafficSegs = [];
 let avisoFijoHasta = 0;        // un aviso importante (parada alcanzada) no se pisa con "Quedan X km" durante unos segundos
+let rutaDistTotal = 0, rutaTiempoTotal = 0;   // de la ultima ruta calculada, para poder escalar el tiempo que queda
 let wps = [], rutaVersion = 0;   // wps = paradas intermedias pendientes, ordenadas a lo largo de la ruta
 let offAcc = 0, lastRecalc = 0;
 let follow = true, lastFix = null, heading = 0, speedKmh = 0;
@@ -574,7 +580,7 @@ function actualizarZoomManiobra(distSiguiente, tipoSiguiente){
   try{ map.setZoom(z, { animate:true }); }catch(e){}
 }
 
-const VERSION = '2026.09.28-o';
+const VERSION = '2026.09.28-p';
 // X dibujada: el caracter U+2715 no esta en la fuente del navegador y salia como un rectangulo
 const X_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>';
 try{ $('ver').textContent = 'v'+VERSION; }catch(e){}
@@ -649,7 +655,14 @@ if (navigator.geolocation){
     if (faroOn) pintarFaro();
     $('spd').textContent = Math.round(speedKmh)+' km/h';
     $('spd2').textContent = Math.round(speedKmh);
-    $('acc').textContent = Math.round(c.accuracy||0)+' m';
+    // Discreta: solo aparece cuando la precision es mala de verdad -- por debajo de
+    // eso, ese numero no aporta nada la mayor parte del tiempo y solo ensucia la
+    // pantalla. GPS "recuperandose" (>50 m) se distingue de "debil" (25-50 m).
+    const accM = c.accuracy||0;
+    const acc = $('acc');
+    if (accM > 50){ acc.hidden = false; acc.textContent = '● GPS recuperándose'; acc.classList.add('malo'); }
+    else if (accM > 25){ acc.hidden = false; acc.textContent = '● GPS débil'; acc.classList.remove('malo'); }
+    else acc.hidden = true;
     if (routeOn) trackRoute();
     // Los radares no se mueven: repasar la base entera cada segundo, aunque
     // apenas te hayas desplazado unos metros, es trabajo repetido para el
@@ -712,7 +725,20 @@ function trackRoute(){
   const sigMan = steps[stepIdx];
   if (sigMan) actualizarZoomManiobra(Math.max(0, (sigMan.metro||0) - recorrido), sigMan.maneuver && sigMan.maneuver.type);
   const dRem = Math.max(0, (routeCumDist[routeCumDist.length-1]||0) - recorrido);
-  if (performance.now() > avisoFijoHasta) setStatus('Quedan ' + fmtDist(dRem));
+  actualizarEta(dRem, rutaTiempoTotal * (rutaDistTotal ? dRem/rutaDistTotal : 0));
+}
+/* Tarjeta de ETA: distancia y minutos que quedan, y hora real de llegada. El tiempo
+   restante se escala proporcionalmente al que dio TomTom para la ruta entera -- no es
+   una nueva consulta de trafico en vivo, es una estimacion a partir de lo que ya
+   tenemos, igual de valida para lo que se necesita aqui. */
+function actualizarEta(distM, tiempoSeg){
+  if (!routeOn){ $('etaCard').classList.remove('on'); return; }
+  $('etaCard').classList.add('on');
+  $('etaKm').textContent = fmtDist(distM);
+  const min = Math.round(tiempoSeg/60);
+  $('etaMin').textContent = min + ' min';
+  const llegada = new Date(Date.now() + tiempoSeg*1000);
+  $('etaLlegada').textContent = 'Llegada ' + String(llegada.getHours()).padStart(2,'0') + ':' + String(llegada.getMinutes()).padStart(2,'0');
 }
 
 /* ---- panel de maniobra: mismas funciones que AutoBoard (arrowSVG,
@@ -779,21 +805,31 @@ function avanzarPaso(recorrido){
   while (stepIdx < steps.length-1 && (steps[stepIdx].metro||0) <= recorrido + 15) stepIdx++;
 }
 
+let ultimoStepPintado = -1;   // -1 fuerza el primer dibujo; se resetea al calcular ruta nueva
 function renderStep(){
   const s = steps[stepIdx]; if (!s) return;
-  const hw = !!s.hw || isHighway(s);
   const nb = $('navbanner');
   nb.style.display = 'flex';
-  nb.classList.toggle('hw', hw);
-  $('navarrow').innerHTML = maneuverSVG(s, hw);
+  // El SVG de la flecha/rotonda y el nombre de la calle estan atados al PASO, no al
+  // fix de GPS: mientras stepIdx no cambie, siguen siendo exactamente los mismos.
+  // Antes se regeneraba el SVG entero en cada posicion -varios <path> y calculo
+  // trigonometrico en una rotonda- para pintar, la mayoria de las veces, el mismo
+  // dibujo que ya habia. Ahora solo se toca el DOM de la flecha cuando de verdad
+  // cambia de maniobra; en cada fix normal solo se actualiza el numero de metros.
+  if (stepIdx !== ultimoStepPintado){
+    ultimoStepPintado = stepIdx;
+    const hw = !!s.hw || isHighway(s);
+    nb.classList.toggle('hw', hw);
+    $('navarrow').innerHTML = maneuverSVG(s, hw);
+    $('navsub').textContent = s.calle || s.msg || '';
+  }
   const distAquiA = Math.max(0, (s.metro||0) - recorridoAhora());
   $('navd').textContent = fmtDist(distAquiA);
-  $('navsub').textContent = s.calle || s.msg || '';
 }
 function endRoute(){
   if (hudAbierto) cerrarHud();
   wps = []; pintarParadas(); zoomManiobraOn = false;
-  routeOn = false; if (listaCargOn) setTimeout(renderLista, 0); steps = []; stepIdx = 0;
+  routeOn = false; $('etaCard').classList.remove('on'); if (listaCargOn) setTimeout(renderLista, 0); steps = []; stepIdx = 0;
   if (routeLine){ map.removeLayer(routeLine); routeLine = null; }
   $('navbanner').style.display = 'none';
   cerrarBuscador();
@@ -890,7 +926,7 @@ async function irA(destino, nombre, opc){
     });
     console.log('[ruta] maniobras (m desde el inicio):', steps.map(s=>Math.round(s.metro)).join(' · '),
       '| geometria:', Math.round(routeCumDist[routeCumDist.length-1]), 'm | TomTom dice:', route.summary.lengthInMeters, 'm');
-    stepIdx = 0; avanzarPaso(0);   // se salta la instruccion de salida (punto a 0 m): se empieza en la primera maniobra real
+    stepIdx = 0; ultimoStepPintado = -1; avanzarPaso(0);   // se salta la instruccion de salida (punto a 0 m): se empieza en la primera maniobra real -- ultimoStepPintado se resetea para que un recalculo SIEMPRE redibuje, aunque stepIdx vuelva a coincidir con el mismo numero de antes
 
     cerrarBuscador();
     renderStep();
@@ -901,7 +937,9 @@ async function irA(destino, nombre, opc){
     }
 
     const ms = Math.round(performance.now()-t0);
-    setStatus('Ruta: '+fmtDist(route.summary.lengthInMeters)+' · '+Math.round(route.summary.travelTimeInSeconds/60)+' min'+(wps.length ? ' · '+wps.length+(wps.length>1?' paradas':' parada') : '')+' · ('+ms+' ms)');
+    rutaDistTotal = route.summary.lengthInMeters || 1; rutaTiempoTotal = route.summary.travelTimeInSeconds || 0;
+    setStatus('Ruta calculada en '+ms+' ms'+(wps.length ? ' · '+wps.length+(wps.length>1?' paradas':' parada') : ''));
+    actualizarEta(rutaDistTotal, rutaTiempoTotal);
     wps.forEach(w => { w.pos = proyectarEnRuta(w.ll).along; });   // donde cae cada parada sobre esta ruta
     pintarParadas(); if (listaCargOn) renderLista();
     if (destNombre && !opc.conservarParadas) guardarReciente(destNombre, destino);
@@ -1088,6 +1126,7 @@ function cerrarHud(){
   $('hud2wrap').classList.remove('on'); $('map').style.visibility = ''; avisoHud('');
   hudAbierto = false; hudDemo = false; marcarPestana('tabMapa');
   follow = true; zoomPendiente = true; if (lastFix) seguirCamara([lastFix.lat, lastFix.lon], 0);   // el mapa vuelve donde esta el coche
+  fpsArrancar();
 }
 
 /* ==== Faro: pantalla limpia, extraida de la version YA INTEGRADA de AutoBoard (el
@@ -1120,6 +1159,7 @@ function cerrarFaro(){
   document.documentElement.classList.remove('faromode');
   $('faroWrap').classList.remove('on'); $('map').style.visibility = '';
   marcarPestana('tabMapa');
+  fpsArrancar();
   follow = true; zoomPendiente = true; if (lastFix) seguirCamara([lastFix.lat, lastFix.lon], 0);
 }
 setInterval(() => { if (!faroOn) return; faroBlinkT = !faroBlinkT; $('fSpeed').classList.toggle('blink', faroBlinkT && $('fSpeed').classList.contains('sign')); }, 450);
@@ -1511,8 +1551,19 @@ function getHome(){ try{ return JSON.parse(localStorage.getItem('homeLT')||'null
   b.addEventListener('mousedown', start); b.addEventListener('mouseup', () => { cancel(); if (!longed) doHome(); }); b.addEventListener('mouseleave', cancel);
 })();
 
-(function(){
-  let n=0, t=performance.now();
-  function tick(){ n++; const now=performance.now(); if (now-t>=1000){ $('fps').textContent=n+' fps'; n=0; t=now; } requestAnimationFrame(tick); }
-  requestAnimationFrame(tick);
-})();
+/* El contador cuenta fotogramas de verdad -- solo un requestAnimationFrame puede
+   hacer eso, un setInterval no mide nada real, solo dispara un temporizador aparte.
+   Lo que si se puede evitar es que siga sonando mientras no aporta nada: con el HUD
+   o Faro abiertos el mapa esta oculto y en pausa (ver mapaOculto), asi que el bucle
+   se para del todo y se reengancha solo al volver al Mapa. */
+let fpsRaf = null;
+function fpsTick(t0, n){
+  return function tick(){
+    if (mapaOculto){ fpsRaf = null; return; }
+    n++; const now = performance.now();
+    if (now - t0 >= 1000){ $('fps').textContent = n + ' fps'; n = 0; t0 = now; }
+    fpsRaf = requestAnimationFrame(tick);
+  };
+}
+function fpsArrancar(){ if (!fpsRaf && !mapaOculto) fpsRaf = requestAnimationFrame(fpsTick(performance.now(), 0)); }
+fpsArrancar();

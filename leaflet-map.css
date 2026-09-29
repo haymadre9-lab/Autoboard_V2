@@ -94,9 +94,11 @@ html,body{margin:0;height:100%;background:#0b0e12;color:#e8eef2;
    inferior, lejos de la flecha del coche), 1,4x mas grande, SIN palo, y parpadeando
    suave para que no tape el mapa de forma permanente. */
 .radarsign{position:fixed;left:50%;top:84%;z-index:950;display:none;flex-direction:column;
-  align-items:center;transform:translate(-50%,-50%) scale(1.4);opacity:.6;pointer-events:none}
-.radarsign.show{display:flex;animation:radblink 1.05s ease-in-out infinite}
-@keyframes radblink{0%,100%{opacity:.12}50%{opacity:.72}}
+  align-items:center;transform:translate(-50%,-50%) scale(1.4);opacity:.55;pointer-events:none;
+  transition:border-color .2s}
+.radarsign.show{display:flex}                       /* radar delante, dentro del limite: quieta, sin parpadeo */
+.radarsign.show.alerta{animation:radblink 1.05s ease-in-out infinite}   /* alerta real: SI parpadea */
+@keyframes radblink{0%,100%{opacity:.3}50%{opacity:.85}}
 .rs-c{width:70px;height:70px;border-radius:50%;background:#fff;border:9px solid #e01d1d;
   display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(0,0,0,.65)}
 .rs-c span{font-size:28px;font-weight:800;color:#111}
@@ -234,3 +236,15 @@ html.faromode #bar, html.faromode #recenter, html.faromode #sat, html.faromode #
 html.faromode #cargList, html.faromode #status, html.faromode #radarsign,
 html.faromode .leaflet-top.leaflet-left, html.faromode .leaflet-control-attribution
 { display:none !important }
+
+/* ==== tarjeta de ETA: distancia, minutos y hora real de llegada ==== */
+#etaCard{position:fixed;left:10px;bottom:74px;z-index:905;display:none;align-items:baseline;gap:8px;
+  background:rgba(10,13,16,.72);border:1px solid rgba(255,255,255,.14);border-radius:10px;
+  padding:7px 12px;font:700 14px system-ui,sans-serif;color:#f2f6f9}
+#etaCard.on{display:flex}
+#etaLlegada{font:600 11px system-ui,sans-serif;color:#9aa7b2;margin-left:2px}
+
+/* ==== precision de GPS: oculta salvo cuando es mala ==== */
+#acc{position:fixed;left:10px;bottom:100px;z-index:905;font:600 11px system-ui,sans-serif;
+  color:#e0b020;background:rgba(10,13,16,.72);border-radius:8px;padding:4px 9px}
+#acc.malo{color:#ff6b57}
