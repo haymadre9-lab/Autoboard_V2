@@ -284,29 +284,33 @@ function laneArrow(dir,valid,hw){ const col=valid?(hw?'#ffffff':'#0a8a34'):(hw?'
 
 function roundaboutSVG(exit,mod,col){
   // El tramo de rotonda que se recorre (entrada -> tu salida) se pinta como un
-  // arco blanco grueso: se lee la forma de un vistazo, sin depender de un
+  // arco relleno grueso: se lee la forma de un vistazo, sin depender de un
   // numero pequeno.
-  // Angulos de salida FIJOS (no dependen de cual sea tu salida): 6 huecos
-  // repartidos en 300 grados, dejando 60 grados libres junto a la entrada. El
-  // esquema anterior calculaba el reparto a partir de tu propia salida y eso
-  // hacia que la salida 2 diera SIEMPRE un arco de longitud cero (justo la
-  // maniobra mas habitual, "sigue recto en la rotonda"): un fallo real, no solo
-  // de estetica.
-  const g='#6b7480', cx=26, cy=26, r=13, grosor=6.5, NMAX=6, pasoDeg=300/NMAX;
-  const n=Math.max(1,Math.min(NMAX,parseInt(exit,10)||1));
+  // Maximo 4 salidas dibujadas. En la mayoria de rotondas reales, la salida 4
+  // es un cambio de sentido (vuelta casi completa) -- asi que cualquier salida
+  // real 4 o mayor (4, 5, 6, 7...) se trata como esa misma maniobra: dar casi
+  // toda la vuelta y salir por donde se entro, no "una salida mas" en el
+  // reparto. Solo las salidas 1, 2 y 3 son huecos normales.
+  const g='#6b7480', cx=26, cy=26, r=13, grosor=6.5, NEXITS=3, pasoDeg=240/NEXITS;
+  const exitReal=Math.max(1,parseInt(exit,10)||1);
+  const esVuelta=exitReal>=4;
+  const n=esVuelta?4:exitReal;
   const a0=Math.PI/2;                        // entrada, siempre abajo
-  const aDe=k=>a0-(k*pasoDeg)*Math.PI/180;    // angulo de la salida k (1..NMAX)
+  const aDe=k=>a0-(k*pasoDeg)*Math.PI/180;    // angulo de la salida k (1..NEXITS)
   let s='<svg viewBox="0 0 52 52">';
   s+='<circle cx="'+cx+'" cy="'+cy+'" r="'+(r-grosor/2-1)+'" fill="'+g+'" opacity=".18"/>';
   s+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+g+'" stroke-width="3" opacity=".45"/>';
   // entrada, en gris: aun no estas circulando por la rotonda
   s+='<path d="M'+cx+' 52 L'+cx+' '+(cy+r)+'" stroke="'+g+'" stroke-width="'+grosor+'" stroke-linecap="round" opacity=".55"/>';
-  // las demas salidas, apenas insinuadas
-  for(let k=1;k<=NMAX;k++){ if(k===n) continue; const a=aDe(k);
+  // las demas salidas normales, apenas insinuadas (si esta maniobra es la vuelta, ninguna esta seleccionada: se insinuan las 3)
+  for(let k=1;k<=NEXITS;k++){ if(k===n) continue; const a=aDe(k);
     const x1=cx+Math.cos(a)*r, y1=cy+Math.sin(a)*r, x2=cx+Math.cos(a)*(r+7), y2=cy+Math.sin(a)*(r+7);
     s+='<path d="M'+x1.toFixed(1)+' '+y1.toFixed(1)+' L'+x2.toFixed(1)+' '+y2.toFixed(1)+'" stroke="'+g+'" stroke-width="2.4" stroke-linecap="round" opacity=".4"/>'; }
-  // ARCO relleno (blanco, grueso) del tramo real, desde la entrada hasta tu salida
-  const aSel=aDe(n);
+  // ARCO relleno (blanco, grueso) del tramo real, desde la entrada hasta tu salida.
+  // El cambio de sentido barre CASI toda la circunferencia (350 grados) en vez de
+  // parar en un hueco: se lee de un vistazo como "da la vuelta entera", no como
+  // una salida normal mas.
+  const aSel=esVuelta ? a0-350*Math.PI/180 : aDe(n);
   // El arco NO se dibuja con el comando "A" de SVG: sus banderas large/sweep
   // eligen entre dos centros posibles, y si no coinciden EXACTAMENTE con mi
   // centro real (cx,cy) el arco se hincha hacia fuera en vez de seguir la
@@ -338,6 +342,7 @@ function roundaboutSVG(exit,mod,col){
     {x:xs-lat.x*shaftHW, y:ys-lat.y*shaftHW},
   ];
   s+='<path d="M'+poly.map(p=>p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' L')+' Z" fill="'+col2+'"/>';
+  s+='<text x="'+cx+'" y="'+(cy+1)+'" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="800" font-family="system-ui,sans-serif" fill="'+col+'">'+exitReal+'</text>';
   return s+'</svg>';
 }
 
@@ -569,7 +574,7 @@ function actualizarZoomManiobra(distSiguiente, tipoSiguiente){
   try{ map.setZoom(z, { animate:true }); }catch(e){}
 }
 
-const VERSION = '2026.09.28-m';
+const VERSION = '2026.09.28-n';
 // X dibujada: el caracter U+2715 no esta en la fuente del navegador y salia como un rectangulo
 const X_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>';
 try{ $('ver').textContent = 'v'+VERSION; }catch(e){}
