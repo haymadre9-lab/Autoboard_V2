@@ -7,7 +7,7 @@
 <title>Leaflet Test · AutoBoard Fase 1</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
   integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-<link rel="stylesheet" href="./leaflet-map.css?v=20260929a">
+<link rel="stylesheet" href="./leaflet-map.css?v=20260929b">
 </head>
 <body>
 
@@ -71,6 +71,20 @@
   <button class="setbtn on" id="rotateBtn">🧭 Quitar giro de mapa</button>
   <button class="setbtn" id="cargBtn">⚡ Lista de cargadores</button>
   <div class="srow" style="margin-top:16px">
+    <span>Radares</span>
+    <label class="hs-c"><input type="checkbox" id="rt_fijo" checked> <i class="chip" style="background:#ff8a8a"></i> Fijos</label>
+    <label class="hs-c"><input type="checkbox" id="rt_movil" checked> <i class="chip" style="background:#a9c8ff;opacity:.7"></i> Móviles</label>
+    <label class="hs-c"><input type="checkbox" id="rt_tramo" checked> <i class="chip" style="background:#ff9a1f"></i> Tramo</label>
+    <label class="hs-c"><input type="checkbox" id="rt_semaforo" checked> <i class="chip" style="background:#f5c518"></i> Semáforo</label>
+  </div>
+  <div class="srow">
+    <span>Cargadores por potencia</span>
+    <label class="hs-c"><input type="checkbox" id="ct_amarillo" checked> <i class="chip" style="background:#f5c518"></i> 11-22 kW</label>
+    <label class="hs-c"><input type="checkbox" id="ct_azul" checked> <i class="chip" style="background:#2f6bff"></i> 50-72 kW</label>
+    <label class="hs-c"><input type="checkbox" id="ct_verde" checked> <i class="chip" style="background:#22c55e"></i> Más de 72 kW</label>
+    <label class="hs-c"><input type="checkbox" id="ct_tesla" checked> <i class="chip" style="background:#7b1e3a"></i> Supercharger Tesla</label>
+  </div>
+  <div class="srow" style="margin-top:16px">
     <span>Favoritos</span>
     <div id="favList"></div>
     <div class="favrow" id="addFavBtn" style="color:#5fd0e0">⭐ Guardar destino actual como favorito</div>
@@ -88,7 +102,7 @@
      no hace nada -- no hay ningun sitio del codigo que dependa de que esto
      funcione para lo demas. -->
 <script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
-<script src="./leaflet-map.js?v=20260929a"></script>
+<script src="./leaflet-map.js?v=20260929b"></script>
 <script>if(/[?&]debug=1/.test(location.search)){var e=document.createElement("script");e.src="https://cdn.jsdelivr.net/npm/eruda";e.onload=function(){eruda.init()};document.head.appendChild(e);}</script>
 </body>
 <script>

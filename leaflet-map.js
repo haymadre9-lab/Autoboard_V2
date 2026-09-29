@@ -77,7 +77,13 @@ function refreshRadars(here){ const out=[];
   if (huella !== _radarsHuella){ _radarsHuella = huella; drawRadars(); }
 }
 
-function radarColor(t){ return t==='fijo'?'#e01d1d': t==='movil'?'#2f6bff': t==='tramo'?'#ff9a1f': t==='semaforo'?'#f5c518':'#e01d1d'; }
+/* Fijo: rojo muy palido -- se sabe que esta, sin gritar. Movil: azul palido Y medio
+   transparente -- doble atenuacion, color claro y opacidad reducida, porque se mueve
+   y no conviene que se lea como algo tan fijo/seguro como un radar fijo. Tramo y
+   semaforo se quedan igual que antes, no se pidio tocarlos. */
+function radarColor(t){ return t==='fijo'?'#ff8a8a': t==='movil'?'#a9c8ff': t==='tramo'?'#ff9a1f': t==='semaforo'?'#f5c518':'#ff8a8a'; }
+function radarOpacidad(t){ return t==='movil' ? 0.55 : 1; }
+let radarTiposOn = { fijo:true, movil:true, tramo:true, semaforo:true };   // Ajustes: activar/desactivar cada tipo por separado
 
 // Circulos en vez de icono con divIcon: se dibujan sobre el <canvas> que ya
 // activamos con preferCanvas, sin crear ni un <div> por radar. Se pierde la
@@ -102,8 +108,9 @@ function trianguloLL(centro, metros){
 function drawRadars(){
   radarGroup.clearLayers(); if(!showRadars)return;
   for(const p of radars){
+    if (radarTiposOn[p.t] === false) continue;   // tipo desactivado en Ajustes
     L.circleMarker([p.ll[0],p.ll[1]], {
-      radius: 8, color:'#fff', weight:2, fillColor: radarColor(p.t), fillOpacity: 1, interactive:false
+      radius: 8, color:'#fff', weight:2, fillColor: radarColor(p.t), fillOpacity: radarOpacidad(p.t), interactive:false
     }).addTo(radarGroup);
   }
 }
@@ -153,16 +160,38 @@ const chargerGroup = L.layerGroup();
 let paradaGroup = null;   // se crea despues del mapa
 
 function isTesla(p){ return /tesla|supercharger/i.test((p.op||'')+' '+(p.name||'')); }
+/* Franja de potencia: 11/22 kW amarillo, 50/72 kW azul, mas de 72 kW verde (como antes),
+   Superchargers Tesla en granate SIEMPRE, por encima de lo que marque su potencia. */
+function tierCargador(p){
+  if (isTesla(p)) return 'tesla';
+  const kw = p.kw||0;
+  if (kw && kw<=22) return 'amarillo';
+  if (kw && kw<=72) return 'azul';
+  return 'verde';   // mas de 72 kW, o sin dato de potencia
+}
+const COLOR_TIER = { amarillo:'#f5c518', azul:'#2f6bff', verde:'#22c55e', tesla:'#7b1e3a' };
+let cargadorTiposOn = { amarillo:true, azul:true, verde:true, tesla:true };   // Ajustes: activar/desactivar cada franja por separado
 
+/* Icono con la propia potencia escrita encima, para leer el color y el numero a la vez
+   sin tener que recordar que significa cada uno. Esto SI vuelve a divIcon (un elemento
+   del DOM por cargador, no un circulo de lienzo): los cargadores son pocos comparados
+   con los radares -la lista de Ajustes ya los limita a 5 a la vez-, y el texto legible
+   no se puede pintar con circleMarker. El texto oscuro en el amarillo, blanco en el
+   resto -- mismo criterio que ya usamos en los colores del coche del HUD. */
+function iconoCargador(p, tier){
+  const col = COLOR_TIER[tier];
+  const txt = tier==='tesla' ? (p.kw ? Math.round(p.kw) : 'SC') : Math.round(p.kw||0);
+  const oscuro = tier==='amarillo';
+  return L.divIcon({ className:'', iconSize:[28,28], iconAnchor:[14,14],
+    html:'<div class="ic-carg" style="background:'+col+';color:'+(oscuro?'#111':'#fff')+'">'+txt+'</div>' });
+}
 function drawChargers(){
   chargerGroup.clearLayers();
   if (listaCargOn) renderLista();
   for (const p of pois){ if (p.type!=='charge') continue;
-    L.circleMarker([p.ll[0],p.ll[1]], {
-      radius: 11, color:'#fff', weight:3,   // grandes: hay que acertar con el dedo conduciendo
-      fillColor: isTesla(p) ? '#0d5c33' : '#22c55e', fillOpacity: 1,   // Tesla en verde OSCURO, no rojo -- el rojo ya lo usan los radares fijos
-      interactive: false   // el toque se detecta por cercania (ver cargadorCerca): acertar a un circulo de 14 px con el dedo es dificil, y sin hit-testing el lienzo trabaja menos
-    }).addTo(chargerGroup);
+    const tier = tierCargador(p);
+    if (cargadorTiposOn[tier] === false) continue;   // franja desactivada en Ajustes
+    L.marker([p.ll[0],p.ll[1]], { icon: iconoCargador(p, tier), interactive:false }).addTo(chargerGroup);
   }
 }
 
@@ -580,7 +609,7 @@ function actualizarZoomManiobra(distSiguiente, tipoSiguiente){
   try{ map.setZoom(z, { animate:true }); }catch(e){}
 }
 
-const VERSION = '2026.09.29-a';
+const VERSION = '2026.09.29-b';
 // X dibujada: el caracter U+2715 no esta en la fuente del navegador y salia como un rectangulo
 const X_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>';
 try{ $('ver').textContent = 'v'+VERSION; }catch(e){}
@@ -1073,6 +1102,15 @@ function setTraffic(on){
   $('trafficBtn').classList.toggle('on', trafficOn);
 }
 $('trafficBtn').onclick = () => setTraffic(!trafficOn);
+
+/* Radares y cargadores por tipo/franja: cada casilla se activa o desactiva por su
+   cuenta -- se puede dejar solo un tipo, dos, o todos a la vez. */
+['fijo','movil','tramo','semaforo'].forEach(t => {
+  $('rt_'+t).onchange = e => { radarTiposOn[t] = e.target.checked; drawRadars(); };
+});
+['amarillo','azul','verde','tesla'].forEach(t => {
+  $('ct_'+t).onchange = e => { cargadorTiposOn[t] = e.target.checked; drawChargers(); };
+});
 
 function pintarBotonGiro(){
   const b = $('rotateBtn');
