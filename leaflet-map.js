@@ -525,7 +525,7 @@ function pasoBearing(ts){
   const cur = map.getBearing();
   const d = diffAngulo(cur, bearingCSSObjetivo);
   if (Math.abs(d) < 0.05){ try{ map.setBearing(bearingCSSObjetivo); }catch(e){} bearingRaf = null; return; }
-  const k = 1 - Math.exp(-dtMs/380);   // antes 250 ms: un poco mas de suavizado, a costa de una pizca mas de retraso
+  const k = 1 - Math.exp(-dtMs/550);   // antes 380 ms (y 250 ms antes de eso): cada vez un poco mas suave, a costa de un poco mas de retraso al empezar un giro real
   try{ map.setBearing(cur + d*k); }catch(e){ bearingRaf = null; return; }
   bearingRaf = requestAnimationFrame(pasoBearing);
 }
@@ -580,7 +580,7 @@ function actualizarZoomManiobra(distSiguiente, tipoSiguiente){
   try{ map.setZoom(z, { animate:true }); }catch(e){}
 }
 
-const VERSION = '2026.09.28-s';
+const VERSION = '2026.09.28-u';
 // X dibujada: el caracter U+2715 no esta en la fuente del navegador y salia como un rectangulo
 const X_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>';
 try{ $('ver').textContent = 'v'+VERSION; }catch(e){}
@@ -821,12 +821,44 @@ async function fetchLanes(pts){
     const j = await r.json();
     if (!j.routes || !j.routes.length) return;
     const out = [];
-    j.routes[0].legs.forEach(l => l.steps.forEach(st => (st.intersections||[]).forEach(it => {
-      if (it.lanes && it.lanes.length) out.push({ ll:[it.location[1],it.location[0]], lanes: it.lanes.map(la=>({valid:!!la.valid, dir:pickDir(la.indications)})) });
-    })));
+    const avisos = [];   // fork / end of road / continue: cruces reales donde OSRM SI marca una decision, aunque sea "seguir recto"
+    j.routes[0].legs.forEach(l => l.steps.forEach(st => {
+      (st.intersections||[]).forEach(it => {
+        if (it.lanes && it.lanes.length) out.push({ ll:[it.location[1],it.location[0]], lanes: it.lanes.map(la=>({valid:!!la.valid, dir:pickDir(la.indications)})) });
+      });
+      const m = st.maneuver||{}, mod = m.modifier||'';
+      if (['fork','end of road','continue'].indexOf(m.type)>=0 && ['straight','slight left','slight right'].indexOf(mod)>=0 && m.location){
+        avisos.push({ ll:[m.location[1],m.location[0]], modifier: mod });
+      }
+    }));
     osrmLanes = out;
-    console.log('[carriles] cruces con datos de carril:', out.length);
+    console.log('[carriles] cruces con datos de carril:', out.length, '| avisos de OSRM (fork/end of road/continue):', avisos.length);
+    fusionarAvisosOSRM(avisos);
   }catch(e){ console.warn('[carriles]', e.message); }
+}
+/* Avisos de "sigue recto" en cruces reales que OSRM detecta y TomTom, a veces, no marca.
+   Motor DISTINTO al de TomTom: su ruta puede no coincidir exactamente con la nuestra en
+   algun tramo. Por eso cada aviso solo se acepta si cae de verdad ENCIMA de la ruta real
+   (a menos de 30 m, perpendicular) -- si las rutas discrepan ahi, se descarta en vez de
+   arriesgarse a avisar de un cruce por el que no se pasa. Tampoco se duplica un aviso
+   pegado a una maniobra que TomTom ya iba a mostrar por su cuenta. */
+function fusionarAvisosOSRM(avisos){
+  if (!avisos.length || !routeCoordsLL.length) return;
+  let anadidos = 0;
+  for (const a of avisos){
+    const pr = proyectarEnRuta(a.ll, 1e9);
+    if (pr.d > 30) continue;                                              // no es un cruce de NUESTRA ruta
+    if (steps.some(s => Math.abs((s.metro||0) - pr.along) < 60)) continue; // ya hay un aviso de TomTom ahi mismo
+    steps.push({ metro: pr.along, calle:'', name:'', msg:'', ll:a.ll, hw:false,
+      maneuver: { type:'turn', modifier: a.modifier }, deOSRM:true });
+    anadidos++;
+  }
+  if (anadidos){
+    steps.sort((x,y) => (x.metro||0) - (y.metro||0));
+    ultimoStepPintado = '';                       // el indice de cada paso ha podido cambiar al reordenar: forzar redibujo
+    avanzarPaso(recorridoAhora());                // recolocar stepIdx sobre la lista ya fusionada
+    console.log('[carriles] avisos de OSRM añadidos a la ruta:', anadidos);
+  }
 }
 function laneFor(ll){ if (!ll) return null; let best=null, bd=170; for (const e of osrmLanes){ const dd=dist(ll,e.ll); if(dd<bd){bd=dd;best=e;} } return best?best.lanes:null; }
 function lanesHTML(lanes,hw){ return '<div class="lanerow">'+lanes.map(l=>laneArrow(l.dir,l.valid,hw)).join('')+'</div>'; }
@@ -1286,7 +1318,13 @@ map.on('contextmenu', e => pulsacionLarga(e.latlng));   // raton (escritorio)
    Solo los controles que se notan de verdad conduciendo, del panel original de
    hud2-boot.js. Como el resto de ajustes de la app: valen para esta sesion, no se
    guardan de un dia para otro. Se aplican en caliente con hud2.set(). */
-const HUD_DEF = { theme:'auto', maxFps:0, escala:0.6, perfil:'auto', estilo:'suave', radioMin:130,
+/* El mapa de Leaflet ya se para del todo con el HUD abierto (verificado). Si el HUD sigue
+   dando problemas de estabilidad en el Tesla, lo que queda trabajando de mas es el propio
+   motor de dibujo -- su escena en marcha sin parar. Por defecto mas ligero: fps limitados
+   a 30 en vez de sin tope, perfil "ligero" en vez de "auto" (el auto-detectado del motor
+   puede no identificar bien el Tesla como un equipo modesto), y resolucion al 45% en vez
+   del 60%. Se puede subir a mano en Ajustes si el Tesla lo aguanta de sobra. */
+const HUD_DEF = { theme:'auto', maxFps:30, escala:0.45, perfil:'ligero', estilo:'suave', radioMin:130,
   carScale:1, hudScale:1, vista:1, hud:false, carteles:true, carColor:'#eef1f4', ambiente:true, detalleCoche:true,
   rain:false, spray:true, rotondaInvertida:false, frenarCamara:false, traffic:'off' };
 const HUD_NUM = ['maxFps','escala'];
