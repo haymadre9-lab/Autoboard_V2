@@ -256,6 +256,11 @@ html.faromode .leaflet-top.leaflet-left, html.faromode .leaflet-control-attribut
 #acc.malo{color:#ff6b57}
 
 /* ==== carriles en el panel de maniobra: mismo hueco que la flecha normal (78x84) ==== */
-.lanerow{display:flex;gap:3px;align-items:center;height:84px;min-width:78px}
-.lane{width:26px;height:34px;flex:0 0 auto}
+/* El dibujo de cada flecha vive en un lienzo de 48x52 -- una caja de 26x34 quedaba mas
+   estrecha que ese lienzo, asi que se encogia por el ancho y sobraba alto sin usar. Con
+   32x40 se acerca mas a esa proporcion (48:52 = 0,92; 32:40 = 0,80), se ve mas grande y
+   deja menos hueco muerto. El tamaño es SIEMPRE el mismo, salgan 1 o los carriles que
+   salgan -- #navbanner no tiene un ancho maximo, crece para dejar sitio a la fila entera. */
+.lanerow{display:flex;gap:4px;align-items:center;height:84px;min-width:78px}
+.lane{width:32px;height:40px;flex:0 0 auto}
 .lane svg{width:100%;height:100%;display:block}
