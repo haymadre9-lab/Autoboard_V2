@@ -29,6 +29,7 @@
   .tab.here{background:linear-gradient(160deg,#4a2e0a,#12161c);border-color:#ff9a1f}
   .tab.tesla{background:linear-gradient(160deg,#4a0e18,#12161c);border-color:#e31937}
   .tab.precision{background:linear-gradient(160deg,#1a2438,#12161c);border-color:#5b7fd6}
+  .tab.codriver{background:linear-gradient(160deg,#123030,#12161c);border-color:#2dd4bf}
   .tab.samsung{background:linear-gradient(160deg,#2e1a4a,#12161c);border-color:#a970ff}
   .tab.realme{background:linear-gradient(160deg,#4a1a2e,#12161c);border-color:#ff5c8a}
   h1.seg{margin-top:6px}
@@ -45,15 +46,17 @@
       <div class="nombre">AutoBoard</div>
       <div class="sub">Nuestro navegador</div>
     </a>
-    <a class="tab waze" data-id="waze" href="https://www.waze.com/live-map">
+    <a class="tab waze" data-id="waze" href="https://www.waze.com/live-map"
+       data-destino="https://waze.com/ul?ll=LAT,LON&amp;navigate=yes">
       <div class="ico">🔵</div>
       <div class="nombre">Waze</div>
-      <div class="sub">Mapa en vivo</div>
+      <div class="sub">Pide destino y navega</div>
     </a>
-    <a class="tab gmaps" data-id="gmaps" href="https://www.google.com/maps">
+    <a class="tab gmaps" data-id="gmaps" href="https://www.google.com/maps"
+       data-destino="https://www.google.com/maps/dir/?api=1&amp;destination=LAT,LON&amp;dir_action=navigate">
       <div class="ico">📍</div>
       <div class="nombre">Google Maps</div>
-      <div class="sub">Mapa</div>
+      <div class="sub">Pide destino y navega</div>
     </a>
     <a class="tab here" data-id="here" href="https://wego.here.com">
       <div class="ico">🟠</div>
@@ -69,6 +72,11 @@
       <div class="ico">🧩</div>
       <div class="nombre">Precision Drive</div>
       <div class="sub">Tus apps, con PIN</div>
+    </a>
+    <a class="tab codriver" data-id="codriver" href="https://codriver.io">
+      <div class="ico">🛰️</div>
+      <div class="nombre">codriver</div>
+      <div class="sub">A prueba · pide cuenta</div>
     </a>
   </div>
 
@@ -101,7 +109,7 @@
    cerrar el navegador, y solo afecta a este aparato -- si cambias la URL en el móvil,
    no se entera el Tesla, cada uno guarda la suya. */
 const CLAVE = id => 'navhubUrl:' + id;
-document.querySelectorAll('.tab[data-id]').forEach(a => {
+document.querySelectorAll('.tab[data-id]:not([data-destino])').forEach(a => {
   a.dataset.default = a.getAttribute('href');
   const guardada = localStorage.getItem(CLAVE(a.dataset.id));
   if (guardada) a.setAttribute('href', guardada);
@@ -130,6 +138,35 @@ document.querySelectorAll('.tab[data-id]').forEach(a => {
   a.addEventListener('mouseleave', cancelar);
   a.addEventListener('contextmenu', e => e.preventDefault());   // el menu de "abrir enlace" del navegador estorbaria a la pulsacion larga
   a.addEventListener('click', e => { if (largo) e.preventDefault(); });   // no navegar justo despues de editar
+});
+
+/* Waze y Google Maps: sin destino propio no tiene sentido "editar su direccion" con
+   pulsacion larga (no hay una URL fija que editar, cada viaje construye la suya), asi
+   que estas dos funcionan aparte. Al tocarlas piden a donde ir, geocodifican con el
+   mismo servicio que ya usa AutoBoard (Nominatim, sin clave), y abren directamente en
+   modo navegacion -- no solo el mapa. Si se deja vacio, abren el mapa general de
+   siempre, por si solo quieres mirar sin un destino concreto. */
+async function geocodificarNavHub(texto){
+  const m = texto.trim().match(/^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/);
+  if (m) return [parseFloat(m[1]), parseFloat(m[2])];   // ya viene como "lat,lon"
+  try{
+    const r = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(texto));
+    const j = await r.json();
+    return j.length ? [parseFloat(j[0].lat), parseFloat(j[0].lon)] : null;
+  }catch(e){ return null; }
+}
+document.querySelectorAll('.tab[data-destino]').forEach(a => {
+  a.addEventListener('click', async e => {
+    e.preventDefault();
+    const nombre = a.querySelector('.nombre').textContent;
+    const destino = prompt('¿A dónde vamos con ' + nombre + '? (dirección, o vacío para solo abrir el mapa)', '');
+    if (destino === null) return;
+    const limpio = destino.trim();
+    if (!limpio){ location.href = a.getAttribute('href'); return; }
+    const ll = await geocodificarNavHub(limpio);
+    if (!ll){ alert('No se ha encontrado "' + limpio + '"'); return; }
+    location.href = a.dataset.destino.replace('LAT', ll[0]).replace('LON', ll[1]);
+  });
 });
 </script>
 </body>
