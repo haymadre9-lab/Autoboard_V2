@@ -1,148 +1,173 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<script>if(/[?&]debug=1/.test(location.search))document.documentElement.classList.add("debug");</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Leaflet Test · AutoBoard Fase 1</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-<link rel="stylesheet" href="./leaflet-map.css?v=20260929c">
+<title>Nav Hub</title>
+<style>
+  :root{ --bd:#232c33; --dim:#9aa7b2; }
+  html,body{margin:0;height:100%;background:#0b0e12;color:#e8eef2;
+    font-family:-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+  body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+    padding:16px;box-sizing:border-box;overflow-y:auto}
+  h1{font-size:15px;font-weight:600;color:var(--dim);letter-spacing:.04em;text-transform:uppercase;
+    margin:0 0 4px 0}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;width:100%;max-width:640px}
+  .tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+    border:2px solid var(--bd);border-radius:18px;padding:22px 10px;cursor:pointer;
+    background:#12161c;text-decoration:none;color:inherit;transition:transform .1s}
+  .tab:active{transform:scale(.96)}
+  .tab .ico{font-size:34px;line-height:1}
+  .tab .nombre{font-size:16px;font-weight:700}
+  .tab .sub{font-size:11px;color:var(--dim)}
+  /* Cada tarjeta usa el MISMO color en el fondo y en el aro que en el propio icono --
+     antes habia mezclas (icono verde sobre fondo azul, icono azul sobre fondo verde)
+     que hacian dificil distinguir una tarjeta de otra de un vistazo rapido. */
+  .tab.autoboard{background:linear-gradient(160deg,#0e3a2e,#12161c);border-color:#22c58f}
+  .tab.waze{background:linear-gradient(160deg,#0a3550,#12161c);border-color:#29b6f6}
+  .tab.gmaps{background:linear-gradient(160deg,#4a1414,#12161c);border-color:#ea4335}
+  .tab.here{background:linear-gradient(160deg,#4a2e0a,#12161c);border-color:#ff9a1f}
+  .tab.tesla{background:linear-gradient(160deg,#4a0e18,#12161c);border-color:#e31937}
+  .tab.precision{background:linear-gradient(160deg,#1a2438,#12161c);border-color:#5b7fd6}
+  .tab.codriver{background:linear-gradient(160deg,#123030,#12161c);border-color:#2dd4bf}
+  .tab.samsung{background:linear-gradient(160deg,#2e1a4a,#12161c);border-color:#a970ff}
+  .tab.realme{background:linear-gradient(160deg,#4a1a2e,#12161c);border-color:#ff5c8a}
+  h1.seg{margin-top:6px}
+  .nota{max-width:640px;font-size:12px;color:var(--dim);text-align:center;line-height:1.5;padding:0 12px}
+  .nota b{color:#c7cdd3}
+</style>
 </head>
 <body>
 
-<span id="spd" hidden>0 km/h</span>
-<span id="acc" hidden></span>
-<div id="fps">— fps</div>
+  <h1>Elige navegador</h1>
+  <div class="grid">
+    <a class="tab autoboard" data-id="autoboard" href="../">
+      <div class="ico">🗺️</div>
+      <div class="nombre">AutoBoard</div>
+      <div class="sub">Nuestro navegador</div>
+    </a>
+    <a class="tab waze" data-id="waze" href="https://www.waze.com/live-map"
+       data-destino="https://waze.com/ul?ll=LAT,LON&amp;navigate=yes">
+      <div class="ico">🔵</div>
+      <div class="nombre">Waze</div>
+      <div class="sub">Pide destino y navega</div>
+    </a>
+    <a class="tab gmaps" data-id="gmaps" href="https://www.google.com/maps"
+       data-destino="https://www.google.com/maps/dir/?api=1&amp;destination=LAT,LON&amp;dir_action=navigate">
+      <div class="ico">📍</div>
+      <div class="nombre">Google Maps</div>
+      <div class="sub">Pide destino y navega</div>
+    </a>
+    <a class="tab here" data-id="here" href="https://wego.here.com">
+      <div class="ico">🟠</div>
+      <div class="nombre">HERE WeGo</div>
+      <div class="sub">Mapa y rutas</div>
+    </a>
+    <a class="tab tesla" data-id="tesla" href="https://www.viajandoentesla.es/navegador">
+      <div class="ico">🚨</div>
+      <div class="nombre">Viajando en Tesla</div>
+      <div class="sub">Navegador con radares</div>
+    </a>
+    <a class="tab precision" data-id="precision" href="https://drive.precisionautotechnik.com">
+      <div class="ico">🧩</div>
+      <div class="nombre">Precision Drive</div>
+      <div class="sub">Tus apps, con PIN</div>
+    </a>
+    <a class="tab codriver" data-id="codriver" href="https://codriver.io">
+      <div class="ico">🛰️</div>
+      <div class="nombre">codriver</div>
+      <div class="sub">A prueba · pide cuenta</div>
+    </a>
+  </div>
 
-<div id="map"></div>
-<div id="hud2wrap"><canvas id="hud2canvas"></canvas></div>
-<div id="tabs">
-  <button id="tabMapa" class="modo on">🗺️ Mapa</button>
-  <button id="tabHud" class="modo">🚗 HUD</button>
-  <button id="tabAjHud" class="modo" aria-label="Ajustes del HUD">⚙️</button>
-  <button id="tabFaro" class="modo">💡 Faro</button>
-</div>
-<div id="hud2err"></div>
-<div id="faroWrap"><div id="fSpeed"><div class="n" id="fNum">0</div><div class="u">KM/H</div></div></div>
-<div id="cargList"></div>
-<div id="hudset">
-  <div class="shead"><span>Ajustes HUD 2</span><button id="closeHudset" aria-label="Cerrar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg></button></div>
-  <div id="hudsetBody"></div>
-</div>
-<div id="hoja">
-  <div class="hh"><span id="hojaTitulo"></span><button id="hojaCerrar" aria-label="Cerrar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg></button></div>
-  <div id="hojaInfo"></div>
-  <div id="hojaBtns"></div>
-</div>
-<div id="radaredge"></div>
-<div class="radarsign" id="radarsign"><div class="rs-c"><span id="rsmax">80</span></div><div class="rs-d" id="rsdist">500 m</div></div>
-<div id="navbanner">
-  <div class="arrow" id="navarrow"></div>
-  <div class="navtext"><div class="navd" id="navd"></div><div class="navsub" id="navsub"></div></div>
-  <button class="navx" id="cancelRuta" aria-label="Cerrar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg></button>
-</div>
-<div id="status">Leaflet real + MapTiler (token) — sin ningún adaptador de por medio</div>
-<div id="etaCard"><b id="etaKm"></b><b id="etaMin"></b><span id="etaLlegada"></span></div>
+  <h1 class="seg">Espejo del móvil</h1>
+  <div class="grid">
+    <a class="tab samsung" data-id="samsung" href="https://64-226-76-114.nip.io/ver/samsung">
+      <div class="ico">📱</div>
+      <div class="nombre">Samsung</div>
+      <div class="sub">AATesla</div>
+    </a>
+    <a class="tab realme" data-id="realme" href="https://64-226-76-114.nip.io/ver/realme">
+      <div class="ico">📴</div>
+      <div class="nombre">Realme</div>
+      <div class="sub">AATeslaLibre</div>
+    </a>
+  </div>
 
-<button id="searchToggle">🔍</button>
-<div id="spdmap"><b id="spd2">0</b><small>KM/H</small></div>
-<div id="bar">
-  <div class="searchrow">
-    <button id="homeBtn" title="Casa (mantén pulsado para fijar)">🏠</button>
-    <input id="q" type="text" placeholder="¿A dónde vamos?" autocomplete="off">
-    <button id="go">Ir</button>
+  <div class="nota">
+    Para volver aquí, usa <b>atrás</b> en el navegador del Tesla, o guarda esta
+    página en <b>favoritos</b> para tenerla siempre a mano.<br>
+    TomTom no tiene navegador web público, solo app móvil — por eso no está aquí.
   </div>
-  <div class="suggest" id="suggest"></div>
-</div>
 
-<!-- Tres iconos abajo a la derecha, mismo sitio y orden que AutoBoard real -->
-<button id="recenter" class="ovl">🎯</button>
-<button id="sat" class="ovl">🛰️</button>
-<button id="gear" class="ovl">⚙️</button>
 
-<div id="settings">
-  <div class="shead"><span>Ajustes <small id="ver">(js antiguo)</small></span><button id="closeSettings" aria-label="Cerrar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg></button></div>
-  <div class="srow"><span>Zoom de conducción</span>
-    <div class="seg" id="zoomSeg"><button data-z="17">Lejos</button><button data-z="17.4" class="on">Cerca</button><button data-z="18">Muy cerca</button><button data-z="18.4">Máximo</button></div>
-  </div>
-  <button class="setbtn" id="mapnight">🌙 Noche</button>
-  <button class="setbtn" id="trafficBtn">🚦 Tráfico</button>
-  <button class="setbtn on" id="rotateBtn">🧭 Quitar giro de mapa</button>
-  <button class="setbtn" id="cargBtn">⚡ Lista de cargadores</button>
-  <div class="srow" style="margin-top:16px">
-    <span>Radares</span>
-    <label class="hs-c"><input type="checkbox" id="rt_fijo" checked> <i class="chip" style="background:#ff8a8a"></i> Fijos</label>
-    <label class="hs-c"><input type="checkbox" id="rt_movil" checked> <i class="chip" style="background:#a9c8ff;opacity:.7"></i> Móviles</label>
-    <label class="hs-c"><input type="checkbox" id="rt_tramo" checked> <i class="chip" style="background:#ff9a1f"></i> Tramo</label>
-    <label class="hs-c"><input type="checkbox" id="rt_semaforo" checked> <i class="chip" style="background:#f5c518"></i> Semáforo</label>
-  </div>
-  <div class="srow">
-    <span>Cargadores por potencia</span>
-    <label class="hs-c"><input type="checkbox" id="ct_amarillo" checked> <i class="chip" style="background:#f5c518"></i> 11-22 kW</label>
-    <label class="hs-c"><input type="checkbox" id="ct_azul" checked> <i class="chip" style="background:#2f6bff"></i> 50-72 kW</label>
-    <label class="hs-c"><input type="checkbox" id="ct_verde" checked> <i class="chip" style="background:#22c55e"></i> Más de 72 kW</label>
-    <label class="hs-c"><input type="checkbox" id="ct_tesla" checked> <i class="chip" style="background:#7b1e3a"></i> Supercharger Tesla</label>
-  </div>
-  <div class="srow" style="margin-top:16px">
-    <span>Favoritos</span>
-    <div id="favList"></div>
-    <div class="favrow" id="addFavBtn" style="color:#5fd0e0">⭐ Guardar destino actual como favorito</div>
-  </div>
-  <div class="srow">
-    <span>Últimas direcciones</span>
-    <div id="recentList"></div>
-  </div>
-</div>
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<!-- leaflet-rotate: experimental, a prueba. Si el archivo no carga o el
-     metodo que necesita no existe, el ajuste de "girar mapa" simplemente
-     no hace nada -- no hay ningun sitio del codigo que dependa de que esto
-     funcione para lo demas. -->
-<script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
-<script src="./leaflet-map.js?v=20260929c"></script>
-<script>if(/[?&]debug=1/.test(location.search)){var e=document.createElement("script");e.src="https://cdn.jsdelivr.net/npm/eruda";e.onload=function(){eruda.init()};document.head.appendChild(e);}</script>
-</body>
 <script>
-/* Registro del service worker: cache con nombre propio ("autoboard"), se
-   borran los caches con nombre ajeno, se pide actualizacion al SW y, si entra
-   uno nuevo, se recarga una sola vez. Asi deja de servir versiones viejas.
-   Extraido literal del index.html anterior -- sin esto, sw.js nunca llega a
-   registrarse y la app no funciona sin conexion. */
-if('serviceWorker' in navigator){
-  addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
-  let _r=false;
-  navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(_r)return; _r=true; location.reload(); });
+/* Pulsación larga sobre cualquier pestaña -> editar y guardar su dirección, por si
+   alguna cambia (como ya nos ha pasado con viajandoentesla.es). Mismo umbral de 550 ms
+   que usa AutoBoard para no confundirlo con un toque normal, y se cancela si el dedo
+   se mueve (para no disparar al hacer scroll). Guardado en localStorage: sobrevive a
+   cerrar el navegador, y solo afecta a este aparato -- si cambias la URL en el móvil,
+   no se entera el Tesla, cada uno guarda la suya. */
+const CLAVE = id => 'navhubUrl:' + id;
+document.querySelectorAll('.tab[data-id]:not([data-destino])').forEach(a => {
+  a.dataset.default = a.getAttribute('href');
+  const guardada = localStorage.getItem(CLAVE(a.dataset.id));
+  if (guardada) a.setAttribute('href', guardada);
+
+  let tmr = null, largo = false, sx = 0, sy = 0;
+  const cancelar = () => { if (tmr) { clearTimeout(tmr); tmr = null; } };
+  const editar = () => {
+    const actual = a.getAttribute('href');
+    const nueva = prompt('Dirección para "' + a.querySelector('.nombre').textContent + '":', actual);
+    if (nueva === null) return;
+    const limpia = nueva.trim();
+    if (!limpia) return;
+    if (limpia === a.dataset.default) localStorage.removeItem(CLAVE(a.dataset.id));
+    else localStorage.setItem(CLAVE(a.dataset.id), limpia);
+    a.setAttribute('href', limpia);
+  };
+  const empezar = (x, y) => {
+    largo = false; sx = x; sy = y; cancelar();
+    tmr = setTimeout(() => { largo = true; editar(); }, 550);
+  };
+  a.addEventListener('touchstart', e => empezar(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
+  a.addEventListener('touchmove', e => { const t = e.touches[0]; if (Math.abs(t.clientX - sx) > 10 || Math.abs(t.clientY - sy) > 10) cancelar(); }, { passive: true });
+  a.addEventListener('touchend', cancelar);
+  a.addEventListener('mousedown', e => empezar(e.clientX, e.clientY));
+  a.addEventListener('mouseup', cancelar);
+  a.addEventListener('mouseleave', cancelar);
+  a.addEventListener('contextmenu', e => e.preventDefault());   // el menu de "abrir enlace" del navegador estorbaria a la pulsacion larga
+  a.addEventListener('click', e => { if (largo) e.preventDefault(); });   // no navegar justo despues de editar
+});
+
+/* Waze y Google Maps: sin destino propio no tiene sentido "editar su direccion" con
+   pulsacion larga (no hay una URL fija que editar, cada viaje construye la suya), asi
+   que estas dos funcionan aparte. Al tocarlas piden a donde ir, geocodifican con el
+   mismo servicio que ya usa AutoBoard (Nominatim, sin clave), y abren directamente en
+   modo navegacion -- no solo el mapa. Si se deja vacio, abren el mapa general de
+   siempre, por si solo quieres mirar sin un destino concreto. */
+async function geocodificarNavHub(texto){
+  const m = texto.trim().match(/^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/);
+  if (m) return [parseFloat(m[1]), parseFloat(m[2])];   // ya viene como "lat,lon"
+  try{
+    const r = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(texto));
+    const j = await r.json();
+    return j.length ? [parseFloat(j[0].lat), parseFloat(j[0].lon)] : null;
+  }catch(e){ return null; }
 }
-(function(){
-  const MIO = 'autoboard';          // los caches que NO empiecen asi, se borran
-  if(!('serviceWorker' in navigator)) return;
-  addEventListener('load', async () => {
-    try{
-      if(window.caches){
-        const ns = await caches.keys();
-        for(const n of ns) if(n.indexOf(MIO)!==0){ await caches.delete(n); console.log('[sw] cache ajeno borrado:', n); }
-      }
-      const rs = await navigator.serviceWorker.getRegistrations();
-      for(const r of rs){
-        r.update();
-        r.addEventListener('updatefound', () => {
-          const nuevo = r.installing;
-          if(!nuevo) return;
-          nuevo.addEventListener('statechange', () => {
-            if(nuevo.state==='installed' && navigator.serviceWorker.controller
-               && !sessionStorage.getItem('swRecargado')){
-              sessionStorage.setItem('swRecargado','1');
-              console.log('[sw] version nueva instalada; recargando');
-              location.reload();
-            }
-          });
-        });
-      }
-    }catch(e){ console.warn('[sw]', e.message); }
+document.querySelectorAll('.tab[data-destino]').forEach(a => {
+  a.addEventListener('click', async e => {
+    e.preventDefault();
+    const nombre = a.querySelector('.nombre').textContent;
+    const destino = prompt('¿A dónde vamos con ' + nombre + '? (dirección, o vacío para solo abrir el mapa)', '');
+    if (destino === null) return;
+    const limpio = destino.trim();
+    if (!limpio){ location.href = a.getAttribute('href'); return; }
+    const ll = await geocodificarNavHub(limpio);
+    if (!ll){ alert('No se ha encontrado "' + limpio + '"'); return; }
+    location.href = a.dataset.destino.replace('LAT', ll[0]).replace('LON', ll[1]);
   });
-})();
+});
 </script>
+</body>
 </html>
