@@ -40,32 +40,32 @@
 
   <h1>Elige navegador</h1>
   <div class="grid">
-    <a class="tab autoboard" href="../">
+    <a class="tab autoboard" data-id="autoboard" href="../">
       <div class="ico">🗺️</div>
       <div class="nombre">AutoBoard</div>
       <div class="sub">Nuestro navegador</div>
     </a>
-    <a class="tab waze" href="https://www.waze.com/live-map">
+    <a class="tab waze" data-id="waze" href="https://www.waze.com/live-map">
       <div class="ico">🔵</div>
       <div class="nombre">Waze</div>
       <div class="sub">Mapa en vivo</div>
     </a>
-    <a class="tab gmaps" href="https://www.google.com/maps">
+    <a class="tab gmaps" data-id="gmaps" href="https://www.google.com/maps">
       <div class="ico">📍</div>
       <div class="nombre">Google Maps</div>
       <div class="sub">Mapa</div>
     </a>
-    <a class="tab here" href="https://wego.here.com">
+    <a class="tab here" data-id="here" href="https://wego.here.com">
       <div class="ico">🟠</div>
       <div class="nombre">HERE WeGo</div>
       <div class="sub">Mapa y rutas</div>
     </a>
-    <a class="tab tesla" href="https://www.viajandoentesla.es">
+    <a class="tab tesla" data-id="tesla" href="https://www.viajandoentesla.es/navegador">
       <div class="ico">🚨</div>
       <div class="nombre">Viajando en Tesla</div>
       <div class="sub">Navegador con radares</div>
     </a>
-    <a class="tab precision" href="https://drive.precisionautotechnik.com">
+    <a class="tab precision" data-id="precision" href="https://drive.precisionautotechnik.com">
       <div class="ico">🧩</div>
       <div class="nombre">Precision Drive</div>
       <div class="sub">Tus apps, con PIN</div>
@@ -74,12 +74,12 @@
 
   <h1 class="seg">Espejo del móvil</h1>
   <div class="grid">
-    <a class="tab samsung" href="https://64-226-76-114.nip.io/ver/samsung">
+    <a class="tab samsung" data-id="samsung" href="https://64-226-76-114.nip.io/ver/samsung">
       <div class="ico">📱</div>
       <div class="nombre">Samsung</div>
       <div class="sub">AATesla</div>
     </a>
-    <a class="tab realme" href="https://64-226-76-114.nip.io/ver/realme">
+    <a class="tab realme" data-id="realme" href="https://64-226-76-114.nip.io/ver/realme">
       <div class="ico">📴</div>
       <div class="nombre">Realme</div>
       <div class="sub">AATeslaLibre</div>
@@ -92,5 +92,45 @@
     TomTom no tiene navegador web público, solo app móvil — por eso no está aquí.
   </div>
 
+
+<script>
+/* Pulsación larga sobre cualquier pestaña -> editar y guardar su dirección, por si
+   alguna cambia (como ya nos ha pasado con viajandoentesla.es). Mismo umbral de 550 ms
+   que usa AutoBoard para no confundirlo con un toque normal, y se cancela si el dedo
+   se mueve (para no disparar al hacer scroll). Guardado en localStorage: sobrevive a
+   cerrar el navegador, y solo afecta a este aparato -- si cambias la URL en el móvil,
+   no se entera el Tesla, cada uno guarda la suya. */
+const CLAVE = id => 'navhubUrl:' + id;
+document.querySelectorAll('.tab[data-id]').forEach(a => {
+  a.dataset.default = a.getAttribute('href');
+  const guardada = localStorage.getItem(CLAVE(a.dataset.id));
+  if (guardada) a.setAttribute('href', guardada);
+
+  let tmr = null, largo = false, sx = 0, sy = 0;
+  const cancelar = () => { if (tmr) { clearTimeout(tmr); tmr = null; } };
+  const editar = () => {
+    const actual = a.getAttribute('href');
+    const nueva = prompt('Dirección para "' + a.querySelector('.nombre').textContent + '":', actual);
+    if (nueva === null) return;
+    const limpia = nueva.trim();
+    if (!limpia) return;
+    if (limpia === a.dataset.default) localStorage.removeItem(CLAVE(a.dataset.id));
+    else localStorage.setItem(CLAVE(a.dataset.id), limpia);
+    a.setAttribute('href', limpia);
+  };
+  const empezar = (x, y) => {
+    largo = false; sx = x; sy = y; cancelar();
+    tmr = setTimeout(() => { largo = true; editar(); }, 550);
+  };
+  a.addEventListener('touchstart', e => empezar(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
+  a.addEventListener('touchmove', e => { const t = e.touches[0]; if (Math.abs(t.clientX - sx) > 10 || Math.abs(t.clientY - sy) > 10) cancelar(); }, { passive: true });
+  a.addEventListener('touchend', cancelar);
+  a.addEventListener('mousedown', e => empezar(e.clientX, e.clientY));
+  a.addEventListener('mouseup', cancelar);
+  a.addEventListener('mouseleave', cancelar);
+  a.addEventListener('contextmenu', e => e.preventDefault());   // el menu de "abrir enlace" del navegador estorbaria a la pulsacion larga
+  a.addEventListener('click', e => { if (largo) e.preventDefault(); });   // no navegar justo despues de editar
+});
+</script>
 </body>
 </html>
