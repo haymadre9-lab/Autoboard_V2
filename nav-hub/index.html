@@ -41,6 +41,40 @@
   h1.seg{margin-top:6px}
   .nota{max-width:640px;font-size:12px;color:var(--dim);text-align:center;line-height:1.5;padding:0 12px}
   .nota b{color:#c7cdd3}
+
+  /* ==== laboratorio de lanzamiento: nuevo, aparte, no toca las pestañas de arriba ==== */
+  .tab.debug{background:linear-gradient(160deg,#3a1a4a,#12161c);border-color:#c084fc}
+
+  #appWindow{position:fixed;inset:0;z-index:2000;background:#05070a;display:none;flex-direction:column}
+  #appWindow.on{display:flex}
+  #awTop{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#12161c;border-bottom:1px solid var(--bd)}
+  #awTitle{flex:1;font-weight:700;font-size:14px}
+  #awClose{background:#232c33;border:0;color:#e8eef2;font-size:18px;border-radius:10px;padding:8px 14px;cursor:pointer}
+  #awBody{flex:1;position:relative;overflow:hidden}
+  #awBody iframe{width:100%;height:100%;border:0}
+  #awHint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    color:var(--dim);font-size:13px;text-align:center;padding:20px;flex-direction:column;gap:10px}
+
+  #debugPanel{position:fixed;inset:0;z-index:1900;background:#0b0e12;display:none;flex-direction:column;
+    padding:16px;box-sizing:border-box;overflow-y:auto;gap:14px}
+  #debugPanel.on{display:flex}
+  .dbg-row{display:flex;flex-direction:column;gap:4px;max-width:520px;width:100%;align-self:center}
+  .dbg-row label{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.04em}
+  .dbg-row input{background:#12161c;border:1px solid var(--bd);border-radius:10px;color:#e8eef2;
+    font-size:16px;padding:12px 14px;box-sizing:border-box}
+  .dbg-apps{display:flex;flex-direction:column;gap:10px;max-width:520px;width:100%;align-self:center}
+  .dbg-app{background:#12161c;border:1px solid var(--bd);border-radius:14px;padding:12px}
+  .dbg-app h3{margin:0 0 8px 0;font-size:14px}
+  .dbg-methods{display:flex;gap:8px;flex-wrap:wrap}
+  .dbg-methods button{background:#1e293b;border:1px solid #2c3942;color:#e8eef2;border-radius:9px;
+    padding:10px 12px;font-size:12px;font-weight:700;cursor:pointer}
+  .dbg-methods button:active{background:#2a3a52}
+  #debugLogWrap{max-width:520px;width:100%;align-self:center;background:#0d1117;border:1px solid var(--bd);
+    border-radius:12px;padding:10px}
+  #debugLogWrap h3{margin:0 0 6px 0;font-size:12px;color:var(--dim);text-transform:uppercase}
+  #debugLog{font:11px/1.5 ui-monospace,monospace;color:#9ae6b4;white-space:pre-wrap;max-height:220px;overflow-y:auto}
+  #debugClose{max-width:520px;width:100%;align-self:center;background:#232c33;border:0;color:#e8eef2;
+    border-radius:10px;padding:12px;font-weight:700;cursor:pointer}
 </style>
 </head>
 <body>
@@ -82,6 +116,11 @@
       <div class="nombre">codriver</div>
       <div class="sub">A prueba · pide cuenta</div>
     </a>
+    <button class="tab debug" id="abrirDebug" type="button">
+      <div class="ico">🐞</div>
+      <div class="nombre">Laboratorio</div>
+      <div class="sub">Probar métodos de lanzamiento</div>
+    </button>
   </div>
 
   <h1 class="seg">Espejo del móvil</h1>
@@ -103,6 +142,67 @@
     página en <b>favoritos</b> para tenerla siempre a mano.<br>
     TomTom no tiene navegador web público, solo app móvil — por eso no está aquí.
   </div>
+
+<!-- ==== Laboratorio de lanzamiento (sección 7 del encargo): destino de prueba +
+     un botón por metodo, que ensena APP/METODO/URL antes de disparar nada. ==== -->
+<div id="debugPanel">
+  <h1 style="align-self:center">Laboratorio de lanzamiento</h1>
+  <div class="dbg-row">
+    <label>Latitud</label><input id="dbgLat" type="text" inputmode="decimal" placeholder="43.2785784" value="43.2785784">
+  </div>
+  <div class="dbg-row">
+    <label>Longitud</label><input id="dbgLon" type="text" inputmode="decimal" placeholder="-2.9873281" value="-2.9873281">
+  </div>
+  <div class="dbg-row">
+    <label>Nombre</label><input id="dbgNombre" type="text" placeholder="Destino de prueba" value="Destino de prueba">
+  </div>
+  <button id="dbgFijar" class="dbg-methods" style="max-width:520px;width:100%;align-self:center;background:#1e293b;border:1px solid #2c3942;color:#e8eef2;border-radius:10px;padding:12px;font-weight:700;cursor:pointer">
+    Fijar destino
+  </button>
+
+  <div class="dbg-apps">
+    <div class="dbg-app">
+      <h3>🗺 Google Maps</h3>
+      <div class="dbg-methods">
+        <button data-app="gmaps" data-method="https">HTTPS</button>
+        <button data-app="gmaps" data-method="custom-scheme">CUSTOM SCHEME</button>
+        <button data-app="gmaps" data-method="intent">INTENT</button>
+        <button data-app="gmaps" data-method="iframe">IFRAME</button>
+        <button data-app="gmaps" data-method="external">EXTERNAL</button>
+      </div>
+    </div>
+    <div class="dbg-app">
+      <h3>🟦 Waze</h3>
+      <div class="dbg-methods">
+        <button data-app="waze" data-method="https">HTTPS</button>
+        <button data-app="waze" data-method="custom-scheme">CUSTOM SCHEME</button>
+        <button data-app="waze" data-method="intent">INTENT</button>
+        <button data-app="waze" data-method="iframe">IFRAME</button>
+        <button data-app="waze" data-method="external">EXTERNAL</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="debugLogWrap">
+    <h3>Registro de eventos</h3>
+    <div id="debugLog">(sin eventos todavía)</div>
+  </div>
+
+  <button id="debugClose" type="button">Cerrar laboratorio</button>
+</div>
+
+<!-- ==== Ventana de "app abierta" (seccion 2). Solo IFRAME se queda dentro de esta
+     ventana; los demas metodos navegan de verdad (no hay forma de evitarlo sin
+     iframe: son URLs que el propio navegador decide donde abrir). ==== -->
+<div id="appWindow">
+  <div id="awTop">
+    <div id="awTitle">App</div>
+    <button id="awClose" type="button">✕ Cerrar</button>
+  </div>
+  <div id="awBody">
+    <div id="awHint"></div>
+  </div>
+</div>
 
 
 <script>
@@ -142,6 +242,179 @@ document.querySelectorAll('.tab[data-id]').forEach(a => {
   a.addEventListener('mouseleave', cancelar);
   a.addEventListener('contextmenu', e => e.preventDefault());   // el menu de "abrir enlace" del navegador estorbaria a la pulsacion larga
   a.addEventListener('click', e => { if (largo) e.preventDefault(); });   // no navegar justo despues de editar
+});
+
+/* ============================================================================
+   LABORATORIO DE LANZAMIENTO -- nuevo, aparte de todo lo de arriba. No toca
+   ninguna pestaña existente. Objetivo: poder probar, uno a uno, distintos
+   metodos de abrir Google Maps/Waze desde el navegador del Tesla, sin dar
+   por sentado que ninguno funciona hasta comprobarlo de verdad.
+   ============================================================================ */
+
+/* ---- 8) Registro de eventos ---- */
+const DebugConsole = {
+  lineas: [],
+  log(msg){
+    const t = new Date().toTimeString().slice(0,8);
+    this.lineas.push('['+t+'] '+msg);
+    if (this.lineas.length > 200) this.lineas.shift();
+    this.pintar();
+  },
+  pintar(){
+    const el = document.getElementById('debugLog');
+    if (el) el.textContent = this.lineas.slice(-60).join('\n') || '(sin eventos todavía)';
+  }
+};
+function alVolverVisible(ev){
+  DebugConsole.log(ev + (document.hidden !== undefined ? ' (hidden=' + document.hidden + ')' : ''));
+  /* 11) Regreso desde la app: si estabamos en APP_OPEN/APP_OPENING con un metodo
+     que navega de verdad (no iframe) y el navegador vuelve a estar visible,
+     se asume que hemos vuelto de Maps/Waze -- se cierra la ventana sin recargar. */
+  if ((ev === 'visibilitychange' && !document.hidden) || ev === 'pageshow' || ev === 'focus'){
+    if ((NavHubState === 'APP_OPEN' || NavHubState === 'APP_OPENING') && !AppWindow.esIframeAbierto){
+      AppWindow.close();
+    }
+  }
+}
+// visibilitychange se dispara sobre DOCUMENT, no sobre window -- los otros cuatro
+// si son eventos de window. Iban los cinco mal puestos en window.
+document.addEventListener('visibilitychange', () => alVolverVisible('visibilitychange'));
+['pageshow','pagehide','focus','blur'].forEach(ev => window.addEventListener(ev, () => alVolverVisible(ev)));
+
+/* ---- 6) Destino compartido ---- */
+const DestinationManager = {
+  currentDestination: { lat:null, lon:null, name:'', address:'' },
+  setDestination(d){
+    Object.assign(this.currentDestination, d);
+    DebugConsole.log('Destination set: ' + JSON.stringify(this.currentDestination));
+  }
+};
+
+/* ---- 4/5) Google Maps y Waze: construccion de URL, un metodo por estrategia.
+   NINGUNO de estos se da por bueno todavia -- son solo las formas mas conocidas
+   de cada esquema, para poder probarlas. custom-scheme/intent son los que MAS
+   dudas ofrecen dentro de un navegador (no una app nativa): puede que el
+   navegador del Tesla simplemente no sepa que hacer con ellos. */
+function launchGoogleMaps(lat, lon, method){
+  const ll = lat + ',' + lon;
+  if (method === 'https') return 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(ll) + '&dir_action=navigate';
+  if (method === 'custom-scheme') return 'comgooglemaps://?daddr=' + encodeURIComponent(ll) + '&directionsmode=driving';
+  if (method === 'intent') return 'intent://maps.google.com/maps?daddr=' + encodeURIComponent(ll) + '#Intent;scheme=https;package=com.google.android.apps.maps;end';
+  if (method === 'iframe' || method === 'external') return 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(ll) + '&dir_action=navigate';
+  return null;
+}
+function launchWaze(lat, lon, method){
+  const ll = lat + ',' + lon;
+  if (method === 'https') return 'https://waze.com/ul?ll=' + encodeURIComponent(ll) + '&navigate=yes';
+  if (method === 'custom-scheme') return 'waze://?ll=' + encodeURIComponent(ll) + '&navigate=yes';
+  if (method === 'intent') return 'intent://waze.com/ul?ll=' + encodeURIComponent(ll) + '&navigate=yes#Intent;scheme=https;package=com.waze;end';
+  if (method === 'iframe' || method === 'external') return 'https://waze.com/ul?ll=' + encodeURIComponent(ll) + '&navigate=yes';
+  return null;
+}
+
+/* ---- 10) Estados ---- */
+let NavHubState = 'HOME';
+function fijarEstado(s){ NavHubState = s; DebugConsole.log('app state: ' + s); }
+
+/* ---- 2) Ventana de "app abierta". Solo IFRAME se queda dentro, de verdad, en
+   esta ventana -- los demas metodos son URLs normales: el navegador decide a
+   donde ir, Nav-Hub no puede "retenerlas" dentro de un panel. Para esos casos
+   la ventana solo sirve de aviso visual momentaneo antes de navegar. */
+const AppWindow = {
+  esIframeAbierto: false,
+  open(app, url, esIframe){
+    fijarEstado('APP_OPENING');
+    document.getElementById('awTitle').textContent = app;
+    const body = document.getElementById('awBody');
+    body.innerHTML = '';
+    this.esIframeAbierto = !!esIframe;
+    if (esIframe){
+      const ifr = document.createElement('iframe');
+      ifr.src = url;
+      ifr.addEventListener('load', () => DebugConsole.log('iframe: load (esto NO garantiza que el contenido real se vea -- muchos sitios bloquean en silencio con X-Frame-Options/CSP)'));
+      ifr.addEventListener('error', () => DebugConsole.log('iframe: error'));
+      body.appendChild(ifr);
+    } else {
+      const aviso = document.createElement('div');
+      aviso.id = 'awHint';
+      aviso.innerHTML = '<div>Abriendo fuera de Nav-Hub…</div>' +
+        '<div style="font-size:11px;opacity:.7">Si el navegador del Tesla vuelve aquí, esta ventana se cerrará sola.</div>';
+      body.appendChild(aviso);
+    }
+    document.getElementById('appWindow').classList.add('on');
+    fijarEstado('APP_OPEN');
+  },
+  close(){
+    if (NavHubState === 'HOME') return;
+    fijarEstado('APP_CLOSING');
+    document.getElementById('appWindow').classList.remove('on');
+    document.getElementById('awBody').innerHTML = '';
+    this.esIframeAbierto = false;
+    fijarEstado('HOME');
+  }
+};
+document.getElementById('awClose').onclick = () => AppWindow.close();
+
+/* 9) Gesto: deslizar hacia arriba sobre la ventana de app para cerrarla.
+   Deteccion sencilla, sin librerias: solo mide cuanto se ha movido el dedo en
+   vertical desde el toque inicial. */
+(function(){
+  const el = document.getElementById('appWindow');
+  let y0 = null;
+  el.addEventListener('touchstart', e => { y0 = e.touches[0].clientY; }, { passive:true });
+  el.addEventListener('touchend', e => {
+    if (y0 === null) return;
+    const dy = (e.changedTouches[0].clientY) - y0;
+    y0 = null;
+    if (dy < -70) { DebugConsole.log('gesture: swipe up -> close'); AppWindow.close(); }
+  }, { passive:true });
+})();
+
+/* ---- 3) AppLauncher: un solo punto de entrada para lanzar cualquier app con
+   cualquier metodo. No asume que ninguno funciona -- solo registra lo que
+   intenta y lo intenta. */
+const AppLauncher = {
+  launch({ app, method, url }){
+    DebugConsole.log('Launch ' + app);
+    DebugConsole.log('Method: ' + method);
+    DebugConsole.log('URL: ' + url);
+    if (method === 'iframe'){ AppWindow.open(app, url, true); return; }
+    AppWindow.open(app, url, false);
+    try{
+      if (method === 'external') window.open(url, '_blank');
+      else location.href = url;   // https, custom-scheme, intent: es el navegador quien decide que hacer con cada una
+    }catch(e){ DebugConsole.log('Error: ' + e.message); }
+  }
+};
+
+/* ---- 7) Pantalla DEBUG: fijar destino, y un boton por metodo que ensena
+   APP/METODO/URL antes de disparar nada (confirm(), sencillo y fiable). ---- */
+document.getElementById('abrirDebug').onclick = () => document.getElementById('debugPanel').classList.add('on');
+document.getElementById('debugClose').onclick = () => document.getElementById('debugPanel').classList.remove('on');
+
+document.getElementById('dbgFijar').onclick = () => {
+  DestinationManager.setDestination({
+    lat: document.getElementById('dbgLat').value.trim(),
+    lon: document.getElementById('dbgLon').value.trim(),
+    name: document.getElementById('dbgNombre').value.trim(),
+    address: ''
+  });
+};
+
+document.querySelectorAll('.dbg-methods button[data-app]').forEach(btn => {
+  btn.onclick = () => {
+    const lat = document.getElementById('dbgLat').value.trim();
+    const lon = document.getElementById('dbgLon').value.trim();
+    const nombre = document.getElementById('dbgNombre').value.trim();
+    if (!lat || !lon){ alert('Pon latitud y longitud primero.'); return; }
+    DestinationManager.setDestination({ lat, lon, name: nombre, address:'' });
+    const app = btn.dataset.app, method = btn.dataset.method;
+    const url = app === 'gmaps' ? launchGoogleMaps(lat, lon, method) : launchWaze(lat, lon, method);
+    if (!url){ DebugConsole.log('Error: metodo desconocido ' + method); return; }
+    const ok = confirm('APP: ' + app + '\nMETHOD: ' + method + '\nURL: ' + url + '\n\n¿Lanzar?');
+    if (!ok){ DebugConsole.log('Cancelado por el usuario (' + app + ' / ' + method + ')'); return; }
+    AppLauncher.launch({ app, method, url });
+  };
 });
 
 </script>
