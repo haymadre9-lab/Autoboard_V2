@@ -75,6 +75,15 @@
   #debugLog{font:11px/1.5 ui-monospace,monospace;color:#9ae6b4;white-space:pre-wrap;max-height:220px;overflow-y:auto}
   #debugClose{max-width:520px;width:100%;align-self:center;background:#232c33;border:0;color:#e8eef2;
     border-radius:10px;padding:12px;font-weight:700;cursor:pointer}
+
+  /* ==== panel de diagnostico temporal, visible mientras APP_OPEN ==== */
+  #diagPanel{display:none;background:#1a0f0f;border:1px solid #7a2020;border-radius:12px;
+    padding:10px 12px;margin:10px;font:12px/1.7 ui-monospace,monospace;color:#ffb4b4}
+  #diagPanel.on{display:block}
+  #diagPanel b{color:#ff8a8a}
+  #diagBtns{display:flex;gap:8px;margin-top:8px}
+  #diagBtns button{flex:1;background:#7a2020;border:0;color:#fff;border-radius:8px;padding:10px;font-weight:700;cursor:pointer}
+  #diagBtns button.limpiar{background:#3a3a1a}
 </style>
 </head>
 <body>
@@ -199,6 +208,19 @@
     <div id="awTitle">App</div>
     <button id="awClose" type="button">✕ Cerrar</button>
   </div>
+  <div id="diagPanel">
+    STATE: <b id="diagState">-</b><br>
+    VISIBILITY: <b id="diagVis">-</b><br>
+    HIDDEN: <b id="diagHidden">-</b><br>
+    FOCUS: <b id="diagFocus">-</b><br>
+    URL: <b id="diagUrl">-</b><br>
+    METHOD: <b id="diagMethod">-</b><br>
+    APP: <b id="diagApp">-</b>
+    <div id="diagBtns">
+      <button id="diagCerrar" type="button">CERRAR APP</button>
+      <button id="diagLimpiar" class="limpiar" type="button">LIMPIAR LOG</button>
+    </div>
+  </div>
   <div id="awBody">
     <div id="awHint"></div>
   </div>
@@ -265,21 +287,49 @@ const DebugConsole = {
     if (el) el.textContent = this.lineas.slice(-60).join('\n') || '(sin eventos todavía)';
   }
 };
+/* ============================================================================
+   DIAGNOSTICO TEMPORAL (a peticion explicita) -- el cierre automatico que habia
+   aqui queda DESACTIVADO mientras dure esta prueba. Ya no se llama a
+   AppWindow.close() desde ningun evento de foco/visibilidad: la unica forma de
+   volver a HOME es el boton CERRAR APP (o el de la barra superior, que hace lo
+   mismo). Esto es deliberado, para poder ver la secuencia completa de eventos
+   sin que nada la borre antes de que le de tiempo a leerla. */
 function alVolverVisible(ev){
-  DebugConsole.log(ev + (document.hidden !== undefined ? ' (hidden=' + document.hidden + ')' : ''));
-  /* 11) Regreso desde la app: si estabamos en APP_OPEN/APP_OPENING con un metodo
-     que navega de verdad (no iframe) y el navegador vuelve a estar visible,
-     se asume que hemos vuelto de Maps/Waze -- se cierra la ventana sin recargar. */
-  if ((ev === 'visibilitychange' && !document.hidden) || ev === 'pageshow' || ev === 'focus'){
-    if ((NavHubState === 'APP_OPEN' || NavHubState === 'APP_OPENING') && !AppWindow.esIframeAbierto){
-      AppWindow.close();
-    }
-  }
+  const t = new Date();
+  const ts = t.toTimeString().slice(0,8) + '.' + String(t.getMilliseconds()).padStart(3,'0');
+  const hidden = document.hidden;
+  const vis = document.visibilityState;
+  const foco = document.hasFocus();
+  DebugConsole.lineas.push(
+    ts + '\n' + ev +
+    '\nhidden=' + hidden +
+    '\nvisibilityState=' + vis +
+    '\nhasFocus=' + foco +
+    '\nstate=' + NavHubState
+  );
+  DebugConsole.pintar();
+  pintarDiagPanel();
+  // NO se llama a AppWindow.close() aqui -- desactivado a proposito para esta prueba.
 }
-// visibilitychange se dispara sobre DOCUMENT, no sobre window -- los otros cuatro
-// si son eventos de window. Iban los cinco mal puestos en window.
 document.addEventListener('visibilitychange', () => alVolverVisible('visibilitychange'));
-['pageshow','pagehide','focus','blur'].forEach(ev => window.addEventListener(ev, () => alVolverVisible(ev)));
+['pageshow','pagehide','focus','blur','beforeunload'].forEach(ev => window.addEventListener(ev, () => alVolverVisible(ev)));
+
+function pintarDiagPanel(){
+  const panel = document.getElementById('diagPanel');
+  if (!panel) return;
+  const activo = (NavHubState === 'APP_OPEN' || NavHubState === 'APP_OPENING');
+  panel.classList.toggle('on', activo);
+  if (!activo) return;
+  document.getElementById('diagState').textContent = NavHubState;
+  document.getElementById('diagVis').textContent = document.visibilityState;
+  document.getElementById('diagHidden').textContent = document.hidden;
+  document.getElementById('diagFocus').textContent = document.hasFocus();
+  document.getElementById('diagUrl').textContent = ultimoLanzamiento.url || '-';
+  document.getElementById('diagMethod').textContent = ultimoLanzamiento.method || '-';
+  document.getElementById('diagApp').textContent = ultimoLanzamiento.app || '-';
+}
+document.getElementById('diagCerrar').onclick = () => AppWindow.close();
+document.getElementById('diagLimpiar').onclick = () => { DebugConsole.lineas = []; DebugConsole.pintar(); };
 
 /* ---- 6) Destino compartido ---- */
 const DestinationManager = {
@@ -314,7 +364,8 @@ function launchWaze(lat, lon, method){
 
 /* ---- 10) Estados ---- */
 let NavHubState = 'HOME';
-function fijarEstado(s){ NavHubState = s; DebugConsole.log('app state: ' + s); }
+let ultimoLanzamiento = { app:null, method:null, url:null };
+function fijarEstado(s){ NavHubState = s; DebugConsole.log('app state: ' + s); pintarDiagPanel(); }
 
 /* ---- 2) Ventana de "app abierta". Solo IFRAME se queda dentro, de verdad, en
    esta ventana -- los demas metodos son URLs normales: el navegador decide a
@@ -366,7 +417,8 @@ document.getElementById('awClose').onclick = () => AppWindow.close();
     if (y0 === null) return;
     const dy = (e.changedTouches[0].clientY) - y0;
     y0 = null;
-    if (dy < -70) { DebugConsole.log('gesture: swipe up -> close'); AppWindow.close(); }
+    // Desactivado para esta prueba de diagnostico: CERRAR APP debe ser la unica via.
+    if (dy < -70) { DebugConsole.log('gesture: swipe up -> close (DESACTIVADO para esta prueba, no se ha cerrado)'); }
   }, { passive:true });
 })();
 
@@ -375,6 +427,7 @@ document.getElementById('awClose').onclick = () => AppWindow.close();
    intenta y lo intenta. */
 const AppLauncher = {
   launch({ app, method, url }){
+    ultimoLanzamiento = { app, method, url };
     DebugConsole.log('Launch ' + app);
     DebugConsole.log('Method: ' + method);
     DebugConsole.log('URL: ' + url);
