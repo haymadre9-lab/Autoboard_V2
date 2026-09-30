@@ -95,13 +95,14 @@ let radarTiposOn = { fijo:true, movil:true, tramo:true, semaforo:true };   // Aj
 // sigue siendo una forma de lienzo, ligera, sin necesitar volver a
 // dibujarla en cada cambio de zoom -- a cambio, crece o encoge un poco con
 // el zoom, igual que cualquier otro elemento real del mapa.
-function trianguloLL(centro, metros){
+function diamanteLL(centro, metros){
   const mx = 111320*Math.cos(centro[0]*Math.PI/180), my=110540;
   const dy = metros/my, dx = metros/mx;
   return [
     [centro[0]+dy, centro[1]],
-    [centro[0]-dy*0.6, centro[1]-dx*0.9],
-    [centro[0]-dy*0.6, centro[1]+dx*0.9]
+    [centro[0], centro[1]+dx],
+    [centro[0]-dy, centro[1]],
+    [centro[0], centro[1]-dx]
   ];
 }
 
@@ -109,9 +110,19 @@ function drawRadars(){
   radarGroup.clearLayers(); if(!showRadars)return;
   for(const p of radars){
     if (radarTiposOn[p.t] === false) continue;   // tipo desactivado en Ajustes
-    L.circleMarker([p.ll[0],p.ll[1]], {
-      radius: 8, color:'#fff', weight:2, fillColor: radarColor(p.t), fillOpacity: radarOpacidad(p.t), interactive:false
-    }).addTo(radarGroup);
+    if (p.t === 'tramo'){
+      // Diamante, no circulo: se diferencia de un vistazo de fijo/movil/semaforo,
+      // que siguen siendo circulos. Un tramo de velocidad media es conceptualmente
+      // distinto -no es un punto fijo, es un control entre dos puntos-, y la forma
+      // ya lo deja claro sin depender solo del color.
+      L.polygon(diamanteLL(p.ll, 11), {
+        color:'#fff', weight:2, fillColor: radarColor(p.t), fillOpacity: radarOpacidad(p.t), interactive:false
+      }).addTo(radarGroup);
+    } else {
+      L.circleMarker([p.ll[0],p.ll[1]], {
+        radius: 8, color:'#fff', weight:2, fillColor: radarColor(p.t), fillOpacity: radarOpacidad(p.t), interactive:false
+      }).addTo(radarGroup);
+    }
   }
 }
 
@@ -609,7 +620,7 @@ function actualizarZoomManiobra(distSiguiente, tipoSiguiente){
   try{ map.setZoom(z, { animate:true }); }catch(e){}
 }
 
-const VERSION = '2026.09.29-b';
+const VERSION = '2026.09.29-c';
 // X dibujada: el caracter U+2715 no esta en la fuente del navegador y salia como un rectangulo
 const X_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>';
 try{ $('ver').textContent = 'v'+VERSION; }catch(e){}
