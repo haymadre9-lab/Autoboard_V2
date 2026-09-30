@@ -8,50 +8,83 @@
 <style>
   html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
   #map{position:absolute;inset:0}
-  /* Panel de diagnostico: las 4 preguntas de la Fase 1, respondidas en vivo, no adivinadas */
-  #diag{position:fixed;top:10px;left:10px;z-index:10;background:rgba(10,13,16,.82);
+  #diag{position:fixed;top:10px;left:10px;z-index:10;background:rgba(10,13,16,.88);
     border:1px solid #232c33;border-radius:10px;padding:10px 14px;color:#e8eef2;
-    font:12px/1.6 ui-monospace,monospace;max-width:300px}
+    font:12px/1.6 ui-monospace,monospace;max-width:320px;max-height:70vh;overflow-y:auto}
   #diag b{color:#9ae6b4}
   #diag .mal{color:#ff8a8a}
-  #fps{position:fixed;top:10px;right:10px;z-index:10;background:rgba(10,13,16,.82);
-    border:1px solid #232c33;border-radius:10px;padding:8px 12px;color:#e8eef2;
-    font:700 13px ui-monospace,monospace}
+  #diag .aviso{color:#ffd166}
+  #diag hr{border:0;border-top:1px solid #232c33;margin:6px 0}
   #controles{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;
-    display:flex;gap:8px}
+    display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:94vw}
   #controles button{background:#12161c;border:1px solid #232c33;color:#e8eef2;
-    border-radius:10px;padding:12px 16px;font-size:13px;font-weight:700}
+    border-radius:10px;padding:10px 12px;font-size:12px;font-weight:700}
+  #controles button.on{background:#1d3a2c;border-color:#2e6b4a}
+  #controles button:disabled{opacity:.4}
+  #errlog{position:fixed;top:10px;right:10px;z-index:10;background:rgba(10,13,16,.88);
+    border:1px solid #232c33;border-radius:10px;padding:8px 12px;color:#ff8a8a;
+    font:11px/1.5 ui-monospace,monospace;max-width:280px;max-height:40vh;overflow-y:auto;display:none}
+  #errlog.on{display:block}
 </style>
 </head>
 <body>
 <div id="map"></div>
 <div id="diag">
-  <div><b>FASE 1 — solo mapa, nada mas</b></div>
-  <div>1) ¿Arranca? <span id="q1">cargando…</span></div>
-  <div>2) ¿Teselas cargan fluido? <span id="q2">esperando…</span></div>
-  <div>3) ¿Giro/inclinacion fluidos? <span id="q3">prueba con los botones</span></div>
-  <div>4) FPS en movimiento: <span id="q4">-</span></div>
+  <div><b>FASE 1 — medicion, no demo</b></div>
+  <div>ARRANQUE: <span id="rArranque">cargando…</span></div>
+  <div>VECTOR TILES: <span id="rTiles">esperando…</span></div>
+  <div>WEBGL: <span id="rWebgl">-</span></div>
+  <div>3D BUILDINGS: <span id="rBuildings">-</span></div>
+  <hr>
+  <div>ROTACION (10s): <span id="rRot">sin probar</span></div>
+  <div>PITCH (10s): <span id="rPitch">sin probar</span></div>
+  <hr>
+  <div>ERRORES: <span id="rErrores">0</span></div>
 </div>
-<div id="fps">-- fps</div>
+<div id="errlog"></div>
 <div id="controles">
-  <button id="btnGirar">🔄 Girar</button>
-  <button id="btnInclinar">📐 Inclinar</button>
-  <button id="btnEdificios">🏢 Edificios 3D</button>
+  <button id="btnEdificios" class="on">🏢 Edificios: ON</button>
+  <button id="btnPitch" class="on">📐 Pitch: ON</button>
+  <button id="btnAA">🪄 Antialias: OFF (recargar)</button>
+  <button id="btnRot">▶ Prueba rotacion 10s</button>
+  <button id="btnPitchTest">▶ Prueba pitch 10s</button>
 </div>
 
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script>
 /* ============================================================================
-   FASE 1 -- SOLO ESTO. Nada de TomTom, nada de GPS, nada de radares, nada de
-   carpetas. El unico objetivo de este archivo es contestar 4 preguntas antes
-   de invertir una sola hora mas en este proyecto. Si esto va mal en el Tesla,
-   se acaba aqui y no ha costado nada. Reutiliza la MISMA clave de MapTiler que
-   ya usa AutoBoard V2 para las teselas planas -- no hace falta un proveedor
-   nuevo para esta prueba.
+   FASE 1, version corregida (2ª vuelta, tras la revision de ChatGPT sobre la
+   primera). Objetivo: convertir esto en una MEDICION fiable, no una demo que
+   simplemente "carga y gira bien a ojo". Sigue sin TomTom, GPS, HUD ni
+   radares -- eso sigue esperando a Fase 2.
+
+   Que corrige esta version, punto por punto:
+   1) FPS real de MapLibre (evento 'render' del propio motor), no del reloj
+      del navegador -- antes un rAF libre contaba igual con el mapa quieto.
+   2) La fuente/capa de edificios ya no se adivina: se buscan TODAS las
+      fuentes vectoriales y TODAS las capas con "building" en el nombre, se
+      informa de cuales se encontraron, y se comprueba con una consulta real
+      al mapa si la altura (render_height) existe de verdad en los datos, en
+      vez de confiar en que el nombre del atributo sea el correcto.
+   3) antialias:false por defecto (antes iba a true desde el principio).
+   4) Los errores se categorizan (style/source/tile/webgl/recurso) con su
+      mensaje real, no solo se cuentan.
+   5) Dos pruebas automaticas de 10 segundos -una girando, otra cambiando de
+      inclinacion sin parar-, midiendo FPS medio/minimo/maximo de verdad
+      durante el movimiento, no una impresion a ojo.
    ============================================================================ */
 const MAPTILER_KEY = 'sG00UkBX9Ig2ifguvPgU';
+const antialiasActivo = new URLSearchParams(location.search).get('aa') === '1';
 
-// Centrado en Bilbao/Vizcaya -- la zona real donde se va a probar, no un sitio generico
+const errores = [];   // {tipo, mensaje}
+function registrarError(tipo, mensaje){
+  errores.push({ tipo, mensaje });
+  document.getElementById('rErrores').textContent = errores.length;
+  const el = document.getElementById('errlog');
+  el.classList.add('on');
+  el.innerHTML = errores.map(e => '<b>[' + e.tipo + ']</b> ' + e.mensaje).join('<br><br>');
+}
+
 const map = new maplibregl.Map({
   container: 'map',
   style: 'https://api.maptiler.com/maps/streets-v2/style.json?key=' + MAPTILER_KEY,
@@ -59,76 +92,167 @@ const map = new maplibregl.Map({
   zoom: 16,
   pitch: 45,
   bearing: 0,
-  antialias: true
+  antialias: antialiasActivo
 });
+document.getElementById('btnAA').textContent = antialiasActivo ? '🪄 Antialias: ON (recargar)' : '🪄 Antialias: OFF (recargar)';
+document.getElementById('btnAA').onclick = () => {
+  location.href = location.pathname + (antialiasActivo ? '' : '?aa=1');
+};
 
-// ---- Pregunta 1: ¿arranca? ----
+// ---- errores categorizados: nunca un contador ciego ----
+let webglOk = true;
 map.on('error', e => {
-  document.getElementById('q1').innerHTML = '<span class="mal">ERROR: ' + (e.error ? e.error.message : 'desconocido') + '</span>';
+  const msg = (e.error && e.error.message) || String(e.error || 'desconocido');
+  let tipo = 'otro';
+  if (/webgl|context/i.test(msg)) { tipo = 'webgl'; webglOk = false; document.getElementById('rWebgl').innerHTML = '<span class="mal">FALLO</span>'; }
+  else if (/style/i.test(msg)) tipo = 'style';
+  else if (/source/i.test(msg)) tipo = 'source';
+  else if (/tile|pbf/i.test(msg)) tipo = 'tile';
+  else if (e.error && e.error instanceof TypeError) tipo = 'recurso externo';
+  registrarError(tipo, msg);
+  if (/^ARRANQUE|esperando|cargando/.test(document.getElementById('rArranque').textContent)){
+    document.getElementById('rArranque').innerHTML = '<span class="mal">ERROR: ' + msg + '</span>';
+  }
 });
 
-let primerRenderVisto = false;
+let idFuenteBuildings = null, sourceLayerBuildings = null, edificiosOn = true;
+
 map.on('load', () => {
-  document.getElementById('q1').innerHTML = '<b>SI, cargo</b>';
+  document.getElementById('rArranque').innerHTML = '<b>OK</b>';
+  document.getElementById('rWebgl').innerHTML = webglOk ? '<b>OK</b>' : '<span class="mal">FALLO</span>';
 
-  // ---- Edificios en 3D: capa de extrusion sobre las teselas vectoriales de MapTiler ----
-  const capas = map.getStyle().layers;
-  let idEtiquetas;
-  for (const l of capas) { if (l.type === 'symbol' && l.layout && l.layout['text-field']) { idEtiquetas = l.id; break; } }
-  map.addLayer({
-    id: '3d-buildings',
-    source: 'openmaptiles',
-    'source-layer': 'building',
-    type: 'fill-extrusion',
-    minzoom: 14,
-    paint: {
-      'fill-extrusion-color': '#3a4552',
-      'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 8],
-      'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
-      'fill-extrusion-opacity': 0.85
+  // ---- 2) buscar TODAS las fuentes vectoriales y TODAS las capas "building",
+  //         sin asumir que la primera que aparezca es la correcta ----
+  const estilo = map.getStyle();
+  const fuentesVectoriales = Object.keys(estilo.sources).filter(k => estilo.sources[k].type === 'vector');
+  const candidatas = [];
+  for (const src of fuentesVectoriales){
+    for (const l of estilo.layers){
+      if (l.source === src && /building/i.test(l['source-layer']||'')) candidatas.push({ source: src, sourceLayer: l['source-layer'], layerId: l.id });
     }
-  }, idEtiquetas);
+  }
+  if (!candidatas.length){
+    document.getElementById('rBuildings').innerHTML = '<span class="mal">sin capa de edificios en ninguna fuente vectorial (' + fuentesVectoriales.length + ' fuentes: ' + fuentesVectoriales.join(', ') + ')</span>';
+    return;
+  }
+  idFuenteBuildings = candidatas[0].source;
+  sourceLayerBuildings = candidatas[0].sourceLayer;
+  document.getElementById('rBuildings').innerHTML = '<span class="aviso">añadiendo… (' + candidatas.length + ' candidata(s), usando ' + idFuenteBuildings + '/' + sourceLayerBuildings + ')</span>';
+
+  let idEtiquetas;
+  for (const l of estilo.layers) { if (l.type === 'symbol' && l.layout && l.layout['text-field']) { idEtiquetas = l.id; break; } }
+  try{
+    map.addLayer({
+      id: '3d-buildings',
+      source: idFuenteBuildings,
+      'source-layer': sourceLayerBuildings,
+      type: 'fill-extrusion',
+      minzoom: 14,
+      paint: {
+        'fill-extrusion-color': '#3a4552',
+        'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 8],
+        'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
+        'fill-extrusion-opacity': 0.85
+      }
+    }, idEtiquetas);
+  }catch(e){
+    document.getElementById('rBuildings').innerHTML = '<span class="mal">fallo al añadir la capa: ' + e.message + '</span>';
+    registrarError('3d-buildings', e.message);
+    return;
+  }
+
+  // ---- comprobacion REAL de que render_height existe con datos, no solo que el
+  //      atributo esta documentado en internet -- se consulta el propio mapa ----
+  setTimeout(() => {
+    let feats = [];
+    try{ feats = map.queryRenderedFeatures({ layers: ['3d-buildings'] }); }catch(e){}
+    if (!feats.length){
+      document.getElementById('rBuildings').innerHTML = '<span class="aviso">capa añadida, pero 0 edificios visibles aqui ahora mismo (¿zoom &lt;14, o esta fuente no trae aqui?)</span>';
+      return;
+    }
+    const alturas = feats.slice(0,20).map(f => f.properties && f.properties.render_height).filter(v => v !== undefined);
+    if (!alturas.length){
+      document.getElementById('rBuildings').innerHTML = '<span class="mal">' + feats.length + ' edificios encontrados, pero NINGUNO tiene "render_height" -- se estan dibujando planos, a 8 m fijos (el "coalesce" cayendo al valor por defecto)</span>';
+    } else {
+      document.getElementById('rBuildings').innerHTML = '<b>OK</b> — ' + feats.length + ' edificios visibles, alturas reales de ejemplo: ' + alturas.slice(0,5).map(a=>Math.round(a)+'m').join(', ');
+    }
+  }, 800);
 });
 
-// ---- Pregunta 2: ¿las teselas cargan fluido, o se quedan a medias? ----
-let teselasEsperando = 0, teselasError = 0;
-map.on('dataloading', () => { teselasEsperando++; });
-map.on('idle', () => {
-  document.getElementById('q2').innerHTML = teselasError > 0
-    ? '<span class="mal">' + teselasError + ' con error</span>'
-    : '<b>sin peticiones pendientes</b>';
-});
-map.on('error', () => { teselasError++; });
-
-// ---- Pregunta 3: giro e inclinacion, a mano, con dos botones ----
-document.getElementById('btnGirar').onclick = () => {
-  const t0 = performance.now();
-  map.easeTo({ bearing: (map.getBearing() + 180) % 360, duration: 1500 });
-  document.getElementById('q3').textContent = 'girando… mira si va a saltos';
-};
-document.getElementById('btnInclinar').onclick = () => {
-  map.easeTo({ pitch: map.getPitch() > 30 ? 0 : 60, duration: 1200 });
-};
-let edificiosOn = true;
-document.getElementById('btnEdificios').onclick = () => {
+document.getElementById('btnEdificios').onclick = function(){
   edificiosOn = !edificiosOn;
   if (map.getLayer('3d-buildings')) map.setLayoutProperty('3d-buildings', 'visibility', edificiosOn ? 'visible' : 'none');
+  this.textContent = '🏢 Edificios: ' + (edificiosOn?'ON':'OFF');
+  this.classList.toggle('on', edificiosOn);
+};
+let pitchOn = true;
+document.getElementById('btnPitch').onclick = function(){
+  pitchOn = !pitchOn;
+  map.easeTo({ pitch: pitchOn ? 45 : 0, duration: 400 });
+  this.textContent = '📐 Pitch: ' + (pitchOn?'ON':'OFF');
+  this.classList.toggle('on', pitchOn);
 };
 
-// ---- Pregunta 4: FPS real mientras el mapa se mueve, no en reposo (eso no dice nada) ----
-let n = 0, t = performance.now(), fpsRaf = null;
-function fpsTick(){
-  n++;
-  const ahora = performance.now();
-  if (ahora - t >= 1000){
-    const fps = n;
-    document.getElementById('fps').textContent = fps + ' fps';
-    document.getElementById('q4').innerHTML = fps < 20 ? '<span class="mal">' + fps + ' (bajo)</span>' : '<b>' + fps + '</b>';
-    n = 0; t = ahora;
-  }
-  fpsRaf = requestAnimationFrame(fpsTick);
+/* ---- 1) FPS real: se cuenta el evento 'render' del propio MapLibre, no un
+   requestAnimationFrame libre -- ese evento solo se dispara cuando el motor
+   redibuja de verdad algo, asi que con el mapa quieto no cuenta nada (y no
+   deberia). ---- */
+let contadorRenders = 0;
+map.on('render', () => { contadorRenders++; });
+
+function medirDurante(ms, nombreResultado, mover){
+  return new Promise(resolve => {
+    const muestras = [];
+    let ultimoConteo = contadorRenders, ultimoT = performance.now();
+    const intervalo = setInterval(() => {
+      const ahora = performance.now();
+      const dt = (ahora - ultimoT) / 1000;
+      const fpsInstante = Math.round((contadorRenders - ultimoConteo) / dt);
+      muestras.push(fpsInstante);
+      ultimoConteo = contadorRenders; ultimoT = ahora;
+    }, 250);
+
+    const erroresAntes = errores.length;
+    const t0 = performance.now();
+    let cancelado = false;
+    function paso(ts){
+      if (cancelado) return;
+      const progreso = (ts - t0) / ms;
+      if (progreso >= 1){
+        clearInterval(intervalo);
+        const media = Math.round(muestras.reduce((a,b)=>a+b,0) / muestras.length);
+        const min = Math.min(...muestras), max = Math.max(...muestras);
+        const erroresDurante = errores.length - erroresAntes;
+        document.getElementById(nombreResultado).innerHTML =
+          '<b>media ' + media + '</b> / min ' + min + ' / max ' + max + ' fps' +
+          (erroresDurante ? ' — <span class="mal">' + erroresDurante + ' error(es)</span>' : '');
+        resolve();
+        return;
+      }
+      mover(progreso, ts);
+      requestAnimationFrame(paso);
+    }
+    requestAnimationFrame(paso);
+  });
 }
-fpsRaf = requestAnimationFrame(fpsTick);
+
+document.getElementById('btnRot').onclick = async function(){
+  this.disabled = true;
+  document.getElementById('rRot').innerHTML = '<span class="aviso">girando 10s…</span>';
+  const bearingInicial = map.getBearing();
+  await medirDurante(10000, 'rRot', (progreso) => {
+    map.setBearing((bearingInicial + progreso*720) % 360);   // dos vueltas completas en 10 s
+  });
+  this.disabled = false;
+};
+document.getElementById('btnPitchTest').onclick = async function(){
+  this.disabled = true;
+  document.getElementById('rPitch').innerHTML = '<span class="aviso">cambiando inclinacion 10s…</span>';
+  await medirDurante(10000, 'rPitch', (progreso) => {
+    map.setPitch(30 + 30*Math.sin(progreso * Math.PI * 6));   // oscila 0-60, 3 ciclos en 10 s
+  });
+  this.disabled = false;
+};
 </script>
 </body>
 </html>
