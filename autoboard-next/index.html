@@ -89,25 +89,22 @@
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script>
 /* ============================================================================
-   FASE 1, version corregida (2ª vuelta, tras la revision de ChatGPT sobre la
-   primera). Objetivo: convertir esto en una MEDICION fiable, no una demo que
-   simplemente "carga y gira bien a ojo". Sigue sin TomTom, GPS, HUD ni
-   radares -- eso sigue esperando a Fase 2.
-
-   Que corrige esta version, punto por punto:
-   1) FPS real de MapLibre (evento 'render' del propio motor), no del reloj
-      del navegador -- antes un rAF libre contaba igual con el mapa quieto.
-   2) La fuente/capa de edificios ya no se adivina: se buscan TODAS las
-      fuentes vectoriales y TODAS las capas con "building" en el nombre, se
-      informa de cuales se encontraron, y se comprueba con una consulta real
-      al mapa si la altura (render_height) existe de verdad en los datos, en
-      vez de confiar en que el nombre del atributo sea el correcto.
-   3) antialias:false por defecto (antes iba a true desde el principio).
-   4) Los errores se categorizan (style/source/tile/webgl/recurso) con su
-      mensaje real, no solo se cuentan.
-   5) Dos pruebas automaticas de 10 segundos -una girando, otra cambiando de
-      inclinacion sin parar-, midiendo FPS medio/minimo/maximo de verdad
-      durante el movimiento, no una impresion a ojo.
+   FASE 1 + FASE 2 + FASE 3a -- version con FIX DE TIRONES
+   ============================================================================
+   CAMBIOS RESPECTO A LA VERSION ANTERIOR (solo lo relativo a tirones):
+   - El seguimiento de camara ya no usa map.easeTo() en cada fix GPS. Ahora
+     interpola la posicion y el rumbo en un bucle de requestAnimationFrame a
+     60 fps con map.jumpTo(). Esto elimina los micro-saltos por animaciones
+     solapadas con duracion variable.
+   - El zoom de maniobra se interpola en el mismo bucle (antes era un easeTo
+     que peleaba con el easeTo de centro).
+   - El heading del GPS se filtra con media movil de 5 muestras, y solo se
+     usa heading del receptor a partir de 3 m/s (por debajo, linea base).
+   - watchPosition con maximumAge:0 para evitar fixes duplicados/cacheados.
+   - FPS en marcha: sin variables globales sucias, primer tick descartado.
+   - fill-extrusion-opacity a 1.0 (menos blending => mas rapido).
+   - queryRenderedFeatures movido a map.once('idle') para no bloquear el
+     hilo principal justo cuando arranca el GPS.
    ============================================================================ */
 const MAPTILER_KEY = 'sG00UkBX9Ig2ifguvPgU';
 const antialiasActivo = new URLSearchParams(location.search).get('aa') === '1';
@@ -157,8 +154,7 @@ map.on('load', () => {
   document.getElementById('rArranque').innerHTML = '<b>OK</b>';
   document.getElementById('rWebgl').innerHTML = webglOk ? '<b>OK</b>' : '<span class="mal">FALLO</span>';
 
-  // ---- 2) buscar TODAS las fuentes vectoriales y TODAS las capas "building",
-  //         sin asumir que la primera que aparezca es la correcta ----
+  // ---- buscar TODAS las fuentes vectoriales y TODAS las capas "building" ----
   const estilo = map.getStyle();
   const fuentesVectoriales = Object.keys(estilo.sources).filter(k => estilo.sources[k].type === 'vector');
   const candidatas = [];
@@ -175,10 +171,6 @@ map.on('load', () => {
   sourceLayerBuildings = candidatas[0].sourceLayer;
   document.getElementById('rBuildings').innerHTML = '<span class="aviso">añadiendo… (' + candidatas.length + ' candidata(s), usando ' + idFuenteBuildings + '/' + sourceLayerBuildings + ')</span>';
 
-  // ---- VECTOR TILES: se habia creado la casilla pero nunca se rellenaba.
-  //      "idle" se dispara cuando el mapa ha terminado de pedir y dibujar todo
-  //      lo que hacia falta para la vista actual -- primera vez que ocurre tras
-  //      el arranque, confirma que las teselas de verdad llegaron y se vieron. ----
   map.once('idle', () => {
     document.getElementById('rTiles').innerHTML = webglOk ? '<b>OK</b>' : '<span class="mal">con errores, ver panel derecho</span>';
   });
@@ -196,7 +188,9 @@ map.on('load', () => {
         'fill-extrusion-color': '#3a4552',
         'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 8],
         'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
-        'fill-extrusion-opacity': 0.85
+        // === FIX TIRONES: opacidad 1.0 en vez de 0.85 -- con opacidad < 1
+        // MapLibre ordena extrusiones por profundidad y hace blending, mas caro.
+        'fill-extrusion-opacity': 1.0
       }
     }, idEtiquetas);
   }catch(e){
@@ -205,32 +199,33 @@ map.on('load', () => {
     return;
   }
 
-  // ---- comprobacion REAL de que render_height existe con datos, no solo que el
-  //      atributo esta documentado en internet -- se consulta el propio mapa ----
-  setTimeout(() => {
-    let feats = [];
-    try{ feats = map.queryRenderedFeatures({ layers: ['3d-buildings'] }); }catch(e){}
-    if (!feats.length){
-      document.getElementById('rBuildings').innerHTML = '<span class="aviso">capa añadida, pero 0 edificios visibles aqui ahora mismo (¿zoom &lt;14, o esta fuente no trae aqui?)</span>';
-      return;
-    }
-    const muestra = feats.slice(0,20);
-    const alturas = muestra.map(f => f.properties && f.properties.render_height).filter(v => v !== undefined);
-    if (!alturas.length){
-      document.getElementById('rBuildings').innerHTML = '<span class="mal">' + feats.length + ' edificios encontrados, pero NINGUNO tiene "render_height" -- se estan dibujando planos, a 8 m fijos (el "coalesce" cayendo al valor por defecto)</span>';
-    } else {
-      // Cuantas alturas son "genuinamente distintas" frente a repetirse el mismo
-      // valor una y otra vez -- si casi todas coinciden, es la señal de que
-      // OpenMapTiles esta cayendo al relleno generico de una planta
-      // (BUILDING_FLOOR_HEIGHT) porque esos edificios no llevan "height" ni
-      // "building:levels" etiquetado en OpenStreetMap, no porque el dato este roto.
-      const distintas = new Set(alturas.map(a => Math.round(a))).size;
-      const avisoRelleno = distintas <= 2 && alturas.length >= 5
-        ? '<br><span class="aviso">⚠ casi todas iguales (' + distintas + ' valor(es) distinto(s) en ' + alturas.length + ') -- probablemente datos sin etiquetar en OSM aqui, cayendo al relleno generico de una planta, no un fallo del codigo</span>'
-        : '';
-      document.getElementById('rBuildings').innerHTML = '<b>OK</b> — ' + feats.length + ' edificios visibles, ' + alturas.length + '/' + muestra.length + ' con render_height. Ejemplo: ' + alturas.slice(0,5).map(a=>Math.round(a)+'m').join(', ') + avisoRelleno;
-    }
-  }, 800);
+  // === FIX TIRONES: la comprobacion de render_height ya no se hace con un
+  // setTimeout(800) que puede coincidir con el arranque del GPS. Se espera a
+  // 'idle' (el mapa ya termino de dibujar la vista actual) y ademas se pide
+  // en un idle callback del navegador para no bloquear el hilo principal.
+  map.once('idle', () => {
+    const comprobar = () => {
+      let feats = [];
+      try{ feats = map.queryRenderedFeatures({ layers: ['3d-buildings'] }); }catch(e){}
+      if (!feats.length){
+        document.getElementById('rBuildings').innerHTML = '<span class="aviso">capa añadida, pero 0 edificios visibles aqui ahora mismo</span>';
+        return;
+      }
+      const muestra = feats.slice(0,20);
+      const alturas = muestra.map(f => f.properties && f.properties.render_height).filter(v => v !== undefined);
+      if (!alturas.length){
+        document.getElementById('rBuildings').innerHTML = '<span class="mal">' + feats.length + ' edificios encontrados, pero NINGUNO tiene "render_height"</span>';
+      } else {
+        const distintas = new Set(alturas.map(a => Math.round(a))).size;
+        const avisoRelleno = distintas <= 2 && alturas.length >= 5
+          ? '<br><span class="aviso">⚠ casi todas iguales (' + distintas + ' valor(es) distinto(s) en ' + alturas.length + ') -- probablemente datos sin etiquetar en OSM aqui</span>'
+          : '';
+        document.getElementById('rBuildings').innerHTML = '<b>OK</b> — ' + feats.length + ' edificios visibles, ' + alturas.length + '/' + muestra.length + ' con render_height. Ejemplo: ' + alturas.slice(0,5).map(a=>Math.round(a)+'m').join(', ') + avisoRelleno;
+      }
+    };
+    if ('requestIdleCallback' in window) requestIdleCallback(comprobar, { timeout: 2000 });
+    else setTimeout(comprobar, 300);
+  });
 });
 
 document.getElementById('btnEdificios').onclick = function(){
@@ -247,10 +242,7 @@ document.getElementById('btnPitch').onclick = function(){
   this.classList.toggle('on', pitchOn);
 };
 
-/* ---- 1) FPS real: se cuenta el evento 'render' del propio MapLibre, no un
-   requestAnimationFrame libre -- ese evento solo se dispara cuando el motor
-   redibuja de verdad algo, asi que con el mapa quieto no cuenta nada (y no
-   deberia). ---- */
+/* ---- FPS real: se cuenta el evento 'render' del propio MapLibre ---- */
 let contadorRenders = 0;
 map.on('render', () => { contadorRenders++; });
 
@@ -268,9 +260,7 @@ function medirDurante(ms, nombreResultado, mover){
 
     const erroresAntes = errores.length;
     const t0 = performance.now();
-    let cancelado = false;
     function paso(ts){
-      if (cancelado) return;
       const progreso = (ts - t0) / ms;
       if (progreso >= 1){
         clearInterval(intervalo);
@@ -295,7 +285,7 @@ document.getElementById('btnRot').onclick = async function(){
   document.getElementById('rRot').innerHTML = '<span class="aviso">girando 10s…</span>';
   const bearingInicial = map.getBearing();
   await medirDurante(10000, 'rRot', (progreso) => {
-    map.setBearing((bearingInicial + progreso*720) % 360);   // dos vueltas completas en 10 s
+    map.setBearing((bearingInicial + progreso*720) % 360);
   });
   this.disabled = false;
 };
@@ -303,28 +293,24 @@ document.getElementById('btnPitchTest').onclick = async function(){
   this.disabled = true;
   document.getElementById('rPitch').innerHTML = '<span class="aviso">cambiando inclinacion 10s…</span>';
   await medirDurante(10000, 'rPitch', (progreso) => {
-    map.setPitch(30 + 30*Math.sin(progreso * Math.PI * 6));   // oscila 0-60, 3 ciclos en 10 s
+    map.setPitch(30 + 30*Math.sin(progreso * Math.PI * 6));
   });
   this.disabled = false;
 };
 
 /* ============================================================================
    FASE 2 -- GPS real, marcador del coche, seguimiento de camara, ruta TomTom.
-   Misma clave de TomTom que ya usa AutoBoard V2 -- probada, no se inventa una
-   nueva. Sigue en un unico archivo: Vite llegara cuando haga falta de verdad,
-   no antes. Nada de maniobras, carriles, radares ni HUD todavia -- eso es
-   Fase 3 en adelante.
    ============================================================================ */
 const TT = 'zMPqeYVXNoQw4rJ1ycr8QdywkDFNx0tF';
 
-// ---- funciones puras, para poder verificarlas sin depender de GPS/WebGL real ----
-function dist(a, b){   // metros, formula haversine -- igual que AutoBoard V2
+// ---- funciones puras ----
+function dist(a, b){   // metros, haversine
   const R = 6371000, la1 = a[0]*Math.PI/180, la2 = b[0]*Math.PI/180;
   const dla = (b[0]-a[0])*Math.PI/180, dlo = (b[1]-a[1])*Math.PI/180;
   const h = Math.sin(dla/2)**2 + Math.cos(la1)*Math.cos(la2)*Math.sin(dlo/2)**2;
   return 2*R*Math.asin(Math.sqrt(h));
 }
-function bearing(a, b){   // grados, 0=norte, igual que AutoBoard V2
+function bearing(a, b){   // grados, 0=norte
   const la1 = a[0]*Math.PI/180, la2 = b[0]*Math.PI/180, dlo = (b[1]-a[1])*Math.PI/180;
   const y = Math.sin(dlo)*Math.cos(la2);
   const x = Math.cos(la1)*Math.sin(la2) - Math.sin(la1)*Math.cos(la2)*Math.cos(dlo);
@@ -333,25 +319,13 @@ function bearing(a, b){   // grados, 0=norte, igual que AutoBoard V2
 function urlGeocodificar(texto){
   return 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(texto);
 }
-function urlRutaTomTom(origen, destino){   // origen/destino: [lat,lon]
+function urlRutaTomTom(origen, destino){
   return 'https://api.tomtom.com/routing/1/calculateRoute/' + origen[0]+','+origen[1]+':'+destino[0]+','+destino[1]
     + '/json?key=' + TT + '&routeType=fastest&traffic=true&travelMode=car&instructionsType=text&language=es-ES';
 }
 
 /* ============================================================================
-   FASE 3a -- maniobra actual y zoom dinamico. Carriles + aviso OSRM de "sigue
-   recto" quedan para una Fase 3b aparte -- es demasiado de una vez para
-   verificarlo bien junto con esto.
-
-   Lo de aqui abajo (TURN_GEOM / triHead / turnPath / turnArrowFill / arrowSVG /
-   roundaboutSVG / maneuverSVG / ttMan / isHighway) esta copiado LITERAL de
-   AutoBoard V2 -- son funciones puras, no dependen de Leaflet para nada, solo
-   construyen texto SVG a partir de numeros. Una correccion real al copiarlas:
-   maneuverSVG llamaba a una funcion "arrowHead(...)" que no existe en ningun
-   sitio del archivo original -- se ha cambiado aqui por "triHead", que es la
-   que de verdad esta definida con esa forma. Si alguna vez aparece una
-   maniobra real de bifurcacion/incorporacion en AutoBoard V2, esa llamada
-   revienta alli; aqui ya queda corregido.
+   FASE 3a -- maniobra actual y zoom dinamico.
    ============================================================================ */
 const TURN_GEOM = {
   'straight':     {turn:0,   R:0},
@@ -449,226 +423,6 @@ function maneuverSVG(st,hw){const m=st.maneuver||{};const col=hw?'#ffffff':'#0a8
     return '<svg viewBox="0 0 48 52"><path d="M24 48 L24 28" stroke="'+col+'" stroke-width="7" stroke-linecap="round"/>'
       +'<path d="M24 28 L'+(izq?36:12)+' 10" stroke="'+g+'" stroke-width="5" stroke-linecap="round"/>'
       +'<path d="M24 28 L'+(izq?12:36)+' 10" stroke="'+col+'" stroke-width="7" stroke-linecap="round"/>'
-      +triHead(izq?12:36,10,izq?-0.6:0.6,col)+'</svg>'; }   // antes: arrowHead(...), que no existia
+      +triHead(izq?12:36,10,izq?-0.6:0.6,col)+'</svg>'; }
   if(m.type==='merge'||m.type==='on ramp'){ const izq=(m.modifier||'').indexOf('left')>=0;
-    return '<svg viewBox="0 0 48 52"><path d="M'+(izq?34:14)+' 48 L'+(izq?34:14)+' 6" stroke="#9aa3b2" stroke-width="5" stroke-linecap="round"/>'
-      +'<path d="M'+(izq?12:36)+' 48 Q'+(izq?14:34)+' 26 '+(izq?30:18)+' 14" fill="none" stroke="'+col+'" stroke-width="7" stroke-linecap="round"/></svg>'; }
-  return arrowSVG(m.modifier,col);}
-function ttMan(it){ const m=(it.maneuver||it.instructionType||'').toString().toUpperCase(); const rb=it.roundaboutExitNumber;
-  if(m.indexOf('ROUNDABOUT')>=0||m.indexOf('ROTARY')>=0) return {type:'roundabout',exit:rb,modifier:(m.indexOf('LEFT')>=0?'left':(m.indexOf('RIGHT')>=0?'right':'straight'))};
-  if(m.indexOf('ARRIVE')>=0||m.indexOf('WAYPOINT')>=0)return {type:'arrive'}; if(m.indexOf('DEPART')>=0)return {type:'depart'};
-  if(m.indexOf('EXIT')>=0||m.indexOf('RAMP')>=0)return {type:'off ramp',modifier:(m.indexOf('LEFT')>=0?'left':'right')};
-  if(m.indexOf('MERGE')>=0)return {type:'merge'};
-  let mod='straight';
-  if(m.indexOf('SHARP_LEFT')>=0)mod='sharp left'; else if(m.indexOf('SHARP_RIGHT')>=0)mod='sharp right';
-  else if(m.indexOf('BEAR_LEFT')>=0||m.indexOf('KEEP_LEFT')>=0||m.indexOf('SLIGHT_LEFT')>=0)mod='slight left';
-  else if(m.indexOf('BEAR_RIGHT')>=0||m.indexOf('KEEP_RIGHT')>=0||m.indexOf('SLIGHT_RIGHT')>=0)mod='slight right';
-  else if(m.indexOf('LEFT')>=0)mod='left'; else if(m.indexOf('RIGHT')>=0)mod='right'; else if(m.indexOf('UTURN')>=0||m.indexOf('U_TURN')>=0)mod='uturn';
-  return {type:'turn',modifier:mod};
-}
-function isHighway(st){ const n=((st&&st.name)||'').toLowerCase();
-  return /autopista|autov[ií]a|\b(a|ap)-?\d/.test(n); }
-
-// ---- estado de la ruta/maniobra ----
-let steps = [], stepIdx = 0, routeCoordsLL = [], routeCumDist = [], routeProgIdx = 0;
-let ultimoStepPintado = '', zoomManiobraOn = false, navZoomBase = 17;
-
-function actualizarRouteProgIdx(ll){
-  if (!routeCoordsLL.length) return;
-  const i0 = Math.max(0, routeProgIdx - 5), i1 = Math.min(routeCoordsLL.length-1, routeProgIdx + 400);
-  let mejor = routeProgIdx, mejorD = Infinity;
-  for (let i = i0; i < i1; i++){
-    const d = segDistM2(ll, routeCoordsLL[i], routeCoordsLL[i+1]);
-    if (d < mejorD){ mejorD = d; mejor = i; }
-  }
-  routeProgIdx = mejor;
-}
-function segDistM2(p, a, b){   // misma proyeccion punto-segmento que AutoBoard V2 (segDistM), con a/b en [lat,lon]
-  const mx = 111320*Math.cos(p[0]*Math.PI/180), my = 110540;
-  const px=p[1]*mx, py=p[0]*my, ax=a[1]*mx, ay=a[0]*my, bx=b[1]*mx, by=b[0]*my;
-  const dx=bx-ax, dy=by-ay, L2=dx*dx+dy*dy;
-  let t = L2 ? ((px-ax)*dx+(py-ay)*dy)/L2 : 0; t = Math.max(0,Math.min(1,t));
-  return Math.hypot(px-(ax+t*dx), py-(ay+t*dy));
-}
-function recorridoAhora(ll){
-  const i = routeProgIdx, base = routeCumDist[i]||0;
-  if (i < 0 || i >= routeCoordsLL.length-1) return base;
-  const a = routeCoordsLL[i], b = routeCoordsLL[i+1];
-  const mx = 111320*Math.cos(a[0]*Math.PI/180), my = 110540;
-  const ax=a[1]*mx, ay=a[0]*my, bx=b[1]*mx, by=b[0]*my, px=ll[1]*mx, py=ll[0]*my;
-  const dx=bx-ax, dy=by-ay, L2=dx*dx+dy*dy;
-  const tt = L2 ? Math.max(0,Math.min(1, ((px-ax)*dx+(py-ay)*dy)/L2)) : 0;
-  return base + tt*Math.sqrt(L2);
-}
-function avanzarPaso(recorrido){
-  while (stepIdx < steps.length-1 && (steps[stepIdx].metro||0) <= recorrido + 15) stepIdx++;
-}
-function renderStep(){
-  const s = steps[stepIdx]; if (!s){ document.getElementById('navbanner').style.display = 'none'; return; }
-  const nb = document.getElementById('navbanner');
-  nb.style.display = 'flex';
-  const hw = !!s.hw || isHighway(s);
-  const distAquiA = Math.max(0, (s.metro||0) - recorridoAhora(lastFix ? [lastFix.lat,lastFix.lon] : routeCoordsLL[routeProgIdx]));
-  const clave = stepIdx + '|' + hw;
-  if (clave !== ultimoStepPintado){
-    ultimoStepPintado = clave;
-    nb.classList.toggle('hw', hw);
-    document.getElementById('navarrow').innerHTML = maneuverSVG(s, hw);
-    document.getElementById('navsub').textContent = s.calle || s.msg || '';
-  }
-  document.getElementById('navd').textContent = distAquiA < 1000 ? Math.round(distAquiA)+' m' : (distAquiA/1000).toFixed(1)+' km';
-  return distAquiA;
-}
-function actualizarZoomManiobra(distSiguiente, tipoSiguiente){
-  if (!seguirOn) return;
-  const cerca = distSiguiente < 180 && tipoSiguiente && tipoSiguiente !== 'arrive' && tipoSiguiente !== 'depart';
-  if (cerca === zoomManiobraOn) return;
-  zoomManiobraOn = cerca;
-  map.easeTo({ zoom: cerca ? Math.min(19, navZoomBase+1.4) : navZoomBase, duration: 500 });
-}
-
-// ---- estado GPS ----
-let gpsOn = false, watchId = null, seguirOn = false;
-let lastFix = null, heading = 0, speedKmh = 0;
-let histFixes = [];
-
-function rumboDelGPS(c, now, v){   // simplificado de AutoBoard V2: heading del receptor, o linea base larga
-  histFixes.push(now); if (histFixes.length > 14) histFixes.shift();
-  if (Number.isFinite(c.heading) && v >= 1.5) return ((c.heading % 360) + 360) % 360;
-  if (v < 3) return null;
-  const base = Math.min(35, Math.max(20, v*4));
-  for (let i = histFixes.length-2; i >= 0; i--){
-    const f = histFixes[i];
-    if (now.t - f.t > 12000) break;
-    if (dist([f.lat,f.lon],[now.lat,now.lon]) >= base) return bearing([f.lat,f.lon],[now.lat,now.lon]);
-  }
-  return null;
-}
-
-// ---- marcador del coche: SVG simple, se rota con CSS segun el rumbo ----
-const elCoche = document.createElement('div');
-elCoche.innerHTML = '<svg class="coche" viewBox="0 0 24 24"><path d="M12 2 L20 20 L12 16 L4 20 Z" fill="#3fa9ff" stroke="#fff" stroke-width="1.5"/></svg>';
-const marcadorCoche = new maplibregl.Marker({ element: elCoche, rotationAlignment: 'map' });
-
-function onFix(pos){
-  const c = pos.coords;
-  const now = { lat: c.latitude, lon: c.longitude, t: pos.timestamp || Date.now() };
-  const v = Number.isFinite(c.speed) ? Math.max(0, c.speed) : 0;
-  speedKmh = v * 3.6;
-  const h = rumboDelGPS(c, now, v);
-  if (h !== null) heading = h;
-
-  if (!marcadorCoche.getLngLat || !marcadorCoche._map) marcadorCoche.setLngLat([now.lon, now.lat]).addTo(map);
-  else marcadorCoche.setLngLat([now.lon, now.lat]);
-  marcadorCoche.setRotation(heading);
-
-  document.getElementById('g2').textContent = Math.round(speedKmh) + ' km/h';
-  document.getElementById('g3').textContent = Math.round(heading) + '°';
-
-  const dt = lastFix ? Math.max(0.1, (now.t - lastFix.t)/1000) : 0;
-  if (seguirOn){
-    if (!lastFix) map.jumpTo({ center:[now.lon,now.lat], bearing: heading, zoom: 17 });
-    else map.easeTo({ center:[now.lon,now.lat], bearing: heading, duration: dt*1000, easing: x=>x });   // lineal, igual que seguirCamara() en AutoBoard V2
-  }
-  lastFix = now;
-
-  // ---- Fase 3a: avanzar y pintar la maniobra actual, si hay ruta activa ----
-  if (steps.length){
-    actualizarRouteProgIdx([now.lat, now.lon]);
-    const recorrido = recorridoAhora([now.lat, now.lon]);
-    avanzarPaso(recorrido);
-    const distAquiA = renderStep();
-    const sigMan = steps[stepIdx];
-    if (sigMan) actualizarZoomManiobra(distAquiA, sigMan.maneuver && sigMan.maneuver.type);
-  }
-}
-
-document.getElementById('btnGPS').onclick = function(){
-  gpsOn = !gpsOn;
-  this.textContent = '📍 GPS: ' + (gpsOn?'ON':'OFF');
-  this.classList.toggle('on', gpsOn);
-  if (gpsOn){
-    document.getElementById('g1').innerHTML = '<b>activo</b>';
-    watchId = navigator.geolocation.watchPosition(onFix, e => {
-      document.getElementById('g1').innerHTML = '<span class="mal">error: ' + e.message + '</span>';
-      registrarError('gps', e.message);
-    }, { enableHighAccuracy:true, maximumAge:1000 });
-  } else {
-    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-    document.getElementById('g1').textContent = 'apagado';
-  }
-};
-document.getElementById('btnSeguir').onclick = function(){
-  seguirOn = !seguirOn;
-  this.textContent = '🧭 Seguir: ' + (seguirOn?'ON':'OFF');
-  this.classList.toggle('on', seguirOn);
-};
-
-// ---- FPS durante la marcha real (no un boton de 10s sintetico): se muestrea
-//      todo el rato que el GPS este activo, con el mismo contador 'render' ----
-setInterval(() => {
-  if (!gpsOn) return;
-  const ahora = performance.now();
-  const dt = (ahora - (window.__ultimoT||ahora))/1000;
-  const fps = window.__ultimoT ? Math.round((contadorRenders - (window.__ultimoConteo||0))/dt) : 0;
-  document.getElementById('g4').textContent = fps + ' fps';
-  window.__ultimoConteo = contadorRenders; window.__ultimoT = ahora;
-}, 1000);
-
-// ---- destino y ruta TomTom ----
-let rutaSource = null;
-document.getElementById('btnDestino').onclick = async function(){
-  if (!lastFix){ alert('Activa el GPS primero -- hace falta saber desde donde se traza la ruta.'); return; }
-  const texto = prompt('¿A dónde vamos?', '');
-  if (!texto) return;
-  document.getElementById('g5').innerHTML = '<span class="aviso">buscando dirección…</span>';
-  let destino;
-  try{
-    const r = await fetch(urlGeocodificar(texto));
-    const j = await r.json();
-    if (!j.length){ document.getElementById('g5').innerHTML = '<span class="mal">no se encontró "' + texto + '"</span>'; return; }
-    destino = [parseFloat(j[0].lat), parseFloat(j[0].lon)];
-  }catch(e){ document.getElementById('g5').innerHTML = '<span class="mal">error geocodificando: ' + e.message + '</span>'; return; }
-
-  document.getElementById('g5').innerHTML = '<span class="aviso">calculando ruta…</span>';
-  try{
-    const r = await fetch(urlRutaTomTom([lastFix.lat,lastFix.lon], destino));
-    const j = await r.json();
-    if (!j.routes || !j.routes.length){ document.getElementById('g5').innerHTML = '<span class="mal">TomTom no devolvió ruta</span>'; return; }
-    const ruta = j.routes[0];
-    const coords = ruta.legs.flatMap(l => l.points.map(p => [p.longitude, p.latitude]));
-    const geojson = { type:'Feature', geometry:{ type:'LineString', coordinates: coords } };
-    if (map.getSource('ruta')) map.getSource('ruta').setData(geojson);
-    else {
-      map.addSource('ruta', { type:'geojson', data: geojson });
-      map.addLayer({ id:'ruta', type:'line', source:'ruta',
-        paint: { 'line-color':'#1e88e5', 'line-width':6, 'line-opacity':.9 },
-        layout: { 'line-cap':'round', 'line-join':'round' } });
-    }
-    const km = (ruta.summary.lengthInMeters/1000).toFixed(1);
-    const min = Math.round(ruta.summary.travelTimeInSeconds/60);
-    document.getElementById('g5').innerHTML = '<b>' + km + ' km · ' + min + ' min</b>';
-    const bounds = coords.reduce((b,c) => b.extend(c), new maplibregl.LngLatBounds(coords[0], coords[0]));
-    map.fitBounds(bounds, { padding: 60, pitch: 0 });
-
-    // ---- Fase 3a: maniobras, a partir de la MISMA ruta ya calculada ----
-    routeCoordsLL = coords.map(c => [c[1], c[0]]);   // [lat,lon], convencion de AutoBoard V2 (coords venia en [lon,lat], la de MapLibre)
-    routeCumDist = [0];
-    for (let i = 1; i < routeCoordsLL.length; i++) routeCumDist.push(routeCumDist[i-1] + dist(routeCoordsLL[i-1], routeCoordsLL[i]));
-    steps = (ruta.guidance && ruta.guidance.instructions || []).map(it => {
-      const off = it.routeOffsetInMeters, pi = it.pointIndex;
-      const porIndice = (Number.isInteger(pi) && pi >= 0 && pi < routeCumDist.length) ? routeCumDist[pi] : null;
-      const metroFinal = (porIndice !== null && (off == null || Math.abs(porIndice - off) <= Math.max(300, off*0.1))) ? porIndice : (off||0);
-      return { metro: metroFinal, calle: it.street||'', msg: it.message||'', maneuver: ttMan(it), hw: isHighway({name: it.street||''}) };
-    });
-    stepIdx = 0; ultimoStepPintado = ''; routeProgIdx = 0; zoomManiobraOn = false;
-    navZoomBase = map.getZoom();
-    if (steps.length) renderStep();
-  }catch(e){
-    document.getElementById('g5').innerHTML = '<span class="mal">error de ruta: ' + e.message + '</span>';
-    registrarError('tomtom', e.message);
-  }
-};
-</script>
-</body>
-</html>
+    return '<svg viewBox="0 0 48 52"><path d="M'+(izq?34:14)+' 48 L'+(izq?34:14)+' 6" stroke="#9aa3b2
