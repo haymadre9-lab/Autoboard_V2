@@ -26,7 +26,6 @@
     font:11px/1.5 ui-monospace,monospace;max-width:280px;max-height:40vh;overflow-y:auto;display:none}
   #errlog.on{display:block}
 
-  /* ==== Fase 2: coche y panel de GPS/ruta ==== */
   .coche{width:22px;height:22px}
   #diag2{position:fixed;top:10px;left:340px;z-index:10;background:rgba(10,13,16,.88);
     border:1px solid #232c33;border-radius:10px;padding:10px 14px;color:#e8eef2;
@@ -36,7 +35,6 @@
   #diag2 .aviso{color:#ffd166}
   @media (max-width:900px){ #diag2{left:10px;top:260px} }
 
-  /* ==== Fase 3: panel de maniobra ==== */
   #navbanner{position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:20;display:none;
     align-items:center;gap:12px;background:rgba(10,13,16,.9);border:1px solid #232c33;
     border-radius:16px;padding:8px 18px 8px 10px}
@@ -89,27 +87,21 @@
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script>
 /* ============================================================================
-   FASE 1 + FASE 2 + FASE 3a -- version con FIX DE TIRONES
-   ============================================================================
-   CAMBIOS RESPECTO A LA VERSION ANTERIOR (solo lo relativo a tirones):
-   - El seguimiento de camara ya no usa map.easeTo() en cada fix GPS. Ahora
-     interpola la posicion y el rumbo en un bucle de requestAnimationFrame a
-     60 fps con map.jumpTo(). Esto elimina los micro-saltos por animaciones
-     solapadas con duracion variable.
-   - El zoom de maniobra se interpola en el mismo bucle (antes era un easeTo
-     que peleaba con el easeTo de centro).
-   - El heading del GPS se filtra con media movil de 5 muestras, y solo se
-     usa heading del receptor a partir de 3 m/s (por debajo, linea base).
-   - watchPosition con maximumAge:0 para evitar fixes duplicados/cacheados.
-   - FPS en marcha: sin variables globales sucias, primer tick descartado.
-   - fill-extrusion-opacity a 1.0 (menos blending => mas rapido).
-   - queryRenderedFeatures movido a map.once('idle') para no bloquear el
-     hilo principal justo cuando arranca el GPS.
+   FIX DE TIRONES EN MOVIMIENTO
+   ----------------------------------------------------------------------------
+   - Seguimiento de camara con jumpTo() + interpolacion a 60fps en vez de
+     easeTo() en cada fix GPS (eliminaba micro-saltos por animaciones solapadas).
+   - Zoom de maniobra interpolado en el mismo bucle.
+   - Heading filtrado con media movil de 5 muestras; heading GPS solo a >=3 m/s.
+   - watchPosition maximumAge:0 (sin fixes duplicados cacheados).
+   - FPS en marcha con contador 'render' limpio.
+   - fill-extrusion-opacity 1.0 (menos blending).
+   - queryRenderedFeatures en idle, no en setTimeout que coincida con GPS.
    ============================================================================ */
 const MAPTILER_KEY = 'sG00UkBX9Ig2ifguvPgU';
 const antialiasActivo = new URLSearchParams(location.search).get('aa') === '1';
 
-const errores = [];   // {tipo, mensaje}
+const errores = [];
 function registrarError(tipo, mensaje){
   errores.push({ tipo, mensaje });
   document.getElementById('rErrores').textContent = errores.length;
@@ -121,7 +113,7 @@ function registrarError(tipo, mensaje){
 const map = new maplibregl.Map({
   container: 'map',
   style: 'https://api.maptiler.com/maps/streets-v2/style.json?key=' + MAPTILER_KEY,
-  center: [-2.9387, 43.2678],   // Torre Iberdrola, 165 m -- referencia tan conocida que es casi seguro que tiene su altura bien etiquetada en OSM
+  center: [-2.9387, 43.2678],
   zoom: 16,
   pitch: 45,
   bearing: 0,
@@ -132,7 +124,6 @@ document.getElementById('btnAA').onclick = () => {
   location.href = location.pathname + (antialiasActivo ? '' : '?aa=1');
 };
 
-// ---- errores categorizados: nunca un contador ciego ----
 let webglOk = true;
 map.on('error', e => {
   const msg = (e.error && e.error.message) || String(e.error || 'desconocido');
@@ -154,7 +145,6 @@ map.on('load', () => {
   document.getElementById('rArranque').innerHTML = '<b>OK</b>';
   document.getElementById('rWebgl').innerHTML = webglOk ? '<b>OK</b>' : '<span class="mal">FALLO</span>';
 
-  // ---- buscar TODAS las fuentes vectoriales y TODAS las capas "building" ----
   const estilo = map.getStyle();
   const fuentesVectoriales = Object.keys(estilo.sources).filter(k => estilo.sources[k].type === 'vector');
   const candidatas = [];
@@ -188,8 +178,6 @@ map.on('load', () => {
         'fill-extrusion-color': '#3a4552',
         'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 8],
         'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
-        // === FIX TIRONES: opacidad 1.0 en vez de 0.85 -- con opacidad < 1
-        // MapLibre ordena extrusiones por profundidad y hace blending, mas caro.
         'fill-extrusion-opacity': 1.0
       }
     }, idEtiquetas);
@@ -199,10 +187,6 @@ map.on('load', () => {
     return;
   }
 
-  // === FIX TIRONES: la comprobacion de render_height ya no se hace con un
-  // setTimeout(800) que puede coincidir con el arranque del GPS. Se espera a
-  // 'idle' (el mapa ya termino de dibujar la vista actual) y ademas se pide
-  // en un idle callback del navegador para no bloquear el hilo principal.
   map.once('idle', () => {
     const comprobar = () => {
       let feats = [];
@@ -218,7 +202,7 @@ map.on('load', () => {
       } else {
         const distintas = new Set(alturas.map(a => Math.round(a))).size;
         const avisoRelleno = distintas <= 2 && alturas.length >= 5
-          ? '<br><span class="aviso">⚠ casi todas iguales (' + distintas + ' valor(es) distinto(s) en ' + alturas.length + ') -- probablemente datos sin etiquetar en OSM aqui</span>'
+          ? '<br><span class="aviso">⚠ casi todas iguales (' + distintas + ' valor(es) distinto(s) en ' + alturas.length + ')</span>'
           : '';
         document.getElementById('rBuildings').innerHTML = '<b>OK</b> — ' + feats.length + ' edificios visibles, ' + alturas.length + '/' + muestra.length + ' con render_height. Ejemplo: ' + alturas.slice(0,5).map(a=>Math.round(a)+'m').join(', ') + avisoRelleno;
       }
@@ -242,7 +226,6 @@ document.getElementById('btnPitch').onclick = function(){
   this.classList.toggle('on', pitchOn);
 };
 
-/* ---- FPS real: se cuenta el evento 'render' del propio MapLibre ---- */
 let contadorRenders = 0;
 map.on('render', () => { contadorRenders++; });
 
@@ -298,19 +281,16 @@ document.getElementById('btnPitchTest').onclick = async function(){
   this.disabled = false;
 };
 
-/* ============================================================================
-   FASE 2 -- GPS real, marcador del coche, seguimiento de camara, ruta TomTom.
-   ============================================================================ */
+/* ===== FASE 2: GPS, coche, ruta TomTom ===== */
 const TT = 'zMPqeYVXNoQw4rJ1ycr8QdywkDFNx0tF';
 
-// ---- funciones puras ----
-function dist(a, b){   // metros, haversine
+function dist(a, b){
   const R = 6371000, la1 = a[0]*Math.PI/180, la2 = b[0]*Math.PI/180;
   const dla = (b[0]-a[0])*Math.PI/180, dlo = (b[1]-a[1])*Math.PI/180;
   const h = Math.sin(dla/2)**2 + Math.cos(la1)*Math.cos(la2)*Math.sin(dlo/2)**2;
   return 2*R*Math.asin(Math.sqrt(h));
 }
-function bearing(a, b){   // grados, 0=norte
+function bearing(a, b){
   const la1 = a[0]*Math.PI/180, la2 = b[0]*Math.PI/180, dlo = (b[1]-a[1])*Math.PI/180;
   const y = Math.sin(dlo)*Math.cos(la2);
   const x = Math.cos(la1)*Math.sin(la2) - Math.sin(la1)*Math.cos(la2)*Math.cos(dlo);
@@ -324,9 +304,7 @@ function urlRutaTomTom(origen, destino){
     + '/json?key=' + TT + '&routeType=fastest&traffic=true&travelMode=car&instructionsType=text&language=es-ES';
 }
 
-/* ============================================================================
-   FASE 3a -- maniobra actual y zoom dinamico.
-   ============================================================================ */
+/* ===== FASE 3a: maniobras SVG ===== */
 const TURN_GEOM = {
   'straight':     {turn:0,   R:0},
   'slight right': {turn:35,  R:26},
@@ -425,4 +403,285 @@ function maneuverSVG(st,hw){const m=st.maneuver||{};const col=hw?'#ffffff':'#0a8
       +'<path d="M24 28 L'+(izq?12:36)+' 10" stroke="'+col+'" stroke-width="7" stroke-linecap="round"/>'
       +triHead(izq?12:36,10,izq?-0.6:0.6,col)+'</svg>'; }
   if(m.type==='merge'||m.type==='on ramp'){ const izq=(m.modifier||'').indexOf('left')>=0;
-    return '<svg viewBox="0 0 48 52"><path d="M'+(izq?34:14)+' 48 L'+(izq?34:14)+' 6" stroke="#9aa3b2
+    return '<svg viewBox="0 0 48 52"><path d="M'+(izq?34:14)+' 48 L'+(izq?34:14)+' 6" stroke="#9aa3b2" stroke-width="5" stroke-linecap="round"/>'
+      +'<path d="M'+(izq?12:36)+' 48 Q'+(izq?14:34)+' 26 '+(izq?30:18)+' 14" fill="none" stroke="'+col+'" stroke-width="7" stroke-linecap="round"/></svg>'; }
+  return arrowSVG(m.modifier,col);}
+function ttMan(it){ const m=(it.maneuver||it.instructionType||'').toString().toUpperCase(); const rb=it.roundaboutExitNumber;
+  if(m.indexOf('ROUNDABOUT')>=0||m.indexOf('ROTARY')>=0) return {type:'roundabout',exit:rb,modifier:(m.indexOf('LEFT')>=0?'left':(m.indexOf('RIGHT')>=0?'right':'straight'))};
+  if(m.indexOf('ARRIVE')>=0||m.indexOf('WAYPOINT')>=0)return {type:'arrive'}; if(m.indexOf('DEPART')>=0)return {type:'depart'};
+  if(m.indexOf('EXIT')>=0||m.indexOf('RAMP')>=0)return {type:'off ramp',modifier:(m.indexOf('LEFT')>=0?'left':'right')};
+  if(m.indexOf('MERGE')>=0)return {type:'merge'};
+  let mod='straight';
+  if(m.indexOf('SHARP_LEFT')>=0)mod='sharp left'; else if(m.indexOf('SHARP_RIGHT')>=0)mod='sharp right';
+  else if(m.indexOf('BEAR_LEFT')>=0||m.indexOf('KEEP_LEFT')>=0||m.indexOf('SLIGHT_LEFT')>=0)mod='slight left';
+  else if(m.indexOf('BEAR_RIGHT')>=0||m.indexOf('KEEP_RIGHT')>=0||m.indexOf('SLIGHT_RIGHT')>=0)mod='slight right';
+  else if(m.indexOf('LEFT')>=0)mod='left'; else if(m.indexOf('RIGHT')>=0)mod='right'; else if(m.indexOf('UTURN')>=0||m.indexOf('U_TURN')>=0)mod='uturn';
+  return {type:'turn',modifier:mod};
+}
+function isHighway(st){ const n=((st&&st.name)||'').toLowerCase();
+  return /autopista|autov[ií]a|\b(a|ap)-?\d/.test(n); }
+
+let steps = [], stepIdx = 0, routeCoordsLL = [], routeCumDist = [], routeProgIdx = 0;
+let ultimoStepPintado = '', zoomManiobraOn = false, navZoomBase = 17;
+
+function actualizarRouteProgIdx(ll){
+  if (!routeCoordsLL.length) return;
+  const i0 = Math.max(0, routeProgIdx - 5), i1 = Math.min(routeCoordsLL.length-1, routeProgIdx + 400);
+  let mejor = routeProgIdx, mejorD = Infinity;
+  for (let i = i0; i < i1; i++){
+    const d = segDistM2(ll, routeCoordsLL[i], routeCoordsLL[i+1]);
+    if (d < mejorD){ mejorD = d; mejor = i; }
+  }
+  routeProgIdx = mejor;
+}
+function segDistM2(p, a, b){
+  const mx = 111320*Math.cos(p[0]*Math.PI/180), my = 110540;
+  const px=p[1]*mx, py=p[0]*my, ax=a[1]*mx, ay=a[0]*my, bx=b[1]*mx, by=b[0]*my;
+  const dx=bx-ax, dy=by-ay, L2=dx*dx+dy*dy;
+  let t = L2 ? ((px-ax)*dx+(py-ay)*dy)/L2 : 0; t = Math.max(0,Math.min(1,t));
+  return Math.hypot(px-(ax+t*dx), py-(ay+t*dy));
+}
+function recorridoAhora(ll){
+  const i = routeProgIdx, base = routeCumDist[i]||0;
+  if (i < 0 || i >= routeCoordsLL.length-1) return base;
+  const a = routeCoordsLL[i], b = routeCoordsLL[i+1];
+  const mx = 111320*Math.cos(a[0]*Math.PI/180), my = 110540;
+  const ax=a[1]*mx, ay=a[0]*my, bx=b[1]*mx, by=b[0]*my, px=ll[1]*mx, py=ll[0]*my;
+  const dx=bx-ax, dy=by-ay, L2=dx*dx+dy*dy;
+  const tt = L2 ? Math.max(0,Math.min(1, ((px-ax)*dx+(py-ay)*dy)/L2)) : 0;
+  return base + tt*Math.sqrt(L2);
+}
+function avanzarPaso(recorrido){
+  while (stepIdx < steps.length-1 && (steps[stepIdx].metro||0) <= recorrido + 15) stepIdx++;
+}
+function renderStep(){
+  const s = steps[stepIdx]; if (!s){ document.getElementById('navbanner').style.display = 'none'; return; }
+  const nb = document.getElementById('navbanner');
+  nb.style.display = 'flex';
+  const hw = !!s.hw || isHighway(s);
+  const ref = lastFix ? [lastFix.lat,lastFix.lon] : (routeCoordsLL[routeProgIdx]||[0,0]);
+  const distAquiA = Math.max(0, (s.metro||0) - recorridoAhora(ref));
+  const clave = stepIdx + '|' + hw;
+  if (clave !== ultimoStepPintado){
+    ultimoStepPintado = clave;
+    nb.classList.toggle('hw', hw);
+    document.getElementById('navarrow').innerHTML = maneuverSVG(s, hw);
+    document.getElementById('navsub').textContent = s.calle || s.msg || '';
+  }
+  document.getElementById('navd').textContent = distAquiA < 1000 ? Math.round(distAquiA)+' m' : (distAquiA/1000).toFixed(1)+' km';
+  return distAquiA;
+}
+
+/* ===== FIX TIRONES: estado de interpolacion ===== */
+let gpsOn = false, watchId = null, seguirOn = false;
+let lastFix = null, heading = 0, speedKmh = 0;
+let histFixes = [];
+let headingHist = [];   // media movil de heading
+
+// posicion interpolada que se pinta en el mapa (independiente del fix GPS)
+let camPosActual = null;      // [lon,lat]
+let camPosObjetivo = null;    // [lon,lat]
+let camBearingActual = 0, camBearingObjetivo = 0;
+let camZoomActual = 17, camZoomObjetivo = 17;
+
+function rumboDelGPS(c, now, v){
+  histFixes.push(now); if (histFixes.length > 14) histFixes.shift();
+  // FIX TIRONES: subir umbral a 3 m/s para usar heading del receptor.
+  // Por debajo, el receptor suele dar valores ruidosos que hacian vibrar la camara.
+  if (Number.isFinite(c.heading) && v >= 3) return ((c.heading % 360) + 360) % 360;
+  if (v < 3) return null;
+  const base = Math.min(35, Math.max(20, v*4));
+  for (let i = histFixes.length-2; i >= 0; i--){
+    const f = histFixes[i];
+    if (now.t - f.t > 12000) break;
+    if (dist([f.lat,f.lon],[now.lat,now.lon]) >= base) return bearing([f.lat,f.lon],[now.lat,now.lon]);
+  }
+  return null;
+}
+
+// FIX TIRONES: media movil circular del heading (sin saltos 359->0)
+function filtrarHeading(h){
+  if (!Number.isFinite(h)) return;
+  headingHist.push(h); if (headingHist.length > 5) headingHist.shift();
+  // media vectorial: convierte a seno/coseno, promedia, vuelve a atan2
+  let sx = 0, sy = 0;
+  for (const a of headingHist){
+    const r = a * Math.PI/180;
+    sx += Math.cos(r); sy += Math.sin(r);
+  }
+  let media = Math.atan2(sy, sx) * 180/Math.PI;
+  if (media < 0) media += 360;
+  heading = media;
+}
+
+const elCoche = document.createElement('div');
+elCoche.innerHTML = '<svg class="coche" viewBox="0 0 24 24"><path d="M12 2 L20 20 L12 16 L4 20 Z" fill="#3fa9ff" stroke="#fff" stroke-width="1.5"/></svg>';
+const marcadorCoche = new maplibregl.Marker({ element: elCoche, rotationAlignment: 'map' });
+
+function onFix(pos){
+  const c = pos.coords;
+  const now = { lat: c.latitude, lon: c.longitude, t: pos.timestamp || Date.now() };
+  const v = Number.isFinite(c.speed) ? Math.max(0, c.speed) : 0;
+  speedKmh = v * 3.6;
+  const h = rumboDelGPS(c, now, v);
+  if (h !== null) filtrarHeading(h);
+
+  // el marcador se actualiza SOLO cuando llega un fix (no en cada frame)
+  if (!marcadorCoche._map) marcadorCoche.setLngLat([now.lon, now.lat]).addTo(map);
+  else marcadorCoche.setLngLat([now.lon, now.lat]);
+  marcadorCoche.setRotation(heading);
+
+  document.getElementById('g2').textContent = Math.round(speedKmh) + ' km/h';
+  document.getElementById('g3').textContent = Math.round(heading) + '°';
+
+  // FIX TIRONES: en vez de easeTo con duration = dt*1000 (que cambiaba de
+  // velocidad segun el fix), solo actualizamos el OBJETIVO. El bucle de
+  // requestAnimationFrame de abajo se encarga de acercar la camara.
+  camPosObjetivo = [now.lon, now.lat];
+  camBearingObjetivo = heading;
+  if (!camPosActual){
+    camPosActual = camPosObjetivo.slice();
+    camBearingActual = camBearingObjetivo;
+    camZoomActual = camZoomObjetivo = 17;
+    if (seguirOn) map.jumpTo({ center: camPosActual, bearing: camBearingActual, zoom: camZoomActual });
+  }
+  lastFix = now;
+
+  if (steps.length){
+    actualizarRouteProgIdx([now.lat, now.lon]);
+    const recorrido = recorridoAhora([now.lat, now.lon]);
+    avanzarPaso(recorrido);
+    const distAquiA = renderStep();
+    const sigMan = steps[stepIdx];
+    if (sigMan && seguirOn){
+      const tipo = sigMan.maneuver && sigMan.maneuver.type;
+      const cerca = distAquiA < 180 && tipo && tipo !== 'arrive' && tipo !== 'depart';
+      if (cerca !== zoomManiobraOn){
+        zoomManiobraOn = cerca;
+        camZoomObjetivo = cerca ? Math.min(19, navZoomBase+1.4) : navZoomBase;
+      }
+    }
+  }
+}
+
+/* FIX TIRONES: bucle de render dedicado.
+   - interpola posicion y rumbo con suavizado exponencial
+   - usa jumpTo, NO easeTo (no hay animaciones solapadas)
+   - actualiza cada frame, pero solo si hay objetivo pendiente */
+function bucleSeguimiento(){
+  if (seguirOn && camPosActual && camPosObjetivo){
+    const k = 0.18;   // 0.15-0.25 es el rango bueno; mas bajo = mas suave pero mas lag
+    camPosActual[0] += (camPosObjetivo[0] - camPosActual[0]) * k;
+    camPosActual[1] += (camPosObjetivo[1] - camPosActual[1]) * k;
+
+    // bearing: cuidado con el salto 359->0 usando diferencia normalizada a +-180
+    let dB = camBearingObjetivo - camBearingActual;
+    while (dB > 180) dB -= 360;
+    while (dB < -180) dB += 360;
+    camBearingActual += dB * 0.14;
+
+    // zoom suavizado
+    camZoomActual += (camZoomObjetivo - camZoomActual) * 0.10;
+
+    map.jumpTo({
+      center: camPosActual,
+      bearing: camBearingActual,
+      zoom: camZoomActual
+    });
+  }
+  requestAnimationFrame(bucleSeguimiento);
+}
+requestAnimationFrame(bucleSeguimiento);
+
+document.getElementById('btnGPS').onclick = function(){
+  gpsOn = !gpsOn;
+  this.textContent = '📍 GPS: ' + (gpsOn?'ON':'OFF');
+  this.classList.toggle('on', gpsOn);
+  if (gpsOn){
+    document.getElementById('g1').innerHTML = '<b>activo</b>';
+    // FIX TIRONES: maximumAge 0 fuerza fix fresco (evita duplicados cacheados)
+    watchId = navigator.geolocation.watchPosition(onFix, e => {
+      document.getElementById('g1').innerHTML = '<span class="mal">error: ' + e.message + '</span>';
+      registrarError('gps', e.message);
+    }, { enableHighAccuracy:true, maximumAge:0, timeout:15000 });
+  } else {
+    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+    document.getElementById('g1').textContent = 'apagado';
+  }
+};
+document.getElementById('btnSeguir').onclick = function(){
+  seguirOn = !seguirOn;
+  this.textContent = '🧭 Seguir: ' + (seguirOn?'ON':'OFF');
+  this.classList.toggle('on', seguirOn);
+};
+
+// FPS en marcha: variables locales limpias, primer tick descartado
+let fpsMarchaUltimoT = 0, fpsMarchaUltimoConteo = 0;
+setInterval(() => {
+  if (!gpsOn) { fpsMarchaUltimoT = 0; return; }
+  const ahora = performance.now();
+  if (fpsMarchaUltimoT === 0){
+    fpsMarchaUltimoT = ahora; fpsMarchaUltimoConteo = contadorRenders;
+    return;   // descarta el primer tick, dt seria basura
+  }
+  const dt = (ahora - fpsMarchaUltimoT)/1000;
+  const fps = dt > 0 ? Math.round((contadorRenders - fpsMarchaUltimoConteo)/dt) : 0;
+  document.getElementById('g4').textContent = fps + ' fps';
+  fpsMarchaUltimoT = ahora; fpsMarchaUltimoConteo = contadorRenders;
+}, 1000);
+
+document.getElementById('btnDestino').onclick = async function(){
+  if (!lastFix){ alert('Activa el GPS primero -- hace falta saber desde donde se traza la ruta.'); return; }
+  const texto = prompt('¿A dónde vamos?', '');
+  if (!texto) return;
+  document.getElementById('g5').innerHTML = '<span class="aviso">buscando dirección…</span>';
+  let destino;
+  try{
+    const r = await fetch(urlGeocodificar(texto));
+    const j = await r.json();
+    if (!j.length){ document.getElementById('g5').innerHTML = '<span class="mal">no se encontró "' + texto + '"</span>'; return; }
+    destino = [parseFloat(j[0].lat), parseFloat(j[0].lon)];
+  }catch(e){ document.getElementById('g5').innerHTML = '<span class="mal">error geocodificando: ' + e.message + '</span>'; return; }
+
+  document.getElementById('g5').innerHTML = '<span class="aviso">calculando ruta…</span>';
+  try{
+    const r = await fetch(urlRutaTomTom([lastFix.lat,lastFix.lon], destino));
+    const j = await r.json();
+    if (!j.routes || !j.routes.length){ document.getElementById('g5').innerHTML = '<span class="mal">TomTom no devolvió ruta</span>'; return; }
+    const ruta = j.routes[0];
+    const coords = ruta.legs.flatMap(l => l.points.map(p => [p.longitude, p.latitude]));
+    const geojson = { type:'Feature', geometry:{ type:'LineString', coordinates: coords } };
+    if (map.getSource('ruta')) map.getSource('ruta').setData(geojson);
+    else {
+      map.addSource('ruta', { type:'geojson', data: geojson });
+      map.addLayer({ id:'ruta', type:'line', source:'ruta',
+        paint: { 'line-color':'#1e88e5', 'line-width':6, 'line-opacity':.9 },
+        layout: { 'line-cap':'round', 'line-join':'round' } });
+    }
+    const km = (ruta.summary.lengthInMeters/1000).toFixed(1);
+    const min = Math.round(ruta.summary.travelTimeInSeconds/60);
+    document.getElementById('g5').innerHTML = '<b>' + km + ' km · ' + min + ' min</b>';
+    const bounds = coords.reduce((b,c) => b.extend(c), new maplibregl.LngLatBounds(coords[0], coords[0]));
+    map.fitBounds(bounds, { padding: 60, pitch: 0 });
+
+    routeCoordsLL = coords.map(c => [c[1], c[0]]);
+    routeCumDist = [0];
+    for (let i = 1; i < routeCoordsLL.length; i++) routeCumDist.push(routeCumDist[i-1] + dist(routeCoordsLL[i-1], routeCoordsLL[i]));
+    steps = (ruta.guidance && ruta.guidance.instructions || []).map(it => {
+      const off = it.routeOffsetInMeters, pi = it.pointIndex;
+      const porIndice = (Number.isInteger(pi) && pi >= 0 && pi < routeCumDist.length) ? routeCumDist[pi] : null;
+      const metroFinal = (porIndice !== null && (off == null || Math.abs(porIndice - off) <= Math.max(300, off*0.1))) ? porIndice : (off||0);
+      return { metro: metroFinal, calle: it.street||'', msg: it.message||'', maneuver: ttMan(it), hw: isHighway({name: it.street||''}) };
+    });
+    stepIdx = 0; ultimoStepPintado = ''; routeProgIdx = 0; zoomManiobraOn = false;
+    navZoomBase = map.getZoom();
+    camZoomObjetivo = navZoomBase;
+    if (steps.length) renderStep();
+  }catch(e){
+    document.getElementById('g5').innerHTML = '<span class="mal">error de ruta: ' + e.message + '</span>';
+    registrarError('tomtom', e.message);
+  }
+};
+</script>
+</body>
+</html>
