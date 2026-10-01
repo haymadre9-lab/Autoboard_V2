@@ -25,6 +25,16 @@
     border:1px solid #232c33;border-radius:10px;padding:8px 12px;color:#ff8a8a;
     font:11px/1.5 ui-monospace,monospace;max-width:280px;max-height:40vh;overflow-y:auto;display:none}
   #errlog.on{display:block}
+
+  /* ==== Fase 2: coche y panel de GPS/ruta ==== */
+  .coche{width:22px;height:22px}
+  #diag2{position:fixed;top:10px;left:340px;z-index:10;background:rgba(10,13,16,.88);
+    border:1px solid #232c33;border-radius:10px;padding:10px 14px;color:#e8eef2;
+    font:12px/1.6 ui-monospace,monospace;max-width:260px}
+  #diag2 b{color:#9ae6b4}
+  #diag2 .mal{color:#ff8a8a}
+  #diag2 .aviso{color:#ffd166}
+  @media (max-width:900px){ #diag2{left:10px;top:260px} }
 </style>
 </head>
 <body>
@@ -48,6 +58,17 @@
   <button id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button id="btnRot">▶ Prueba rotacion 10s</button>
   <button id="btnPitchTest">▶ Prueba pitch 10s</button>
+  <button id="btnGPS">📍 GPS: OFF</button>
+  <button id="btnSeguir">🧭 Seguir: OFF</button>
+  <button id="btnDestino">🏁 Fijar destino</button>
+</div>
+<div id="diag2">
+  <div><b>FASE 2 — GPS y ruta</b></div>
+  <div>GPS: <span id="g1">apagado</span></div>
+  <div>Velocidad: <span id="g2">-</span></div>
+  <div>Rumbo: <span id="g3">-</span></div>
+  <div>FPS en marcha: <span id="g4">-</span></div>
+  <div>Ruta: <span id="g5">sin destino</span></div>
 </div>
 
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
@@ -270,6 +291,154 @@ document.getElementById('btnPitchTest').onclick = async function(){
     map.setPitch(30 + 30*Math.sin(progreso * Math.PI * 6));   // oscila 0-60, 3 ciclos en 10 s
   });
   this.disabled = false;
+};
+
+/* ============================================================================
+   FASE 2 -- GPS real, marcador del coche, seguimiento de camara, ruta TomTom.
+   Misma clave de TomTom que ya usa AutoBoard V2 -- probada, no se inventa una
+   nueva. Sigue en un unico archivo: Vite llegara cuando haga falta de verdad,
+   no antes. Nada de maniobras, carriles, radares ni HUD todavia -- eso es
+   Fase 3 en adelante.
+   ============================================================================ */
+const TT = 'zMPqeYVXNoQw4rJ1ycr8QdywkDFNx0tF';
+
+// ---- funciones puras, para poder verificarlas sin depender de GPS/WebGL real ----
+function dist(a, b){   // metros, formula haversine -- igual que AutoBoard V2
+  const R = 6371000, la1 = a[0]*Math.PI/180, la2 = b[0]*Math.PI/180;
+  const dla = (b[0]-a[0])*Math.PI/180, dlo = (b[1]-a[1])*Math.PI/180;
+  const h = Math.sin(dla/2)**2 + Math.cos(la1)*Math.cos(la2)*Math.sin(dlo/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+function bearing(a, b){   // grados, 0=norte, igual que AutoBoard V2
+  const la1 = a[0]*Math.PI/180, la2 = b[0]*Math.PI/180, dlo = (b[1]-a[1])*Math.PI/180;
+  const y = Math.sin(dlo)*Math.cos(la2);
+  const x = Math.cos(la1)*Math.sin(la2) - Math.sin(la1)*Math.cos(la2)*Math.cos(dlo);
+  return ((Math.atan2(y,x)*180/Math.PI)+360)%360;
+}
+function urlGeocodificar(texto){
+  return 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(texto);
+}
+function urlRutaTomTom(origen, destino){   // origen/destino: [lat,lon]
+  return 'https://api.tomtom.com/routing/1/calculateRoute/' + origen[0]+','+origen[1]+':'+destino[0]+','+destino[1] + '/json?key=' + TT + '&routeType=fastest&traffic=true';
+}
+
+// ---- estado GPS ----
+let gpsOn = false, watchId = null, seguirOn = false;
+let lastFix = null, heading = 0, speedKmh = 0;
+let histFixes = [];
+
+function rumboDelGPS(c, now, v){   // simplificado de AutoBoard V2: heading del receptor, o linea base larga
+  histFixes.push(now); if (histFixes.length > 14) histFixes.shift();
+  if (Number.isFinite(c.heading) && v >= 1.5) return ((c.heading % 360) + 360) % 360;
+  if (v < 3) return null;
+  const base = Math.min(35, Math.max(20, v*4));
+  for (let i = histFixes.length-2; i >= 0; i--){
+    const f = histFixes[i];
+    if (now.t - f.t > 12000) break;
+    if (dist([f.lat,f.lon],[now.lat,now.lon]) >= base) return bearing([f.lat,f.lon],[now.lat,now.lon]);
+  }
+  return null;
+}
+
+// ---- marcador del coche: SVG simple, se rota con CSS segun el rumbo ----
+const elCoche = document.createElement('div');
+elCoche.innerHTML = '<svg class="coche" viewBox="0 0 24 24"><path d="M12 2 L20 20 L12 16 L4 20 Z" fill="#3fa9ff" stroke="#fff" stroke-width="1.5"/></svg>';
+const marcadorCoche = new maplibregl.Marker({ element: elCoche, rotationAlignment: 'map' });
+
+function onFix(pos){
+  const c = pos.coords;
+  const now = { lat: c.latitude, lon: c.longitude, t: pos.timestamp || Date.now() };
+  const v = Number.isFinite(c.speed) ? Math.max(0, c.speed) : 0;
+  speedKmh = v * 3.6;
+  const h = rumboDelGPS(c, now, v);
+  if (h !== null) heading = h;
+
+  if (!marcadorCoche.getLngLat || !marcadorCoche._map) marcadorCoche.setLngLat([now.lon, now.lat]).addTo(map);
+  else marcadorCoche.setLngLat([now.lon, now.lat]);
+  marcadorCoche.setRotation(heading);
+
+  document.getElementById('g2').textContent = Math.round(speedKmh) + ' km/h';
+  document.getElementById('g3').textContent = Math.round(heading) + '°';
+
+  const dt = lastFix ? Math.max(0.1, (now.t - lastFix.t)/1000) : 0;
+  if (seguirOn){
+    if (!lastFix) map.jumpTo({ center:[now.lon,now.lat], bearing: heading, zoom: 17 });
+    else map.easeTo({ center:[now.lon,now.lat], bearing: heading, duration: dt*1000, easing: x=>x });   // lineal, igual que seguirCamara() en AutoBoard V2
+  }
+  lastFix = now;
+}
+
+document.getElementById('btnGPS').onclick = function(){
+  gpsOn = !gpsOn;
+  this.textContent = '📍 GPS: ' + (gpsOn?'ON':'OFF');
+  this.classList.toggle('on', gpsOn);
+  if (gpsOn){
+    document.getElementById('g1').innerHTML = '<b>activo</b>';
+    watchId = navigator.geolocation.watchPosition(onFix, e => {
+      document.getElementById('g1').innerHTML = '<span class="mal">error: ' + e.message + '</span>';
+      registrarError('gps', e.message);
+    }, { enableHighAccuracy:true, maximumAge:1000 });
+  } else {
+    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+    document.getElementById('g1').textContent = 'apagado';
+  }
+};
+document.getElementById('btnSeguir').onclick = function(){
+  seguirOn = !seguirOn;
+  this.textContent = '🧭 Seguir: ' + (seguirOn?'ON':'OFF');
+  this.classList.toggle('on', seguirOn);
+};
+
+// ---- FPS durante la marcha real (no un boton de 10s sintetico): se muestrea
+//      todo el rato que el GPS este activo, con el mismo contador 'render' ----
+setInterval(() => {
+  if (!gpsOn) return;
+  const ahora = performance.now();
+  const dt = (ahora - (window.__ultimoT||ahora))/1000;
+  const fps = window.__ultimoT ? Math.round((contadorRenders - (window.__ultimoConteo||0))/dt) : 0;
+  document.getElementById('g4').textContent = fps + ' fps';
+  window.__ultimoConteo = contadorRenders; window.__ultimoT = ahora;
+}, 1000);
+
+// ---- destino y ruta TomTom ----
+let rutaSource = null;
+document.getElementById('btnDestino').onclick = async function(){
+  if (!lastFix){ alert('Activa el GPS primero -- hace falta saber desde donde se traza la ruta.'); return; }
+  const texto = prompt('¿A dónde vamos?', '');
+  if (!texto) return;
+  document.getElementById('g5').innerHTML = '<span class="aviso">buscando dirección…</span>';
+  let destino;
+  try{
+    const r = await fetch(urlGeocodificar(texto));
+    const j = await r.json();
+    if (!j.length){ document.getElementById('g5').innerHTML = '<span class="mal">no se encontró "' + texto + '"</span>'; return; }
+    destino = [parseFloat(j[0].lat), parseFloat(j[0].lon)];
+  }catch(e){ document.getElementById('g5').innerHTML = '<span class="mal">error geocodificando: ' + e.message + '</span>'; return; }
+
+  document.getElementById('g5').innerHTML = '<span class="aviso">calculando ruta…</span>';
+  try{
+    const r = await fetch(urlRutaTomTom([lastFix.lat,lastFix.lon], destino));
+    const j = await r.json();
+    if (!j.routes || !j.routes.length){ document.getElementById('g5').innerHTML = '<span class="mal">TomTom no devolvió ruta</span>'; return; }
+    const ruta = j.routes[0];
+    const coords = ruta.legs.flatMap(l => l.points.map(p => [p.longitude, p.latitude]));
+    const geojson = { type:'Feature', geometry:{ type:'LineString', coordinates: coords } };
+    if (map.getSource('ruta')) map.getSource('ruta').setData(geojson);
+    else {
+      map.addSource('ruta', { type:'geojson', data: geojson });
+      map.addLayer({ id:'ruta', type:'line', source:'ruta',
+        paint: { 'line-color':'#1e88e5', 'line-width':6, 'line-opacity':.9 },
+        layout: { 'line-cap':'round', 'line-join':'round' } });
+    }
+    const km = (ruta.summary.lengthInMeters/1000).toFixed(1);
+    const min = Math.round(ruta.summary.travelTimeInSeconds/60);
+    document.getElementById('g5').innerHTML = '<b>' + km + ' km · ' + min + ' min</b>';
+    const bounds = coords.reduce((b,c) => b.extend(c), new maplibregl.LngLatBounds(coords[0], coords[0]));
+    map.fitBounds(bounds, { padding: 60, pitch: 0 });
+  }catch(e){
+    document.getElementById('g5').innerHTML = '<span class="mal">error de ruta: ' + e.message + '</span>';
+    registrarError('tomtom', e.message);
+  }
 };
 </script>
 </body>
