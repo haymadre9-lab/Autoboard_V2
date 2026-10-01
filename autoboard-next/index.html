@@ -139,6 +139,14 @@ map.on('load', () => {
   sourceLayerBuildings = candidatas[0].sourceLayer;
   document.getElementById('rBuildings').innerHTML = '<span class="aviso">añadiendo… (' + candidatas.length + ' candidata(s), usando ' + idFuenteBuildings + '/' + sourceLayerBuildings + ')</span>';
 
+  // ---- VECTOR TILES: se habia creado la casilla pero nunca se rellenaba.
+  //      "idle" se dispara cuando el mapa ha terminado de pedir y dibujar todo
+  //      lo que hacia falta para la vista actual -- primera vez que ocurre tras
+  //      el arranque, confirma que las teselas de verdad llegaron y se vieron. ----
+  map.once('idle', () => {
+    document.getElementById('rTiles').innerHTML = webglOk ? '<b>OK</b>' : '<span class="mal">con errores, ver panel derecho</span>';
+  });
+
   let idEtiquetas;
   for (const l of estilo.layers) { if (l.type === 'symbol' && l.layout && l.layout['text-field']) { idEtiquetas = l.id; break; } }
   try{
@@ -170,11 +178,21 @@ map.on('load', () => {
       document.getElementById('rBuildings').innerHTML = '<span class="aviso">capa añadida, pero 0 edificios visibles aqui ahora mismo (¿zoom &lt;14, o esta fuente no trae aqui?)</span>';
       return;
     }
-    const alturas = feats.slice(0,20).map(f => f.properties && f.properties.render_height).filter(v => v !== undefined);
+    const muestra = feats.slice(0,20);
+    const alturas = muestra.map(f => f.properties && f.properties.render_height).filter(v => v !== undefined);
     if (!alturas.length){
       document.getElementById('rBuildings').innerHTML = '<span class="mal">' + feats.length + ' edificios encontrados, pero NINGUNO tiene "render_height" -- se estan dibujando planos, a 8 m fijos (el "coalesce" cayendo al valor por defecto)</span>';
     } else {
-      document.getElementById('rBuildings').innerHTML = '<b>OK</b> — ' + feats.length + ' edificios visibles, alturas reales de ejemplo: ' + alturas.slice(0,5).map(a=>Math.round(a)+'m').join(', ');
+      // Cuantas alturas son "genuinamente distintas" frente a repetirse el mismo
+      // valor una y otra vez -- si casi todas coinciden, es la señal de que
+      // OpenMapTiles esta cayendo al relleno generico de una planta
+      // (BUILDING_FLOOR_HEIGHT) porque esos edificios no llevan "height" ni
+      // "building:levels" etiquetado en OpenStreetMap, no porque el dato este roto.
+      const distintas = new Set(alturas.map(a => Math.round(a))).size;
+      const avisoRelleno = distintas <= 2 && alturas.length >= 5
+        ? '<br><span class="aviso">⚠ casi todas iguales (' + distintas + ' valor(es) distinto(s) en ' + alturas.length + ') -- probablemente datos sin etiquetar en OSM aqui, cayendo al relleno generico de una planta, no un fallo del codigo</span>'
+        : '';
+      document.getElementById('rBuildings').innerHTML = '<b>OK</b> — ' + feats.length + ' edificios visibles, ' + alturas.length + '/' + muestra.length + ' con render_height. Ejemplo: ' + alturas.slice(0,5).map(a=>Math.round(a)+'m').join(', ') + avisoRelleno;
     }
   }, 800);
 });
