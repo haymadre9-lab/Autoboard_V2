@@ -459,21 +459,43 @@ function onFix(pos){
   const now = { lat: c.latitude, lon: c.longitude, t: pos.timestamp || Date.now() };
   const v = Number.isFinite(c.speed) ? Math.max(0, c.speed) : 0;
   speedKmh = v * 3.6;
+
+  // === FIX TIRONES EN PARADO ===
+  // A menos de 1.5 m/s (~5 km/h) NO perseguimos la posicion ni el rumbo.
+  // Los receptores GPS oscilan +-3-5m y el heading es basura a baja velocidad.
+  // Congelamos la camara y el marcador en la ultima posicion estable.
+  if (v < 1.5 && lastFix){
+    document.getElementById('g2').textContent = Math.round(speedKmh) + ' km/h';
+    document.getElementById('g3').textContent = Math.round(heading) + '°';
+    return;
+  }
+  // === FIN FIX ===
+
   const h = rumboDelGPS(c, now, v);
   if (h !== null) filtrarHeading(h);
+
+  // el marcador se actualiza SOLO cuando llega un fix (no en cada frame)
   if (!marcadorCoche._map) marcadorCoche.setLngLat([now.lon, now.lat]).addTo(map);
   else marcadorCoche.setLngLat([now.lon, now.lat]);
   marcadorCoche.setRotation(heading);
+
   document.getElementById('g2').textContent = Math.round(speedKmh) + ' km/h';
   document.getElementById('g3').textContent = Math.round(heading) + '°';
+
   camPosObjetivo = [now.lon, now.lat];
   camBearingObjetivo = heading;
+
+  // === FIX ARRANQUE SUAVE ===
+  // La primera vez que llega un fix con el coche en movimiento, en vez de
+  // hacer un jumpTo brusco a la posicion, inicializamos la camara ENCIMA de
+  // esa posicion y dejamos que el suavizado la siga desde ahi. Sin salto.
   if (!camPosActual){
     camPosActual = camPosObjetivo.slice();
     camBearingActual = camBearingObjetivo;
     camZoomActual = camZoomObjetivo = 17;
-    if (seguirOn) map.jumpTo({ center: camPosActual, bearing: camBearingActual, zoom: camZoomActual });
   }
+  // === FIN FIX ===
+
   lastFix = now;
   if (steps.length){
     actualizarRouteProgIdx([now.lat, now.lon]);
@@ -501,7 +523,18 @@ function bucleSeguimiento(){
     while (dB < -180) dB += 360;
     camBearingActual += dB * 0.14;
     camZoomActual += (camZoomObjetivo - camZoomActual) * 0.10;
-    map.jumpTo({ center: camPosActual, bearing: camBearingActual, zoom: camZoomActual });
+
+    // === FIX TIRONES EN PARADO ===
+    // Si la camara ya esta practicamente en el objetivo (parado), no hace
+    // falta jumpTo 60 veces por segundo. Ahorra GPU y evita micro-tirones.
+    const dx = Math.abs(camPosObjetivo[0] - camPosActual[0]);
+    const dy = Math.abs(camPosObjetivo[1] - camPosActual[1]);
+    const dZoom = Math.abs(camZoomObjetivo - camZoomActual);
+    const quieto = dx < 1e-6 && dy < 1e-6 && dZoom < 0.001;
+    if (!quieto){
+      map.jumpTo({ center: camPosActual, bearing: camBearingActual, zoom: camZoomActual });
+    }
+    // === FIN FIX ===
   }
   requestAnimationFrame(bucleSeguimiento);
 }
