@@ -1,96 +1,79 @@
 <!DOCTYPE html>
 <html lang="es">
-<cabeza>
-<meta conjunto de caracteres="utf-8">
-<meta nombre="ventana gráfica" contenido="ancho=ancho del dispositivo, escala inicial=1, ajuste de la ventana gráfica=cubierta, escalable por el usuario=no">
-<título>autoboard-next · Fase 4b · coche 3D + navegación</título>
-<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="hoja de estilo">
-<estilo>
-html,cuerpo{margen:0;altura:100%;fondo:#0b0e12;rebosar:oculto}
-#mapa{posición:absoluto;insertar:0}
-
-/* ==== Pantallas de información ==== */
-#diag{posición:fijo;top:10px;izquierda:10px;índice z:10;fondo:rgba(10,13,16,.88);
-  frontera:1px sólido #232c33;radio fronterizo:10px;acolchado:10px 14px;color:#e8eef2;
-  fuente:12px/1.6 ui-monospace,monoespacial;ancho máximo:320px;altura máxima:70vh;desbordamiento:auto}
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>autoboard-next · Fase 4b · coche 3D + navegación</title>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<style>
+html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
+#map{position:absolute;inset:0}
+#diag{position:fixed;top:10px;left:10px;z-index:10;background:rgba(10,13,16,.88);
+  border:1px solid #232c33;border-radius:10px;padding:10px 14px;color:#e8eef2;
+  font:12px/1.6 ui-monospace,monospace;max-width:320px;max-height:70vh;overflow-y:auto}
 #diag b{color:#9ae6b4}.mal{color:#ff8a8a}.aviso{color:#ffd166}
-#diag hr{frontera:0;border-top:1px sólido #232c33;margen:6px 0}
-
-#controles{posición:fijo;fondo:16px;izquierda:50%;transformar:traducirX(-50%);índice z:10;
-  visualizar:flex;brecha:6px;flex-wrap:envolver;justificar-contenido:centro;ancho máximo:94vw}
-#controles botón{fondo:#12161c;frontera:1px sólido #232c33;color:#e8eef2;
-  radio fronterizo:10px;acolchado:10px 12px;tamaño de fuente:12px;font-weight:700}
-#controles botón.en{fondo:#1d3a2c;color del borde:#2e6b4a}
-#controles botón:discapacitado{opacidad:.4}
-
-#errlog{posición:fijo;top:10px;bien:10px;índice z:10;fondo:rgba(10,13,16,.88);
-  frontera:1px sólido #232c33;radio fronterizo:10px;acolchado:8px 12px;color:#ff8a8a;
-  fuente:11px/1.5 ui-monospace,monoespacial;ancho máximo:280px;altura máxima:40vh;desbordamiento:auto;visualizar:ninguno}
-#errlog.en{visualizar:bloque}
-
-.coche{ancho:22px;altura:22px}
-
-#diag2{posición:fijo;top:10px;izquierda:340px;índice z:10;fondo:rgba(10,13,16,.88);
-  frontera:1px sólido #232c33;radio fronterizo:10px;acolchado:10px 14px;color:#e8eef2;
-  fuente:12px/1.6 ui-monospace,monoespacial;ancho máximo:290px}
+#diag hr{border:0;border-top:1px solid #232c33;margin:6px 0}
+#controles{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;
+  display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:94vw}
+#controles button{background:#12161c;border:1px solid #232c33;color:#e8eef2;
+  border-radius:10px;padding:10px 12px;font-size:12px;font-weight:700}
+#controles button.on{background:#1d3a2c;border-color:#2e6b4a}
+#controles button:disabled{opacity:.4}
+#errlog{position:fixed;top:10px;right:10px;z-index:10;background:rgba(10,13,16,.88);
+  border:1px solid #232c33;border-radius:10px;padding:8px 12px;color:#ff8a8a;
+  font:11px/1.5 ui-monospace,monospace;max-width:280px;max-height:40vh;overflow-y:auto;display:none}
+#errlog.on{display:block}
+.coche{width:22px;height:22px}
+#diag2{position:fixed;top:10px;left:340px;z-index:10;background:rgba(10,13,16,.88);
+  border:1px solid #232c33;border-radius:10px;padding:10px 14px;color:#e8eef2;
+  font:12px/1.6 ui-monospace,monospace;max-width:290px}
 #diag2 b{color:#9ae6b4}
-@media(ancho máximo:900px){#diag2{izquierda:10px;top:260px}}
-
-#navbanner{posición:fijo;izquierda:50%;transformar:traducirX(-50%);top:8px;índice z:20;visualizar:ninguno;
-  align-items:centro;brecha:12px;fondo:rgba(10,13,16,.9);frontera:1px sólido #232c33;
-  radio fronterizo:16px;acolchado:8px 18px 8px 10px}
-#navbanner.hw{fondo:rgba(10,30,70,.92);color del borde:#1e4a8a}
-#navarrow{ancho:78px;altura:84px;flex:0 0 auto}
-#navarrow svg{ancho:78px;altura:84px;visualizar:bloque}
-#navd{fuente:800 26px sistema-ui,sans-serif;color:#fff}
-#navsub{fuente:600 13px sistema-ui,sans-serif;color:#9aa7b2;ancho máximo:220px;
-  rebosar:oculto;desbordamiento de texto:elipsis;espacio en blanco:nowrap}
-
-#panel de coco{posición:fijo;bien:10px;fondo:92px;índice z:15;fondo:rgba(10,13,16,.92);
-  frontera:1px sólido #232c33;radio fronterizo:12px;acolchado:10px 12px;color:#e8eef2;
-  fuente:11px/1,45 ui-monospace,monoespacial;ancho:230px;visualizar:ninguno;box-sizing:border-box}
-#panel de coco.en{visualizar:bloque}
-#panel de coco .titulo{font-weight:800;color:#9ae6b4;margen inferior:7px}
-#panel de coco etiqueta{visualizar:bloque;margen:6px 0 2px}
-#panel de coco .val{float:bien;color:#ffd166}
-#panel de coco entrada{ancho:100%;box-sizing:border-box}
-#panel de coco .nota{margin-top:6px;color:#8d99a5;tamaño de fuente:10px}
-@media(ancho máximo:900px){#panel de coco{bien:10px;fondo:145px;ancho:210px}}
-
-/* ==== Selector de modo (arriba derecha, discreto) ==== */
-#modos{posición:fijo;top:10px;bien:10px;índice z:25;visualizar:flex;brecha:6px;flex-wrap:envolver;
-  justificar-contenido:flex-end;ancho máximo:70vw}
-#modos botón{fondo:rgba(10,13,16,.85);frontera:1px sólido #232c33;color:#e8eef2;
-  radio fronterizo:10px;acolchado:8px 12px;tamaño de fuente:12px;font-weight:700}
-#modos botón.en{fondo:#1d3a2c;color del borde:#2e6b4a;color:#9ae6b4}
-#modos botón.engranaje{acolchado:8px 10px}
-
-/* ==== Mini-HUD de navegación (bajo izquierda) ==== */
-#minihud{posición:fijo;izquierda:10px;fondo:16px;índice z:15;visualizar:ninguno;
-  fondo:rgba(10,13,16,.82);frontera:1px sólido #232c33;radio fronterizo:12px;
-  acolchado:8px 14px;color:#e8eef2;fuente:700 18px/1.2 sistema-ui,sans-serif;
-  align-items:centro;brecha:14px}
-#minihud.en{visualizar:flex}
+@media(max-width:900px){#diag2{left:10px;top:260px}}
+#navbanner{position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:20;display:none;
+  align-items:center;gap:12px;background:rgba(10,13,16,.9);border:1px solid #232c33;
+  border-radius:16px;padding:8px 18px 8px 10px}
+#navbanner.hw{background:rgba(10,30,70,.92);border-color:#1e4a8a}
+#navarrow{width:78px;height:84px;flex:0 0 auto}
+#navarrow svg{width:78px;height:84px;display:block}
+#navd{font:800 26px system-ui,sans-serif;color:#fff}
+#navsub{font:600 13px system-ui,sans-serif;color:#9aa7b2;max-width:220px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#cochePanel{position:fixed;right:10px;bottom:92px;z-index:15;background:rgba(10,13,16,.92);
+  border:1px solid #232c33;border-radius:12px;padding:10px 12px;color:#e8eef2;
+  font:11px/1.45 ui-monospace,monospace;width:230px;display:none;box-sizing:border-box}
+#cochePanel.on{display:block}
+#cochePanel .titulo{font-weight:800;color:#9ae6b4;margin-bottom:7px}
+#cochePanel label{display:block;margin:6px 0 2px}
+#cochePanel .val{float:right;color:#ffd166}
+#cochePanel input{width:100%;box-sizing:border-box}
+#cochePanel .nota{margin-top:6px;color:#8d99a5;font-size:10px}
+@media(max-width:900px){#cochePanel{right:10px;bottom:145px;width:210px}}
+#modos{position:fixed;top:10px;right:10px;z-index:25;display:flex;gap:6px;flex-wrap:wrap;
+  justify-content:flex-end;max-width:70vw}
+#modos button{background:rgba(10,13,16,.85);border:1px solid #232c33;color:#e8eef2;
+  border-radius:10px;padding:8px 12px;font-size:12px;font-weight:700}
+#modos button.on{background:#1d3a2c;border-color:#2e6b4a;color:#9ae6b4}
+#minihud{position:fixed;left:10px;bottom:16px;z-index:15;display:none;
+  background:rgba(10,13,16,.82);border:1px solid #232c33;border-radius:12px;
+  padding:8px 14px;color:#e8eef2;font:700 18px/1.2 system-ui,sans-serif;
+  align-items:center;gap:14px}
+#minihud.on{display:flex}
 #minihud .sep{color:#4a5560}
 #minihud .vel{color:#fff}
-#minihud .ron{color:#9ae6b4}
-
-/* ==== Modos: que se ve y que no ==== */
-cuerpo.modo-debug #panel de coco.en{visualizar:bloque}
-cuerpo.modo-calibración #diag,cuerpo.modo-calibración #diag2,cuerpo.modo-calibración #controles{visualizar:ninguno}
-cuerpo.modo-navegación #diag,cuerpo.modo-navegación #diag2,
-cuerpo.modo-navegación #controles,cuerpo.modo-navegación #panel de coco{visualizar:ninguno}
-cuerpo.modo-solomapa #diag,cuerpo.modo-solomapa #diag2,
-cuerpo.modo-solomapa #controles,cuerpo.modo-solomapa #panel de coco,
-cuerpo.modo-solomapa #navbanner,cuerpo.modo-solomapa #minihud{visualizar:ninguno}
-</estilo>
-</cabeza>
-<cuerpo clase="modo-depuración">
-<div id="mapa"></div>
-
+#minihud .rum{color:#9ae6b4}
+body.modo-calibracion #diag,body.modo-calibracion #diag2,body.modo-calibracion #controles{display:none}
+body.modo-navegacion #diag,body.modo-navegacion #diag2,
+body.modo-navegacion #controles,body.modo-navegacion #cochePanel{display:none}
+body.modo-solomapa #diag,body.modo-solomapa #diag2,
+body.modo-solomapa #controles,body.modo-solomapa #cochePanel,
+body.modo-solomapa #navbanner,body.modo-solomapa #minihud{display:none}
+</style>
+</head>
+<body class="modo-debug">
+<div id="map"></div>
 <div id="diag">
-  <div><b>FASE 1 — medicina, sin demostración</b></div>
-  <div>ARRANQUE: <span id=„rArranque">cargando…</span></div>
+  <div><b>FASE 1 — medicion, no demo</b></div>
+  <div>ARRANQUE: <span id="rArranque">cargando…</span></div>
   <div>VECTOR TILES: <span id="rTiles">esperando…</span></div>
   <div>WEBGL: <span id="rWebgl">-</span></div>
   <div>3D BUILDINGS: <span id="rBuildings">-</span></div>
@@ -101,7 +84,6 @@ cuerpo.modo-solomapa #navbanner,cuerpo.modo-solomapa #minihud{visualizar:ninguno
   <div>ERRORES: <span id="rErrores">0</span></div>
 </div>
 <div id="errlog"></div>
-
 <div id="controles">
   <button id="btnEdificios" class="on">🏢 Edificios: ON</button>
   <button id="btnPitch" class="on">📐 Pitch: ON</button>
@@ -112,7 +94,6 @@ cuerpo.modo-solomapa #navbanner,cuerpo.modo-solomapa #minihud{visualizar:ninguno
   <button id="btnSeguir">🧭 Seguir: OFF</button>
   <button id="btnDestino">🏁 Fijar destino</button>
 </div>
-
 <div id="diag2">
   <div><b>FASE 2 — GPS y ruta</b></div>
   <div>GPS: <span id="g1">apagado</span></div>
@@ -123,29 +104,25 @@ cuerpo.modo-solomapa #navbanner,cuerpo.modo-solomapa #minihud{visualizar:ninguno
   <div>Coche 3D: <span id="g6">GPS apagado</span></div>
   <div>Desvío: <span id="g7">-</span></div>
 </div>
-
 <div id="cochePanel">
   <div class="titulo">🚗 Coche 3D — calibracion</div>
-  <label>Escala <span class="val" id="escVal">0.50x</span></label>
-  <input type="range" id="escSlider" min="0.01" max="10" step="0.01" value="0.50">
-  <label>Altura <span class="val" id="altVal">0.50 m</span></label>
-  <input type="range" id="altSlider" min="-2" max="20" step="0.1" value="0.50">
+  <label>Escala <span class="val" id="escVal">1.00x</span></label>
+  <input type="range" id="escSlider" min="0.01" max="10" step="0.01" value="1.00">
+  <label>Altura <span class="val" id="altVal">0.00 m</span></label>
+  <input type="range" id="altSlider" min="-2" max="20" step="0.1" value="0">
   <label>Giro Z <span class="val" id="rotZVal">0°</span></label>
   <input type="range" id="rotZSlider" min="-180" max="180" step="1" value="0">
   <div class="nota">Escala y giro se aplican al GLB. La altura es sobre el terreno.</div>
 </div>
-
 <div id="navbanner">
   <div id="navarrow"></div>
   <div><div id="navd">-</div><div id="navsub"></div></div>
 </div>
-
 <div id="minihud">
   <span class="vel" id="hudVel">0 km/h</span>
   <span class="sep">·</span>
   <span class="rum" id="hudRum">N 0°</span>
 </div>
-
 <div id="modos">
   <button id="modoDebug" class="on">🔧 Debug</button>
   <button id="modoCalib">🚙 Calibrar</button>
@@ -166,26 +143,12 @@ import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 
 let mapRef=null, carLayer=null, carModel=null, carLngLat=null;
-let carBearing=0, carScale=.5, carAltura=.5, carRotationZ=0, modeloListo=false;
+let carBearing=0, carScale=1.0, carAltura=0.0, carRotationZ=0, modeloListo=false;
 
 function actualizarEstado(texto, clase=''){
   const el=document.getElementById('g6');
   if(!el) return;
   el.innerHTML = clase ? '<span class="'+clase+'">'+texto+'</span>' : texto;
-}
-
-// ==== FIX: el ajuste de ejes Y->Z del GLB se hace UNA VEZ sobre el modelo,
-//      asi el grupo exterior solo tiene que aplicar rumbo y escala limpios. ====
-function prepararModelo(modelo){
-  const box = new THREE.Box3().setFromObject(modelo);
-  const c = box.getCenter(new THREE.Vector3());
-  // Centrar en XZ (para que gire sobre si mismo) y apoyar en Y=0 (ruedas al suelo)
-  modelo.position.x -= c.x;
-  modelo.position.z -= c.z;
-  modelo.position.y -= box.min.y;
-  // Convertir eje Y-arriba (GLB) a Z-arriba (Mercator)
-  modelo.rotation.x = Math.PI / 2;
-  modelo.traverse(o => { if(o.isMesh){ o.castShadow=false; o.receiveShadow=false; } });
 }
 
 async function cargarModelo(capa){
@@ -197,13 +160,42 @@ async function cargarModelo(capa){
       ev => { if(ev.lengthComputable) actualizarEstado('cargando… '+Math.round(ev.loaded/ev.total*100)+'%','aviso'); },
       reject
     ));
-    carModel = gltf.scene;
-    prepararModelo(carModel);
-    capa.scene.add(carModel);
+    const modelo = gltf.scene;
+
+    // ==== FIX peana: eliminar cualquier mesh gigante (base de presentacion) ====
+    const objetosAEliminar = [];
+    modelo.updateMatrixWorld(true);
+    modelo.traverse(o => {
+      if (o.isMesh) {
+        const box = new THREE.Box3().setFromObject(o);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        if (size.x > 6 || size.z > 6) objetosAEliminar.push(o);
+      }
+    });
+    objetosAEliminar.forEach(o => { if (o.parent) o.parent.remove(o); });
+    // ==== FIN FIX peana ====
+
+    // Centrar en XZ (para girar sobre si mismo) y apoyar en Y=0
+    const box = new THREE.Box3().setFromObject(modelo);
+    const c = box.getCenter(new THREE.Vector3());
+    modelo.position.x -= c.x;
+    modelo.position.z -= c.z;
+    modelo.position.y -= box.min.y;
+    modelo.traverse(o => { if(o.isMesh){ o.castShadow=false; o.receiveShadow=false; } });
+
+    // Añadir al grupo INTERNO (que tiene la conversion de ejes)
+    capa.innerGroup.add(modelo);
+    carModel = modelo;
     modeloListo = true;
     actualizarEstado('listo · 3D');
     document.getElementById('cochePanel').classList.add('on');
     if(window.__show2DCar) window.__show2DCar(false);
+
+    // Info de tamaño util
+    const tam = new THREE.Vector3();
+    new THREE.Box3().setFromObject(modelo).getSize(tam);
+    console.log('Tamaño coche sin peana:', tam.x.toFixed(2), '×', tam.y.toFixed(2), '×', tam.z.toFixed(2));
   }catch(e){
     modeloListo = false;
     actualizarEstado('ERROR: '+(e.message||e),'mal');
@@ -224,39 +216,56 @@ function crearCapaCoche(){
       dir.position.set(0,-1,1).normalize();
       this.scene.add(dir);
 
+      // ==== FIX fondo gris: sin alpha, sin premultipliedAlpha, sin clears ====
       this.renderer = new THREE.WebGLRenderer({
         canvas: map.getCanvas(),
         context: gl,
-        antialias: true,
-        alpha: true
+        antialias: true
       });
       this.renderer.autoClear = false;
+      this.renderer.autoClearColor = false;
+      this.renderer.autoClearDepth = false;
+      this.renderer.autoClearStencil = false;
       this.renderer.setPixelRatio(1);
-      // ==== FIX recuadro gris: forzar alpha 0 en el clear ====
+      this.renderer.setClearColor(0x000000, 0);
       this.renderer.setClearAlpha(0);
+      // ==== FIN FIX ====
+
+      // ==== FIX rotacion: grupo exterior (rumbo) + grupo interior (ejes) ====
+      this.modelGroup = new THREE.Group();
+      this.innerGroup = new THREE.Group();
+      this.innerGroup.rotation.x = Math.PI / 2;   // GLB Y-arriba -> Mercator Z-arriba
+      this.modelGroup.add(this.innerGroup);
+      this.scene.add(this.modelGroup);
+      // ==== FIN FIX ====
 
       carLayer = this;
       actualizarEstado('inicializando…','aviso');
       cargarModelo(this);
     },
     render(gl, matrix){
-      if(!this.renderer || !this.camera || !carModel || !carLngLat) return;
+      if(!this.renderer || !this.camera || !this.modelGroup) return;
+      if(!carModel || !carLngLat) return;
+
       const mc = maplibregl.MercatorCoordinate.fromLngLat(
         { lng: carLngLat[0], lat: carLngLat[1] }, carAltura);
       const s = mc.meterInMercatorCoordinateUnits();
-      // ==== FIX rotacion: el modelo ya tiene su eje ajustado en prepararModelo(),
-      //      aqui solo aplicamos translacion, escala y el rumbo (Z). ====
-      const rz = new THREE.Matrix4().makeRotationZ((-carBearing + carRotationZ) * Math.PI/180);
+
+      // Translacion + escala + rotacion Z (rumbo) sobre el grupo exterior
+      const rz = new THREE.Matrix4().makeRotationZ(
+        (-carBearing + carRotationZ) * Math.PI/180);
       const mt = new THREE.Matrix4()
         .makeTranslation(mc.x, mc.y, mc.z)
         .scale(new THREE.Vector3(s*carScale, -s*carScale, s*carScale))
         .multiply(rz);
-      const mm = new THREE.Matrix4().fromArray(matrix);
-      this.camera.projectionMatrix.copy(mm).multiply(mt);
+
+      this.modelGroup.matrix = mt;
+      this.modelGroup.matrixAutoUpdate = false;
+
+      this.camera.projectionMatrix = new THREE.Matrix4().fromArray(matrix);
       this.renderer.resetState();
       this.renderer.render(this.scene, this.camera);
-      // ==== FIX tirones: NO llamamos a triggerRepaint aqui. MapLibre ya
-      //      repinta solo cuando la camara se mueve (jumpTo). ====
+      // ==== NO triggerRepaint: MapLibre ya repinta con jumpTo ====
     },
     onRemove(){
       if(this.renderer) this.renderer.dispose();
@@ -281,14 +290,13 @@ window.__crearCapaCoche = crearCapaCoche;
 window.__setCarPos = (lng,lat,brg) => {
   carLngLat = [lng,lat];
   if(Number.isFinite(brg)) carBearing = brg;
-  if(window.__gpsActivo3D && !modeloListo) actualizarEstado('GPS activo · cargando…','aviso');
 };
 window.__activarCoche3D = () => {
   window.__gpsActivo3D = true;
   actualizarEstado(modeloListo ? 'listo · 3D' : 'GPS activo · inicializando…','aviso');
   instalarCapa();
 };
-window.__setCarScale = v => { carScale = Number(v)||.5; };
+window.__setCarScale = v => { carScale = Number(v)||1.0; };
 window.__setCarAltura = v => { carAltura = Number(v)||0; };
 window.__setCarRotationZ = v => { carRotationZ = Number(v)||0; };
 window.__car3DReady = () => modeloListo;
@@ -432,7 +440,6 @@ document.getElementById('btnPitchTest').onclick = async function(){
   this.disabled = false;
 };
 
-/* ==== Selector de modos de pantalla ==== */
 const botonesModo = {
   modoDebug: 'modo-debug',
   modoCalib: 'modo-calibracion',
@@ -445,7 +452,6 @@ function aplicarModo(modo){
     const btn = document.getElementById(id);
     if(btn) btn.classList.toggle('on', botonesModo[id]===modo);
   }
-  // El mini-HUD solo se ve en Navegacion. El navbanner se controla desde renderStep.
   const hud = document.getElementById('minihud');
   hud.classList.toggle('on', modo==='modo-navegacion');
 }
@@ -454,7 +460,6 @@ for(const id in botonesModo){
   if(btn) btn.onclick = () => aplicarModo(botonesModo[id]);
 }
 
-/* ==== Sliders del coche 3D ==== */
 const escSlider = document.getElementById('escSlider');
 const altSlider = document.getElementById('altSlider');
 const rotZSlider = document.getElementById('rotZSlider');
@@ -474,7 +479,6 @@ rotZSlider.oninput = () => {
   if(window.__setCarRotationZ) window.__setCarRotationZ(v);
 };
 
-/* ==== Utilidades geo ==== */
 const TT = 'zMPqeYVXNoQw4rJ1ycr8QdywkDFNx0tF';
 function dist(a,b){
   const R=6371000, la1=a[0]*Math.PI/180, la2=b[0]*Math.PI/180;
@@ -495,8 +499,6 @@ function urlRutaTomTom(o,d){
   return 'https://api.tomtom.com/routing/1/calculateRoute/'+o[0]+','+o[1]+':'+d[0]+','+d[1]
     +'/json?key='+TT+'&routeType=fastest&traffic=true&travelMode=car&instructionsType=text&language=es-ES';
 }
-
-/* ==== Maniobras SVG ==== */
 const TURN_GEOM = {
   'straight':{turn:0,R:0},'slight right':{turn:35,R:26},right:{turn:90,R:15},
   'sharp right':{turn:150,R:10},uturn:{turn:178,R:9},'sharp left':{turn:-150,R:10},
@@ -533,12 +535,9 @@ function ttMan(it){
   else if(m.includes('UTURN')||m.includes('U_TURN')) mod='uturn';
   return {type:'turn',modifier:mod};
 }
-
-/* ==== Estado de ruta ==== */
 let steps=[], stepIdx=0, routeCoordsLL=[], routeCumDist=[], routeProgIdx=0;
 let ultimoStepPintado='', zoomManiobraOn=false, navZoomBase=18.2;
 let ultimaRutaDestino=null;
-
 function segDistM2(p,a,b){
   const mx=111320*Math.cos(p[0]*Math.PI/180), my=110540;
   const px=p[1]*mx, py=p[0]*my, ax=a[1]*mx, ay=a[0]*my, bx=b[1]*mx, by=b[0]*my;
@@ -574,7 +573,6 @@ function avanzarPaso(r){
 }
 function renderStep(){
   const s=steps[stepIdx];
-  // ==== Opcion 1: si no hay ruta activa, el navbanner se oculta ====
   if(!s || !steps.length){ document.getElementById('navbanner').style.display='none'; return Infinity; }
   const nb=document.getElementById('navbanner');
   nb.style.display='flex';
@@ -590,15 +588,12 @@ function renderStep(){
   document.getElementById('navd').textContent = d<1000 ? Math.round(d)+' m' : (d/1000).toFixed(1)+' km';
   return d;
 }
-
-/* ==== Estado GPS ==== */
 let gpsOn=false, watchId=null, seguirOn=false;
 let lastFix=null, heading=0, speedKmh=0;
 let histFixes=[], headingHist=[];
 let camPosActual=null, camPosObjetivo=null;
 let camBearingActual=0, camBearingObjetivo=0;
 let camZoomActual=18.2, camZoomObjetivo=18.2;
-
 function rumboDelGPS(c,now,v){
   histFixes.push(now); if(histFixes.length>14) histFixes.shift();
   if(Number.isFinite(c.heading)&&v>=3) return ((c.heading%360)+360)%360;
@@ -613,22 +608,18 @@ function rumboDelGPS(c,now,v){
 }
 function filtrarHeading(h){
   if(!Number.isFinite(h)) return;
-  headingHist.push(h); if(headingHist.length>5) headingHist.shift();
+  headingHist.push(h); if(headingHist.length>8) headingHist.shift();
   let sx=0, sy=0;
   for(const a of headingHist){ const r=a*Math.PI/180; sx+=Math.cos(r); sy+=Math.sin(r); }
   heading = Math.atan2(sy,sx)*180/Math.PI;
   if(heading<0) heading+=360;
 }
-
 const elCoche = document.createElement('div');
 elCoche.innerHTML = '<svg class="coche" viewBox="0 0 24 24"><path d="M12 2 L20 20 L12 16 L4 20 Z" fill="#3fa9ff" stroke="#fff" stroke-width="1.5"/></svg>';
 const marcadorCoche = new maplibregl.Marker({element:elCoche, rotationAlignment:'map'});
 window.__show2DCar = on => { elCoche.style.display = on?'block':'none'; };
-
-/* ==== Deteccion de desvio + recálculo ==== */
 let distanciaFueraRuta=0, fueraDesde=0, recalculando=false, ultimoRecalculo=0;
 const DESVIO_M=45, CONFIRMACION_MS=2500, COOLDOWN_MS=10000;
-
 function distanciaRutaActual(ll){
   if(!routeCoordsLL.length) return Infinity;
   const i0=Math.max(0,routeProgIdx-20), i1=Math.min(routeCoordsLL.length-1, routeProgIdx+500);
@@ -694,18 +685,13 @@ async function comprobarDesvio(ll){
     }
   } else fueraDesde = 0;
 }
-
-/* ==== onFix ==== */
 function onFix(pos){
   const c=pos.coords;
   const now={lat:c.latitude, lon:c.longitude, t:pos.timestamp||Date.now()};
   const v = Number.isFinite(c.speed) ? Math.max(0,c.speed) : 0;
   speedKmh = v*3.6;
-
   if(window.__activarCoche3D) window.__activarCoche3D();
-
-  // ==== FIX tirones: salir antes de tocar camara si vamos despacio ====
-  if(v<1.5 && lastFix){
+  if(v<3 && lastFix){
     document.getElementById('g2').textContent = Math.round(speedKmh)+' km/h';
     document.getElementById('g3').textContent = Math.round(heading)+'°';
     actualizarHUD();
@@ -713,20 +699,15 @@ function onFix(pos){
     comprobarDesvio([now.lat, now.lon]);
     return;
   }
-
   const h = rumboDelGPS(c,now,v);
   if(h!==null) filtrarHeading(h);
-
   if(!marcadorCoche._map) marcadorCoche.setLngLat([now.lon,now.lat]).addTo(map);
   else marcadorCoche.setLngLat([now.lon,now.lat]);
   marcadorCoche.setRotation(heading);
-
   if(window.__setCarPos) window.__setCarPos(now.lon, now.lat, heading);
-
   document.getElementById('g2').textContent = Math.round(speedKmh)+' km/h';
   document.getElementById('g3').textContent = Math.round(heading)+'°';
   actualizarHUD();
-
   camPosObjetivo = [now.lon, now.lat];
   camBearingObjetivo = heading;
   if(!camPosActual){
@@ -735,7 +716,6 @@ function onFix(pos){
     camZoomActual = camZoomObjetivo = 18.2;
   }
   lastFix = now;
-
   if(steps.length){
     const ll=[now.lat,now.lon];
     actualizarRouteProgIdx(ll);
@@ -755,7 +735,6 @@ function onFix(pos){
   }
   comprobarDesvio([now.lat, now.lon]);
 }
-
 function actualizarHUD(){
   const vel = document.getElementById('hudVel');
   const rum = document.getElementById('hudRum');
@@ -766,8 +745,6 @@ function actualizarHUD(){
     rum.textContent = dirs[idx]+' '+Math.round(heading)+'°';
   }
 }
-
-/* ==== Bucle de seguimiento ==== */
 function bucleSeguimiento(){
   if(seguirOn && camPosActual && camPosObjetivo){
     const k=.18;
@@ -778,7 +755,6 @@ function bucleSeguimiento(){
     while(dB<-180) dB+=360;
     camBearingActual += dB*.14;
     camZoomActual += (camZoomObjetivo-camZoomActual)*.10;
-    // ==== FIX tirones: no repintar si ya estamos quietos ====
     const dx=Math.abs(camPosObjetivo[0]-camPosActual[0]);
     const dy=Math.abs(camPosObjetivo[1]-camPosActual[1]);
     const dz=Math.abs(camZoomObjetivo-camZoomActual);
@@ -790,8 +766,6 @@ function bucleSeguimiento(){
   requestAnimationFrame(bucleSeguimiento);
 }
 requestAnimationFrame(bucleSeguimiento);
-
-/* ==== Botones GPS / Seguir / Destino ==== */
 document.getElementById('btnGPS').onclick = function(){
   gpsOn = !gpsOn;
   this.textContent = '📍 GPS: '+(gpsOn?'ON':'OFF');
@@ -810,7 +784,6 @@ document.getElementById('btnGPS').onclick = function(){
     window.__show2DCar(true);
   }
 };
-
 document.getElementById('btnSeguir').onclick = function(){
   seguirOn = !seguirOn;
   this.textContent = '🧭 Seguir: '+(seguirOn?'ON':'OFF');
@@ -820,7 +793,6 @@ document.getElementById('btnSeguir').onclick = function(){
     map.jumpTo({center:[lastFix.lon,lastFix.lat], bearing:heading, zoom:camZoomObjetivo, pitch:60});
   }
 };
-
 let fpsMarchaUltimoT=0, fpsMarchaUltimoConteo=0;
 setInterval(()=>{
   if(!gpsOn){ fpsMarchaUltimoT=0; return; }
@@ -830,7 +802,6 @@ setInterval(()=>{
   document.getElementById('g4').textContent = Math.round((contadorRenders-fpsMarchaUltimoConteo)/dt)+' fps';
   fpsMarchaUltimoT = a; fpsMarchaUltimoConteo = contadorRenders;
 }, 1000);
-
 document.getElementById('btnDestino').onclick = async function(){
   if(!lastFix){ alert('Activa el GPS primero.'); return; }
   const texto = prompt('¿A dónde vamos?','');
@@ -862,38 +833,3 @@ document.getElementById('btnDestino').onclick = async function(){
 </script>
 </body>
 </html>
-```
-
-## Cómo se usa
-
-### Botones de modo (arriba a la derecha)
-
-| Botón | Qué hace | Cuándo usarlo |
-|---|---|---|
-| 🔧 **Debug** | Todo visible (paneles, botones, sliders, navbanner) | Desarrollo y verificación |
-| 🚙 **Calibrar** | Solo navbanner + panel de sliders del coche | Ajustar escala/altura/giro del GLB |
-| 🧭 **Navegar** | Solo navbanner + mini-HUD abajo-izq | Conducción real |
-| 🗺 **Solo mapa** | Nada encima, mapa limpio | Ver el coche 3D sin distracciones |
-
-El botón activo se ilumina en verde.
-
-### Orden recomendado para probar
-
-1. **Arranca en modo Debug**. Verifica que el mapa, el coche y todo carga.
-2. Pulsa **📍 GPS: ON** y **🧭 Seguir: ON**. Verás el coche 3D.
-3. Pasa a **🚙 Calibrar** y ajusta los tres sliders hasta que el coche se vea del tamaño y orientación correctos. **Apunta los valores**.
-4. Pasa a **🧭 Navegar**. Comprueba que se ve limpio: solo el coche, el mapa, y el mini-HUD.
-5. Pulsa **🏁 Fijar destino** con una dirección. Aparecerá el navbanner arriba.
-6. Si algo va mal, vuelve a **🔧 Debug** y mira los paneles.
-
-### Cuando tengas los valores buenos
-
-Dime los 3 números (escala, altura, giro Z) y te doy la versión final **sin sliders**, con esos valores fijos. Ya no necesitarás volver a Calibrar.
-
-## Nota importante sobre los fixes aplicados
-
-Si tras pegar esto ves que **el coche no aparece** o **el mini-HUD no se actualiza**, abre la consola (F12) y dime qué error sale. Los tres bugs que he corregido tienen un síntoma muy concreto cada uno:
-
-- **Recuadro gris** → si sigue, es que el navegador del Tesla no soporta `alpha:true` en el contexto compartido con MapLibre. Solución: probar sin antialias (`?aa=0`).
-- **Coche no gira** → si el coche gira pero mirando hacia atrás, ajusta el slider **Giro Z** a `180`.
-- **Tirones** → si vuelven, mira el panel `FPS en marcha`: si marca <30 fps, es la GPU del Tesla; si marca 60 pero aún notas saltos, es otra cosa.
