@@ -163,41 +163,18 @@ async function cargarModelo(capa){
     const modelo = gltf.scene;
     modelo.updateMatrixWorld(true);
 
-    // ==== DIAGNOSTICO: listar estructura completa en consola ====
+    // Diagnostico en consola (util si algo se ve raro)
     console.log('=== ESTRUCTURA DEL GLB ===');
-    modelo.traverse(o => {
-      if (!o.name && !o.isMesh) return;
-      const box = new THREE.Box3().setFromObject(o);
-      const size = new THREE.Vector3();
-      box.getSize(size);
-      console.log(
-        (o.isMesh ? '[MESH] ' : '[NODE] ') + (o.name || '(sin nombre)') +
-        ' | ' + size.x.toFixed(2) + ' × ' + size.y.toFixed(2) + ' × ' + size.z.toFixed(2)
-      );
-    });
-    console.log('=== FIN ESTRUCTURA ===');
-
-    // ==== FIX peana: eliminar SOLO el mesh que sea claramente plano y grande ====
-    // Una peana tiene altura muy pequena y ancho/profundo grandes.
-    // Un coche, cristal o rueda NO cumple esa combinacion.
-    const objetosAEliminar = [];
     modelo.traverse(o => {
       if (!o.isMesh) return;
       const box = new THREE.Box3().setFromObject(o);
       const size = new THREE.Vector3();
       box.getSize(size);
-      const esPlano = size.y < 0.5;         // muy bajo
-      const esGrande = size.x > 8 || size.z > 8;  // mucho mas que un coche
-      if (esPlano && esGrande) {
-        objetosAEliminar.push(o);
-        console.log('Peana detectada y eliminada:', o.name,
-          '| tamaño:', size.x.toFixed(2), '×', size.y.toFixed(2), '×', size.z.toFixed(2));
-      }
+      console.log('[MESH] ' + (o.name||'(sin nombre)') + ' | ' +
+        size.x.toFixed(2) + ' × ' + size.y.toFixed(2) + ' × ' + size.z.toFixed(2));
     });
-    objetosAEliminar.forEach(o => { if (o.parent) o.parent.remove(o); });
-    // ==== FIN FIX peana ====
 
-    // Centrar en XZ y apoyar en Y=0
+    // Centrar en XZ (para girar sobre si mismo) y apoyar en Y=0
     const box = new THREE.Box3().setFromObject(modelo);
     const c = box.getCenter(new THREE.Vector3());
     modelo.position.x -= c.x;
@@ -212,10 +189,10 @@ async function cargarModelo(capa){
     document.getElementById('cochePanel').classList.add('on');
     if(window.__show2DCar) window.__show2DCar(false);
 
-    // Info del tamaño final del coche (sin peana)
     const tam = new THREE.Vector3();
     new THREE.Box3().setFromObject(modelo).getSize(tam);
-    console.log('TAMAÑO FINAL COCHE:', tam.x.toFixed(2), '×', tam.y.toFixed(2), '×', tam.z.toFixed(2));
+    console.log('TAMAÑO COCHE (sin filtros):',
+      tam.x.toFixed(2), '×', tam.y.toFixed(2), '×', tam.z.toFixed(2));
   }catch(e){
     modeloListo = false;
     actualizarEstado('ERROR: '+(e.message||e),'mal');
