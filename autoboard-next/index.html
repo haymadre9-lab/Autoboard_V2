@@ -1,96 +1,96 @@
 <!DOCTYPE html>
 <html lang="es">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>autoboard-next · Fase 4b · coche 3D + navegación</title>
-<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
-<style>
-html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
-#map{position:absolute;inset:0}
+<cabeza>
+<meta conjunto de caracteres="utf-8">
+<meta nombre="ventana gráfica" contenido="ancho=ancho del dispositivo, escala inicial=1, ajuste de la ventana gráfica=cubierta, escalable por el usuario=no">
+<título>autoboard-next · Fase 4b · coche 3D + navegación</título>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="hoja de estilo">
+<estilo>
+html,cuerpo{margen:0;altura:100%;fondo:#0b0e12;rebosar:oculto}
+#mapa{posición:absoluto;insertar:0}
 
-/* ==== Pantallas de informacion ==== */
-#diag{position:fixed;top:10px;left:10px;z-index:10;background:rgba(10,13,16,.88);
-  border:1px solid #232c33;border-radius:10px;padding:10px 14px;color:#e8eef2;
-  font:12px/1.6 ui-monospace,monospace;max-width:320px;max-height:70vh;overflow-y:auto}
+/* ==== Pantallas de información ==== */
+#diag{posición:fijo;top:10px;izquierda:10px;índice z:10;fondo:rgba(10,13,16,.88);
+  frontera:1px sólido #232c33;radio fronterizo:10px;acolchado:10px 14px;color:#e8eef2;
+  fuente:12px/1.6 ui-monospace,monoespacial;ancho máximo:320px;altura máxima:70vh;desbordamiento:auto}
 #diag b{color:#9ae6b4}.mal{color:#ff8a8a}.aviso{color:#ffd166}
-#diag hr{border:0;border-top:1px solid #232c33;margin:6px 0}
+#diag hr{frontera:0;border-top:1px sólido #232c33;margen:6px 0}
 
-#controles{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;
-  display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:94vw}
-#controles button{background:#12161c;border:1px solid #232c33;color:#e8eef2;
-  border-radius:10px;padding:10px 12px;font-size:12px;font-weight:700}
-#controles button.on{background:#1d3a2c;border-color:#2e6b4a}
-#controles button:disabled{opacity:.4}
+#controles{posición:fijo;fondo:16px;izquierda:50%;transformar:traducirX(-50%);índice z:10;
+  visualizar:flex;brecha:6px;flex-wrap:envolver;justificar-contenido:centro;ancho máximo:94vw}
+#controles botón{fondo:#12161c;frontera:1px sólido #232c33;color:#e8eef2;
+  radio fronterizo:10px;acolchado:10px 12px;tamaño de fuente:12px;font-weight:700}
+#controles botón.en{fondo:#1d3a2c;color del borde:#2e6b4a}
+#controles botón:discapacitado{opacidad:.4}
 
-#errlog{position:fixed;top:10px;right:10px;z-index:10;background:rgba(10,13,16,.88);
-  border:1px solid #232c33;border-radius:10px;padding:8px 12px;color:#ff8a8a;
-  font:11px/1.5 ui-monospace,monospace;max-width:280px;max-height:40vh;overflow-y:auto;display:none}
-#errlog.on{display:block}
+#errlog{posición:fijo;top:10px;bien:10px;índice z:10;fondo:rgba(10,13,16,.88);
+  frontera:1px sólido #232c33;radio fronterizo:10px;acolchado:8px 12px;color:#ff8a8a;
+  fuente:11px/1.5 ui-monospace,monoespacial;ancho máximo:280px;altura máxima:40vh;desbordamiento:auto;visualizar:ninguno}
+#errlog.en{visualizar:bloque}
 
-.coche{width:22px;height:22px}
+.coche{ancho:22px;altura:22px}
 
-#diag2{position:fixed;top:10px;left:340px;z-index:10;background:rgba(10,13,16,.88);
-  border:1px solid #232c33;border-radius:10px;padding:10px 14px;color:#e8eef2;
-  font:12px/1.6 ui-monospace,monospace;max-width:290px}
+#diag2{posición:fijo;top:10px;izquierda:340px;índice z:10;fondo:rgba(10,13,16,.88);
+  frontera:1px sólido #232c33;radio fronterizo:10px;acolchado:10px 14px;color:#e8eef2;
+  fuente:12px/1.6 ui-monospace,monoespacial;ancho máximo:290px}
 #diag2 b{color:#9ae6b4}
-@media(max-width:900px){#diag2{left:10px;top:260px}}
+@media(ancho máximo:900px){#diag2{izquierda:10px;top:260px}}
 
-#navbanner{position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:20;display:none;
-  align-items:center;gap:12px;background:rgba(10,13,16,.9);border:1px solid #232c33;
-  border-radius:16px;padding:8px 18px 8px 10px}
-#navbanner.hw{background:rgba(10,30,70,.92);border-color:#1e4a8a}
-#navarrow{width:78px;height:84px;flex:0 0 auto}
-#navarrow svg{width:78px;height:84px;display:block}
-#navd{font:800 26px system-ui,sans-serif;color:#fff}
-#navsub{font:600 13px system-ui,sans-serif;color:#9aa7b2;max-width:220px;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#navbanner{posición:fijo;izquierda:50%;transformar:traducirX(-50%);top:8px;índice z:20;visualizar:ninguno;
+  align-items:centro;brecha:12px;fondo:rgba(10,13,16,.9);frontera:1px sólido #232c33;
+  radio fronterizo:16px;acolchado:8px 18px 8px 10px}
+#navbanner.hw{fondo:rgba(10,30,70,.92);color del borde:#1e4a8a}
+#navarrow{ancho:78px;altura:84px;flex:0 0 auto}
+#navarrow svg{ancho:78px;altura:84px;visualizar:bloque}
+#navd{fuente:800 26px sistema-ui,sans-serif;color:#fff}
+#navsub{fuente:600 13px sistema-ui,sans-serif;color:#9aa7b2;ancho máximo:220px;
+  rebosar:oculto;desbordamiento de texto:elipsis;espacio en blanco:nowrap}
 
-#cochePanel{position:fixed;right:10px;bottom:92px;z-index:15;background:rgba(10,13,16,.92);
-  border:1px solid #232c33;border-radius:12px;padding:10px 12px;color:#e8eef2;
-  font:11px/1.45 ui-monospace,monospace;width:230px;display:none;box-sizing:border-box}
-#cochePanel.on{display:block}
-#cochePanel .titulo{font-weight:800;color:#9ae6b4;margin-bottom:7px}
-#cochePanel label{display:block;margin:6px 0 2px}
-#cochePanel .val{float:right;color:#ffd166}
-#cochePanel input{width:100%;box-sizing:border-box}
-#cochePanel .nota{margin-top:6px;color:#8d99a5;font-size:10px}
-@media(max-width:900px){#cochePanel{right:10px;bottom:145px;width:210px}}
+#panel de coco{posición:fijo;bien:10px;fondo:92px;índice z:15;fondo:rgba(10,13,16,.92);
+  frontera:1px sólido #232c33;radio fronterizo:12px;acolchado:10px 12px;color:#e8eef2;
+  fuente:11px/1,45 ui-monospace,monoespacial;ancho:230px;visualizar:ninguno;box-sizing:border-box}
+#panel de coco.en{visualizar:bloque}
+#panel de coco .titulo{font-weight:800;color:#9ae6b4;margen inferior:7px}
+#panel de coco etiqueta{visualizar:bloque;margen:6px 0 2px}
+#panel de coco .val{float:bien;color:#ffd166}
+#panel de coco entrada{ancho:100%;box-sizing:border-box}
+#panel de coco .nota{margin-top:6px;color:#8d99a5;tamaño de fuente:10px}
+@media(ancho máximo:900px){#panel de coco{bien:10px;fondo:145px;ancho:210px}}
 
 /* ==== Selector de modo (arriba derecha, discreto) ==== */
-#modos{position:fixed;top:10px;right:10px;z-index:25;display:flex;gap:6px;flex-wrap:wrap;
-  justify-content:flex-end;max-width:70vw}
-#modos button{background:rgba(10,13,16,.85);border:1px solid #232c33;color:#e8eef2;
-  border-radius:10px;padding:8px 12px;font-size:12px;font-weight:700}
-#modos button.on{background:#1d3a2c;border-color:#2e6b4a;color:#9ae6b4}
-#modos button.gear{padding:8px 10px}
+#modos{posición:fijo;top:10px;bien:10px;índice z:25;visualizar:flex;brecha:6px;flex-wrap:envolver;
+  justificar-contenido:flex-end;ancho máximo:70vw}
+#modos botón{fondo:rgba(10,13,16,.85);frontera:1px sólido #232c33;color:#e8eef2;
+  radio fronterizo:10px;acolchado:8px 12px;tamaño de fuente:12px;font-weight:700}
+#modos botón.en{fondo:#1d3a2c;color del borde:#2e6b4a;color:#9ae6b4}
+#modos botón.engranaje{acolchado:8px 10px}
 
-/* ==== Mini-HUD de navegacion (abajo izquierda) ==== */
-#minihud{position:fixed;left:10px;bottom:16px;z-index:15;display:none;
-  background:rgba(10,13,16,.82);border:1px solid #232c33;border-radius:12px;
-  padding:8px 14px;color:#e8eef2;font:700 18px/1.2 system-ui,sans-serif;
-  align-items:center;gap:14px}
-#minihud.on{display:flex}
+/* ==== Mini-HUD de navegación (bajo izquierda) ==== */
+#minihud{posición:fijo;izquierda:10px;fondo:16px;índice z:15;visualizar:ninguno;
+  fondo:rgba(10,13,16,.82);frontera:1px sólido #232c33;radio fronterizo:12px;
+  acolchado:8px 14px;color:#e8eef2;fuente:700 18px/1.2 sistema-ui,sans-serif;
+  align-items:centro;brecha:14px}
+#minihud.en{visualizar:flex}
 #minihud .sep{color:#4a5560}
 #minihud .vel{color:#fff}
-#minihud .rum{color:#9ae6b4}
+#minihud .ron{color:#9ae6b4}
 
 /* ==== Modos: que se ve y que no ==== */
-body.modo-debug #cochePanel.on{display:block}
-body.modo-calibracion #diag,body.modo-calibracion #diag2,body.modo-calibracion #controles{display:none}
-body.modo-navegacion #diag,body.modo-navegacion #diag2,
-body.modo-navegacion #controles,body.modo-navegacion #cochePanel{display:none}
-body.modo-solomapa #diag,body.modo-solomapa #diag2,
-body.modo-solomapa #controles,body.modo-solomapa #cochePanel,
-body.modo-solomapa #navbanner,body.modo-solomapa #minihud{display:none}
-</style>
-</head>
-<body class="modo-debug">
-<div id="map"></div>
+cuerpo.modo-debug #panel de coco.en{visualizar:bloque}
+cuerpo.modo-calibración #diag,cuerpo.modo-calibración #diag2,cuerpo.modo-calibración #controles{visualizar:ninguno}
+cuerpo.modo-navegación #diag,cuerpo.modo-navegación #diag2,
+cuerpo.modo-navegación #controles,cuerpo.modo-navegación #panel de coco{visualizar:ninguno}
+cuerpo.modo-solomapa #diag,cuerpo.modo-solomapa #diag2,
+cuerpo.modo-solomapa #controles,cuerpo.modo-solomapa #panel de coco,
+cuerpo.modo-solomapa #navbanner,cuerpo.modo-solomapa #minihud{visualizar:ninguno}
+</estilo>
+</cabeza>
+<cuerpo clase="modo-depuración">
+<div id="mapa"></div>
 
 <div id="diag">
-  <div><b>FASE 1 — medicion, no demo</b></div>
-  <div>ARRANQUE: <span id="rArranque">cargando…</span></div>
+  <div><b>FASE 1 — medicina, sin demostración</b></div>
+  <div>ARRANQUE: <span id=„rArranque">cargando…</span></div>
   <div>VECTOR TILES: <span id="rTiles">esperando…</span></div>
   <div>WEBGL: <span id="rWebgl">-</span></div>
   <div>3D BUILDINGS: <span id="rBuildings">-</span></div>
