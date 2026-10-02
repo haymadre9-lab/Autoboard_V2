@@ -1,87 +1,87 @@
 <!DOCTYPE html>
 <html lang="es">
-<cabeza>
-<meta conjunto de caracteres="utf-8">
-<meta nombre="ventana gráfica" contenido="ancho=ancho del dispositivo, escala inicial=1, ajuste de la ventana gráfica=cubierta, escalable por el usuario=no">
-<típulo>autoboard-next · Fase 5 · navegación 2D</tipulo>
-<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="hoja de estilo">
-<estilo>
-html,cuerpo{margen:0;altura:100%;fondo:#0b0e12;rebosar:oculto}
-#mapa{posición:absoluto;insertar:0}
-#diag{posición:fijo;top:10px;izquierda:10px;índice z:10;fondo:rgba(10,13,16,.88);
-  frontera:1px sólido #232c33;radio frontera:10px;acolchado:10px 14px;color:#e8eef2;
-  fuente:12px/1.6 ui-monospace,monoespacial;ancho máximo:320px;altura máxima:70vh;desbordamiento:auto}
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>autoboard-next · Fase 5 · navegación 2D</title>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<style>
+html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
+#map{position:absolute;inset:0}
+#diag{position:fixed;top:10px;left:10px;z-index:10;background:rgba(10,13,16,.88);
+  border:1px solid #232c33;border-radius:10px;padding:10px 14px;color:#e8eef2;
+  font:12px/1.6 ui-monospace,monospace;max-width:320px;max-height:70vh;overflow-y:auto}
 #diag b{color:#9ae6b4}.mal{color:#ff8a8a}.aviso{color:#ffd166}
-#diag hr{frontera:0;border-top:1px sólido #232c33;margen:6px 0}
-#controles{posición:fijo;fondo:16px;izquierda:50%;transformar:traduirX(-50%);índice z:10;
-  visualizar:flex;brecha:6px;flex-wrap:envolver;justificar-contenido:centro;ancho máximo:94vw}
-#controles botón{fondo:#12161c;frontera:1px sólido #232c33;color:#e8eef2;
-  radio fronterizo:10px;acolchado:10px 12px;tamaño de fuente:12px;font-weight:700}
-#controles botón.en{fondo:#1d3a2c;color del borde:#2e6b4a}
-#controles botón:discapacitado{opacidad:.4}
-#errlog{posición:fijo;top:10px;bien:10px;índice z:10;fondo:rgba(10,13,16,.88);
-  frontera:1px sólido #232c33;radio frontera:10px;acolchado:8px 12px;color:#ff8a8a;
-  fuente:11px/1.5 ui-monospace,monoespacial;ancho máximo:280px;altura máxima:40vh;desbordamiento:auto;visualizar:ninguno}
-#errlog.en{visualizar:bloque}
-.coche{ancho:28px;altura:28px}
-#diag2{posición:fijo;top:10px;izquierda:340px;índice z:10;fondo:rgba(10,13,16,.88);
-  frontera:1px sólido #232c33;radio frontera:10px;acolchado:10px 14px;color:#e8eef2;
-  fuente:12px/1.6 ui-monospace,monoespacial;ancho máximo:290px}
+#diag hr{border:0;border-top:1px solid #232c33;margin:6px 0}
+#controles{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;
+  display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:94vw}
+#controles button{background:#12161c;border:1px solid #232c33;color:#e8eef2;
+  border-radius:10px;padding:10px 12px;font-size:12px;font-weight:700}
+#controles button.on{background:#1d3a2c;border-color:#2e6b4a}
+#controles button:disabled{opacity:.4}
+#errlog{position:fixed;top:10px;right:10px;z-index:10;background:rgba(10,13,16,.88);
+  border:1px solid #232c33;border-radius:10px;padding:8px 12px;color:#ff8a8a;
+  font:11px/1.5 ui-monospace,monospace;max-width:280px;max-height:40vh;overflow-y:auto;display:none}
+#errlog.on{display:block}
+.coche{width:28px;height:28px}
+#diag2{position:fixed;top:10px;left:340px;z-index:10;background:rgba(10,13,16,.88);
+  border:1px solid #232c33;border-radius:10px;padding:10px 14px;color:#e8eef2;
+  font:12px/1.6 ui-monospace,monospace;max-width:290px}
 #diag2 b{color:#9ae6b4}
-@media(ancho máximo:900px){#diag2{izquierda:10px;top:260px}}
-#navbanner{posición:fijo;izquierda:50%;transformar:traduirX(-50%);top:8px;índice z:20;visualizar:ninguno;
-  align-items:centro;brecha:12px;fondo:rgba(10,13,16,.9);frontera:1px sólido #232c33;
-  radio fronterizo:16px;acolchado:8px 18px 8px 10px}
-#navbanner.hw{fondo:rgba(10,30,70,.92);color del borde:#1e4a8a}
-#navarrow{ancho:78px;altura:84px;flex:0 0 auto}
-#navarrow svg{ancho:78px;altura:84px;visualizar:bloque}
-#navd{fuente:800 26px sistema-ui,sans-serif;color:#fff}
-#navsub{fuente:600 13px sistema-ui,sans-serif;color:#9aa7b2;ancho máximo:220px;
-  rebosar:oculto;desbordamiento de texto:elipsis;espacio en blanco:nowrap}
-#modos{posición:fijo;top:10px;bien:10px;índice z:25;visualizar:flex;brecha:6px;flex-wrap:envolver;
-  justificar-contenido:flex-end;ancho máximo:70vw}
-#modos botón{fondo:rgba(10,13,16,.85);frontera:1px sólido #232c33;color:#e8eef2;
-  radio fronterizo:10px;acolchado:8px 12px;tamaño de fuente:12px;font-weight:700}
-#modos botón.en{fondo:#1d3a2c;color del borde:#2e6b4a;color:#9ae6b4}
-#minihud{posición:fijo;izquierda:10px;fondo:16px;índice z:15;visualizar:ninguno;
-  fondo:rgba(10,13,16,.82);frontera:1px sólido #232c33;radio fronterizo:12px;
-  acompañado:8px 14px;color:#e8eef2;fuente:700 18px/1.2 sistema-ui,sans-serif;
-  align-items:centro;brecha:14px}
-#minihud.en{visualizar:flex}
+@media(max-width:900px){#diag2{left:10px;top:260px}}
+#navbanner{position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:20;display:none;
+  align-items:center;gap:12px;background:rgba(10,13,16,.9);border:1px solid #232c33;
+  border-radius:16px;padding:8px 18px 8px 10px}
+#navbanner.hw{background:rgba(10,30,70,.92);border-color:#1e4a8a}
+#navarrow{width:78px;height:84px;flex:0 0 auto}
+#navarrow svg{width:78px;height:84px;display:block}
+#navd{font:800 26px system-ui,sans-serif;color:#fff}
+#navsub{font:600 13px system-ui,sans-serif;color:#9aa7b2;max-width:220px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#modos{position:fixed;top:10px;right:10px;z-index:25;display:flex;gap:6px;flex-wrap:wrap;
+  justify-content:flex-end;max-width:70vw}
+#modos button{background:rgba(10,13,16,.85);border:1px solid #232c33;color:#e8eef2;
+  border-radius:10px;padding:8px 12px;font-size:12px;font-weight:700}
+#modos button.on{background:#1d3a2c;border-color:#2e6b4a;color:#9ae6b4}
+#minihud{position:fixed;left:10px;bottom:16px;z-index:15;display:none;
+  background:rgba(10,13,16,.82);border:1px solid #232c33;border-radius:12px;
+  padding:8px 14px;color:#e8eef2;font:700 18px/1.2 system-ui,sans-serif;
+  align-items:center;gap:14px}
+#minihud.on{display:flex}
 #minihud .sep{color:#4a5560}
 #minihud .vel{color:#fff}
-#minihud .ron{color:#9ae6b4}
-cuerpo.modo-navegación #diag,cuerpo.modo-navegación #diag2,
-cuerpo.modo-navegación #controles{visualizar:ninguno}
-cuerpo.modo-solomapa #diag,cuerpo.modo-solomapa #diag2,
-cuerpo.modo-solomapa #controles,
-cuerpo.modo-solomapa #navbanner,cuerpo.modo-solomapa #minihud{visualizar:ninguno}
-</estilo>
-</cabeza>
-<cuervo clasa="modo-depuración">
-<div id="mapa"></div>
+#minihud .rum{color:#9ae6b4}
+body.modo-navegacion #diag,body.modo-navegacion #diag2,
+body.modo-navegacion #controles{display:none}
+body.modo-solomapa #diag,body.modo-solomapa #diag2,
+body.modo-solomapa #controles,
+body.modo-solomapa #navbanner,body.modo-solomapa #minihud{display:none}
+</style>
+</head>
+<body class="modo-debug">
+<div id="map"></div>
 <div id="diag">
-  <div><b>FASE 1 — medicina, sin demostración</b></div>
-  <div>ARRANQUE: <span id=„rArranque">cargando…</span></div>
-  <div>MOSAICOS VECTORIALES: <span id=„rTiles">esperando…</span></div>
-  <div>WEBGL: <span id=„rWebgl">-</span></div>
-  <div>EDIFICIOS 3D: <span id=„rEdificios">-</span></div>
+  <div><b>FASE 1 — medicion, no demo</b></div>
+  <div>ARRANQUE: <span id="rArranque">cargando…</span></div>
+  <div>VECTOR TILES: <span id="rTiles">esperando…</span></div>
+  <div>WEBGL: <span id="rWebgl">-</span></div>
+  <div>3D BUILDINGS: <span id="rBuildings">-</span></div>
   <hr>
-  <div>ROTACIÓN (10s): <span id="rRot">sin probar</span></div>
-  <div>TONO (10s): <span id=„rPitch">sin probar</span></div>
+  <div>ROTACION (10s): <span id="rRot">sin probar</span></div>
+  <div>PITCH (10s): <span id="rPitch">sin probar</span></div>
   <hr>
   <div>ERRORES: <span id="rErrores">0</span></div>
 </div>
 <div id="errlog"></div>
 <div id="controles">
-  <botón id="btnEdificios" clasa="encendido">🏢 Edificios: ON</botón>
-  <botón id="btnPitch" clasa="encendido">📐 Lanzamiento: ON</botón>
-  <botón id=„btnAA">🪄 Antialias: APAGADO (recargar)</botón>
-  <botón id="btnRot">▶ Rotación Prueba 10s</botón>
-  <botón id=„btnPitchTest">▶ Prueba tono 10s</botón>
-  <botón id="btnGPS">📍 GPS: APAGADO</botón>
-  <botón id="btnSeguir">🧭 Seguir: APAGADO</botón>
-  <botón id=„btnDestino">🏁 Fijar destino</botón>
+  <button id="btnEdificios" class="on">🏢 Edificios: ON</button>
+  <button id="btnPitch" class="on">📐 Pitch: ON</button>
+  <button id="btnAA">🪄 Antialias: OFF (recargar)</button>
+  <button id="btnRot">▶ Prueba rotacion 10s</button>
+  <button id="btnPitchTest">▶ Prueba pitch 10s</button>
+  <button id="btnGPS">📍 GPS: OFF</button>
+  <button id="btnSeguir">🧭 Seguir: OFF</button>
+  <button id="btnDestino">🏁 Fijar destino</button>
 </div>
 <div id="diag2">
   <div><b>FASE 2 — GPS y ruta</b></div>
@@ -90,7 +90,8 @@ cuerpo.modo-solomapa #navbanner,cuerpo.modo-solomapa #minihud{visualizar:ninguno
   <div>Rumbo: <span id="g3">-</span></div>
   <div>FPS en marcha: <span id="g4">-</span></div>
   <div>Ruta: <span id="g5">sin destino</span></div>
-  <div>Desvio: <span id="g7">-</span></div>
+  <div>Desvío: <span id="g7">-</span></div>
+  <div>Modo cámara: <span id="g8">seguir</span></div>
 </div>
 <div id="navbanner">
   <div id="navarrow"></div>
@@ -138,10 +139,44 @@ map.on('error', e => {
   registrarError('map', msg);
 });
 
+// ==== ITER 1: imagen de flecha para la ruta (canvas -> data URL) ====
+// Generamos una flecha blanca en un canvas transparente y la registramos
+// como imagen de MapLibre. Se usa en la capa symbol encima de la linea.
+function crearImagenFlecha(){
+  const size = 40;
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0,0,size,size);
+  // Flecha blanca con contorno oscuro para que se vea sobre azul y sobre satelite
+  ctx.fillStyle = '#ffffff';
+  ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  // Cabeza de flecha apuntando hacia arriba (0 grados = norte)
+  ctx.moveTo(size/2, 6);          // punta
+  ctx.lineTo(size-8, size-8);     // esquina inferior derecha
+  ctx.lineTo(size/2, size-14);    // hueco central
+  ctx.lineTo(8, size-8);          // esquina inferior izquierda
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  return { data: ctx.getImageData(0,0,size,size), width: size, height: size };
+}
+
+// ==== ITER 1: zoom base mas cercano ====
+let navZoomBase = 18.8;   // antes 18.2
+
 let idFuenteBuildings=null, sourceLayerBuildings=null, edificiosOn=true;
 map.on('load', () => {
   document.getElementById('rArranque').innerHTML = '<b>OK</b>';
   document.getElementById('rWebgl').innerHTML = webglOk?'<b>OK</b>':'<span class="mal">FALLO</span>';
+
+  // ==== ITER 1: registrar la imagen de la flecha ====
+  try {
+    const img = crearImagenFlecha();
+    if(!map.hasImage('ruta-flecha')) map.addImage('ruta-flecha', img, {sdf:false});
+  } catch(e){ console.warn('No se pudo añadir imagen de flecha', e); }
 
   const estilo = map.getStyle();
   const fuentes = Object.keys(estilo.sources).filter(k => estilo.sources[k].type==='vector');
@@ -166,10 +201,11 @@ map.on('load', () => {
       id:'3d-buildings', source:idFuenteBuildings, 'source-layer':sourceLayerBuildings,
       type:'fill-extrusion', minzoom:14,
       paint:{
-        'fill-extrusion-color':'#3a4552',
+        // ==== ITER 1: edificios mas claros ====
+        'fill-extrusion-color':'#8a93a0',
         'fill-extrusion-height':['coalesce',['get','render_height'],8],
         'fill-extrusion-base':['coalesce',['get','render_min_height'],0],
-        'fill-extrusion-opacity':1
+        'fill-extrusion-opacity':0.9
       }
     }, idEtiquetas);
   }catch(e){
@@ -321,7 +357,7 @@ function ttMan(it){
   return {type:'turn',modifier:mod};
 }
 let steps=[], stepIdx=0, routeCoordsLL=[], routeCumDist=[], routeProgIdx=0;
-let ultimoStepPintado='', zoomManiobraOn=false, navZoomBase=18.2;
+let ultimoStepPintado='', zoomManiobraOn=false;
 let ultimaRutaDestino=null;
 function segDistM2(p,a,b){
   const mx=111320*Math.cos(p[0]*Math.PI/180), my=110540;
@@ -378,7 +414,9 @@ let lastFix=null, heading=0, speedKmh=0;
 let histFixes=[], headingHist=[];
 let camPosActual=null, camPosObjetivo=null;
 let camBearingActual=0, camBearingObjetivo=0;
-let camZoomActual=18.2, camZoomObjetivo=18.2;
+let camZoomActual=18.8, camZoomObjetivo=18.8;
+// ==== ITER 1: modo camara (seguir vs libre al parar) ====
+let camaraLibre = false;   // cuando esta en true, el bucle NO mueve la camara
 function rumboDelGPS(c,now,v){
   histFixes.push(now); if(histFixes.length>14) histFixes.shift();
   if(Number.isFinite(c.heading)&&v>=3) return ((c.heading%360)+360)%360;
@@ -425,9 +463,20 @@ async function calcularRuta(origen, destino, modo='normal'){
     if(map.getSource('ruta')) map.getSource('ruta').setData(geojson);
     else {
       map.addSource('ruta', {type:'geojson', data:geojson});
+      // ==== ITER 1: linea base (mas ancha) + capa symbol con flechas ====
       map.addLayer({id:'ruta', type:'line', source:'ruta',
-        paint:{'line-color':'#1e88e5','line-width':6,'line-opacity':.9},
+        paint:{'line-color':'#1e88e5','line-width':8,'line-opacity':.9},
         layout:{'line-cap':'round','line-join':'round'}});
+      map.addLayer({id:'ruta-flechas', type:'symbol', source:'ruta',
+        layout:{
+          'symbol-placement':'line',
+          'symbol-spacing':80,          // cada 80 px aparece una flecha
+          'icon-image':'ruta-flecha',
+          'icon-size':0.45,
+          'icon-rotation-alignment':'map',
+          'icon-allow-overlap':true,
+          'icon-ignore-placement':true
+        }});
     }
     routeCoordsLL = coords.map(c=>[c[1],c[0]]);
     routeCumDist = [0];
@@ -442,7 +491,6 @@ async function calcularRuta(origen, destino, modo='normal'){
                maneuver:ttMan(it), hw:/autopista|autov[ií]a|\b(a|ap)-?\d/i.test(it.street||'') };
     });
     stepIdx=0; routeProgIdx=0; ultimoStepPintado=''; zoomManiobraOn=false;
-    navZoomBase = Math.max(18.0, Math.min(18.5, map.getZoom()));
     camZoomObjetivo = navZoomBase;
     renderStep();
     const km=(ruta.summary.lengthInMeters/1000).toFixed(1);
@@ -474,7 +522,15 @@ function onFix(pos){
   const now={lat:c.latitude, lon:c.longitude, t:pos.timestamp||Date.now()};
   const v = Number.isFinite(c.speed) ? Math.max(0,c.speed) : 0;
   speedKmh = v*3.6;
-  if(v<3 && lastFix){
+
+  // ==== ITER 1: al parar, ceder el control al usuario ====
+  const parado = speedKmh < 3;
+  if(parado !== camaraLibre){
+    camaraLibre = parado;
+    document.getElementById('g8').textContent = parado ? 'libre (parado)' : 'seguir';
+  }
+
+  if(parado && lastFix){
     document.getElementById('g2').textContent = Math.round(speedKmh)+' km/h';
     document.getElementById('g3').textContent = Math.round(heading)+'°';
     actualizarHUD();
@@ -494,7 +550,7 @@ function onFix(pos){
   if(!camPosActual){
     camPosActual = camPosObjetivo.slice();
     camBearingActual = camBearingObjetivo;
-    camZoomActual = camZoomObjetivo = 18.2;
+    camZoomActual = camZoomObjetivo = navZoomBase;
   }
   lastFix = now;
   if(steps.length){
@@ -508,7 +564,7 @@ function onFix(pos){
       const cerca = d<180 && s.maneuver && s.maneuver.type!=='arrive';
       if(cerca !== zoomManiobraOn){
         zoomManiobraOn = cerca;
-        camZoomObjetivo = cerca ? Math.min(19.4, navZoomBase+1.2) : navZoomBase;
+        camZoomObjetivo = cerca ? Math.min(19.8, navZoomBase+1.2) : navZoomBase;
       }
     }
   } else {
@@ -527,7 +583,8 @@ function actualizarHUD(){
   }
 }
 function bucleSeguimiento(){
-  if(seguirOn && camPosActual && camPosObjetivo){
+  // ==== ITER 1: si la camara esta libre (parado), no hacemos nada ====
+  if(seguirOn && !camaraLibre && camPosActual && camPosObjetivo){
     const k=.18;
     camPosActual[0] += (camPosObjetivo[0]-camPosActual[0])*k;
     camPosActual[1] += (camPosObjetivo[1]-camPosActual[1])*k;
@@ -567,7 +624,8 @@ document.getElementById('btnSeguir').onclick = function(){
   this.textContent = '🧭 Seguir: '+(seguirOn?'ON':'OFF');
   this.classList.toggle('on', seguirOn);
   if(seguirOn && lastFix){
-    camZoomObjetivo = Math.max(camZoomObjetivo, 18.2);
+    camaraLibre = false;
+    camZoomObjetivo = navZoomBase;
     map.jumpTo({center:[lastFix.lon,lastFix.lat], bearing:heading, zoom:camZoomObjetivo, pitch:60});
   }
 };
@@ -594,8 +652,9 @@ document.getElementById('btnDestino').onclick = async function(){
     const ok = await calcularRuta([lastFix.lat,lastFix.lon], ultimaRutaDestino);
     if(ok){
       if(seguirOn){
-        camZoomObjetivo = 18.2;
-        map.jumpTo({center:[lastFix.lon,lastFix.lat], bearing:heading, zoom:18.2, pitch:60});
+        camaraLibre = false;
+        camZoomObjetivo = navZoomBase;
+        map.jumpTo({center:[lastFix.lon,lastFix.lat], bearing:heading, zoom:navZoomBase, pitch:60});
       } else {
         const bounds = routeCoordsLL.reduce((b,c)=>b.extend([c[1],c[0]]),
           new maplibregl.LngLatBounds([routeCoordsLL[0][1],routeCoordsLL[0][0]],
