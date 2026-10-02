@@ -66,6 +66,7 @@ body.modo-solomapa #navbanner,body.modo-solomapa #minihud{display:none}
   <div>VECTOR TILES: <span id="rTiles">esperando…</span></div>
   <div>WEBGL: <span id="rWebgl">-</span></div>
   <div>3D BUILDINGS: <span id="rBuildings">-</span></div>
+  <div>TERRENO: <span id="rTerreno">OFF</span></div>
   <hr>
   <div>ROTACION (10s): <span id="rRot">sin probar</span></div>
   <div>PITCH (10s): <span id="rPitch">sin probar</span></div>
@@ -75,6 +76,7 @@ body.modo-solomapa #navbanner,body.modo-solomapa #minihud{display:none}
 <div id="errlog"></div>
 <div id="controles">
   <button id="btnEdificios" class="on">🏢 Edificios: ON</button>
+  <button id="btnTerreno">🏔 Terreno: OFF</button>
   <button id="btnPitch" class="on">📐 Pitch: ON</button>
   <button id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button id="btnRot">▶ Prueba rotacion 10s</button>
@@ -139,44 +141,55 @@ map.on('error', e => {
   registrarError('map', msg);
 });
 
-// ==== ITER 1: imagen de flecha para la ruta (canvas -> data URL) ====
-// Generamos una flecha blanca en un canvas transparente y la registramos
-// como imagen de MapLibre. Se usa en la capa symbol encima de la linea.
+// ==== Imagen de flecha para la ruta ====
 function crearImagenFlecha(){
   const size = 40;
   const c = document.createElement('canvas');
   c.width = size; c.height = size;
   const ctx = c.getContext('2d');
   ctx.clearRect(0,0,size,size);
-  // Flecha blanca con contorno oscuro para que se vea sobre azul y sobre satelite
   ctx.fillStyle = '#ffffff';
   ctx.strokeStyle = 'rgba(0,0,0,0.55)';
   ctx.lineWidth = 2;
   ctx.beginPath();
-  // Cabeza de flecha apuntando hacia arriba (0 grados = norte)
-  ctx.moveTo(size/2, 6);          // punta
-  ctx.lineTo(size-8, size-8);     // esquina inferior derecha
-  ctx.lineTo(size/2, size-14);    // hueco central
-  ctx.lineTo(8, size-8);          // esquina inferior izquierda
+  ctx.moveTo(size/2, 6);
+  ctx.lineTo(size-8, size-8);
+  ctx.lineTo(size/2, size-14);
+  ctx.lineTo(8, size-8);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
   return { data: ctx.getImageData(0,0,size,size), width: size, height: size };
 }
 
-// ==== ITER 1: zoom base mas cercano ====
-let navZoomBase = 18.8;   // antes 18.2
+let navZoomBase = 18.8;
+
+// ==== ITER 2: estado del terreno ====
+let terrenoActivo = false;
+const TERRENO_EXAG = 1.5;
 
 let idFuenteBuildings=null, sourceLayerBuildings=null, edificiosOn=true;
 map.on('load', () => {
   document.getElementById('rArranque').innerHTML = '<b>OK</b>';
   document.getElementById('rWebgl').innerHTML = webglOk?'<b>OK</b>':'<span class="mal">FALLO</span>';
 
-  // ==== ITER 1: registrar la imagen de la flecha ====
   try {
     const img = crearImagenFlecha();
     if(!map.hasImage('ruta-flecha')) map.addImage('ruta-flecha', img, {sdf:false});
   } catch(e){ console.warn('No se pudo añadir imagen de flecha', e); }
+
+  // ==== ITER 2: precargar fuente de terreno (no activada) ====
+  try {
+    map.addSource('terreno', {
+      type: 'raster-dem',
+      url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=' + MAPTILER_KEY,
+      tileSize: 256,
+      maxzoom: 12
+    });
+    document.getElementById('rTerreno').textContent = 'listo (OFF)';
+  } catch(e){
+    document.getElementById('rTerreno').innerHTML = '<span class="mal">fallo fuente: '+e.message+'</span>';
+  }
 
   const estilo = map.getStyle();
   const fuentes = Object.keys(estilo.sources).filter(k => estilo.sources[k].type==='vector');
@@ -201,7 +214,6 @@ map.on('load', () => {
       id:'3d-buildings', source:idFuenteBuildings, 'source-layer':sourceLayerBuildings,
       type:'fill-extrusion', minzoom:14,
       paint:{
-        // ==== ITER 1: edificios mas claros ====
         'fill-extrusion-color':'#8a93a0',
         'fill-extrusion-height':['coalesce',['get','render_height'],8],
         'fill-extrusion-base':['coalesce',['get','render_min_height'],0],
@@ -228,6 +240,42 @@ document.getElementById('btnEdificios').onclick = function(){
   if(map.getLayer('3d-buildings')) map.setLayoutProperty('3d-buildings','visibility',edificiosOn?'visible':'none');
   this.textContent = '🏢 Edificios: '+(edificiosOn?'ON':'OFF');
   this.classList.toggle('on', edificiosOn);
+};
+
+// ==== ITER 2: interruptor del terreno ====
+function actualizarTerreno(on){
+  terrenoActivo = on;
+  try {
+    if (on) {
+      map.setTerrain({ source:'terreno', exaggeration: TERRENO_EXAG });
+      if (!map.getLayer('hillshade')){
+        map.addLayer({
+          id: 'hillshade',
+          type: 'hillshade',
+          source: 'terreno',
+          paint: {
+            'hillshade-exaggeration': 0.4,
+            'hillshade-shadow-color': '#000000',
+            'hillshade-highlight-color': '#ffffff'
+          }
+        });
+      }
+      document.getElementById('rTerreno').innerHTML = '<b>activo</b>';
+    } else {
+      map.setTerrain(null);
+      if (map.getLayer('hillshade')) map.removeLayer('hillshade');
+      document.getElementById('rTerreno').textContent = 'listo (OFF)';
+    }
+    const btn = document.getElementById('btnTerreno');
+    btn.textContent = '🏔 Terreno: '+(on?'ON':'OFF');
+    btn.classList.toggle('on', on);
+  } catch(e){
+    document.getElementById('rTerreno').innerHTML = '<span class="mal">fallo: '+e.message+'</span>';
+  }
+}
+
+document.getElementById('btnTerreno').onclick = function(){
+  actualizarTerreno(!terrenoActivo);
 };
 
 let pitchOn = true;
@@ -415,8 +463,7 @@ let histFixes=[], headingHist=[];
 let camPosActual=null, camPosObjetivo=null;
 let camBearingActual=0, camBearingObjetivo=0;
 let camZoomActual=18.8, camZoomObjetivo=18.8;
-// ==== ITER 1: modo camara (seguir vs libre al parar) ====
-let camaraLibre = false;   // cuando esta en true, el bucle NO mueve la camara
+let camaraLibre = false;
 function rumboDelGPS(c,now,v){
   histFixes.push(now); if(histFixes.length>14) histFixes.shift();
   if(Number.isFinite(c.heading)&&v>=3) return ((c.heading%360)+360)%360;
@@ -463,14 +510,13 @@ async function calcularRuta(origen, destino, modo='normal'){
     if(map.getSource('ruta')) map.getSource('ruta').setData(geojson);
     else {
       map.addSource('ruta', {type:'geojson', data:geojson});
-      // ==== ITER 1: linea base (mas ancha) + capa symbol con flechas ====
       map.addLayer({id:'ruta', type:'line', source:'ruta',
         paint:{'line-color':'#1e88e5','line-width':8,'line-opacity':.9},
         layout:{'line-cap':'round','line-join':'round'}});
       map.addLayer({id:'ruta-flechas', type:'symbol', source:'ruta',
         layout:{
           'symbol-placement':'line',
-          'symbol-spacing':80,          // cada 80 px aparece una flecha
+          'symbol-spacing':80,
           'icon-image':'ruta-flecha',
           'icon-size':0.45,
           'icon-rotation-alignment':'map',
@@ -523,11 +569,15 @@ function onFix(pos){
   const v = Number.isFinite(c.speed) ? Math.max(0,c.speed) : 0;
   speedKmh = v*3.6;
 
-  // ==== ITER 1: al parar, ceder el control al usuario ====
   const parado = speedKmh < 3;
   if(parado !== camaraLibre){
     camaraLibre = parado;
     document.getElementById('g8').textContent = parado ? 'libre (parado)' : 'seguir';
+  }
+
+  // ==== ITER 2: si arrancas (>5 km/h) y hay terreno activo, apagarlo solo ====
+  if(speedKmh > 5 && terrenoActivo){
+    actualizarTerreno(false);
   }
 
   if(parado && lastFix){
@@ -583,7 +633,6 @@ function actualizarHUD(){
   }
 }
 function bucleSeguimiento(){
-  // ==== ITER 1: si la camara esta libre (parado), no hacemos nada ====
   if(seguirOn && !camaraLibre && camPosActual && camPosObjetivo){
     const k=.18;
     camPosActual[0] += (camPosObjetivo[0]-camPosActual[0])*k;
