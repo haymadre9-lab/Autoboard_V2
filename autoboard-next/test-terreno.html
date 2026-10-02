@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Test terreno 3D</title>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<style>
+  html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
+  #map{position:absolute;inset:0}
+  #estado{position:fixed;top:10px;left:10px;z-index:10;background:rgba(10,13,16,.88);
+    border:1px solid #232c33;border-radius:10px;padding:10px 14px;color:#e8eef2;
+    font:12px/1.6 ui-monospace,monospace;max-width:320px}
+  #estado b{color:#9ae6b4}
+  #estado .mal{color:#ff8a8a}
+  #estado .aviso{color:#ffd166}
+  #panel{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;
+    background:rgba(10,13,16,.92);border:1px solid #232c33;border-radius:12px;
+    padding:12px 16px;color:#e8eef2;font:12px/1.5 ui-monospace,monospace;width:340px;
+    display:flex;flex-direction:column;gap:8px}
+  #panel label{display:flex;justify-content:space-between;gap:8px;align-items:center}
+  #panel .val{color:#ffd166;font-weight:700;min-width:50px;text-align:right}
+  #panel input[type=range]{width:100%}
+  #panel button{background:#12161c;border:1px solid #232c33;color:#e8eef2;
+    border-radius:8px;padding:8px;font-weight:700;cursor:pointer}
+  #panel button.on{background:#1d3a2c;border-color:#2e6b4a;color:#9ae6b4}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="estado">
+  <div><b>Test terreno 3D — Bilbao</b></div>
+  <div>Estado: <span id="e1">iniciando…</span></div>
+  <div>Terreno: <span id="e2">-</span></div>
+  <div>Pitch actual: <span id="e3">-</span></div>
+</div>
+<div id="panel">
+  <label>Exageración <input type="range" id="excSlider" min="0.5" max="3.0" step="0.1" value="1.5"><span class="val" id="excVal">1.5x</span></label>
+  <label>Pitch <input type="range" id="pitchSlider" min="0" max="85" step="1" value="65"><span class="val" id="pitchVal">65°</span></label>
+  <button id="btnTerreno" class="on">🏔 Terreno: ON</button>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script>
+const MAPTILER_KEY = 'sG00UkBX9Ig2ifguvPgU';
+const e1 = document.getElementById('e1');
+const e2 = document.getElementById('e2');
+const e3 = document.getElementById('e3');
+
+// Vista desde el centro de Bilbao mirando al sur (hacia el Pagasarri)
+// Asi se ve claramente el relieve al activar el terreno
+const map = new maplibregl.Map({
+  container: 'map',
+  style: 'https://api.maptiler.com/maps/streets-v2/style.json?key=' + MAPTILER_KEY,
+  center: [-2.9350, 43.2600],
+  zoom: 15,
+  pitch: 65,
+  bearing: 180
+});
+
+let terrenoActivo = true;
+let exageracion = 1.5;
+
+map.on('error', e => {
+  const msg = e.error && e.error.message || String(e.error);
+  e1.innerHTML = '<span class="mal">ERROR: '+msg+'</span>';
+});
+
+map.on('load', () => {
+  e1.innerHTML = '<b>mapa OK</b>';
+
+  // ==== 1. Anadir fuente de terreno (elevacion real) ====
+  try {
+    map.addSource('terreno', {
+      type: 'raster-dem',
+      url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=' + MAPTILER_KEY,
+      tileSize: 256,
+      maxzoom: 12
+    });
+    e2.innerHTML = '<b>fuente OK</b>';
+  } catch(e) {
+    e2.innerHTML = '<span class="mal">fallo fuente: '+e.message+'</span>';
+    return;
+  }
+
+  // ==== 2. Activar el terreno ====
+  try {
+    map.setTerrain({ source: 'terreno', exaggeration: exageracion });
+    e2.innerHTML = '<b>activo</b>';
+  } catch(e) {
+    e2.innerHTML = '<span class="mal">fallo setTerrain: '+e.message+'</span>';
+  }
+
+  // ==== 3. Hillshade para que las montanas tengan sombras ====
+  try {
+    map.addLayer({
+      id: 'hillshade',
+      type: 'hillshade',
+      source: 'terreno',
+      paint: {
+        'hillshade-exaggeration': 0.4,
+        'hillshade-shadow-color': '#000000',
+        'hillshade-highlight-color': '#ffffff',
+        'hillshade-accent-color': '#000000'
+      }
+    });
+  } catch(e) {
+    console.warn('No se pudo anadir hillshade', e);
+  }
+
+  // Actualizar el panel con el pitch real
+  e3.textContent = Math.round(map.getPitch()) + '°';
+});
+
+// ==== Sliders ====
+const excSlider = document.getElementById('excSlider');
+const pitchSlider = document.getElementById('pitchSlider');
+const excVal = document.getElementById('excVal');
+const pitchVal = document.getElementById('pitchVal');
+const btnTerreno = document.getElementById('btnTerreno');
+
+excSlider.oninput = () => {
+  exageracion = parseFloat(excSlider.value);
+  excVal.textContent = exageracion.toFixed(1) + 'x';
+  if (terrenoActivo) {
+    map.setTerrain({ source: 'terreno', exaggeration: exageracion });
+  }
+};
+
+pitchSlider.oninput = () => {
+  const p = parseInt(pitchSlider.value);
+  pitchVal.textContent = p + '°';
+  map.setPitch(p);
+  e3.textContent = p + '°';
+};
+
+btnTerreno.onclick = () => {
+  terrenoActivo = !terrenoActivo;
+  if (terrenoActivo) {
+    map.setTerrain({ source: 'terreno', exaggeration: exageracion });
+    btnTerreno.textContent = '🏔 Terreno: ON';
+    btnTerreno.classList.add('on');
+  } else {
+    map.setTerrain(null);
+    btnTerreno.textContent = '🏔 Terreno: OFF';
+    btnTerreno.classList.remove('on');
+  }
+};
+
+// Actualizar el indicador de pitch cuando el usuario arrastra el mapa
+map.on('moveend', () => {
+  e3.textContent = Math.round(map.getPitch()) + '°';
+});
+</script>
+</body>
+</html>
