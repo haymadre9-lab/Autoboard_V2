@@ -59,6 +59,7 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #panelAjustes .seccion{margin-top:16px;margin-bottom:6px;color:#8d99a5;font-size:12px;text-transform:uppercase;letter-spacing:1px}
 #minihud{position:fixed;left:14px;bottom:80px;z-index:15;display:none;background:rgba(10,13,16,.85);border:1px solid #232c33;border-radius:14px;padding:12px 16px;color:#fff;font:800 44px/1 system-ui,sans-serif;align-items:center;gap:14px;min-width:88px;justify-content:center}
 #minihud.on{display:flex}
+body.modo-navegacion #minihud{display:flex}
 #minihud .vel{color:#fff;font-weight:900;letter-spacing:-1px}
 #minihud .limite{width:56px;height:56px;border-radius:50%;background:#ffffff;border:6px solid #d32f2f;display:flex;align-items:center;justify-content:center;font:800 22px/1 system-ui,sans-serif;color:#000;box-shadow:0 2px 6px rgba(0,0,0,.4)}
 #minihud .limite.oculto{display:none}
@@ -372,6 +373,8 @@ async function cargarRadares(){
   }
 }
 function comprobarRadaresCercanos(lat,lon,velocidadActualKmh){
+  // Sin GPS activo no hay avisos
+  if(!gpsOn){apagarAlertaRadar();return;}
   if(!radaresCargados.length || !radaresOn){apagarAlertaRadar();return;}
   const dLat=0.01,dLon=0.01;
   let masCercano=null,distMin=Infinity;
@@ -591,7 +594,6 @@ document.getElementById('btnLimpiarFavs').onclick=()=>{
   alert('Favoritos borrados.');
 };
 
-// ==== BUSQUEDA TomTom (search/2 con typeahead) ====
 const barraB=document.getElementById('barraBusqueda');
 const inputB=document.getElementById('inputBusqueda');
 const sugs=document.getElementById('sugerencias');
@@ -655,7 +657,6 @@ function seleccionarSugerencia(res){
 }
 let ultimoDestinoNombre='';
 
-// ==== Casa ====
 document.getElementById('btnCasa').onclick=async()=>{
   if(!casa){
     const dir=prompt('¿Cuál es tu dirección de casa?');
@@ -693,7 +694,6 @@ map.on('click',()=>{
   document.getElementById('popupCargador').classList.remove('on');
 });
 
-// ==== RUTA ====
 let steps=[],stepIdx=0,routeCoordsLL=[],routeCumDist=[],routeProgIdx=0;
 let ultimoStepPintado='',zoomManiobraOn=false;
 let ultimaRutaDestino=null;
@@ -955,6 +955,12 @@ function actualizarHUD(){
   if(limiteVelocidadVia>0){lim.textContent=limiteVelocidadVia;lim.classList.remove('oculto');}
   else lim.classList.add('oculto');
 }
+function ocultarHUD(){
+  const vel=document.getElementById('hudVel');
+  if(vel) vel.textContent='0';
+  const lim=document.getElementById('hudLimite');
+  if(lim) lim.classList.add('oculto');
+}
 function bucleSeguimiento(){
   if(seguirOn&&!camaraLibre&&camPosActual&&camPosObjetivo){
     const k=.18;
@@ -996,6 +1002,7 @@ document.getElementById('btnGPS').onclick=function(){
   gpsOn=!gpsOn;
   this.textContent='📍 GPS: '+(gpsOn?'ON':'OFF');
   this.classList.toggle('on',gpsOn);
+  document.body.classList.toggle('modo-navegacion',gpsOn);
   if(gpsOn){
     document.getElementById('g1').innerHTML='<b>activo</b>';
     watchId=navigator.geolocation.watchPosition(onFix,e=>{
@@ -1006,6 +1013,7 @@ document.getElementById('btnGPS').onclick=function(){
     if(watchId!==null) navigator.geolocation.clearWatch(watchId);
     document.getElementById('g1').textContent='apagado';
     apagarAlertaRadar();
+    ocultarHUD();
   }
 };
 document.getElementById('btnSeguir').onclick=function(){
