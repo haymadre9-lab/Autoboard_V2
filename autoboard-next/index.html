@@ -67,6 +67,7 @@ body.modo-solomapa #navbanner,body.modo-solomapa #minihud{display:none}
   <div>WEBGL: <span id="rWebgl">-</span></div>
   <div>3D BUILDINGS: <span id="rBuildings">-</span></div>
   <div>TERRENO: <span id="rTerreno">OFF</span></div>
+  <div>TRIM RUTA: <span id="rTrim">-</span></div>
   <hr>
   <div>ROTACION (10s): <span id="rRot">sin probar</span></div>
   <div>PITCH (10s): <span id="rPitch">sin probar</span></div>
@@ -141,21 +142,21 @@ map.on('error', e => {
   registrarError('map', msg);
 });
 
-// ==== Imagen de flecha para la ruta ====
+// ==== ITER 3: imagen de flecha mas grande (60px) ====
 function crearImagenFlecha(){
-  const size = 40;
+  const size = 60;
   const c = document.createElement('canvas');
   c.width = size; c.height = size;
   const ctx = c.getContext('2d');
   ctx.clearRect(0,0,size,size);
   ctx.fillStyle = '#ffffff';
   ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2.5;
   ctx.beginPath();
-  ctx.moveTo(size/2, 6);
-  ctx.lineTo(size-8, size-8);
-  ctx.lineTo(size/2, size-14);
-  ctx.lineTo(8, size-8);
+  ctx.moveTo(size/2, 8);
+  ctx.lineTo(size-10, size-12);
+  ctx.lineTo(size/2, size-20);
+  ctx.lineTo(10, size-12);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
@@ -163,10 +164,10 @@ function crearImagenFlecha(){
 }
 
 let navZoomBase = 18.8;
-
-// ==== ITER 2: estado del terreno ====
 let terrenoActivo = false;
 const TERRENO_EXAG = 1.5;
+// ==== ITER 3: estado del trim ====
+let trimSoportado = true;
 
 let idFuenteBuildings=null, sourceLayerBuildings=null, edificiosOn=true;
 map.on('load', () => {
@@ -178,7 +179,6 @@ map.on('load', () => {
     if(!map.hasImage('ruta-flecha')) map.addImage('ruta-flecha', img, {sdf:false});
   } catch(e){ console.warn('No se pudo añadir imagen de flecha', e); }
 
-  // ==== ITER 2: precargar fuente de terreno (no activada) ====
   try {
     map.addSource('terreno', {
       type: 'raster-dem',
@@ -242,7 +242,6 @@ document.getElementById('btnEdificios').onclick = function(){
   this.classList.toggle('on', edificiosOn);
 };
 
-// ==== ITER 2: interruptor del terreno ====
 function actualizarTerreno(on){
   terrenoActivo = on;
   try {
@@ -273,10 +272,7 @@ function actualizarTerreno(on){
     document.getElementById('rTerreno').innerHTML = '<span class="mal">fallo: '+e.message+'</span>';
   }
 }
-
-document.getElementById('btnTerreno').onclick = function(){
-  actualizarTerreno(!terrenoActivo);
-};
+document.getElementById('btnTerreno').onclick = function(){ actualizarTerreno(!terrenoActivo); };
 
 let pitchOn = true;
 document.getElementById('btnPitch').onclick = function(){
@@ -440,6 +436,28 @@ function recorridoAhora(ll){
 function avanzarPaso(r){
   while(stepIdx<steps.length-1 && (steps[stepIdx].metro||0)<=r+15) stepIdx++;
 }
+
+// ==== ITER 3: recorta la parte recorrida de la ruta ====
+function actualizarTrimRuta(){
+  if(!trimSoportado) return;
+  if(!routeCoordsLL.length || !routeCumDist.length) return;
+  if(!map.getLayer('ruta')) return;
+  const total = routeCumDist[routeCumDist.length - 1];
+  if(total <= 0) return;
+  const recorrido = routeCumDist[routeProgIdx] || 0;
+  const fraccion = Math.max(0, Math.min(1, recorrido / total));
+  try {
+    map.setPaintProperty('ruta', 'line-trim-offset', [0, fraccion]);
+    if(map.getLayer('ruta-casco')){
+      map.setPaintProperty('ruta-casco', 'line-trim-offset', [0, fraccion]);
+    }
+    document.getElementById('rTrim').textContent = Math.round(fraccion*100) + '%';
+  } catch(e){
+    trimSoportado = false;
+    document.getElementById('rTrim').innerHTML = '<span class="aviso">no soportado</span>';
+  }
+}
+
 function renderStep(){
   const s=steps[stepIdx];
   if(!s || !steps.length){ document.getElementById('navbanner').style.display='none'; return Infinity; }
@@ -509,20 +527,51 @@ async function calcularRuta(origen, destino, modo='normal'){
     const geojson = {type:'Feature', geometry:{type:'LineString', coordinates:coords}};
     if(map.getSource('ruta')) map.getSource('ruta').setData(geojson);
     else {
-      map.addSource('ruta', {type:'geojson', data:geojson});
+      // ==== ITER 3: lineMetrics necesario para line-trim-offset ====
+      map.addSource('ruta', {
+        type:'geojson',
+        data:geojson,
+        lineMetrics: true
+      });
+
+      // 1) Casco oscuro por debajo (borde de la ruta)
+      map.addLayer({id:'ruta-casco', type:'line', source:'ruta',
+        paint:{
+          'line-color':'#0d47a1',
+          'line-width':13,
+          'line-opacity':0.85
+        },
+        layout:{'line-cap':'round','line-join':'round','line-round-limit':1.0}});
+
+      // 2) Relleno azul (ruta en si)
       map.addLayer({id:'ruta', type:'line', source:'ruta',
-        paint:{'line-color':'#1e88e5','line-width':8,'line-opacity':.9},
-        layout:{'line-cap':'round','line-join':'round'}});
+        paint:{
+          'line-color':'#1e88e5',
+          'line-width':10,
+          'line-opacity':0.95
+        },
+        layout:{'line-cap':'round','line-join':'round','line-round-limit':1.0}});
+
+      // 3) Flechas de sentido (mas grandes y mas seguidas)
       map.addLayer({id:'ruta-flechas', type:'symbol', source:'ruta',
         layout:{
           'symbol-placement':'line',
-          'symbol-spacing':80,
+          'symbol-spacing':60,
           'icon-image':'ruta-flecha',
-          'icon-size':0.45,
+          'icon-size':0.7,
           'icon-rotation-alignment':'map',
           'icon-allow-overlap':true,
           'icon-ignore-placement':true
         }});
+
+      // Comprobar si line-trim-offset esta soportado
+      try {
+        map.setPaintProperty('ruta', 'line-trim-offset', [0, 0]);
+        map.setPaintProperty('ruta-casco', 'line-trim-offset', [0, 0]);
+      } catch(e){
+        trimSoportado = false;
+        document.getElementById('rTrim').innerHTML = '<span class="aviso">no soportado</span>';
+      }
     }
     routeCoordsLL = coords.map(c=>[c[1],c[0]]);
     routeCumDist = [0];
@@ -539,6 +588,7 @@ async function calcularRuta(origen, destino, modo='normal'){
     stepIdx=0; routeProgIdx=0; ultimoStepPintado=''; zoomManiobraOn=false;
     camZoomObjetivo = navZoomBase;
     renderStep();
+    actualizarTrimRuta();
     const km=(ruta.summary.lengthInMeters/1000).toFixed(1);
     const min=Math.round(ruta.summary.travelTimeInSeconds/60);
     document.getElementById('g5').innerHTML = '<b>'+km+' km · '+min+' min</b>';
@@ -575,7 +625,6 @@ function onFix(pos){
     document.getElementById('g8').textContent = parado ? 'libre (parado)' : 'seguir';
   }
 
-  // ==== ITER 2: si arrancas (>5 km/h) y hay terreno activo, apagarlo solo ====
   if(speedKmh > 5 && terrenoActivo){
     actualizarTerreno(false);
   }
@@ -609,6 +658,8 @@ function onFix(pos){
     const recorrido = recorridoAhora(ll);
     avanzarPaso(recorrido);
     const d = renderStep();
+    // ==== ITER 3: recorta la ruta recorrida ====
+    actualizarTrimRuta();
     const s = steps[stepIdx];
     if(s && seguirOn){
       const cerca = d<180 && s.maneuver && s.maneuver.type!=='arrive';
