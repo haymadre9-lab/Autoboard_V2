@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>autoboard-next · Fase 5 · navegación 2D + radares</title>
+<title>autoboard-next · Fase 6 · cargadores + tráfico</title>
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
 <style>
 html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
@@ -28,7 +28,6 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #navsub{font:600 13px system-ui,sans-serif;color:#9aa7b2;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #navbanner #btnPararRuta{width:38px;height:38px;border-radius:50%;border:2px solid #5a2020;background:rgba(60,20,20,.85);color:#ff8a8a;font-size:20px;font-weight:900;cursor:pointer;display:none;align-items:center;justify-content:center;margin-left:8px;flex:0 0 auto;padding:0}
 #navbanner #btnPararRuta.on{display:flex}
-#navbanner #btnPararRuta:active{transform:scale(.92)}
 #modos{position:fixed;top:10px;right:10px;z-index:25;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:70vw}
 #modos button{background:rgba(10,13,16,.85);border:1px solid #232c33;color:#e8eef2;border-radius:10px;padding:8px 12px;font-size:12px;font-weight:700}
 #modos button.on{background:#1d3a2c;border-color:#2e6b4a;color:#9ae6b4}
@@ -39,38 +38,38 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #minihud .limite.oculto{display:none}
 #btnCentrar{position:fixed;right:20px;bottom:160px;z-index:20;display:none;width:56px;height:56px;border-radius:50%;border:2px solid #232c33;background:rgba(10,13,16,.92);color:#3fa9ff;font-size:24px;cursor:pointer;align-items:center;justify-content:center;padding:0;box-shadow:0 2px 10px rgba(0,0,0,.5)}
 #btnCentrar.on{display:flex}
-#btnCentrar:active{transform:scale(0.95)}
 body.modo-navegacion #btnCentrar{bottom:20px;right:20px}
 body.modo-solomapa #btnCentrar{display:none!important}
 body.modo-navegacion #diag,body.modo-navegacion #diag2,body.modo-navegacion #controles{display:none}
 body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #controles,body.modo-solomapa #navbanner,body.modo-solomapa #minihud{display:none}
 .coche-marcador{width:48px!important;height:48px!important;will-change:transform}
 .coche-marcador svg{width:48px;height:48px;display:block;filter:drop-shadow(0 0 6px rgba(41,182,246,.75))}
-#radarAlerta{position:fixed;inset:0;z-index:18;pointer-events:none;display:none;
-  box-shadow:inset 0 0 80px 20px rgba(255,0,0,.55), inset 0 0 200px 60px rgba(255,0,0,.25);
-  animation:radarPulse 1s ease-in-out infinite}
+#radarAlerta{position:fixed;inset:0;z-index:18;pointer-events:none;display:none;box-shadow:inset 0 0 80px 20px rgba(255,0,0,.55), inset 0 0 200px 60px rgba(255,0,0,.25);animation:radarPulse 1s ease-in-out infinite}
 #radarAlerta.on{display:block}
-@keyframes radarPulse{
-  0%{opacity:.35}
-  50%{opacity:1}
-  100%{opacity:.35}
-}
-#radarInfo{position:fixed;left:50%;transform:translateX(-50%);top:100px;z-index:19;display:none;
-  background:rgba(120,10,10,.92);border:2px solid #ff5252;border-radius:12px;
-  padding:8px 16px;color:#fff;font:700 14px/1.2 system-ui,sans-serif;text-align:center;
-  box-shadow:0 2px 12px rgba(255,0,0,.5)}
+@keyframes radarPulse{0%{opacity:.35}50%{opacity:1}100%{opacity:.35}}
+#radarInfo{position:fixed;left:50%;transform:translateX(-50%);top:100px;z-index:19;display:none;background:rgba(120,10,10,.92);border:2px solid #ff5252;border-radius:12px;padding:8px 16px;color:#fff;font:700 14px/1.2 system-ui,sans-serif;text-align:center;box-shadow:0 2px 12px rgba(255,0,0,.5)}
 #radarInfo.on{display:block}
 #radarInfo .dist{font-size:22px;font-weight:900}
 #radarInfo .lim{font-size:13px;color:#ffcdd2;margin-top:2px}
+/* ==== POPUP CARGADOR ==== */
+#popupCargador{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;z-index:30;display:none;background:rgba(15,20,26,.96);border:2px solid #2e6b4a;border-radius:16px;padding:16px 20px;color:#e8eef2;font:14px/1.5 system-ui,sans-serif;max-width:520px;width:92vw;box-shadow:0 4px 20px rgba(0,0,0,.6)}
+#popupCargador.on{display:block}
+#popupCargador h3{margin:0 0 8px;color:#9ae6b4;font-size:18px}
+#popupCargador .info{margin:4px 0;color:#b8c0cc}
+#popupCargador .info b{color:#e8eef2}
+#popupCargador .conectores{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+#popupCargador .conector{background:#1a2a20;border:1px solid #2e6b4a;border-radius:8px;padding:6px 10px;font-weight:700;font-size:13px}
+#popupCargador .acciones{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+#popupCargador .acciones button{flex:1;min-width:120px;background:#1d3a2c;border:1px solid #2e6b4a;color:#e8eef2;border-radius:10px;padding:12px 16px;font-size:14px;font-weight:700;cursor:pointer}
+#popupCargador .acciones button:hover{background:#2a4d3a}
+#popupCargador .acciones button.cerrar{flex:0 0 auto;min-width:auto;background:#2a1a1a;border-color:#5a2020;color:#ff8a8a}
 </style>
 </head>
 <body class="modo-debug">
 <div id="map"></div>
 <div id="radarAlerta"></div>
-<div id="radarInfo">
-  <div class="dist" id="radarDist">-</div>
-  <div class="lim" id="radarLim">-</div>
-</div>
+<div id="radarInfo"><div class="dist" id="radarDist">-</div><div class="lim" id="radarLim">-</div></div>
+<div id="popupCargador"></div>
 <div id="diag">
   <div><b>FASE 1 — medicion, no demo</b></div>
   <div>ARRANQUE: <span id="rArranque">cargando…</span></div>
@@ -80,6 +79,7 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #controles
   <div>TERRENO: <span id="rTerreno">OFF</span></div>
   <div>TRIM RUTA: <span id="rTrim">-</span></div>
   <div>RADARES: <span id="rRadares">cargando…</span></div>
+  <div>CARGADORES: <span id="rCargadores">-</span></div>
   <hr>
   <div>ROTACION (10s): <span id="rRot">sin probar</span></div>
   <div>PITCH (10s): <span id="rPitch">sin probar</span></div>
@@ -91,6 +91,7 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #controles
   <button id="btnEdificios" class="on">🏢 Edificios: ON</button>
   <button id="btnTerreno">🏔 Terreno: OFF</button>
   <button id="btnRadares" class="on">📸 Radares: ON</button>
+  <button id="btnCargadores" class="on">🔌 Cargadores: ON</button>
   <button id="btnPitch" class="on">📐 Pitch: ON</button>
   <button id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button id="btnRot">▶ Prueba rotacion 10s</button>
@@ -115,10 +116,7 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #controles
   <div><div id="navd">-</div><div id="navsub"></div></div>
   <button id="btnPararRuta" title="Detener ruta">✕</button>
 </div>
-<div id="minihud">
-  <span class="vel" id="hudVel">0</span>
-  <span class="limite oculto" id="hudLimite">50</span>
-</div>
+<div id="minihud"><span class="vel" id="hudVel">0</span><span class="limite oculto" id="hudLimite">50</span></div>
 <button id="btnCentrar" title="Centrar en mi posición">🎯</button>
 <div id="modos">
   <button id="modoDebug" class="on">🔧 Debug</button>
@@ -128,20 +126,19 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #controles
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script>
 const MAPTILER_KEY='sG00UkBX9Ig2ifguvPgU';
+const OCM_API_KEY='c597036e-f13e-4675-ae60-fe70feb86e2a';
 const antialiasActivo=new URLSearchParams(location.search).get('aa')==='1';
 const errores=[];
 function registrarError(tipo,mensaje){
   errores.push({tipo,mensaje});
   document.getElementById('rErrores').textContent=errores.length;
-  const el=document.getElementById('errlog');
-  el.classList.add('on');
+  const el=document.getElementById('errlog');el.classList.add('on');
   el.innerHTML=errores.map(e=>'<b>['+e.tipo+']</b> '+e.mensaje).join('<br><br>');
 }
 const map=new maplibregl.Map({
   container:'map',
   style:'https://api.maptiler.com/maps/streets-v2/style.json?key='+MAPTILER_KEY,
-  center:[-2.9387,43.2678],zoom:17.2,pitch:60,bearing:0,
-  antialias:antialiasActivo
+  center:[-2.9387,43.2678],zoom:17.2,pitch:60,bearing:0,antialias:antialiasActivo
 });
 document.getElementById('btnAA').textContent=antialiasActivo?'🪄 Antialias: ON (recargar)':'🪄 Antialias: OFF (recargar)';
 document.getElementById('btnAA').onclick=()=>{location.href=location.pathname+(antialiasActivo?'':'?aa=1');};
@@ -151,6 +148,7 @@ map.on('error',e=>{
   if(/webgl|context/i.test(msg)){webglOk=false;document.getElementById('rWebgl').innerHTML='<span class="mal">FALLO</span>';}
   registrarError('map',msg);
 });
+// ===== Iconos =====
 function crearFlechaRuta(){
   const size=60,c=document.createElement('canvas');c.width=size;c.height=size;
   const ctx=c.getContext('2d');ctx.clearRect(0,0,size,size);
@@ -168,36 +166,44 @@ function crearChevronGiro(){
   ctx.fillStyle='#ffffff';ctx.fill();
   return {data:ctx.getImageData(0,0,size,size),width:size,height:size};
 }
-function crearIconoRadar(tipo, velocidad){
+function crearIconoRadar(tipo,velocidad){
   const size=64,c=document.createElement('canvas');c.width=size;c.height=size;
-  const ctx=c.getContext('2d');
-  ctx.clearRect(0,0,size,size);
+  const ctx=c.getContext('2d');ctx.clearRect(0,0,size,size);
   let color='#2196f3';
-  if(velocidad>=120) color='#d32f2f';
-  else if(velocidad>=90) color='#ff6f00';
-  else if(velocidad>=60) color='#f9a825';
-  ctx.beginPath();ctx.arc(size/2,size/2,size/2-4,0,Math.PI*2);
-  ctx.fillStyle=color;ctx.fill();
+  if(velocidad>=120) color='#d32f2f';else if(velocidad>=90) color='#ff6f00';else if(velocidad>=60) color='#f9a825';
+  ctx.beginPath();ctx.arc(size/2,size/2,size/2-4,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
   ctx.lineWidth=3;ctx.strokeStyle='#ffffff';ctx.stroke();
   ctx.fillStyle='#ffffff';
-  if(tipo==='semaforo'){
-    ctx.fillRect(size/2-8,10,16,34);
-    ctx.fillStyle=color;
-    ctx.beginPath();ctx.arc(size/2,18,4,0,Math.PI*2);ctx.fill();
-    ctx.beginPath();ctx.arc(size/2,28,4,0,Math.PI*2);ctx.fill();
-    ctx.beginPath();ctx.arc(size/2,38,4,0,Math.PI*2);ctx.fill();
-  } else if(tipo==='movil'){
-    ctx.fillRect(14,26,36,12);
-    ctx.fillRect(20,18,24,10);
-    ctx.beginPath();ctx.arc(20,42,5,0,Math.PI*2);ctx.fill();
-    ctx.beginPath();ctx.arc(44,42,5,0,Math.PI*2);ctx.fill();
-  } else {
-    ctx.fillRect(18,24,28,16);
-    ctx.beginPath();ctx.arc(46,32,6,0,Math.PI*2);ctx.fill();
-    ctx.fillRect(26,40,12,6);
-  }
+  if(tipo==='semaforo'){ctx.fillRect(size/2-8,10,16,34);ctx.fillStyle=color;ctx.beginPath();ctx.arc(size/2,18,4,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(size/2,28,4,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(size/2,38,4,0,Math.PI*2);ctx.fill();}
+  else if(tipo==='movil'){ctx.fillRect(14,26,36,12);ctx.fillRect(20,18,24,10);ctx.beginPath();ctx.arc(20,42,5,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(44,42,5,0,Math.PI*2);ctx.fill();}
+  else{ctx.fillRect(18,24,28,16);ctx.beginPath();ctx.arc(46,32,6,0,Math.PI*2);ctx.fill();ctx.fillRect(26,40,12,6);}
   return {data:ctx.getImageData(0,0,size,size),width:size,height:size};
 }
+function crearIconoCargador(color,texto){
+  const size=64,c=document.createElement('canvas');c.width=size;c.height=size;
+  const ctx=c.getContext('2d');ctx.clearRect(0,0,size,size);
+  ctx.beginPath();ctx.arc(size/2,size/2,size/2-3,0,Math.PI*2);
+  ctx.fillStyle=color;ctx.fill();ctx.lineWidth=3;ctx.strokeStyle='#ffffff';ctx.stroke();
+  ctx.fillStyle='#ffffff';ctx.font='bold 20px system-ui,sans-serif';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(texto,size/2,size/2+1);
+  return {data:ctx.getImageData(0,0,size,size),width:size,height:size};
+}
+function crearIconoSupercharger(){
+  const size=72,c=document.createElement('canvas');c.width=size;c.height=size;
+  const ctx=c.getContext('2d');ctx.clearRect(0,0,size,size);
+  ctx.beginPath();ctx.arc(size/2,size/2,size/2-3,0,Math.PI*2);
+  ctx.fillStyle='#d32f2f';ctx.fill();ctx.lineWidth=4;ctx.strokeStyle='#ffffff';ctx.stroke();
+  ctx.fillStyle='#ffffff';ctx.font='bold 38px system-ui,sans-serif';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('T',size/2,size/2-6);
+  ctx.font='bold 11px system-ui,sans-serif';
+  ctx.fillText('SC',size/2,size/2+20);
+  return {data:ctx.getImageData(0,0,size,size),width:size,height:size};
+}
+// Operadores conocidos (OperatorID -> nombre corto)
+const OPERADORES={23:'Tesla',1:'ChargePoint',3449:'EasyGo',3586:'Repsol',3355:'Iberdrola',3515:'Endesa',3524:'Wenea',3534:'Zunder',3478:'Ionity'};
+
 let navZoomBase=17.2;
 const ZOOM_MANIOBRA_EXTRA=2.2;
 let terrenoActivo=false;
@@ -208,8 +214,14 @@ let limiteVelocidadVia=0;
 let radaresCargados=[];
 let radaresOn=true;
 let alertaRadarActiva=false;
-const RADAR_DIST_AVISO=500;
-const RADAR_DIST_APAGADO=550;
+const RADAR_DIST_AVISO=500,RADAR_DIST_APAGADO=550;
+let cargadoresOn=true;
+let ultimoCentroCargadores=null;
+let cargadoresData=[];
+// Favoritos persistentes
+let favoritos=JSON.parse(localStorage.getItem('cargadores_favs')||'[]');
+function guardarFavoritos(){localStorage.setItem('cargadores_favs',JSON.stringify(favoritos));}
+function esFavorito(id){return favoritos.includes(id);}
 
 map.on('load',()=>{
   document.getElementById('rArranque').innerHTML='<b>OK</b>';
@@ -219,12 +231,15 @@ map.on('load',()=>{
     if(!map.hasImage('chevron-giro')) map.addImage('chevron-giro',crearChevronGiro(),{sdf:false});
     const tipos=['fijo','tramo','movil','semaforo'];
     const velocidades=[40,50,60,70,80,90,100,110,120];
-    for(const t of tipos){
-      for(const v of velocidades){
-        const key='radar-'+t+'-'+v;
-        if(!map.hasImage(key)) map.addImage(key, crearIconoRadar(t,v), {sdf:false});
-      }
+    for(const t of tipos) for(const v of velocidades){
+      const key='radar-'+t+'-'+v;
+      if(!map.hasImage(key)) map.addImage(key,crearIconoRadar(t,v),{sdf:false});
     }
+    if(!map.hasImage('car-11-22')) map.addImage('car-11-22',crearIconoCargador('#f9a825','11-22'),{sdf:false});
+    if(!map.hasImage('car-50-72')) map.addImage('car-50-72',crearIconoCargador('#ff6f00','50-72'),{sdf:false});
+    if(!map.hasImage('car-72mas')) map.addImage('car-72mas',crearIconoCargador('#d32f2f','72+'),{sdf:false});
+    if(!map.hasImage('car-supercharger')) map.addImage('car-supercharger',crearIconoSupercharger(),{sdf:false});
+    if(!map.hasImage('car-fav')) map.addImage('car-fav',crearIconoCargador('#ffd700','★'),{sdf:false});
   }catch(e){console.warn('No se pudieron anadir iconos',e);}
   try{
     map.addSource('terreno',{type:'raster-dem',url:'https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key='+MAPTILER_KEY,tileSize:256,maxzoom:12});
@@ -232,23 +247,32 @@ map.on('load',()=>{
   }catch(e){document.getElementById('rTerreno').innerHTML='<span class="mal">fallo fuente: '+e.message+'</span>';}
   map.addSource('giro-pos',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
   map.addLayer({id:'giro-pos',type:'symbol',source:'giro-pos',
-    layout:{'icon-image':'chevron-giro','icon-size':0.85,'icon-rotate':['get','bearing'],
-      'icon-rotation-alignment':'map','icon-allow-overlap':true,'icon-ignore-placement':true,'icon-pitch-alignment':'map'}});
+    layout:{'icon-image':'chevron-giro','icon-size':0.85,'icon-rotate':['get','bearing'],'icon-rotation-alignment':'map','icon-allow-overlap':true,'icon-ignore-placement':true,'icon-pitch-alignment':'map'}});
+  // RUTA con colores de trafico
   map.addSource('ruta',{type:'geojson',data:{type:'FeatureCollection',features:[]},lineMetrics:true});
-  map.addLayer({id:'ruta-casco',type:'line',source:'ruta',
-    paint:{'line-color':'#0d47a1','line-opacity':0.7,'line-width':['interpolate',['linear'],['zoom'],14,12,16,18,18,24,20,30]},
-    layout:{'line-cap':'round','line-join':'round','line-round-limit':1.0}});
-  map.addLayer({id:'ruta',type:'line',source:'ruta',
-    paint:{'line-color':'#1e88e5','line-opacity':0.4,'line-width':['interpolate',['linear'],['zoom'],14,8,16,14,18,20,20,26]},
-    layout:{'line-cap':'round','line-join':'round','line-round-limit':1.0}});
-  map.addLayer({id:'ruta-flechas',type:'symbol',source:'ruta',
-    layout:{'symbol-placement':'line','symbol-spacing':90,'icon-image':'ruta-flecha','icon-size':0.85,
-      'icon-rotation-alignment':'map','icon-allow-overlap':true,'icon-ignore-placement':true}});
+  const paintBase={'line-opacity':0.85,'line-width':['interpolate',['linear'],['zoom'],14,8,16,14,18,20,20,26]};
+  const layoutBase={'line-cap':'round','line-join':'round','line-round-limit':1.0};
+  map.addLayer({id:'ruta-0',type:'line',source:'ruta',filter:['==',['get','nivel'],0],paint:{...paintBase,'line-color':'#1e88e5'},layout:layoutBase});
+  map.addLayer({id:'ruta-1',type:'line',source:'ruta',filter:['==',['get','nivel'],1],paint:{...paintBase,'line-color':'#f9a825'},layout:layoutBase});
+  map.addLayer({id:'ruta-2',type:'line',source:'ruta',filter:['==',['get','nivel'],2],paint:{...paintBase,'line-color':'#ff6f00'},layout:layoutBase});
+  map.addLayer({id:'ruta-3',type:'line',source:'ruta',filter:['==',['get','nivel'],3],paint:{...paintBase,'line-color':'#d32f2f'},layout:layoutBase});
   try{
-    map.setPaintProperty('ruta','line-trim-offset',[0,0]);
-    map.setPaintProperty('ruta-casco','line-trim-offset',[0,0]);
+    for(const id of ['ruta-0','ruta-1','ruta-2','ruta-3']) map.setPaintProperty(id,'line-trim-offset',[0,0]);
   }catch(e){trimSoportado=false;document.getElementById('rTrim').innerHTML='<span class="aviso">no soportado</span>';}
   cargarRadares();
+  // Cargadores
+  map.addSource('cargadores',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+  map.addLayer({id:'cargadores',type:'symbol',source:'cargadores',minzoom:11,
+    layout:{'icon-image':['get','icono'],'icon-size':['interpolate',['linear'],['zoom'],11,0.35,15,0.5,18,0.65],
+      'icon-allow-overlap':true,'icon-ignore-placement':true}});
+  // Click en cargador
+  map.on('click','cargadores',(e)=>{
+    if(!e.features||!e.features.length) return;
+    const f=e.features[0];
+    abrirPopupCargador(Number(f.properties.id));
+  });
+  map.on('mouseenter','cargadores',()=>{map.getCanvas().style.cursor='pointer';});
+  map.on('mouseleave','cargadores',()=>{map.getCanvas().style.cursor='';});
   const estilo=map.getStyle();
   const fuentes=Object.keys(estilo.sources).filter(k=>estilo.sources[k].type==='vector');
   const cand=[];
@@ -260,19 +284,16 @@ map.on('load',()=>{
   sourceLayerBuildings=cand[0].sourceLayer;
   map.once('idle',()=>document.getElementById('rTiles').innerHTML=webglOk?'<b>OK</b>':'<span class="mal">con errores</span>');
   try{
-    map.addLayer({
-      id:'3d-buildings',source:idFuenteBuildings,'source-layer':sourceLayerBuildings,
+    map.addLayer({id:'3d-buildings',source:idFuenteBuildings,'source-layer':sourceLayerBuildings,
       type:'fill-extrusion',minzoom:14,
-      paint:{'fill-extrusion-color':'#b8c0cc','fill-extrusion-height':['coalesce',['get','render_height'],8],
-        'fill-extrusion-base':['coalesce',['get','render_min_height'],0],'fill-extrusion-opacity':0.5}
-    });
+      paint:{'fill-extrusion-color':'#b8c0cc','fill-extrusion-height':['coalesce',['get','render_height'],8],'fill-extrusion-base':['coalesce',['get','render_min_height'],0],'fill-extrusion-opacity':0.5}});
   }catch(e){
     document.getElementById('rBuildings').innerHTML='<span class="mal">fallo capa: '+e.message+'</span>';
     registrarError('3d-buildings',e.message);return;
   }
 });
 
-// ==== RADARES: carga con normalizacion y doble capa ====
+// ==== RADARES ====
 async function cargarRadares(){
   try{
     const r=await fetch('./assets/radares.json');
@@ -287,100 +308,44 @@ async function cargarRadares(){
       else tipo='fijo';
       let v=Number(rd.max);
       if(!Number.isFinite(v) || v<=0 || v>200) v=50;
-      if(v<=40) v=40;
-      else if(v<=50) v=50;
-      else if(v<=60) v=60;
-      else if(v<=70) v=70;
-      else if(v<=80) v=80;
-      else if(v<=90) v=90;
-      else if(v<=100) v=100;
-      else if(v<=110) v=110;
-      else v=120;
-      return {
-        type:'Feature',
-        geometry:{type:'Point',coordinates:[rd.lon,rd.lat]},
-        properties:{ idx:i, tipo:tipo, velocidad:v, velReal:Number(rd.max)||0 }
-      };
+      if(v<=40) v=40;else if(v<=50) v=50;else if(v<=60) v=60;else if(v<=70) v=70;
+      else if(v<=80) v=80;else if(v<=90) v=90;else if(v<=100) v=100;else if(v<=110) v=110;else v=120;
+      return {type:'Feature',geometry:{type:'Point',coordinates:[rd.lon,rd.lat]},properties:{idx:i,tipo:tipo,velocidad:v}};
     });
-    const geojson={type:'FeatureCollection',features:features};
-    map.addSource('radares',{type:'geojson',data:geojson});
-    // Capa 1: circulo base
-    map.addLayer({
-      id:'radares-circulo',
-      type:'circle',
-      source:'radares',
-      minzoom:11,
-      paint:{
-        'circle-radius':['interpolate',['linear'],['zoom'],11,2,14,4,17,7,20,10],
-        'circle-color':[
-          'step',['get','velocidad'],
-          '#2196f3',
-          60,'#f9a825',
-          90,'#ff6f00',
-          120,'#d32f2f'
-        ],
-        'circle-stroke-width':1.5,
-        'circle-stroke-color':'#ffffff',
-        'circle-opacity':0.95
-      }
-    });
-    // Capa 2: icono encima del circulo
-    map.addLayer({
-      id:'radares',
-      type:'symbol',
-      source:'radares',
-      minzoom:14,
-      layout:{
-        'icon-image':[
-          'concat',
-          'radar-',
-          ['get','tipo'],
-          '-',
-          ['to-string',['get','velocidad']]
-        ],
+    map.addSource('radares',{type:'geojson',data:{type:'FeatureCollection',features:features}});
+    map.addLayer({id:'radares-circulo',type:'circle',source:'radares',minzoom:11,
+      paint:{'circle-radius':['interpolate',['linear'],['zoom'],11,2,14,4,17,7,20,10],
+        'circle-color':['step',['get','velocidad'],'#2196f3',60,'#f9a825',90,'#ff6f00',120,'#d32f2f'],
+        'circle-stroke-width':1.5,'circle-stroke-color':'#ffffff','circle-opacity':0.95}});
+    map.addLayer({id:'radares',type:'symbol',source:'radares',minzoom:14,
+      layout:{'icon-image':['concat','radar-',['get','tipo'],'-',['to-string',['get','velocidad']]],
         'icon-size':['interpolate',['linear'],['zoom'],14,0.35,17,0.5,20,0.65],
-        'icon-allow-overlap':true,
-        'icon-ignore-placement':true
-      }
-    });
-    document.getElementById('rRadares').innerHTML='<b>'+datos.length+'</b> cargados (2 capas)';
+        'icon-allow-overlap':true,'icon-ignore-placement':true}});
+    document.getElementById('rRadares').innerHTML='<b>'+datos.length+'</b> cargados';
   }catch(e){
     document.getElementById('rRadares').innerHTML='<span class="mal">error: '+e.message+'</span>';
     registrarError('radares',e.message);
   }
 }
-
 function comprobarRadaresCercanos(lat,lon,velocidadActualKmh){
-  if(!radaresCargados.length || !radaresOn){
-    apagarAlertaRadar();
-    return;
-  }
-  const dLat=0.01, dLon=0.01;
-  let masCercano=null, distMin=Infinity;
+  if(!radaresCargados.length || !radaresOn){apagarAlertaRadar();return;}
+  const dLat=0.01,dLon=0.01;
+  let masCercano=null,distMin=Infinity;
   for(const rd of radaresCargados){
-    if(Math.abs(rd.lat-lat)>dLat || Math.abs(rd.lon-lon)>dLon) continue;
+    if(Math.abs(rd.lat-lat)>dLat||Math.abs(rd.lon-lon)>dLon) continue;
     const d=dist([lat,lon],[rd.lat,rd.lon]);
-    if(d<distMin){ distMin=d; masCercano=rd; }
+    if(d<distMin){distMin=d;masCercano=rd;}
   }
   const g9=document.getElementById('g9');
-  if(!masCercano || distMin>RADAR_DIST_APAGADO){
-    apagarAlertaRadar();
-    g9.textContent='-';
-    return;
-  }
+  if(!masCercano||distMin>RADAR_DIST_APAGADO){apagarAlertaRadar();g9.textContent='-';return;}
   const limRadar=Number(masCercano.max)||50;
   g9.textContent=Math.round(distMin)+' m · '+limRadar+' km/h';
-  if(distMin<RADAR_DIST_AVISO && velocidadActualKmh>limRadar){
-    activarAlertaRadar(distMin, limRadar);
-  } else {
-    apagarAlertaRadar();
-  }
+  if(distMin<RADAR_DIST_AVISO && velocidadActualKmh>limRadar) activarAlertaRadar(distMin,limRadar);
+  else apagarAlertaRadar();
 }
-function activarAlertaRadar(distancia, limite){
-  const a=document.getElementById('radarAlerta');
-  const info=document.getElementById('radarInfo');
-  a.classList.add('on');
-  info.classList.add('on');
+function activarAlertaRadar(distancia,limite){
+  document.getElementById('radarAlerta').classList.add('on');
+  document.getElementById('radarInfo').classList.add('on');
   document.getElementById('radarDist').textContent=Math.round(distancia)+' m';
   document.getElementById('radarLim').textContent='Límite del radar: '+limite+' km/h';
   alertaRadarActiva=true;
@@ -392,13 +357,183 @@ function apagarAlertaRadar(){
   alertaRadarActiva=false;
 }
 
+// ==== CARGADORES ====
+function clasificarPotencia(kw){
+  if(kw>72) return {icono:'car-72mas', nivel:'72+'};
+  if(kw>=50) return {icono:'car-50-72', nivel:'50-72'};
+  return {icono:'car-11-22', nivel:'11-22'};
+}
+function potenciaMaxima(cp){
+  let max=0;
+  if(!cp.Connections) return 0;
+  for(const c of cp.Connections){
+    if(typeof c.PowerKW==='number' && c.PowerKW>max) max=c.PowerKW;
+  }
+  return max;
+}
+async function cargarCargadores(lat,lon){
+  if(ultimoCentroCargadores){
+    const d=Math.max(Math.abs(ultimoCentroCargadores[0]-lat),Math.abs(ultimoCentroCargadores[1]-lon));
+    if(d<0.03) return;
+  }
+  const dLat=0.15,dLon=0.15;
+  const bbox='('+(lat-dLat)+','+(lon-dLon)+'),('+(lat+dLat)+','+(lon+dLon)+')';
+  const url='https://api.openchargemap.io/v3/poi/?key='+OCM_API_KEY
+    +'&boundingbox='+encodeURIComponent(bbox)
+    +'&maxresults=300&compact=true&verbose=false&connectiontypeid=25,32';
+  document.getElementById('rCargadores').innerHTML='<span class="aviso">cargando…</span>';
+  try{
+    const r=await fetch(url);
+    const datos=await r.json();
+    cargadoresData=datos;
+    const features=datos.map(cp=>{
+      const kw=potenciaMaxima(cp);
+      const esSC=cp.OperatorID===23;
+      let icono=esSC?'car-supercharger':clasificarPotencia(kw).icono;
+      if(esFavorito(cp.ID)) icono='car-fav';
+      return {
+        type:'Feature',
+        geometry:{type:'Point',coordinates:[cp.AddressInfo.Longitude,cp.AddressInfo.Latitude]},
+        properties:{id:cp.ID, icono:icono, kw:kw, operador:cp.OperatorID||0, esSC:esSC?1:0}
+      };
+    });
+    map.getSource('cargadores').setData({type:'FeatureCollection',features:features});
+    ultimoCentroCargadores=[lat,lon];
+    const nSC=datos.filter(c=>c.OperatorID===23).length;
+    document.getElementById('rCargadores').innerHTML='<b>'+datos.length+'</b> ('+nSC+' SC)';
+  }catch(e){
+    document.getElementById('rCargadores').innerHTML='<span class="mal">error: '+e.message+'</span>';
+    registrarError('cargadores',e.message);
+  }
+}
+// ==== POPUP CARGADOR ====
+async function abrirPopupCargador(id){
+  const pop=document.getElementById('popupCargador');
+  // Intento primero con los datos que tengo (rapido)
+  let cp=cargadoresData.find(c=>c.ID===id);
+  if(!cp){pop.classList.remove('on');return;}
+  // Muestro popup basico mientras pido verbose
+  pintarPopupCargador(cp, null);
+  pop.classList.add('on');
+  // Pido datos completos (verbose=true) solo para este ID
+  try{
+    const url='https://api.openchargemap.io/v3/poi/?key='+OCM_API_KEY+'&chargepointid='+id+'&verbose=true&compact=true';
+    const r=await fetch(url);
+    const j=await r.json();
+    if(j && j.length){
+      pintarPopupCargador(j[0], j[0]);
+    }
+  }catch(e){
+    console.warn('No se pudo cargar verbose',e);
+  }
+}
+function pintarPopupCargador(cp, cpVerbose){
+  const pop=document.getElementById('popupCargador');
+  const ai=cp.AddressInfo||{};
+  const operadorId=cp.OperatorID||0;
+  const nombreOperador=(cpVerbose&&cpVerbose.OperatorInfo&&cpVerbose.OperatorInfo.Title)
+    ? cpVerbose.OperatorInfo.Title
+    : (OPERADORES[operadorId]||('Operador #'+operadorId));
+  const esSC=operadorId===23;
+  const titulo=(ai.Title||'Cargador')+(esSC?' ⚡ Tesla':'');
+
+  const conectoresHTML=filtrarConectoresTesla(cp).map(c=>{
+    const potencia=c.PowerKW?c.PowerKW+' kW':'?';
+    const tipo=nombreConector(c.ConnectionTypeID);
+    const cantidad=c.Quantity?(' x'+c.Quantity):'';
+    return '<span class="conector">'+tipo+' · '+potencia+cantidad+'</span>';
+  }).join('')||'<span class="conector" style="opacity:.6">Sin conectores Tesla</span>';
+
+  const fav=esFavorito(cp.ID);
+  const favTexto=fav?'★ Quitar de favoritos':'☆ Guardar en favoritos';
+
+  pop.innerHTML=''
+    +'<h3>'+escapeHTML(titulo)+'</h3>'
+    +'<div class="info"><b>Dirección:</b> '+escapeHTML([ai.AddressLine1,ai.Town,ai.StateOrProvince].filter(Boolean).join(', ')||'—')+'</div>'
+    +'<div class="info"><b>Compañía:</b> '+escapeHTML(nombreOperador)+'</div>'
+    +'<div class="info"><b>Puntos totales:</b> '+(cp.NumberOfPoints||'—')+'</div>'
+    +(cp.UsageCost?'<div class="info"><b>Coste:</b> '+escapeHTML(cp.UsageCost)+'</div>':'')
+    +(cp.DateLastVerified?'<div class="info"><b>Última verificación:</b> '+formatFecha(cp.DateLastVerified)+'</div>':'')
+    +'<div class="info"><b>Conectores compatibles:</b></div>'
+    +'<div class="conectores">'+conectoresHTML+'</div>'
+    +'<div class="acciones">'
+    +'  <button id="btnNavCargador">🏁 Iniciar ruta</button>'
+    +'  <button id="btnFavCargador">'+favTexto+'</button>'
+    +'  <button class="cerrar" id="btnCerrarPopup">✕</button>'
+    +'</div>';
+
+  document.getElementById('btnCerrarPopup').onclick=()=>pop.classList.remove('on');
+  document.getElementById('btnNavCargador').onclick=()=>{
+    pop.classList.remove('on');
+    navegarACargador(ai.Latitude, ai.Longitude);
+  };
+  document.getElementById('btnFavCargador').onclick=()=>{
+    toggleFavorito(cp.ID);
+    // Refrescar popup
+    pintarPopupCargador(cp, cpVerbose);
+    // Refrescar iconos del mapa
+    refrescarIconosCargadores();
+  };
+}
+function filtrarConectoresTesla(cp){
+  if(!cp.Connections) return [];
+  // Type 2 = 25, CCS Combo 2 = 32
+  return cp.Connections.filter(c=>c.ConnectionTypeID===25||c.ConnectionTypeID===32);
+}
+function nombreConector(id){
+  if(id===25) return 'Type 2';
+  if(id===32) return 'CCS';
+  return 'Tipo '+id;
+}
+function formatFecha(iso){
+  try{
+    const d=new Date(iso);
+    return d.toLocaleDateString('es-ES',{day:'2-digit',month:'short',year:'numeric'});
+  }catch(e){return iso;}
+}
+function escapeHTML(s){
+  return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function toggleFavorito(id){
+  const idx=favoritos.indexOf(id);
+  if(idx>=0) favoritos.splice(idx,1);
+  else favoritos.push(id);
+  guardarFavoritos();
+}
+function refrescarIconosCargadores(){
+  const features=cargadoresData.map(cp=>{
+    const kw=potenciaMaxima(cp);
+    const esSC=cp.OperatorID===23;
+    let icono=esSC?'car-supercharger':clasificarPotencia(kw).icono;
+    if(esFavorito(cp.ID)) icono='car-fav';
+    return {
+      type:'Feature',
+      geometry:{type:'Point',coordinates:[cp.AddressInfo.Longitude,cp.AddressInfo.Latitude]},
+      properties:{id:cp.ID, icono:icono, kw:kw, operador:cp.OperatorID||0, esSC:esSC?1:0}
+    };
+  });
+  map.getSource('cargadores').setData({type:'FeatureCollection',features:features});
+}
+async function navegarACargador(lat,lon){
+  if(!lastFix){alert('Activa el GPS primero.');return;}
+  ultimaRutaDestino=[lat,lon];
+  document.getElementById('g5').innerHTML='<span class="aviso">calculando ruta…</span>';
+  const ok=await calcularRuta([lastFix.lat,lastFix.lon],ultimaRutaDestino);
+  if(ok){
+    if(seguirOn) centrarEnMi();
+    else{
+      const bounds=routeCoordsLL.reduce((b,c)=>b.extend([c[1],c[0]]),new maplibregl.LngLatBounds([routeCoordsLL[0][1],routeCoordsLL[0][0]],[routeCoordsLL[0][1],routeCoordsLL[0][0]]));
+      map.fitBounds(bounds,{padding:60,pitch:0,maxZoom:17.5});
+    }
+  }
+}
+
 document.getElementById('btnEdificios').onclick=function(){
   edificiosOn=!edificiosOn;
   if(map.getLayer('3d-buildings')) map.setLayoutProperty('3d-buildings','visibility',edificiosOn?'visible':'none');
   this.textContent='🏢 Edificios: '+(edificiosOn?'ON':'OFF');
   this.classList.toggle('on',edificiosOn);
 };
-// ==== RADARES: boton ON/OFF para las dos capas ====
 document.getElementById('btnRadares').onclick=function(){
   radaresOn=!radaresOn;
   const vis=radaresOn?'visible':'none';
@@ -408,14 +543,19 @@ document.getElementById('btnRadares').onclick=function(){
   this.classList.toggle('on',radaresOn);
   if(!radaresOn) apagarAlertaRadar();
 };
+document.getElementById('btnCargadores').onclick=function(){
+  cargadoresOn=!cargadoresOn;
+  if(map.getLayer('cargadores')) map.setLayoutProperty('cargadores','visibility',cargadoresOn?'visible':'none');
+  this.textContent='🔌 Cargadores: '+(cargadoresOn?'ON':'OFF');
+  this.classList.toggle('on',cargadoresOn);
+  if(!cargadoresOn) document.getElementById('popupCargador').classList.remove('on');
+};
 function actualizarTerreno(on){
   terrenoActivo=on;
   try{
     if(on){
       map.setTerrain({source:'terreno',exaggeration:TERRENO_EXAG});
-      if(!map.getLayer('hillshade')){
-        map.addLayer({id:'hillshade',type:'hillshade',source:'terreno',paint:{'hillshade-exaggeration':0.4,'hillshade-shadow-color':'#000000','hillshade-highlight-color':'#ffffff'}});
-      }
+      if(!map.getLayer('hillshade')) map.addLayer({id:'hillshade',type:'hillshade',source:'terreno',paint:{'hillshade-exaggeration':0.4,'hillshade-shadow-color':'#000000','hillshade-highlight-color':'#ffffff'}});
       document.getElementById('rTerreno').innerHTML='<b>activo</b>';
     }else{
       map.setTerrain(null);
@@ -568,14 +708,13 @@ function avanzarPaso(r){while(stepIdx<steps.length-1&&(steps[stepIdx].metro||0)<
 function actualizarTrimRuta(){
   if(!trimSoportado) return;
   if(!routeCoordsLL.length||!routeCumDist.length) return;
-  if(!map.getLayer('ruta')) return;
+  if(!map.getLayer('ruta-0')) return;
   const total=routeCumDist[routeCumDist.length-1];
   if(total<=0) return;
   const recorrido=routeCumDist[routeProgIdx]||0;
   const fraccion=Math.max(0,Math.min(1,recorrido/total));
   try{
-    map.setPaintProperty('ruta','line-trim-offset',[0,fraccion]);
-    if(map.getLayer('ruta-casco')) map.setPaintProperty('ruta-casco','line-trim-offset',[0,fraccion]);
+    for(const id of ['ruta-0','ruta-1','ruta-2','ruta-3']) map.setPaintProperty(id,'line-trim-offset',[0,fraccion]);
     document.getElementById('rTrim').textContent=Math.round(fraccion*100)+'%';
   }catch(e){trimSoportado=false;document.getElementById('rTrim').innerHTML='<span class="aviso">no soportado</span>';}
 }
@@ -584,15 +723,11 @@ function actualizarChevronGiro(){
   if(!src) return;
   const s=steps[stepIdx];
   if(!s||!s.maneuver||s.maneuver.type==='arrive'||s.maneuver.type==='depart'||!routeCoordsLL.length){
-    src.setData({type:'FeatureCollection',features:[]});
-    return;
+    src.setData({type:'FeatureCollection',features:[]});return;
   }
   const ref=lastFix?[lastFix.lat,lastFix.lon]:routeCoordsLL[routeProgIdx];
   const dRestante=(s.metro||0)-recorridoAhora(ref);
-  if(dRestante<0||dRestante>250){
-    src.setData({type:'FeatureCollection',features:[]});
-    return;
-  }
+  if(dRestante<0||dRestante>250){src.setData({type:'FeatureCollection',features:[]});return;}
   let idxGiro=routeCoordsLL.length-1;
   for(let i=routeProgIdx;i<routeCoordsLL.length;i++){
     if((routeCumDist[i]||0) >= (s.metro||0)){idxGiro=i;break;}
@@ -682,8 +817,39 @@ async function calcularRuta(origen,destino,modo='normal'){
     if(!j.routes||!j.routes.length) throw new Error('TomTom no devolvió ruta');
     const ruta=j.routes[0];
     const coords=ruta.legs.flatMap(l=>l.points.map(p=>[p.longitude,p.latitude]));
-    const geojson={type:'Feature',geometry:{type:'LineString',coordinates:coords}};
-    map.getSource('ruta').setData(geojson);
+    // ==== Niveles de trafico por tramo ====
+    const nivelesPorPunto=new Array(coords.length).fill(0);
+    if(ruta.sections && ruta.sections.length){
+      for(const sec of ruta.sections){
+        if(sec.sectionType && sec.sectionType!=='TRAFFIC') continue;
+        const mag=typeof sec.magnitudeOfDelay==='number'?sec.magnitudeOfDelay:0;
+        let nivel=0;
+        if(mag>=3) nivel=3;
+        else if(mag===2) nivel=2;
+        else if(mag===1) nivel=1;
+        const a=sec.startPointIndex||0;
+        const b=sec.endPointIndex||coords.length-1;
+        for(let i=a;i<=b&&i<coords.length;i++) nivelesPorPunto[i]=nivel;
+      }
+    }
+    // Segmentar la ruta: cada vez que cambia el nivel, crear una LineString nueva
+    const segmentos=[];
+    let inicioSeg=0;
+    for(let i=1;i<coords.length;i++){
+      if(nivelesPorPunto[i]!==nivelesPorPunto[inicioSeg]){
+        segmentos.push({nivel:nivelesPorPunto[inicioSeg],coords:coords.slice(inicioSeg,i+1)});
+        inicioSeg=i;
+      }
+    }
+    segmentos.push({nivel:nivelesPorPunto[inicioSeg],coords:coords.slice(inicioSeg)});
+    const features=segmentos
+      .filter(s=>s.coords.length>=2)
+      .map(s=>({
+        type:'Feature',
+        geometry:{type:'LineString',coordinates:s.coords},
+        properties:{nivel:s.nivel}
+      }));
+    map.getSource('ruta').setData({type:'FeatureCollection',features:features});
     routeCoordsLL=coords.map(c=>[c[1],c[0]]);
     routeCumDist=[0];
     for(let i=1;i<routeCoordsLL.length;i++) routeCumDist.push(routeCumDist[i-1]+dist(routeCoordsLL[i-1],routeCoordsLL[i]));
@@ -732,6 +898,8 @@ function onFix(pos){
     document.getElementById('g8').textContent=parado?'libre (parado)':'seguir';
   }
   comprobarRadaresCercanos(now.lat,now.lon,speedKmh);
+  // Cargar cargadores si es la primera vez o si nos hemos movido
+  if(cargadoresOn) cargarCargadores(now.lat,now.lon);
   if(parado&&lastFix){
     document.getElementById('g2').textContent=Math.round(speedKmh)+' km/h';
     document.getElementById('g3').textContent=Math.round(heading)+'°';
@@ -783,12 +951,8 @@ function actualizarHUD(){
   if(vel) vel.textContent=Math.round(speedKmh);
   const lim=document.getElementById('hudLimite');
   if(!lim) return;
-  if(limiteVelocidadVia>0){
-    lim.textContent=limiteVelocidadVia;
-    lim.classList.remove('oculto');
-  }else{
-    lim.classList.add('oculto');
-  }
+  if(limiteVelocidadVia>0){lim.textContent=limiteVelocidadVia;lim.classList.remove('oculto');}
+  else lim.classList.add('oculto');
 }
 function bucleSeguimiento(){
   if(seguirOn&&!camaraLibre&&camPosActual&&camPosObjetivo){
@@ -884,9 +1048,7 @@ document.getElementById('btnDestino').onclick=async function(){
 };
 function detenerRuta(){
   steps=[];stepIdx=0;routeCoordsLL=[];routeCumDist=[];routeProgIdx=0;
-  ultimaRutaDestino=null;
-  limiteVelocidadVia=0;
-  ultimoStepPintado='';zoomManiobraOn=false;
+  ultimaRutaDestino=null;limiteVelocidadVia=0;ultimoStepPintado='';zoomManiobraOn=false;
   const srcRuta=map.getSource('ruta');
   if(srcRuta) srcRuta.setData({type:'FeatureCollection',features:[]});
   const srcGiro=map.getSource('giro-pos');
