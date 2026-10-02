@@ -8,64 +8,39 @@
 <style>
 html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #map{position:absolute;inset:0}
-#diag{position:fixed;top:10px;left:10px;z-index:10;background:rgba(10,13,16,.88);
-  border:1px solid #232c33;border-radius:10px;padding:10px 14px;color:#e8eef2;
-  font:12px/1.6 ui-monospace,monospace;max-width:320px;max-height:70vh;overflow-y:auto}
+#diag{position:fixed;top:10px;left:10px;z-index:10;background:rgba(10,13,16,.88);border:1px solid #232c33;border-radius:10px;padding:10px 14px;color:#e8eef2;font:12px/1.6 ui-monospace,monospace;max-width:320px;max-height:70vh;overflow-y:auto}
 #diag b{color:#9ae6b4}.mal{color:#ff8a8a}.aviso{color:#ffd166}
 #diag hr{border:0;border-top:1px solid #232c33;margin:6px 0}
-#controles{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;
-  display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:94vw}
-#controles button{background:#12161c;border:1px solid #232c33;color:#e8eef2;
-  border-radius:10px;padding:10px 12px;font-size:12px;font-weight:700}
+#controles{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:94vw}
+#controles button{background:#12161c;border:1px solid #232c33;color:#e8eef2;border-radius:10px;padding:10px 12px;font-size:12px;font-weight:700}
 #controles button.on{background:#1d3a2c;border-color:#2e6b4a}
 #controles button:disabled{opacity:.4}
-#errlog{position:fixed;top:10px;right:10px;z-index:10;background:rgba(10,13,16,.88);
-  border:1px solid #232c33;border-radius:10px;padding:8px 12px;color:#ff8a8a;
-  font:11px/1.5 ui-monospace,monospace;max-width:280px;max-height:40vh;overflow-y:auto;display:none}
+#errlog{position:fixed;top:10px;right:10px;z-index:10;background:rgba(10,13,16,.88);border:1px solid #232c33;border-radius:10px;padding:8px 12px;color:#ff8a8a;font:11px/1.5 ui-monospace,monospace;max-width:280px;max-height:40vh;overflow-y:auto;display:none}
 #errlog.on{display:block}
-.coche{width:28px;height:28px}
-#diag2{position:fixed;top:10px;left:340px;z-index:10;background:rgba(10,13,16,.88);
-  border:1px solid #232c33;border-radius:10px;padding:10px 14px;color:#e8eef2;
-  font:12px/1.6 ui-monospace,monospace;max-width:290px}
+#diag2{position:fixed;top:10px;left:340px;z-index:10;background:rgba(10,13,16,.88);border:1px solid #232c33;border-radius:10px;padding:10px 14px;color:#e8eef2;font:12px/1.6 ui-monospace,monospace;max-width:290px}
 #diag2 b{color:#9ae6b4}
 @media(max-width:900px){#diag2{left:10px;top:260px}}
-#navbanner{position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:20;display:none;
-  align-items:center;gap:12px;background:rgba(10,13,16,.9);border:1px solid #232c33;
-  border-radius:16px;padding:8px 18px 8px 10px}
+#navbanner{position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:20;display:none;align-items:center;gap:12px;background:rgba(10,13,16,.9);border:1px solid #232c33;border-radius:16px;padding:8px 18px 8px 10px}
 #navbanner.hw{background:rgba(10,30,70,.92);border-color:#1e4a8a}
 #navarrow{width:78px;height:84px;flex:0 0 auto}
 #navarrow svg{width:78px;height:84px;display:block}
 #navd{font:800 26px system-ui,sans-serif;color:#fff}
-#navsub{font:600 13px system-ui,sans-serif;color:#9aa7b2;max-width:220px;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#modos{position:fixed;top:10px;right:10px;z-index:25;display:flex;gap:6px;flex-wrap:wrap;
-  justify-content:flex-end;max-width:70vw}
-#modos button{background:rgba(10,13,16,.85);border:1px solid #232c33;color:#e8eef2;
-  border-radius:10px;padding:8px 12px;font-size:12px;font-weight:700}
+#navsub{font:600 13px system-ui,sans-serif;color:#9aa7b2;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#modos{position:fixed;top:10px;right:10px;z-index:25;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:70vw}
+#modos button{background:rgba(10,13,16,.85);border:1px solid #232c33;color:#e8eef2;border-radius:10px;padding:8px 12px;font-size:12px;font-weight:700}
 #modos button.on{background:#1d3a2c;border-color:#2e6b4a;color:#9ae6b4}
-#minihud{position:fixed;left:10px;bottom:16px;z-index:15;display:none;
-  background:rgba(10,13,16,.82);border:1px solid #232c33;border-radius:12px;
-  padding:8px 14px;color:#e8eef2;font:700 18px/1.2 system-ui,sans-serif;
-  align-items:center;gap:14px}
+#minihud{position:fixed;left:10px;bottom:16px;z-index:15;display:none;background:rgba(10,13,16,.82);border:1px solid #232c33;border-radius:12px;padding:8px 14px;color:#e8eef2;font:700 18px/1.2 system-ui,sans-serif;align-items:center;gap:14px}
 #minihud.on{display:flex}
 #minihud .sep{color:#4a5560}
 #minihud .vel{color:#fff}
 #minihud .rum{color:#9ae6b4}
-/* ==== ITER 4: boton centrar flotante ==== */
-#btnCentrar{position:fixed;right:20px;bottom:120px;z-index:20;display:none;
-  width:56px;height:56px;border-radius:50%;border:2px solid #232c33;
-  background:rgba(10,13,16,.92);color:#3fa9ff;font-size:24px;cursor:pointer;
-  align-items:center;justify-content:center;padding:0;
-  box-shadow:0 2px 10px rgba(0,0,0,.5)}
+#btnCentrar{position:fixed;right:20px;bottom:120px;z-index:20;display:none;width:56px;height:56px;border-radius:50%;border:2px solid #232c33;background:rgba(10,13,16,.92);color:#3fa9ff;font-size:24px;cursor:pointer;align-items:center;justify-content:center;padding:0;box-shadow:0 2px 10px rgba(0,0,0,.5)}
 #btnCentrar.on{display:flex}
 #btnCentrar:active{transform:scale(0.95)}
 body.modo-navegacion #btnCentrar{bottom:20px;right:20px}
 body.modo-solomapa #btnCentrar{display:none!important}
-body.modo-navegacion #diag,body.modo-navegacion #diag2,
-body.modo-navegacion #controles{display:none}
-body.modo-solomapa #diag,body.modo-solomapa #diag2,
-body.modo-solomapa #controles,
-body.modo-solomapa #navbanner,body.modo-solomapa #minihud{display:none}
+body.modo-navegacion #diag,body.modo-navegacion #diag2,body.modo-navegacion #controles{display:none}
+body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #controles,body.modo-solomapa #navbanner,body.modo-solomapa #minihud{display:none}
 </style>
 </head>
 <body class="modo-debug">
@@ -121,285 +96,324 @@ body.modo-solomapa #navbanner,body.modo-solomapa #minihud{display:none}
   <button id="modoNav">🧭 Navegar</button>
   <button id="modoSolo">🗺 Solo mapa</button>
 </div>
-
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script>
+// ===== ITER 5: flecha grande tipo puntero, ancho constante, sin zoom ====
 const MAPTILER_KEY='sG00UkBX9Ig2ifguvPgU';
-const antialiasActivo = new URLSearchParams(location.search).get('aa')==='1';
-const errores = [];
-
-function registrarError(tipo, mensaje){
+const antialiasActivo=new URLSearchParams(location.search).get('aa')==='1';
+const errores=[];
+function registrarError(tipo,mensaje){
   errores.push({tipo,mensaje});
-  document.getElementById('rErrores').textContent = errores.length;
-  const el = document.getElementById('errlog');
+  document.getElementById('rErrores').textContent=errores.length;
+  const el=document.getElementById('errlog');
   el.classList.add('on');
-  el.innerHTML = errores.map(e=>'<b>['+e.tipo+']</b> '+e.mensaje).join('<br><br>');
+  el.innerHTML=errores.map(e=>'<b>['+e.tipo+']</b> '+e.mensaje).join('<br><br>');
 }
-
-const map = new maplibregl.Map({
+const map=new maplibregl.Map({
   container:'map',
   style:'https://api.maptiler.com/maps/streets-v2/style.json?key='+MAPTILER_KEY,
-  center:[-2.9387,43.2678], zoom:16, pitch:60, bearing:0,
-  antialias: antialiasActivo
+  center:[-2.9387,43.2678],zoom:17.8,pitch:60,bearing:0,
+  antialias:antialiasActivo
 });
-
-document.getElementById('btnAA').textContent = antialiasActivo?'🪄 Antialias: ON (recargar)':'🪄 Antialias: OFF (recargar)';
-document.getElementById('btnAA').onclick = () => { location.href = location.pathname + (antialiasActivo?'':'?aa=1'); };
-
-let webglOk = true;
-map.on('error', e => {
-  const msg = e.error && e.error.message || String(e.error||'desconocido');
-  if(/webgl|context/i.test(msg)){ webglOk=false; document.getElementById('rWebgl').innerHTML='<span class="mal">FALLO</span>'; }
-  registrarError('map', msg);
+document.getElementById('btnAA').textContent=antialiasActivo?'🪄 Antialias: ON (recargar)':'🪄 Antialias: OFF (recargar)';
+document.getElementById('btnAA').onclick=()=>{location.href=location.pathname+(antialiasActivo?'':'?aa=1');};
+let webglOk=true;
+map.on('error',e=>{
+  const msg=e.error&&e.error.message||String(e.error||'desconocido');
+  if(/webgl|context/i.test(msg)){webglOk=false;document.getElementById('rWebgl').innerHTML='<span class="mal">FALLO</span>';}
+  registrarError('map',msg);
 });
-
-function crearImagenFlecha(){
-  const size = 60;
-  const c = document.createElement('canvas');
-  c.width = size; c.height = size;
-  const ctx = c.getContext('2d');
+// ===== Iconos generados en canvas =====
+function crearFlechaRuta(){
+  const size=60,c=document.createElement('canvas');
+  c.width=size;c.height=size;
+  const ctx=c.getContext('2d');
   ctx.clearRect(0,0,size,size);
-  ctx.fillStyle = '#ffffff';
-  ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-  ctx.lineWidth = 2.5;
+  ctx.fillStyle='#ffffff';
+  ctx.strokeStyle='rgba(0,0,0,0.55)';
+  ctx.lineWidth=2.5;
   ctx.beginPath();
-  ctx.moveTo(size/2, 8);
-  ctx.lineTo(size-10, size-12);
-  ctx.lineTo(size/2, size-20);
-  ctx.lineTo(10, size-12);
+  ctx.moveTo(size/2,8);
+  ctx.lineTo(size-10,size-12);
+  ctx.lineTo(size/2,size-20);
+  ctx.lineTo(10,size-12);
   ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-  return { data: ctx.getImageData(0,0,size,size), width: size, height: size };
+  ctx.fill();ctx.stroke();
+  return {data:ctx.getImageData(0,0,size,size),width:size,height:size};
 }
-
-let navZoomBase = 18.8;
-let terrenoActivo = false;
-const TERRENO_EXAG = 1.5;
-let trimSoportado = true;
-
-let idFuenteBuildings=null, sourceLayerBuildings=null, edificiosOn=true;
-map.on('load', () => {
-  document.getElementById('rArranque').innerHTML = '<b>OK</b>';
-  document.getElementById('rWebgl').innerHTML = webglOk?'<b>OK</b>':'<span class="mal">FALLO</span>';
-
-  try {
-    const img = crearImagenFlecha();
-    if(!map.hasImage('ruta-flecha')) map.addImage('ruta-flecha', img, {sdf:false});
-  } catch(e){ console.warn('No se pudo añadir imagen de flecha', e); }
-
-  try {
-    map.addSource('terreno', {
-      type: 'raster-dem',
-      url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=' + MAPTILER_KEY,
-      tileSize: 256,
-      maxzoom: 12
+// ==== FIX: flecha coche tipo puntero de raton, borde blanco, sombra azul ====
+function crearFlechaCoche(){
+  const size=96,c=document.createElement('canvas');
+  c.width=size;c.height=size;
+  const ctx=c.getContext('2d');
+  ctx.clearRect(0,0,size,size);
+  ctx.shadowColor='rgba(41,182,246,0.7)';
+  ctx.shadowBlur=14;
+  ctx.beginPath();
+  ctx.moveTo(size/2,10);
+  ctx.lineTo(size-14,size-14);
+  ctx.lineTo(size/2,size-28);
+  ctx.lineTo(14,size-14);
+  ctx.closePath();
+  ctx.fillStyle='#29b6f6';
+  ctx.fill();
+  ctx.shadowColor='transparent';
+  ctx.lineWidth=5;
+  ctx.strokeStyle='#ffffff';
+  ctx.lineJoin='round';
+  ctx.stroke();
+  return {data:ctx.getImageData(0,0,size,size),width:size,height:size};
+}
+// ==== Chevron grande para curvas (blanco, encima de la ruta) ====
+function crearChevronGiro(){
+  const size=120,c=document.createElement('canvas');
+  c.width=size;c.height=size;
+  const ctx=c.getContext('2d');
+  ctx.clearRect(0,0,size,size);
+  // Trazo grueso curvado tipo flecha de Google Maps
+  ctx.lineWidth=22;
+  ctx.strokeStyle='#ffffff';
+  ctx.lineCap='round';
+  ctx.lineJoin='round';
+  ctx.shadowColor='rgba(0,0,0,0.45)';
+  ctx.shadowBlur=8;
+  ctx.beginPath();
+  // Flecha recta apuntando arriba. La rotacion la aplica MapLibre.
+  ctx.moveTo(size/2,size-18);
+  ctx.lineTo(size/2,26);
+  ctx.stroke();
+  // Punta triangular
+  ctx.beginPath();
+  ctx.moveTo(size/2,10);
+  ctx.lineTo(size/2+22,44);
+  ctx.lineTo(size/2-22,44);
+  ctx.closePath();
+  ctx.fillStyle='#ffffff';
+  ctx.fill();
+  return {data:ctx.getImageData(0,0,size,size),width:size,height:size};
+}
+let navZoomBase=17.8;
+const ZOOM_MANIOBRA_EXTRA=2.2;
+let terrenoActivo=false;
+const TERRENO_EXAG=1.5;
+let trimSoportado=true;
+let idFuenteBuildings=null,sourceLayerBuildings=null,edificiosOn=true;
+map.on('load',()=>{
+  document.getElementById('rArranque').innerHTML='<b>OK</b>';
+  document.getElementById('rWebgl').innerHTML=webglOk?'<b>OK</b>':'<span class="mal">FALLO</span>';
+  try{
+    if(!map.hasImage('ruta-flecha')) map.addImage('ruta-flecha',crearFlechaRuta(),{sdf:false});
+    if(!map.hasImage('coche-flecha')) map.addImage('coche-flecha',crearFlechaCoche(),{sdf:false});
+    if(!map.hasImage('chevron-giro')) map.addImage('chevron-giro',crearChevronGiro(),{sdf:false});
+  }catch(e){console.warn('No se pudieron anadir iconos',e);}
+  try{
+    map.addSource('terreno',{
+      type:'raster-dem',
+      url:'https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key='+MAPTILER_KEY,
+      tileSize:256,maxzoom:12
     });
-    document.getElementById('rTerreno').textContent = 'listo (OFF)';
-  } catch(e){
-    document.getElementById('rTerreno').innerHTML = '<span class="mal">fallo fuente: '+e.message+'</span>';
-  }
-
-  const estilo = map.getStyle();
-  const fuentes = Object.keys(estilo.sources).filter(k => estilo.sources[k].type==='vector');
-  const cand = [];
+    document.getElementById('rTerreno').textContent='listo (OFF)';
+  }catch(e){document.getElementById('rTerreno').innerHTML='<span class="mal">fallo fuente: '+e.message+'</span>';}
+  // Fuente para posicion del coche (icono symbol, no Marker => tamaño fijo)
+  map.addSource('coche-pos',{type:'geojson',data:{type:'Feature',geometry:{type:'Point',coordinates:[-2.9387,43.2678]},properties:{bearing:0}}});
+  map.addLayer({
+    id:'coche-pos',type:'symbol',source:'coche-pos',
+    layout:{
+      'icon-image':'coche-flecha',
+      'icon-size':0.62,
+      'icon-rotate':['get','bearing'],
+      'icon-rotation-alignment':'map',
+      'icon-allow-overlap':true,
+      'icon-ignore-placement':true,
+      'icon-pitch-alignment':'map'
+    }
+  });
+  // Fuente para chevron de giro (uno solo, se mueve con la maniobra activa)
+  map.addSource('giro-pos',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+  map.addLayer({
+    id:'giro-pos',type:'symbol',source:'giro-pos',
+    layout:{
+      'icon-image':'chevron-giro',
+      'icon-size':0.9,
+      'icon-rotate':['get','bearing'],
+      'icon-rotation-alignment':'map',
+      'icon-allow-overlap':true,
+      'icon-ignore-placement':true,
+      'icon-pitch-alignment':'map'
+    }
+  });
+  const estilo=map.getStyle();
+  const fuentes=Object.keys(estilo.sources).filter(k=>estilo.sources[k].type==='vector');
+  const cand=[];
   for(const src of fuentes) for(const l of estilo.layers)
     if(l.source===src && /building/i.test(l['source-layer']||''))
-      cand.push({source:src, sourceLayer:l['source-layer']});
-  if(!cand.length){
-    document.getElementById('rBuildings').innerHTML = '<span class="mal">sin capa de edificios</span>';
-    return;
-  }
-  idFuenteBuildings = cand[0].source;
-  sourceLayerBuildings = cand[0].sourceLayer;
-
-  map.once('idle', () => document.getElementById('rTiles').innerHTML = webglOk?'<b>OK</b>':'<span class="mal">con errores</span>');
-
+      cand.push({source:src,sourceLayer:l['source-layer']});
+  if(!cand.length){document.getElementById('rBuildings').innerHTML='<span class="mal">sin capa de edificios</span>';return;}
+  idFuenteBuildings=cand[0].source;
+  sourceLayerBuildings=cand[0].sourceLayer;
+  map.once('idle',()=>document.getElementById('rTiles').innerHTML=webglOk?'<b>OK</b>':'<span class="mal">con errores</span>');
   let idEtiquetas;
-  for(const l of estilo.layers) if(l.type==='symbol' && l.layout && l.layout['text-field']){ idEtiquetas=l.id; break; }
-
+  for(const l of estilo.layers) if(l.type==='symbol'&&l.layout&&l.layout['text-field']){idEtiquetas=l.id;break;}
   try{
-    // ==== ITER 4: edificios mas claros y transparentes ====
     map.addLayer({
-      id:'3d-buildings', source:idFuenteBuildings, 'source-layer':sourceLayerBuildings,
-      type:'fill-extrusion', minzoom:14,
+      id:'3d-buildings',source:idFuenteBuildings,'source-layer':sourceLayerBuildings,
+      type:'fill-extrusion',minzoom:14,
       paint:{
         'fill-extrusion-color':'#a8b0bc',
         'fill-extrusion-height':['coalesce',['get','render_height'],8],
         'fill-extrusion-base':['coalesce',['get','render_min_height'],0],
         'fill-extrusion-opacity':0.75
       }
-    }, idEtiquetas);
+    },idEtiquetas);
   }catch(e){
-    document.getElementById('rBuildings').innerHTML = '<span class="mal">fallo capa: '+e.message+'</span>';
-    registrarError('3d-buildings', e.message);
-    return;
+    document.getElementById('rBuildings').innerHTML='<span class="mal">fallo capa: '+e.message+'</span>';
+    registrarError('3d-buildings',e.message);return;
   }
-
-  map.once('idle', () => {
-    let feats=[];
-    try{ feats = map.queryRenderedFeatures({layers:['3d-buildings']}); }catch(e){}
-    document.getElementById('rBuildings').innerHTML = feats.length
-      ? '<b>OK</b> — '+feats.length+' edificios'
-      : '<span class="aviso">capa añadida, 0 edificios visibles</span>';
-  });
 });
-
-document.getElementById('btnEdificios').onclick = function(){
-  edificiosOn = !edificiosOn;
+document.getElementById('btnEdificios').onclick=function(){
+  edificiosOn=!edificiosOn;
   if(map.getLayer('3d-buildings')) map.setLayoutProperty('3d-buildings','visibility',edificiosOn?'visible':'none');
-  this.textContent = '🏢 Edificios: '+(edificiosOn?'ON':'OFF');
-  this.classList.toggle('on', edificiosOn);
+  this.textContent='🏢 Edificios: '+(edificiosOn?'ON':'OFF');
+  this.classList.toggle('on',edificiosOn);
 };
-
 function actualizarTerreno(on){
-  terrenoActivo = on;
-  try {
-    if (on) {
-      map.setTerrain({ source:'terreno', exaggeration: TERRENO_EXAG });
-      if (!map.getLayer('hillshade')){
-        map.addLayer({
-          id: 'hillshade',
-          type: 'hillshade',
-          source: 'terreno',
-          paint: {
-            'hillshade-exaggeration': 0.4,
-            'hillshade-shadow-color': '#000000',
-            'hillshade-highlight-color': '#ffffff'
-          }
-        });
+  terrenoActivo=on;
+  try{
+    if(on){
+      map.setTerrain({source:'terreno',exaggeration:TERRENO_EXAG});
+      if(!map.getLayer('hillshade')){
+        map.addLayer({id:'hillshade',type:'hillshade',source:'terreno',paint:{'hillshade-exaggeration':0.4,'hillshade-shadow-color':'#000000','hillshade-highlight-color':'#ffffff'}});
       }
-      document.getElementById('rTerreno').innerHTML = '<b>activo</b>';
-    } else {
+      document.getElementById('rTerreno').innerHTML='<b>activo</b>';
+    }else{
       map.setTerrain(null);
-      if (map.getLayer('hillshade')) map.removeLayer('hillshade');
-      document.getElementById('rTerreno').textContent = 'listo (OFF)';
+      if(map.getLayer('hillshade')) map.removeLayer('hillshade');
+      document.getElementById('rTerreno').textContent='listo (OFF)';
     }
-    const btn = document.getElementById('btnTerreno');
-    btn.textContent = '🏔 Terreno: '+(on?'ON':'OFF');
-    btn.classList.toggle('on', on);
-  } catch(e){
-    document.getElementById('rTerreno').innerHTML = '<span class="mal">fallo: '+e.message+'</span>';
-  }
+    const btn=document.getElementById('btnTerreno');
+    btn.textContent='🏔 Terreno: '+(on?'ON':'OFF');
+    btn.classList.toggle('on',on);
+  }catch(e){document.getElementById('rTerreno').innerHTML='<span class="mal">fallo: '+e.message+'</span>';}
 }
-document.getElementById('btnTerreno').onclick = function(){ actualizarTerreno(!terrenoActivo); };
-
-let pitchOn = true;
-document.getElementById('btnPitch').onclick = function(){
-  pitchOn = !pitchOn;
-  map.easeTo({pitch:pitchOn?60:0, duration:400});
-  this.textContent = '📐 Pitch: '+(pitchOn?'ON':'OFF');
-  this.classList.toggle('on', pitchOn);
+document.getElementById('btnTerreno').onclick=function(){actualizarTerreno(!terrenoActivo);};
+let pitchOn=true;
+document.getElementById('btnPitch').onclick=function(){
+  pitchOn=!pitchOn;
+  map.easeTo({pitch:pitchOn?60:0,duration:400});
+  this.textContent='📐 Pitch: '+(pitchOn?'ON':'OFF');
+  this.classList.toggle('on',pitchOn);
 };
-
-let contadorRenders = 0;
-map.on('render', () => contadorRenders++);
-
-function medirDurante(ms, id, mover){
-  return new Promise(resolve => {
-    const muestras = [];
-    let lc = contadorRenders, lt = performance.now();
-    const iv = setInterval(() => {
-      const a = performance.now(), dt = (a-lt)/1000;
+let contadorRenders=0;
+map.on('render',()=>contadorRenders++);
+function medirDurante(ms,id,mover){
+  return new Promise(resolve=>{
+    const muestras=[];let lc=contadorRenders,lt=performance.now();
+    const iv=setInterval(()=>{
+      const a=performance.now(),dt=(a-lt)/1000;
       muestras.push(Math.round((contadorRenders-lc)/dt));
-      lc = contadorRenders; lt = a;
-    }, 250);
-    const antes = errores.length, t0 = performance.now();
+      lc=contadorRenders;lt=a;
+    },250);
+    const antes=errores.length,t0=performance.now();
     function paso(ts){
-      const p = (ts-t0)/ms;
+      const p=(ts-t0)/ms;
       if(p>=1){
         clearInterval(iv);
-        const media = Math.round(muestras.reduce((a,b)=>a+b,0)/muestras.length);
-        document.getElementById(id).innerHTML = '<b>media '+media+'</b> fps' +
-          (errores.length-antes?' — <span class="mal">'+(errores.length-antes)+' err</span>':'');
-        resolve(); return;
+        const media=Math.round(muestras.reduce((a,b)=>a+b,0)/muestras.length);
+        document.getElementById(id).innerHTML='<b>media '+media+'</b> fps'+(errores.length-antes?' — <span class="mal">'+(errores.length-antes)+' err</span>':'');
+        resolve();return;
       }
-      mover(p,ts);
-      requestAnimationFrame(paso);
+      mover(p,ts);requestAnimationFrame(paso);
     }
     requestAnimationFrame(paso);
   });
 }
-
-document.getElementById('btnRot').onclick = async function(){
-  this.disabled = true;
-  document.getElementById('rRot').innerHTML = '<span class="aviso">girando 10s…</span>';
-  const b0 = map.getBearing();
-  await medirDurante(10000,'rRot', p => map.setBearing((b0+p*720)%360));
-  this.disabled = false;
+document.getElementById('btnRot').onclick=async function(){
+  this.disabled=true;
+  document.getElementById('rRot').innerHTML='<span class="aviso">girando 10s…</span>';
+  const b0=map.getBearing();
+  await medirDurante(10000,'rRot',p=>map.setBearing((b0+p*720)%360));
+  this.disabled=false;
 };
-document.getElementById('btnPitchTest').onclick = async function(){
-  this.disabled = true;
-  document.getElementById('rPitch').innerHTML = '<span class="aviso">pitch 10s…</span>';
-  await medirDurante(10000,'rPitch', p => map.setPitch(30+30*Math.sin(p*Math.PI*6)));
-  this.disabled = false;
+document.getElementById('btnPitchTest').onclick=async function(){
+  this.disabled=true;
+  document.getElementById('rPitch').innerHTML='<span class="aviso">pitch 10s…</span>';
+  await medirDurante(10000,'rPitch',p=>map.setPitch(30+30*Math.sin(p*Math.PI*6)));
+  this.disabled=false;
 };
-
-const botonesModo = {
-  modoDebug: 'modo-debug',
-  modoNav:   'modo-navegacion',
-  modoSolo:  'modo-solomapa'
-};
+const botonesModo={modoDebug:'modo-debug',modoNav:'modo-navegacion',modoSolo:'modo-solomapa'};
 function aplicarModo(modo){
-  document.body.className = modo;
+  document.body.className=modo;
   for(const id in botonesModo){
-    const btn = document.getElementById(id);
-    if(btn) btn.classList.toggle('on', botonesModo[id]===modo);
+    const btn=document.getElementById(id);
+    if(btn) btn.classList.toggle('on',botonesModo[id]===modo);
   }
-  const hud = document.getElementById('minihud');
-  hud.classList.toggle('on', modo==='modo-navegacion');
+  const hud=document.getElementById('minihud');
+  hud.classList.toggle('on',modo==='modo-navegacion');
 }
 for(const id in botonesModo){
-  const btn = document.getElementById(id);
-  if(btn) btn.onclick = () => aplicarModo(botonesModo[id]);
+  const btn=document.getElementById(id);
+  if(btn) btn.onclick=()=>aplicarModo(botonesModo[id]);
 }
-
-const TT = 'zMPqeYVXNoQw4rJ1ycr8QdywkDFNx0tF';
+const TT='zMPqeYVXNoQw4rJ1ycr8QdywkDFNx0tF';
 function dist(a,b){
-  const R=6371000, la1=a[0]*Math.PI/180, la2=b[0]*Math.PI/180;
-  const dla=(b[0]-a[0])*Math.PI/180, dlo=(b[1]-a[1])*Math.PI/180;
+  const R=6371000,la1=a[0]*Math.PI/180,la2=b[0]*Math.PI/180;
+  const dla=(b[0]-a[0])*Math.PI/180,dlo=(b[1]-a[1])*Math.PI/180;
   const h=Math.sin(dla/2)**2+Math.cos(la1)*Math.cos(la2)*Math.sin(dlo/2)**2;
   return 2*R*Math.asin(Math.sqrt(h));
 }
 function bearing(a,b){
-  const la1=a[0]*Math.PI/180, la2=b[0]*Math.PI/180, dlo=(b[1]-a[1])*Math.PI/180;
+  const la1=a[0]*Math.PI/180,la2=b[0]*Math.PI/180,dlo=(b[1]-a[1])*Math.PI/180;
   const y=Math.sin(dlo)*Math.cos(la2);
   const x=Math.cos(la1)*Math.sin(la2)-Math.sin(la1)*Math.cos(la2)*Math.cos(dlo);
   return ((Math.atan2(y,x)*180/Math.PI)+360)%360;
 }
-function urlGeocodificar(t){
-  return 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(t);
-}
+function urlGeocodificar(t){return 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(t);}
 function urlRutaTomTom(o,d){
-  return 'https://api.tomtom.com/routing/1/calculateRoute/'+o[0]+','+o[1]+':'+d[0]+','+d[1]
-    +'/json?key='+TT+'&routeType=fastest&traffic=true&travelMode=car&instructionsType=text&language=es-ES';
+  return 'https://api.tomtom.com/routing/1/calculateRoute/'+o[0]+','+o[1]+':'+d[0]+','+d[1]+'/json?key='+TT+'&routeType=fastest&traffic=true&travelMode=car&instructionsType=text&language=es-ES';
 }
-const TURN_GEOM = {
-  'straight':{turn:0,R:0},'slight right':{turn:35,R:26},right:{turn:90,R:15},
-  'sharp right':{turn:150,R:10},uturn:{turn:178,R:9},'sharp left':{turn:-150,R:10},
-  left:{turn:-90,R:15},'slight left':{turn:-35,R:26}
-};
+const TURN_GEOM={'straight':{turn:0,R:0},'slight right':{turn:35,R:26},right:{turn:90,R:15},'sharp right':{turn:150,R:10},uturn:{turn:178,R:9},'sharp left':{turn:-150,R:10},left:{turn:-90,R:15},'slight left':{turn:-35,R:26}};
 function arrowSVG(mod,col){
   const g=TURN_GEOM[mod]||TURN_GEOM.straight;
   if(!g.turn) return '<svg viewBox="0 0 48 52"><path d="M24 48V10M14 20L24 8 34 20" stroke="'+(col||'#0a8a34')+'" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  const dir = g.turn>0?1:-1;
+  const dir=g.turn>0?1:-1;
   const pts=[];
   for(let i=0;i<=20;i++){
     const a=(180+dir*Math.abs(g.turn)*i/20)*Math.PI/180;
-    pts.push({x:24+dir*g.R+g.R*Math.cos(a), y:46+g.R*Math.sin(a)});
+    pts.push({x:24+dir*g.R+g.R*Math.cos(a),y:46+g.R*Math.sin(a)});
   }
-  return '<svg viewBox="0 0 48 52"><path d="'+pts.map((p,i)=>(i?'L':'M')+p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' ')
-    +'" fill="none" stroke="'+(col||'#0a8a34')+'" stroke-width="7" stroke-linecap="round"/></svg>';
+  return '<svg viewBox="0 0 48 52"><path d="'+pts.map((p,i)=>(i?'L':'M')+p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' ')+'" fill="none" stroke="'+(col||'#0a8a34')+'" stroke-width="7" stroke-linecap="round"/></svg>';
+}
+function roundaboutSVG(exit,col){
+  col=col||'#0a8a34';
+  const c=24,r=12,grosor=5;
+  const exitReal=Math.max(1,parseInt(exit,10)||1);
+  let s='<svg viewBox="0 0 48 52">';
+  s+='<circle cx="'+c+'" cy="26" r="'+r+'" fill="none" stroke="'+col+'" stroke-width="'+grosor+'" opacity="0.9"/>';
+  s+='<path d="M'+c+' 50 L'+c+' '+(26+r)+'" stroke="'+col+'" stroke-width="'+grosor+'" stroke-linecap="round"/>';
+  const NEXITS=3,pasoDeg=360/NEXITS,a0=Math.PI/2;
+  for(let k=0;k<NEXITS;k++){
+    const a=a0-(k*pasoDeg)*Math.PI/180;
+    const x1=c+Math.cos(a)*r,y1=26+Math.sin(a)*r;
+    const x2=c+Math.cos(a)*(r+7),y2=26+Math.sin(a)*(r+7);
+    const esElegida=(k===Math.min(exitReal,NEXITS-1));
+    s+='<path d="M'+x1.toFixed(1)+' '+y1.toFixed(1)+' L'+x2.toFixed(1)+' '+y2.toFixed(1)+'" stroke="'+(esElegida?'#ffb020':col)+'" stroke-width="'+(esElegida?5:3)+'" stroke-linecap="round"/>';
+  }
+  s+='<text x="'+c+'" y="31" text-anchor="middle" font-size="14" font-weight="800" fill="'+col+'" font-family="system-ui,sans-serif">'+exitReal+'</text>';
+  return s+'</svg>';
 }
 function maneuverSVG(s,hw){
   const m=s.maneuver||{};
   const col=hw?'#fff':'#0a8a34';
   if(m.type==='arrive') return '<svg viewBox="0 0 48 52"><circle cx="24" cy="26" r="15" fill="'+col+'"/><circle cx="24" cy="26" r="6" fill="#fff"/></svg>';
+  if(m.type==='roundabout'||m.type==='rotary') return roundaboutSVG(m.exit,col);
   return arrowSVG(m.modifier,col);
 }
 function ttMan(it){
   const m=(it.maneuver||it.instructionType||'').toString().toUpperCase();
   if(m.includes('ARRIVE')||m.includes('WAYPOINT')) return {type:'arrive'};
+  if(m.includes('ROUNDABOUT')||m.includes('ROTARY')){
+    return {type:'roundabout',exit:it.roundaboutExitNumber||1,modifier:m.includes('LEFT')?'left':(m.includes('RIGHT')?'right':'straight')};
+  }
   let mod='straight';
   if(m.includes('SHARP_LEFT')) mod='sharp left';
   else if(m.includes('SHARP_RIGHT')) mod='sharp right';
@@ -410,23 +424,23 @@ function ttMan(it){
   else if(m.includes('UTURN')||m.includes('U_TURN')) mod='uturn';
   return {type:'turn',modifier:mod};
 }
-let steps=[], stepIdx=0, routeCoordsLL=[], routeCumDist=[], routeProgIdx=0;
-let ultimoStepPintado='', zoomManiobraOn=false;
+let steps=[],stepIdx=0,routeCoordsLL=[],routeCumDist=[],routeProgIdx=0;
+let ultimoStepPintado='',zoomManiobraOn=false;
 let ultimaRutaDestino=null;
 function segDistM2(p,a,b){
-  const mx=111320*Math.cos(p[0]*Math.PI/180), my=110540;
-  const px=p[1]*mx, py=p[0]*my, ax=a[1]*mx, ay=a[0]*my, bx=b[1]*mx, by=b[0]*my;
-  const dx=bx-ax, dy=by-ay, L2=dx*dx+dy*dy;
+  const mx=111320*Math.cos(p[0]*Math.PI/180),my=110540;
+  const px=p[1]*mx,py=p[0]*my,ax=a[1]*mx,ay=a[0]*my,bx=b[1]*mx,by=b[0]*my;
+  const dx=bx-ax,dy=by-ay,L2=dx*dx+dy*dy;
   const t=L2?Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/L2)):0;
-  return Math.hypot(px-(ax+t*dx), py-(ay+t*dy));
+  return Math.hypot(px-(ax+t*dx),py-(ay+t*dy));
 }
 function actualizarRouteProgIdx(ll){
   if(!routeCoordsLL.length) return;
-  const i0=Math.max(0,routeProgIdx-8), i1=Math.min(routeCoordsLL.length-1, routeProgIdx+500);
-  let mejor=routeProgIdx, md=Infinity;
+  const i0=Math.max(0,routeProgIdx-8),i1=Math.min(routeCoordsLL.length-1,routeProgIdx+500);
+  let mejor=routeProgIdx,md=Infinity;
   for(let i=i0;i<i1;i++){
-    const d=segDistM2(ll, routeCoordsLL[i], routeCoordsLL[i+1]);
-    if(d<md){ md=d; mejor=i; }
+    const d=segDistM2(ll,routeCoordsLL[i],routeCoordsLL[i+1]);
+    if(d<md){md=d;mejor=i;}
   }
   routeProgIdx=mejor;
   return md;
@@ -436,391 +450,350 @@ function recorridoAhora(ll){
   if(!routeCoordsLL.length) return 0;
   const base=routeCumDist[i]||0;
   if(i>=routeCoordsLL.length-1) return base;
-  const a=routeCoordsLL[i], b=routeCoordsLL[i+1];
-  const mx=111320*Math.cos(a[0]*Math.PI/180), my=110540;
-  const ax=a[1]*mx, ay=a[0]*my, bx=b[1]*mx, by=b[0]*my, px=ll[1]*mx, py=ll[0]*my;
-  const dx=bx-ax, dy=by-ay, L2=dx*dx+dy*dy;
+  const a=routeCoordsLL[i],b=routeCoordsLL[i+1];
+  const mx=111320*Math.cos(a[0]*Math.PI/180),my=110540;
+  const ax=a[1]*mx,ay=a[0]*my,bx=b[1]*mx,by=b[0]*my,px=ll[1]*mx,py=ll[0]*my;
+  const dx=bx-ax,dy=by-ay,L2=dx*dx+dy*dy;
   const t=L2?Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/L2)):0;
-  return base + t*Math.sqrt(L2);
+  return base+t*Math.sqrt(L2);
 }
 function avanzarPaso(r){
-  while(stepIdx<steps.length-1 && (steps[stepIdx].metro||0)<=r+15) stepIdx++;
+  while(stepIdx<steps.length-1&&(steps[stepIdx].metro||0)<=r+15) stepIdx++;
 }
-
 function actualizarTrimRuta(){
   if(!trimSoportado) return;
-  if(!routeCoordsLL.length || !routeCumDist.length) return;
+  if(!routeCoordsLL.length||!routeCumDist.length) return;
   if(!map.getLayer('ruta')) return;
-  const total = routeCumDist[routeCumDist.length - 1];
-  if(total <= 0) return;
-  const recorrido = routeCumDist[routeProgIdx] || 0;
-  const fraccion = Math.max(0, Math.min(1, recorrido / total));
-  try {
-    map.setPaintProperty('ruta', 'line-trim-offset', [0, fraccion]);
-    if(map.getLayer('ruta-casco')){
-      map.setPaintProperty('ruta-casco', 'line-trim-offset', [0, fraccion]);
-    }
-    document.getElementById('rTrim').textContent = Math.round(fraccion*100) + '%';
-  } catch(e){
-    trimSoportado = false;
-    document.getElementById('rTrim').innerHTML = '<span class="aviso">no soportado</span>';
+  const total=routeCumDist[routeCumDist.length-1];
+  if(total<=0) return;
+  const recorrido=routeCumDist[routeProgIdx]||0;
+  const fraccion=Math.max(0,Math.min(1,recorrido/total));
+  try{
+    map.setPaintProperty('ruta','line-trim-offset',[0,fraccion]);
+    if(map.getLayer('ruta-casco')) map.setPaintProperty('ruta-casco','line-trim-offset',[0,fraccion]);
+    document.getElementById('rTrim').textContent=Math.round(fraccion*100)+'%';
+  }catch(e){
+    trimSoportado=false;
+    document.getElementById('rTrim').innerHTML='<span class="aviso">no soportado</span>';
   }
 }
-
+// ==== Actualiza el chevron de giro sobre la ruta ====
+function actualizarChevronGiro(){
+  const s=steps[stepIdx];
+  const src=map.getSource('giro-pos');
+  if(!src) return;
+  if(!s||!s.maneuver||s.maneuver.type==='arrive'||s.maneuver.type==='depart'||!steps.length){
+    src.setData({type:'FeatureCollection',features:[]});
+    return;
+  }
+  // Ref GPS para calcular distancia
+  const ref=lastFix?[lastFix.lat,lastFix.lon]:(routeCoordsLL[routeProgIdx]||[0,0]);
+  const dRestante=(s.metro||0)-recorridoAhora(ref);
+  // Solo mostrar el chevron si estas a menos de 250 m del giro
+  if(dRestante<0 || dRestante>250){
+    src.setData({type:'FeatureCollection',features:[]});
+    return;
+  }
+  // Punto donde esta el giro
+  const idx=Math.min(routeCoordsLL.length-1,Math.max(0,s.idx||stepIdx));
+  const punto=routeCoordsLL[Math.max(0,Math.min(routeCoordsLL.length-1,(s.routeIdx||stepIdx)))];
+  if(!punto){src.setData({type:'FeatureCollection',features:[]});return;}
+  // Angulo de la flecha segun el tipo de giro
+  const mod=s.maneuver.modifier||'straight';
+  let ang=0;
+  if(mod.includes('right')) ang=90;
+  else if(mod.includes('left')) ang=-90;
+  else if(mod==='uturn') ang=180;
+  else if(mod.includes('slight right')) ang=45;
+  else if(mod.includes('slight left')) ang=-45;
+  src.setData({
+    type:'Feature',
+    geometry:{type:'Point',coordinates:[punto[1],punto[0]]},
+    properties:{bearing:ang}
+  });
+}
 function renderStep(){
   const s=steps[stepIdx];
-  if(!s || !steps.length){ document.getElementById('navbanner').style.display='none'; return Infinity; }
+  if(!s||!steps.length){document.getElementById('navbanner').style.display='none';return Infinity;}
   const nb=document.getElementById('navbanner');
   nb.style.display='flex';
   const ref=lastFix?[lastFix.lat,lastFix.lon]:(routeCoordsLL[routeProgIdx]||[0,0]);
-  const d=Math.max(0, (s.metro||0) - recorridoAhora(ref));
-  const hw=!!s.hw, clave=stepIdx+'|'+hw;
+  const d=Math.max(0,(s.metro||0)-recorridoAhora(ref));
+  const hw=!!s.hw,clave=stepIdx+'|'+hw;
   if(clave!==ultimoStepPintado){
     ultimoStepPintado=clave;
-    nb.classList.toggle('hw', hw);
-    document.getElementById('navarrow').innerHTML = maneuverSVG(s, hw);
-    document.getElementById('navsub').textContent = s.calle||s.msg||'';
+    nb.classList.toggle('hw',hw);
+    document.getElementById('navarrow').innerHTML=maneuverSVG(s,hw);
+    document.getElementById('navsub').textContent=s.calle||s.msg||'';
   }
-  document.getElementById('navd').textContent = d<1000 ? Math.round(d)+' m' : (d/1000).toFixed(1)+' km';
+  document.getElementById('navd').textContent=d<1000?Math.round(d)+' m':(d/1000).toFixed(1)+' km';
+  actualizarChevronGiro();
   return d;
 }
-let gpsOn=false, watchId=null, seguirOn=false;
-let lastFix=null, heading=0, speedKmh=0;
-let histFixes=[], headingHist=[];
-let camPosActual=null, camPosObjetivo=null;
-let camBearingActual=0, camBearingObjetivo=0;
-let camZoomActual=18.8, camZoomObjetivo=18.8;
-let camaraLibre = false;
+let gpsOn=false,watchId=null,seguirOn=false;
+let lastFix=null,heading=0,speedKmh=0;
+let histFixes=[],headingHist=[];
+let camPosActual=null,camPosObjetivo=null;
+let camBearingActual=0,camBearingObjetivo=0;
+let camZoomActual=17.8,camZoomObjetivo=17.8;
+let camaraLibre=false;
 function rumboDelGPS(c,now,v){
-  histFixes.push(now); if(histFixes.length>14) histFixes.shift();
+  histFixes.push(now);if(histFixes.length>14) histFixes.shift();
   if(Number.isFinite(c.heading)&&v>=3) return ((c.heading%360)+360)%360;
   if(v<3) return null;
   for(let i=histFixes.length-2;i>=0;i--){
     const f=histFixes[i];
     if(now.t-f.t>12000) break;
-    if(dist([f.lat,f.lon],[now.lat,now.lon]) >= Math.min(35,Math.max(20,v*4)))
-      return bearing([f.lat,f.lon],[now.lat,now.lon]);
+    if(dist([f.lat,f.lon],[now.lat,now.lon])>=Math.min(35,Math.max(20,v*4))) return bearing([f.lat,f.lon],[now.lat,now.lon]);
   }
   return null;
 }
 function filtrarHeading(h){
   if(!Number.isFinite(h)) return;
-  headingHist.push(h); if(headingHist.length>8) headingHist.shift();
-  let sx=0, sy=0;
-  for(const a of headingHist){ const r=a*Math.PI/180; sx+=Math.cos(r); sy+=Math.sin(r); }
-  heading = Math.atan2(sy,sx)*180/Math.PI;
+  headingHist.push(h);if(headingHist.length>8) headingHist.shift();
+  let sx=0,sy=0;
+  for(const a of headingHist){const r=a*Math.PI/180;sx+=Math.cos(r);sy+=Math.sin(r);}
+  heading=Math.atan2(sy,sx)*180/Math.PI;
   if(heading<0) heading+=360;
 }
-const elCoche = document.createElement('div');
-elCoche.innerHTML = '<svg class="coche" viewBox="0 0 24 24"><path d="M12 2 L20 20 L12 16 L4 20 Z" fill="#3fa9ff" stroke="#fff" stroke-width="1.5"/></svg>';
-const marcadorCoche = new maplibregl.Marker({element:elCoche, rotationAlignment:'map'});
-let distanciaFueraRuta=0, fueraDesde=0, recalculando=false, ultimoRecalculo=0;
-const DESVIO_M=45, CONFIRMACION_MS=2500, COOLDOWN_MS=10000;
+// Fuente del coche actualizada por setData
+function setCochePos(lng,lat,brg){
+  const src=map.getSource('coche-pos');
+  if(!src) return;
+  src.setData({type:'Feature',geometry:{type:'Point',coordinates:[lng,lat]},properties:{bearing:brg}});
+}
+let distanciaFueraRuta=0,fueraDesde=0,recalculando=false,ultimoRecalculo=0;
+const DESVIO_M=45,CONFIRMACION_MS=2500,COOLDOWN_MS=10000;
 function distanciaRutaActual(ll){
   if(!routeCoordsLL.length) return Infinity;
-  const i0=Math.max(0,routeProgIdx-20), i1=Math.min(routeCoordsLL.length-1, routeProgIdx+500);
+  const i0=Math.max(0,routeProgIdx-20),i1=Math.min(routeCoordsLL.length-1,routeProgIdx+500);
   let md=Infinity;
-  for(let i=i0;i<i1;i++) md=Math.min(md, segDistM2(ll, routeCoordsLL[i], routeCoordsLL[i+1]));
+  for(let i=i0;i<i1;i++) md=Math.min(md,segDistM2(ll,routeCoordsLL[i],routeCoordsLL[i+1]));
   return md;
 }
-async function calcularRuta(origen, destino, modo='normal'){
+async function calcularRuta(origen,destino,modo='normal'){
   if(recalculando) return false;
-  recalculando = true;
+  recalculando=true;
   if(modo==='recalculo') document.getElementById('g5').innerHTML='<span class="aviso">↻ recalculando ruta…</span>';
   try{
-    const r = await fetch(urlRutaTomTom(origen,destino));
-    const j = await r.json();
+    const r=await fetch(urlRutaTomTom(origen,destino));
+    const j=await r.json();
     if(!j.routes||!j.routes.length) throw new Error('TomTom no devolvió ruta');
-    const ruta = j.routes[0];
-    const coords = ruta.legs.flatMap(l=>l.points.map(p=>[p.longitude,p.latitude]));
-    const geojson = {type:'Feature', geometry:{type:'LineString', coordinates:coords}};
+    const ruta=j.routes[0];
+    const coords=ruta.legs.flatMap(l=>l.points.map(p=>[p.longitude,p.latitude]));
+    const geojson={type:'Feature',geometry:{type:'LineString',coordinates:coords}};
     if(map.getSource('ruta')) map.getSource('ruta').setData(geojson);
-    else {
-      map.addSource('ruta', {
-        type:'geojson',
-        data:geojson,
-        lineMetrics: true
-      });
-
-      // ==== ITER 4: ruta mas ancha y escala con el zoom ====
-      // line-width con interpolacion por zoom: a mas zoom, mas ancho
-      map.addLayer({id:'ruta-casco', type:'line', source:'ruta',
-        paint:{
-          'line-color':'#0d47a1',
-          'line-opacity':0.9,
-          'line-width':[
-            'interpolate',['linear'],['zoom'],
-            14, 12,
-            16, 18,
-            18, 24,
-            20, 30
-          ]
-        },
+    else{
+      map.addSource('ruta',{type:'geojson',data:geojson,lineMetrics:true});
+      // ==== casco + relleno translucido + flechas internas ====
+      map.addLayer({id:'ruta-casco',type:'line',source:'ruta',
+        paint:{'line-color':'#0d47a1','line-opacity':0.85,
+          'line-width':['interpolate',['linear'],['zoom'],14,12,16,18,18,24,20,30]},
         layout:{'line-cap':'round','line-join':'round','line-round-limit':1.0}});
-
-      map.addLayer({id:'ruta', type:'line', source:'ruta',
-        paint:{
-          'line-color':'#1e88e5',
-          'line-opacity':0.95,
-          'line-width':[
-            'interpolate',['linear'],['zoom'],
-            14, 8,
-            16, 14,
-            18, 20,
-            20, 26
-          ]
-        },
+      map.addLayer({id:'ruta',type:'line',source:'ruta',
+        paint:{'line-color':'#1e88e5','line-opacity':0.75,
+          'line-width':['interpolate',['linear'],['zoom'],14,8,16,14,18,20,20,26]},
         layout:{'line-cap':'round','line-join':'round','line-round-limit':1.0}});
-
-      map.addLayer({id:'ruta-flechas', type:'symbol', source:'ruta',
-        layout:{
-          'symbol-placement':'line',
-          'symbol-spacing':60,
-          'icon-image':'ruta-flecha',
-          'icon-size':0.7,
-          'icon-rotation-alignment':'map',
-          'icon-allow-overlap':true,
-          'icon-ignore-placement':true
-        }});
-
-      try {
-        map.setPaintProperty('ruta', 'line-trim-offset', [0, 0]);
-        map.setPaintProperty('ruta-casco', 'line-trim-offset', [0, 0]);
-      } catch(e){
-        trimSoportado = false;
-        document.getElementById('rTrim').innerHTML = '<span class="aviso">no soportado</span>';
-      }
+      map.addLayer({id:'ruta-flechas',type:'symbol',source:'ruta',
+        layout:{'symbol-placement':'line','symbol-spacing':90,'icon-image':'ruta-flecha','icon-size':0.85,
+          'icon-rotation-alignment':'map','icon-allow-overlap':true,'icon-ignore-placement':true}});
+      try{
+        map.setPaintProperty('ruta','line-trim-offset',[0,0]);
+        map.setPaintProperty('ruta-casco','line-trim-offset',[0,0]);
+      }catch(e){trimSoportado=false;document.getElementById('rTrim').innerHTML='<span class="aviso">no soportado</span>';}
     }
-    routeCoordsLL = coords.map(c=>[c[1],c[0]]);
-    routeCumDist = [0];
-    for(let i=1;i<routeCoordsLL.length;i++)
-      routeCumDist.push(routeCumDist[i-1] + dist(routeCoordsLL[i-1], routeCoordsLL[i]));
-    steps = (ruta.guidance && ruta.guidance.instructions || []).map(it=>{
-      const off=it.routeOffsetInMeters, pi=it.pointIndex;
-      const porIndice = Number.isInteger(pi)&&pi>=0&&pi<routeCumDist.length ? routeCumDist[pi] : null;
-      const metroFinal = porIndice!==null && (off==null || Math.abs(porIndice-off)<=Math.max(300,off*.1))
-        ? porIndice : (off||0);
-      return { metro:metroFinal, calle:it.street||'', msg:it.message||'',
-               maneuver:ttMan(it), hw:/autopista|autov[ií]a|\b(a|ap)-?\d/i.test(it.street||'') };
+    routeCoordsLL=coords.map(c=>[c[1],c[0]]);
+    routeCumDist=[0];
+    for(let i=1;i<routeCoordsLL.length;i++) routeCumDist.push(routeCumDist[i-1]+dist(routeCoordsLL[i-1],routeCoordsLL[i]));
+    steps=(ruta.guidance&&ruta.guidance.instructions||[]).map(it=>{
+      const off=it.routeOffsetInMeters,pi=it.pointIndex;
+      const porIndice=Number.isInteger(pi)&&pi>=0&&pi<routeCumDist.length?routeCumDist[pi]:null;
+      const metroFinal=porIndice!==null&&(off==null||Math.abs(porIndice-off)<=Math.max(300,off*.1))?porIndice:(off||0);
+      const rutaIdx=Number.isInteger(pi)&&pi>=0&&pi<routeCoordsLL.length?pi:0;
+      return {metro:metroFinal,calle:it.street||'',msg:it.message||'',maneuver:ttMan(it),hw:/autopista|autov[ií]a|\b(a|ap)-?\d/i.test(it.street||''),routeIdx:rutaIdx};
     });
-    stepIdx=0; routeProgIdx=0; ultimoStepPintado=''; zoomManiobraOn=false;
-    camZoomObjetivo = navZoomBase;
+    stepIdx=0;routeProgIdx=0;ultimoStepPintado='';zoomManiobraOn=false;
+    camZoomObjetivo=navZoomBase;
     renderStep();
     actualizarTrimRuta();
     const km=(ruta.summary.lengthInMeters/1000).toFixed(1);
     const min=Math.round(ruta.summary.travelTimeInSeconds/60);
-    document.getElementById('g5').innerHTML = '<b>'+km+' km · '+min+' min</b>';
+    document.getElementById('g5').innerHTML='<b>'+km+' km · '+min+' min</b>';
     return true;
   }catch(e){
     document.getElementById('g5').innerHTML='<span class="mal">error de ruta: '+e.message+'</span>';
-    registrarError('tomtom', e.message);
+    registrarError('tomtom',e.message);
     return false;
-  }finally{ recalculando = false; }
+  }finally{recalculando=false;}
 }
 async function comprobarDesvio(ll){
-  if(!routeCoordsLL.length || !ultimaRutaDestino || recalculando) return;
-  const d = distanciaRutaActual(ll);
-  distanciaFueraRuta = d;
-  document.getElementById('g7').textContent = Math.round(d)+' m';
+  if(!routeCoordsLL.length||!ultimaRutaDestino||recalculando) return;
+  const d=distanciaRutaActual(ll);
+  distanciaFueraRuta=d;
+  document.getElementById('g7').textContent=Math.round(d)+' m';
   if(d>DESVIO_M){
-    if(!fueraDesde) fueraDesde = performance.now();
-    if(performance.now()-fueraDesde > CONFIRMACION_MS && performance.now()-ultimoRecalculo > COOLDOWN_MS){
-      ultimoRecalculo = performance.now();
-      fueraDesde = 0;
-      await calcularRuta([ll[0],ll[1]], ultimaRutaDestino, 'recalculo');
+    if(!fueraDesde) fueraDesde=performance.now();
+    if(performance.now()-fueraDesde>CONFIRMACION_MS&&performance.now()-ultimoRecalculo>COOLDOWN_MS){
+      ultimoRecalculo=performance.now();fueraDesde=0;
+      await calcularRuta([ll[0],ll[1]],ultimaRutaDestino,'recalculo');
     }
-  } else fueraDesde = 0;
+  }else fueraDesde=0;
 }
 function onFix(pos){
   const c=pos.coords;
-  const now={lat:c.latitude, lon:c.longitude, t:pos.timestamp||Date.now()};
-  const v = Number.isFinite(c.speed) ? Math.max(0,c.speed) : 0;
-  speedKmh = v*3.6;
-
-  const parado = speedKmh < 3;
-  if(parado !== camaraLibre){
-    camaraLibre = parado;
-    document.getElementById('g8').textContent = parado ? 'libre (parado)' : 'seguir';
+  const now={lat:c.latitude,lon:c.longitude,t:pos.timestamp||Date.now()};
+  const v=Number.isFinite(c.speed)?Math.max(0,c.speed):0;
+  speedKmh=v*3.6;
+  const parado=speedKmh<3;
+  if(parado!==camaraLibre){
+    camaraLibre=parado;
+    document.getElementById('g8').textContent=parado?'libre (parado)':'seguir';
   }
-
-  // ==== ITER 4: terreno ya no se desactiva automaticamente ====
-  // (se controla solo con el boton)
-
-  if(parado && lastFix){
-    document.getElementById('g2').textContent = Math.round(speedKmh)+' km/h';
-    document.getElementById('g3').textContent = Math.round(heading)+'°';
+  if(parado&&lastFix){
+    document.getElementById('g2').textContent=Math.round(speedKmh)+' km/h';
+    document.getElementById('g3').textContent=Math.round(heading)+'°';
     actualizarHUD();
-    comprobarDesvio([now.lat, now.lon]);
+    comprobarDesvio([now.lat,now.lon]);
     return;
   }
-  const h = rumboDelGPS(c,now,v);
+  const h=rumboDelGPS(c,now,v);
   if(h!==null) filtrarHeading(h);
-  if(!marcadorCoche._map) marcadorCoche.setLngLat([now.lon,now.lat]).addTo(map);
-  else marcadorCoche.setLngLat([now.lon,now.lat]);
-  marcadorCoche.setRotation(heading);
-  document.getElementById('g2').textContent = Math.round(speedKmh)+' km/h';
-  document.getElementById('g3').textContent = Math.round(heading)+'°';
+  setCochePos(now.lon,now.lat,heading);
+  document.getElementById('g2').textContent=Math.round(speedKmh)+' km/h';
+  document.getElementById('g3').textContent=Math.round(heading)+'°';
   actualizarHUD();
-  camPosObjetivo = [now.lon, now.lat];
-  camBearingObjetivo = heading;
+  camPosObjetivo=[now.lon,now.lat];
+  camBearingObjetivo=heading;
   if(!camPosActual){
-    camPosActual = camPosObjetivo.slice();
-    camBearingActual = camBearingObjetivo;
-    camZoomActual = camZoomObjetivo = navZoomBase;
+    camPosActual=camPosObjetivo.slice();
+    camBearingActual=camBearingObjetivo;
+    camZoomActual=camZoomObjetivo=navZoomBase;
   }
-  lastFix = now;
+  lastFix=now;
   if(steps.length){
     const ll=[now.lat,now.lon];
     actualizarRouteProgIdx(ll);
-    const recorrido = recorridoAhora(ll);
+    const recorrido=recorridoAhora(ll);
     avanzarPaso(recorrido);
-    const d = renderStep();
+    const d=renderStep();
     actualizarTrimRuta();
-    const s = steps[stepIdx];
-    if(s && seguirOn){
-      const cerca = d<180 && s.maneuver && s.maneuver.type!=='arrive';
-      if(cerca !== zoomManiobraOn){
-        zoomManiobraOn = cerca;
-        camZoomObjetivo = cerca ? Math.min(19.8, navZoomBase+1.2) : navZoomBase;
+    const s=steps[stepIdx];
+    if(s&&seguirOn){
+      const cerca=d<180&&s.maneuver&&s.maneuver.type!=='arrive';
+      if(cerca!==zoomManiobraOn){
+        zoomManiobraOn=cerca;
+        camZoomObjetivo=cerca?Math.min(20,navZoomBase+ZOOM_MANIOBRA_EXTRA):navZoomBase;
       }
     }
-  } else {
+  }else{
     renderStep();
   }
-  comprobarDesvio([now.lat, now.lon]);
+  comprobarDesvio([now.lat,now.lon]);
 }
 function actualizarHUD(){
-  const vel = document.getElementById('hudVel');
-  const rum = document.getElementById('hudRum');
-  if(vel) vel.textContent = Math.round(speedKmh)+' km/h';
+  const vel=document.getElementById('hudVel');
+  const rum=document.getElementById('hudRum');
+  if(vel) vel.textContent=Math.round(speedKmh)+' km/h';
   if(rum){
     const dirs=['N','NE','E','SE','S','SO','O','NO'];
-    const idx = Math.round(heading/45)%8;
-    rum.textContent = dirs[idx]+' '+Math.round(heading)+'°';
+    const idx=Math.round(heading/45)%8;
+    rum.textContent=dirs[idx]+' '+Math.round(heading)+'°';
   }
 }
 function bucleSeguimiento(){
-  if(seguirOn && !camaraLibre && camPosActual && camPosObjetivo){
+  if(seguirOn&&!camaraLibre&&camPosActual&&camPosObjetivo){
     const k=.18;
-    camPosActual[0] += (camPosObjetivo[0]-camPosActual[0])*k;
-    camPosActual[1] += (camPosObjetivo[1]-camPosActual[1])*k;
-    let dB = camBearingObjetivo - camBearingActual;
+    camPosActual[0]+=(camPosObjetivo[0]-camPosActual[0])*k;
+    camPosActual[1]+=(camPosObjetivo[1]-camPosActual[1])*k;
+    let dB=camBearingObjetivo-camBearingActual;
     while(dB>180) dB-=360;
     while(dB<-180) dB+=360;
-    camBearingActual += dB*.14;
-    camZoomActual += (camZoomObjetivo-camZoomActual)*.10;
+    camBearingActual+=dB*.14;
+    camZoomActual+=(camZoomObjetivo-camZoomActual)*.10;
     const dx=Math.abs(camPosObjetivo[0]-camPosActual[0]);
     const dy=Math.abs(camPosObjetivo[1]-camPosActual[1]);
     const dz=Math.abs(camZoomObjetivo-camZoomActual);
-    const quieto = dx<1e-6 && dy<1e-6 && dz<0.001;
+    const quieto=dx<1e-6&&dy<1e-6&&dz<0.001;
     if(!quieto){
-      map.jumpTo({center:camPosActual, bearing:camBearingActual, zoom:camZoomActual});
+      // Padding bottom para que el coche quede mas abajo en pantalla
+      map.jumpTo({center:camPosActual,bearing:camBearingActual,zoom:camZoomActual});
     }
   }
   requestAnimationFrame(bucleSeguimiento);
 }
 requestAnimationFrame(bucleSeguimiento);
-
-// ==== ITER 4: deteccion de mapa movido a mano para mostrar boton centrar ====
-let mapaMovidoAMano = false;
-map.on('dragstart', () => {
-  if(seguirOn) mostrarBotonCentrar(true);
-});
-map.on('rotatestart', () => {
-  if(seguirOn) mostrarBotonCentrar(true);
-});
-map.on('pitchstart', () => {
-  if(seguirOn) mostrarBotonCentrar(true);
-});
-
+// ==== Deteccion de mapa movido a mano ====
+map.on('dragstart',()=>{if(seguirOn) mostrarBotonCentrar(true);});
+map.on('rotatestart',()=>{if(seguirOn) mostrarBotonCentrar(true);});
+map.on('pitchstart',()=>{if(seguirOn) mostrarBotonCentrar(true);});
 function mostrarBotonCentrar(on){
-  const btn = document.getElementById('btnCentrar');
-  if(on){
-    btn.classList.add('on');
-    mapaMovidoAMano = true;
-  } else {
-    btn.classList.remove('on');
-    mapaMovidoAMano = false;
-  }
+  const btn=document.getElementById('btnCentrar');
+  if(on) btn.classList.add('on');
+  else btn.classList.remove('on');
 }
-
 function centrarEnMi(){
   if(!lastFix) return;
-  camaraLibre = false;
-  camPosActual = [lastFix.lon, lastFix.lat];
-  camPosObjetivo = [lastFix.lon, lastFix.lat];
-  camBearingActual = heading;
-  camBearingObjetivo = heading;
-  camZoomActual = navZoomBase;
-  camZoomObjetivo = navZoomBase;
-  map.jumpTo({
-    center:[lastFix.lon, lastFix.lat],
-    bearing: heading,
-    zoom: navZoomBase,
-    pitch: 60,
-    duration: 400
-  });
+  camaraLibre=false;
+  camPosActual=[lastFix.lon,lastFix.lat];
+  camPosObjetivo=[lastFix.lon,lastFix.lat];
+  camBearingActual=heading;camBearingObjetivo=heading;
+  camZoomActual=navZoomBase;camZoomObjetivo=navZoomBase;
+  map.jumpTo({center:[lastFix.lon,lastFix.lat],bearing:heading,zoom:navZoomBase,pitch:60,duration:400});
   mostrarBotonCentrar(false);
 }
-document.getElementById('btnCentrar').onclick = centrarEnMi;
-
-document.getElementById('btnGPS').onclick = function(){
-  gpsOn = !gpsOn;
-  this.textContent = '📍 GPS: '+(gpsOn?'ON':'OFF');
-  this.classList.toggle('on', gpsOn);
+document.getElementById('btnCentrar').onclick=centrarEnMi;
+document.getElementById('btnGPS').onclick=function(){
+  gpsOn=!gpsOn;
+  this.textContent='📍 GPS: '+(gpsOn?'ON':'OFF');
+  this.classList.toggle('on',gpsOn);
   if(gpsOn){
-    document.getElementById('g1').innerHTML = '<b>activo</b>';
-    watchId = navigator.geolocation.watchPosition(onFix, e => {
-      document.getElementById('g1').innerHTML = '<span class="mal">error: '+e.message+'</span>';
-      registrarError('gps', e.message);
-    }, {enableHighAccuracy:true, maximumAge:0, timeout:15000});
-  } else {
+    document.getElementById('g1').innerHTML='<b>activo</b>';
+    watchId=navigator.geolocation.watchPosition(onFix,e=>{
+      document.getElementById('g1').innerHTML='<span class="mal">error: '+e.message+'</span>';
+      registrarError('gps',e.message);
+    },{enableHighAccuracy:true,maximumAge:0,timeout:15000});
+  }else{
     if(watchId!==null) navigator.geolocation.clearWatch(watchId);
-    document.getElementById('g1').textContent = 'apagado';
+    document.getElementById('g1').textContent='apagado';
   }
 };
-document.getElementById('btnSeguir').onclick = function(){
-  seguirOn = !seguirOn;
-  this.textContent = '🧭 Seguir: '+(seguirOn?'ON':'OFF');
-  this.classList.toggle('on', seguirOn);
-  if(seguirOn && lastFix){
-    centrarEnMi();
-  }
+document.getElementById('btnSeguir').onclick=function(){
+  seguirOn=!seguirOn;
+  this.textContent='🧭 Seguir: '+(seguirOn?'ON':'OFF');
+  this.classList.toggle('on',seguirOn);
+  if(seguirOn&&lastFix) centrarEnMi();
 };
-let fpsMarchaUltimoT=0, fpsMarchaUltimoConteo=0;
+let fpsMarchaUltimoT=0,fpsMarchaUltimoConteo=0;
 setInterval(()=>{
-  if(!gpsOn){ fpsMarchaUltimoT=0; return; }
-  const a = performance.now();
-  if(!fpsMarchaUltimoT){ fpsMarchaUltimoT=a; fpsMarchaUltimoConteo=contadorRenders; return; }
-  const dt = (a-fpsMarchaUltimoT)/1000;
-  document.getElementById('g4').textContent = Math.round((contadorRenders-fpsMarchaUltimoConteo)/dt)+' fps';
-  fpsMarchaUltimoT = a; fpsMarchaUltimoConteo = contadorRenders;
-}, 1000);
-document.getElementById('btnDestino').onclick = async function(){
-  if(!lastFix){ alert('Activa el GPS primero.'); return; }
-  const texto = prompt('¿A dónde vamos?','');
+  if(!gpsOn){fpsMarchaUltimoT=0;return;}
+  const a=performance.now();
+  if(!fpsMarchaUltimoT){fpsMarchaUltimoT=a;fpsMarchaUltimoConteo=contadorRenders;return;}
+  const dt=(a-fpsMarchaUltimoT)/1000;
+  document.getElementById('g4').textContent=Math.round((contadorRenders-fpsMarchaUltimoConteo)/dt)+' fps';
+  fpsMarchaUltimoT=a;fpsMarchaUltimoConteo=contadorRenders;
+},1000);
+document.getElementById('btnDestino').onclick=async function(){
+  if(!lastFix){alert('Activa el GPS primero.');return;}
+  const texto=prompt('¿A dónde vamos?','');
   if(!texto) return;
-  document.getElementById('g5').innerHTML = '<span class="aviso">buscando dirección…</span>';
+  document.getElementById('g5').innerHTML='<span class="aviso">buscando dirección…</span>';
   try{
-    const r = await fetch(urlGeocodificar(texto));
-    const j = await r.json();
-    if(!j.length){ document.getElementById('g5').innerHTML='<span class="mal">no se encontró</span>'; return; }
-    ultimaRutaDestino = [parseFloat(j[0].lat), parseFloat(j[0].lon)];
-    document.getElementById('g5').innerHTML = '<span class="aviso">calculando ruta…</span>';
-    const ok = await calcularRuta([lastFix.lat,lastFix.lon], ultimaRutaDestino);
+    const r=await fetch(urlGeocodificar(texto));
+    const j=await r.json();
+    if(!j.length){document.getElementById('g5').innerHTML='<span class="mal">no se encontró</span>';return;}
+    ultimaRutaDestino=[parseFloat(j[0].lat),parseFloat(j[0].lon)];
+    document.getElementById('g5').innerHTML='<span class="aviso">calculando ruta…</span>';
+    const ok=await calcularRuta([lastFix.lat,lastFix.lon],ultimaRutaDestino);
     if(ok){
-      if(seguirOn){
-        centrarEnMi();
-      } else {
-        const bounds = routeCoordsLL.reduce((b,c)=>b.extend([c[1],c[0]]),
-          new maplibregl.LngLatBounds([routeCoordsLL[0][1],routeCoordsLL[0][0]],
-                                     [routeCoordsLL[0][1],routeCoordsLL[0][0]]));
-        map.fitBounds(bounds, {padding:60, pitch:0, maxZoom:17.5});
+      if(seguirOn) centrarEnMi();
+      else{
+        const bounds=routeCoordsLL.reduce((b,c)=>b.extend([c[1],c[0]]),new maplibregl.LngLatBounds([routeCoordsLL[0][1],routeCoordsLL[0][0]],[routeCoordsLL[0][1],routeCoordsLL[0][0]]));
+        map.fitBounds(bounds,{padding:60,pitch:0,maxZoom:17.5});
       }
     }
   }catch(e){
-    document.getElementById('g5').innerHTML = '<span class="mal">error: '+e.message+'</span>';
-    registrarError('ruta', e.message);
+    document.getElementById('g5').innerHTML='<span class="mal">error: '+e.message+'</span>';
+    registrarError('ruta',e.message);
   }
 };
 </script>
