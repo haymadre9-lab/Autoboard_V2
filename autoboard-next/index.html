@@ -8,8 +8,6 @@
 <style>
 html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #map{position:absolute;inset:0}
-
-/* ===== Paneles de diagnostico (ocultos por defecto, se activan desde engranaje) ===== */
 #diag{position:fixed;top:10px;left:10px;z-index:10;background:rgba(10,13,16,.88);border:1px solid #232c33;border-radius:10px;padding:10px 14px;color:#e8eef2;font:12px/1.6 ui-monospace,monospace;max-width:320px;max-height:70vh;overflow-y:auto;display:none}
 #diag.on{display:block}
 #diag b{color:#9ae6b4}.mal{color:#ff8a8a}.aviso{color:#ffd166}
@@ -20,13 +18,9 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 @media(max-width:900px){#diag2.on{left:10px;top:260px}}
 #errlog{position:fixed;top:10px;right:10px;z-index:10;background:rgba(10,13,16,.88);border:1px solid #232c33;border-radius:10px;padding:8px 12px;color:#ff8a8a;font:11px/1.5 ui-monospace,monospace;max-width:280px;max-height:40vh;overflow-y:auto;display:none}
 #errlog.on{display:block}
-
-/* ===== Controles inferiores: GPS + Seguir ===== */
 #controlesAbajo{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:8px;justify-content:center}
 #controlesAbajo button{background:#12161c;border:1px solid #232c33;color:#e8eef2;border-radius:10px;padding:12px 18px;font-size:14px;font-weight:700}
 #controlesAbajo button.on{background:#1d3a2c;border-color:#2e6b4a}
-
-/* ===== Nav banner (arriba centro) ===== */
 #navbanner{position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:20;display:none;align-items:center;gap:12px;background:rgba(10,13,16,.9);border:1px solid #232c33;border-radius:16px;padding:8px 18px 8px 10px}
 #navbanner.hw{background:rgba(10,30,70,.92);border-color:#1e4a8a}
 #navarrow{width:78px;height:84px;flex:0 0 auto}
@@ -35,8 +29,6 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #navsub{font:600 13px system-ui,sans-serif;color:#9aa7b2;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #navbanner #btnPararRuta{width:38px;height:38px;border-radius:50%;border:2px solid #5a2020;background:rgba(60,20,20,.85);color:#ff8a8a;font-size:20px;font-weight:900;cursor:pointer;display:none;align-items:center;justify-content:center;margin-left:8px;flex:0 0 auto;padding:0}
 #navbanner #btnPararRuta.on{display:flex}
-
-/* ===== Grupo arriba derecha: Casa + Lupa + Barra busqueda ===== */
 #grupoArribaDer{position:fixed;top:14px;right:14px;z-index:25;display:flex;align-items:center;gap:10px}
 #barraBusqueda{display:none;align-items:center;background:rgba(10,13,16,.95);border:2px solid #2e6b4a;border-radius:14px;padding:0 8px;height:52px;min-width:320px;max-width:60vw}
 #barraBusqueda.on{display:flex}
@@ -54,13 +46,9 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 .botonMapa:active{transform:scale(.94)}
 #btnCasa.activo{background:#2e6b4a;border-color:#4a9e6a;color:#fff}
 #btnCasa.guardada{color:#ffd166;border-color:#8a7a20}
-
-/* ===== Controles abajo derecha: Centrar + Engranaje ===== */
 #grupoAbajoDer{position:fixed;right:14px;bottom:16px;z-index:20;display:flex;flex-direction:column;gap:10px;align-items:flex-end}
 #btnCentrar{display:none}
 #btnCentrar.on{display:flex}
-
-/* ===== Panel engranaje lateral derecho ===== */
 #panelAjustes{position:fixed;top:0;right:0;bottom:0;z-index:40;width:340px;max-width:92vw;background:rgba(10,13,16,.98);border-left:1px solid #232c33;padding:20px 18px;color:#e8eef2;font:14px/1.5 system-ui,sans-serif;overflow-y:auto;transform:translateX(100%);transition:transform .25s ease}
 #panelAjustes.on{transform:translateX(0)}
 #panelAjustes h2{margin:0 0 16px;color:#9ae6b4;font-size:18px}
@@ -69,16 +57,11 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #panelAjustes button.ajuste.on{background:#1d3a2c;border-color:#2e6b4a;color:#9ae6b4}
 #panelAjustes button.ajuste.peligro{background:#2a1a1a;border-color:#5a2020;color:#ff8a8a}
 #panelAjustes .seccion{margin-top:16px;margin-bottom:6px;color:#8d99a5;font-size:12px;text-transform:uppercase;letter-spacing:1px}
-#panelAjustes .valor{float:right;color:#ffd166;font-weight:700}
-
-/* ===== Mini-HUD velocidad ===== */
 #minihud{position:fixed;left:14px;bottom:80px;z-index:15;display:none;background:rgba(10,13,16,.85);border:1px solid #232c33;border-radius:14px;padding:12px 16px;color:#fff;font:800 44px/1 system-ui,sans-serif;align-items:center;gap:14px;min-width:88px;justify-content:center}
 #minihud.on{display:flex}
 #minihud .vel{color:#fff;font-weight:900;letter-spacing:-1px}
 #minihud .limite{width:56px;height:56px;border-radius:50%;background:#ffffff;border:6px solid #d32f2f;display:flex;align-items:center;justify-content:center;font:800 22px/1 system-ui,sans-serif;color:#000;box-shadow:0 2px 6px rgba(0,0,0,.4)}
 #minihud .limite.oculto{display:none}
-
-/* ===== Coche y radar ===== */
 .coche-marcador{width:48px!important;height:48px!important;will-change:transform}
 .coche-marcador svg{width:48px;height:48px;display:block;filter:drop-shadow(0 0 6px rgba(41,182,246,.75))}
 #radarAlerta{position:fixed;inset:0;z-index:18;pointer-events:none;display:none;box-shadow:inset 0 0 80px 20px rgba(255,0,0,.55), inset 0 0 200px 60px rgba(255,0,0,.25);animation:radarPulse 1s ease-in-out infinite}
@@ -88,8 +71,6 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #radarInfo.on{display:block}
 #radarInfo .dist{font-size:22px;font-weight:900}
 #radarInfo .lim{font-size:13px;color:#ffcdd2;margin-top:2px}
-
-/* ===== Popup cargador ===== */
 #popupCargador{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;z-index:30;display:none;background:rgba(15,20,26,.96);border:2px solid #2e6b4a;border-radius:16px;padding:16px 20px;color:#e8eef2;font:14px/1.5 system-ui,sans-serif;max-width:520px;width:92vw;box-shadow:0 4px 20px rgba(0,0,0,.6)}
 #popupCargador.on{display:block}
 #popupCargador h3{margin:0 0 8px;color:#9ae6b4;font-size:18px}
@@ -100,8 +81,6 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #popupCargador .acciones{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
 #popupCargador .acciones button{flex:1;min-width:120px;background:#1d3a2c;border:1px solid #2e6b4a;color:#e8eef2;border-radius:10px;padding:12px 16px;font-size:14px;font-weight:700;cursor:pointer}
 #popupCargador .acciones button.cerrar{flex:0 0 auto;min-width:auto;background:#2a1a1a;border-color:#5a2020;color:#ff8a8a}
-
-/* ===== Modos globales ===== */
 body.modo-navegacion #diag,body.modo-navegacion #diag2{display:none}
 body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner,body.modo-solomapa #minihud,body.modo-solomapa #controlesAbajo,body.modo-solomapa #grupoArribaDer,body.modo-solomapa #grupoAbajoDer{display:none}
 </style>
@@ -112,7 +91,6 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
 <div id="radarInfo"><div class="dist" id="radarDist">-</div><div class="lim" id="radarLim">-</div></div>
 <div id="popupCargador"></div>
 
-<!-- Panel engranaje -->
 <div id="panelAjustes">
   <button class="cerrarPanel" id="btnCerrarAjustes">✕</button>
   <h2>⚙️ Ajustes</h2>
@@ -131,7 +109,6 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
 </div>
 
-<!-- Paneles de diagnóstico -->
 <div id="diag">
   <div><b>FASE 1 — medicion</b></div>
   <div>ARRANQUE: <span id="rArranque">cargando…</span></div>
@@ -161,13 +138,11 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
 </div>
 <div id="errlog"></div>
 
-<!-- GPS + Seguir -->
 <div id="controlesAbajo">
   <button id="btnGPS">📍 GPS: OFF</button>
   <button id="btnSeguir">🧭 Seguir: OFF</button>
 </div>
 
-<!-- Arriba derecha: barra busqueda + Casa + Lupa -->
 <div id="grupoArribaDer">
   <div id="barraBusqueda">
     <input id="inputBusqueda" type="text" placeholder="Buscar destino…" autocomplete="off">
@@ -178,17 +153,14 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
 </div>
 <div id="sugerencias"></div>
 
-<!-- Nav banner -->
 <div id="navbanner">
   <div id="navarrow"></div>
   <div><div id="navd">-</div><div id="navsub"></div></div>
   <button id="btnPararRuta" title="Detener ruta">✕</button>
 </div>
 
-<!-- Mini-HUD -->
 <div id="minihud"><span class="vel" id="hudVel">0</span><span class="limite oculto" id="hudLimite">50</span></div>
 
-<!-- Abajo derecha: Centrar + Engranaje -->
 <div id="grupoAbajoDer">
   <button class="botonMapa" id="btnCentrar" title="Centrar en mi posición">🎯</button>
   <button class="botonMapa" id="btnAjustes" title="Ajustes">⚙️</button>
@@ -219,7 +191,6 @@ map.on('error',e=>{
   if(/webgl|context/i.test(msg)){webglOk=false;document.getElementById('rWebgl').innerHTML='<span class="mal">FALLO</span>';}
   registrarError('map',msg);
 });
-// ===== Iconos =====
 function crearFlechaRuta(){
   const size=60,c=document.createElement('canvas');c.width=size;c.height=size;
   const ctx=c.getContext('2d');ctx.clearRect(0,0,size,size);
@@ -291,7 +262,6 @@ let cargadoresData=[];
 let favoritos=JSON.parse(localStorage.getItem('cargadores_favs')||'[]');
 function guardarFavoritos(){localStorage.setItem('cargadores_favs',JSON.stringify(favoritos));}
 function esFavorito(id){return favoritos.includes(id);}
-// Casa
 let casa=JSON.parse(localStorage.getItem('casa_destino')||'null');
 function guardarCasa(obj){casa=obj;if(obj) localStorage.setItem('casa_destino',JSON.stringify(obj));else localStorage.removeItem('casa_destino');actualizarBotonCasa();}
 function actualizarBotonCasa(){
@@ -368,7 +338,6 @@ map.on('load',()=>{
   actualizarBotonCasa();
 });
 
-// ==== RADARES ====
 async function cargarRadares(){
   try{
     const r=await fetch('./assets/radares.json');
@@ -431,12 +400,10 @@ function apagarAlertaRadar(){
   document.getElementById('radarInfo').classList.remove('on');
   alertaRadarActiva=false;
 }
-
-// ==== CARGADORES ====
 function clasificarPotencia(kw){
-  if(kw>72) return {icono:'car-72mas', nivel:'72+'};
-  if(kw>=50) return {icono:'car-50-72', nivel:'50-72'};
-  return {icono:'car-11-22', nivel:'11-22'};
+  if(kw>72) return {icono:'car-72mas'};
+  if(kw>=50) return {icono:'car-50-72'};
+  return {icono:'car-11-22'};
 }
 function potenciaMaxima(cp){
   let max=0;
@@ -562,12 +529,9 @@ async function navegarA(lat,lon){
     }
   }
 }
-
-// ===== Panel ajustes =====
 const panelA=document.getElementById('panelAjustes');
 document.getElementById('btnAjustes').onclick=()=>panelA.classList.add('on');
 document.getElementById('btnCerrarAjustes').onclick=()=>panelA.classList.remove('on');
-
 document.getElementById('btnEdificios').onclick=function(){
   edificiosOn=!edificiosOn;
   if(map.getLayer('3d-buildings')) map.setLayoutProperty('3d-buildings','visibility',edificiosOn?'visible':'none');
@@ -627,7 +591,7 @@ document.getElementById('btnLimpiarFavs').onclick=()=>{
   alert('Favoritos borrados.');
 };
 
-// ===== Busqueda TomTom =====
+// ==== BUSQUEDA TomTom (search/2 con typeahead) ====
 const barraB=document.getElementById('barraBusqueda');
 const inputB=document.getElementById('inputBusqueda');
 const sugs=document.getElementById('sugerencias');
@@ -653,51 +617,47 @@ inputB.addEventListener('input',()=>{
 });
 async function buscarSugerencias(q){
   const centro=lastFix?[lastFix.lat,lastFix.lon]:[43.2678,-2.9387];
-  const url='https://api.tomtom.com/search/1/autocomplete/'+encodeURIComponent(q)+'.json'
-    +'?key='+TT+'&language=es-ES&countrySet=ES&limit=6'
-    +'&lat='+centro[0]+'&lon='+centro[1]+'&radius=50000';
+  const url='https://api.tomtom.com/search/2/search/'+encodeURIComponent(q)+'.json'
+    +'?key='+TT
+    +'&language=es-ES'
+    +'&countrySet=ES'
+    +'&limit=6'
+    +'&typeahead=true'
+    +'&lat='+centro[0]
+    +'&lon='+centro[1]
+    +'&radius=50000';
   try{
     const r=await fetch(url);
     const j=await r.json();
-    if(!j.results||!j.results.length){sugs.innerHTML='<div class="sug" style="color:#8d99a5">Sin resultados</div>';sugs.classList.add('on');return;}
+    if(!j.results||!j.results.length){
+      sugs.innerHTML='<div class="sug" style="color:#8d99a5">Sin resultados</div>';
+      sugs.classList.add('on');
+      return;
+    }
     sugs.innerHTML=j.results.map((s,i)=>{
-      const sub=s.address?[s.address.municipality,s.address.countrySubdivision].filter(Boolean).join(', '):'';
-      return '<div class="sug" data-idx="'+i+'">'+escapeHTML(s.value||s.text||'')+'<div class="sub">'+escapeHTML(sub)+'</div></div>';
+      const direccion=s.address?(s.address.freeformAddress||''):(s.poi?s.poi.name:'');
+      const sub=s.poi&&s.poi.name?s.poi.name:'';
+      return '<div class="sug" data-idx="'+i+'">'+escapeHTML(direccion)+(sub?'<div class="sub">'+escapeHTML(sub)+'</div>':'')+'</div>';
     }).join('');
     sugs.classList.add('on');
-    // Click en una sugerencia: hacer una search real para obtener coords
     sugs.querySelectorAll('.sug').forEach((el,idx)=>{
       el.onclick=()=>seleccionarSugerencia(j.results[idx]);
     });
   }catch(e){console.warn('sug error',e);}
 }
-async function seleccionarSugerencia(s){
-  // Usamos el "fuzzySearch" para obtener coords reales del resultado elegido
-  const valor=s.value||s.text||'';
-  const centro=lastFix?[lastFix.lat,lastFix.lon]:[43.2678,-2.9387];
-  const url='https://api.tomtom.com/search/2/search/'+encodeURIComponent(valor)+'.json'
-    +'?key='+TT+'&language=es-ES&countrySet=ES&limit=1'
-    +'&lat='+centro[0]+'&lon='+centro[1];
-  try{
-    const r=await fetch(url);
-    const j=await r.json();
-    if(!j.results||!j.results.length){alert('No se encontró la dirección');return;}
-    const res=j.results[0];
-    const lat=res.position.lat,lon=res.position.lon;
-    const nombre=res.address? (res.address.freeformAddress||valor) : valor;
-    barraB.classList.remove('on');
-    sugs.classList.remove('on');
-    navegarA(lat,lon);
-    // Guardar nombre del destino por si quiere usarlo como casa
-    ultimoDestinoNombre=nombre;
-  }catch(e){alert('Error buscando: '+e.message);}
+function seleccionarSugerencia(res){
+  const lat=res.position.lat;
+  const lon=res.position.lon;
+  barraB.classList.remove('on');
+  sugs.classList.remove('on');
+  inputB.value='';
+  navegarA(lat,lon);
 }
 let ultimoDestinoNombre='';
 
-// ===== Casa =====
+// ==== Casa ====
 document.getElementById('btnCasa').onclick=async()=>{
   if(!casa){
-    // No hay casa: preguntar por dirección
     const dir=prompt('¿Cuál es tu dirección de casa?');
     if(!dir) return;
     const centro=lastFix?[lastFix.lat,lastFix.lon]:[43.2678,-2.9387];
@@ -716,7 +676,6 @@ document.getElementById('btnCasa').onclick=async()=>{
     navegarA(casa.lat,casa.lon);
   }
 };
-// Pulsacion larga para editar casa
 let timerCasa=null;
 document.getElementById('btnCasa').addEventListener('mousedown',()=>{
   timerCasa=setTimeout(()=>{
@@ -730,12 +689,11 @@ document.getElementById('btnCasa').addEventListener('mousedown',()=>{
 document.getElementById('btnCasa').addEventListener('mouseup',()=>clearTimeout(timerCasa));
 document.getElementById('btnCasa').addEventListener('mouseleave',()=>clearTimeout(timerCasa));
 
-// ===== Cierre de paneles al hacer click fuera =====
 map.on('click',()=>{
   document.getElementById('popupCargador').classList.remove('on');
 });
 
-// ===== Resto del codigo existente (ruta, gps, etc) =====
+// ==== RUTA ====
 let steps=[],stepIdx=0,routeCoordsLL=[],routeCumDist=[],routeProgIdx=0;
 let ultimoStepPintado='',zoomManiobraOn=false;
 let ultimaRutaDestino=null;
