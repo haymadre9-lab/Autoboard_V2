@@ -161,22 +161,43 @@ async function cargarModelo(capa){
       reject
     ));
     const modelo = gltf.scene;
-
-    // ==== FIX peana: eliminar cualquier mesh gigante (base de presentacion) ====
-    const objetosAEliminar = [];
     modelo.updateMatrixWorld(true);
+
+    // ==== DIAGNOSTICO: listar estructura completa en consola ====
+    console.log('=== ESTRUCTURA DEL GLB ===');
     modelo.traverse(o => {
-      if (o.isMesh) {
-        const box = new THREE.Box3().setFromObject(o);
-        const size = new THREE.Vector3();
-        box.getSize(size);
-        if (size.x > 6 || size.z > 6) objetosAEliminar.push(o);
+      if (!o.name && !o.isMesh) return;
+      const box = new THREE.Box3().setFromObject(o);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      console.log(
+        (o.isMesh ? '[MESH] ' : '[NODE] ') + (o.name || '(sin nombre)') +
+        ' | ' + size.x.toFixed(2) + ' × ' + size.y.toFixed(2) + ' × ' + size.z.toFixed(2)
+      );
+    });
+    console.log('=== FIN ESTRUCTURA ===');
+
+    // ==== FIX peana: eliminar SOLO el mesh que sea claramente plano y grande ====
+    // Una peana tiene altura muy pequena y ancho/profundo grandes.
+    // Un coche, cristal o rueda NO cumple esa combinacion.
+    const objetosAEliminar = [];
+    modelo.traverse(o => {
+      if (!o.isMesh) return;
+      const box = new THREE.Box3().setFromObject(o);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      const esPlano = size.y < 0.5;         // muy bajo
+      const esGrande = size.x > 8 || size.z > 8;  // mucho mas que un coche
+      if (esPlano && esGrande) {
+        objetosAEliminar.push(o);
+        console.log('Peana detectada y eliminada:', o.name,
+          '| tamaño:', size.x.toFixed(2), '×', size.y.toFixed(2), '×', size.z.toFixed(2));
       }
     });
     objetosAEliminar.forEach(o => { if (o.parent) o.parent.remove(o); });
     // ==== FIN FIX peana ====
 
-    // Centrar en XZ (para girar sobre si mismo) y apoyar en Y=0
+    // Centrar en XZ y apoyar en Y=0
     const box = new THREE.Box3().setFromObject(modelo);
     const c = box.getCenter(new THREE.Vector3());
     modelo.position.x -= c.x;
@@ -184,7 +205,6 @@ async function cargarModelo(capa){
     modelo.position.y -= box.min.y;
     modelo.traverse(o => { if(o.isMesh){ o.castShadow=false; o.receiveShadow=false; } });
 
-    // Añadir al grupo INTERNO (que tiene la conversion de ejes)
     capa.innerGroup.add(modelo);
     carModel = modelo;
     modeloListo = true;
@@ -192,10 +212,10 @@ async function cargarModelo(capa){
     document.getElementById('cochePanel').classList.add('on');
     if(window.__show2DCar) window.__show2DCar(false);
 
-    // Info de tamaño util
+    // Info del tamaño final del coche (sin peana)
     const tam = new THREE.Vector3();
     new THREE.Box3().setFromObject(modelo).getSize(tam);
-    console.log('Tamaño coche sin peana:', tam.x.toFixed(2), '×', tam.y.toFixed(2), '×', tam.z.toFixed(2));
+    console.log('TAMAÑO FINAL COCHE:', tam.x.toFixed(2), '×', tam.y.toFixed(2), '×', tam.z.toFixed(2));
   }catch(e){
     modeloListo = false;
     actualizarEstado('ERROR: '+(e.message||e),'mal');
@@ -216,7 +236,6 @@ function crearCapaCoche(){
       dir.position.set(0,-1,1).normalize();
       this.scene.add(dir);
 
-      // ==== FIX fondo gris: sin alpha, sin premultipliedAlpha, sin clears ====
       this.renderer = new THREE.WebGLRenderer({
         canvas: map.getCanvas(),
         context: gl,
@@ -229,15 +248,12 @@ function crearCapaCoche(){
       this.renderer.setPixelRatio(1);
       this.renderer.setClearColor(0x000000, 0);
       this.renderer.setClearAlpha(0);
-      // ==== FIN FIX ====
 
-      // ==== FIX rotacion: grupo exterior (rumbo) + grupo interior (ejes) ====
       this.modelGroup = new THREE.Group();
       this.innerGroup = new THREE.Group();
-      this.innerGroup.rotation.x = Math.PI / 2;   // GLB Y-arriba -> Mercator Z-arriba
+      this.innerGroup.rotation.x = Math.PI / 2;
       this.modelGroup.add(this.innerGroup);
       this.scene.add(this.modelGroup);
-      // ==== FIN FIX ====
 
       carLayer = this;
       actualizarEstado('inicializando…','aviso');
@@ -251,7 +267,6 @@ function crearCapaCoche(){
         { lng: carLngLat[0], lat: carLngLat[1] }, carAltura);
       const s = mc.meterInMercatorCoordinateUnits();
 
-      // Translacion + escala + rotacion Z (rumbo) sobre el grupo exterior
       const rz = new THREE.Matrix4().makeRotationZ(
         (-carBearing + carRotationZ) * Math.PI/180);
       const mt = new THREE.Matrix4()
@@ -265,7 +280,6 @@ function crearCapaCoche(){
       this.camera.projectionMatrix = new THREE.Matrix4().fromArray(matrix);
       this.renderer.resetState();
       this.renderer.render(this.scene, this.camera);
-      // ==== NO triggerRepaint: MapLibre ya repinta con jumpTo ====
     },
     onRemove(){
       if(this.renderer) this.renderer.dispose();
