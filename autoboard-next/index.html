@@ -51,6 +51,16 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #minihud .sep{color:#4a5560}
 #minihud .vel{color:#fff}
 #minihud .rum{color:#9ae6b4}
+/* ==== ITER 4: boton centrar flotante ==== */
+#btnCentrar{position:fixed;right:20px;bottom:120px;z-index:20;display:none;
+  width:56px;height:56px;border-radius:50%;border:2px solid #232c33;
+  background:rgba(10,13,16,.92);color:#3fa9ff;font-size:24px;cursor:pointer;
+  align-items:center;justify-content:center;padding:0;
+  box-shadow:0 2px 10px rgba(0,0,0,.5)}
+#btnCentrar.on{display:flex}
+#btnCentrar:active{transform:scale(0.95)}
+body.modo-navegacion #btnCentrar{bottom:20px;right:20px}
+body.modo-solomapa #btnCentrar{display:none!important}
 body.modo-navegacion #diag,body.modo-navegacion #diag2,
 body.modo-navegacion #controles{display:none}
 body.modo-solomapa #diag,body.modo-solomapa #diag2,
@@ -105,6 +115,7 @@ body.modo-solomapa #navbanner,body.modo-solomapa #minihud{display:none}
   <span class="sep">·</span>
   <span class="rum" id="hudRum">N 0°</span>
 </div>
+<button id="btnCentrar" title="Centrar en mi posición">🎯</button>
 <div id="modos">
   <button id="modoDebug" class="on">🔧 Debug</button>
   <button id="modoNav">🧭 Navegar</button>
@@ -142,7 +153,6 @@ map.on('error', e => {
   registrarError('map', msg);
 });
 
-// ==== ITER 3: imagen de flecha mas grande (60px) ====
 function crearImagenFlecha(){
   const size = 60;
   const c = document.createElement('canvas');
@@ -166,7 +176,6 @@ function crearImagenFlecha(){
 let navZoomBase = 18.8;
 let terrenoActivo = false;
 const TERRENO_EXAG = 1.5;
-// ==== ITER 3: estado del trim ====
 let trimSoportado = true;
 
 let idFuenteBuildings=null, sourceLayerBuildings=null, edificiosOn=true;
@@ -210,14 +219,15 @@ map.on('load', () => {
   for(const l of estilo.layers) if(l.type==='symbol' && l.layout && l.layout['text-field']){ idEtiquetas=l.id; break; }
 
   try{
+    // ==== ITER 4: edificios mas claros y transparentes ====
     map.addLayer({
       id:'3d-buildings', source:idFuenteBuildings, 'source-layer':sourceLayerBuildings,
       type:'fill-extrusion', minzoom:14,
       paint:{
-        'fill-extrusion-color':'#8a93a0',
+        'fill-extrusion-color':'#a8b0bc',
         'fill-extrusion-height':['coalesce',['get','render_height'],8],
         'fill-extrusion-base':['coalesce',['get','render_min_height'],0],
-        'fill-extrusion-opacity':0.9
+        'fill-extrusion-opacity':0.75
       }
     }, idEtiquetas);
   }catch(e){
@@ -437,7 +447,6 @@ function avanzarPaso(r){
   while(stepIdx<steps.length-1 && (steps[stepIdx].metro||0)<=r+15) stepIdx++;
 }
 
-// ==== ITER 3: recorta la parte recorrida de la ruta ====
 function actualizarTrimRuta(){
   if(!trimSoportado) return;
   if(!routeCoordsLL.length || !routeCumDist.length) return;
@@ -527,32 +536,42 @@ async function calcularRuta(origen, destino, modo='normal'){
     const geojson = {type:'Feature', geometry:{type:'LineString', coordinates:coords}};
     if(map.getSource('ruta')) map.getSource('ruta').setData(geojson);
     else {
-      // ==== ITER 3: lineMetrics necesario para line-trim-offset ====
       map.addSource('ruta', {
         type:'geojson',
         data:geojson,
         lineMetrics: true
       });
 
-      // 1) Casco oscuro por debajo (borde de la ruta)
+      // ==== ITER 4: ruta mas ancha y escala con el zoom ====
+      // line-width con interpolacion por zoom: a mas zoom, mas ancho
       map.addLayer({id:'ruta-casco', type:'line', source:'ruta',
         paint:{
           'line-color':'#0d47a1',
-          'line-width':13,
-          'line-opacity':0.85
+          'line-opacity':0.9,
+          'line-width':[
+            'interpolate',['linear'],['zoom'],
+            14, 12,
+            16, 18,
+            18, 24,
+            20, 30
+          ]
         },
         layout:{'line-cap':'round','line-join':'round','line-round-limit':1.0}});
 
-      // 2) Relleno azul (ruta en si)
       map.addLayer({id:'ruta', type:'line', source:'ruta',
         paint:{
           'line-color':'#1e88e5',
-          'line-width':10,
-          'line-opacity':0.95
+          'line-opacity':0.95,
+          'line-width':[
+            'interpolate',['linear'],['zoom'],
+            14, 8,
+            16, 14,
+            18, 20,
+            20, 26
+          ]
         },
         layout:{'line-cap':'round','line-join':'round','line-round-limit':1.0}});
 
-      // 3) Flechas de sentido (mas grandes y mas seguidas)
       map.addLayer({id:'ruta-flechas', type:'symbol', source:'ruta',
         layout:{
           'symbol-placement':'line',
@@ -564,7 +583,6 @@ async function calcularRuta(origen, destino, modo='normal'){
           'icon-ignore-placement':true
         }});
 
-      // Comprobar si line-trim-offset esta soportado
       try {
         map.setPaintProperty('ruta', 'line-trim-offset', [0, 0]);
         map.setPaintProperty('ruta-casco', 'line-trim-offset', [0, 0]);
@@ -625,9 +643,8 @@ function onFix(pos){
     document.getElementById('g8').textContent = parado ? 'libre (parado)' : 'seguir';
   }
 
-  if(speedKmh > 5 && terrenoActivo){
-    actualizarTerreno(false);
-  }
+  // ==== ITER 4: terreno ya no se desactiva automaticamente ====
+  // (se controla solo con el boton)
 
   if(parado && lastFix){
     document.getElementById('g2').textContent = Math.round(speedKmh)+' km/h';
@@ -658,7 +675,6 @@ function onFix(pos){
     const recorrido = recorridoAhora(ll);
     avanzarPaso(recorrido);
     const d = renderStep();
-    // ==== ITER 3: recorta la ruta recorrida ====
     actualizarTrimRuta();
     const s = steps[stepIdx];
     if(s && seguirOn){
@@ -704,6 +720,50 @@ function bucleSeguimiento(){
   requestAnimationFrame(bucleSeguimiento);
 }
 requestAnimationFrame(bucleSeguimiento);
+
+// ==== ITER 4: deteccion de mapa movido a mano para mostrar boton centrar ====
+let mapaMovidoAMano = false;
+map.on('dragstart', () => {
+  if(seguirOn) mostrarBotonCentrar(true);
+});
+map.on('rotatestart', () => {
+  if(seguirOn) mostrarBotonCentrar(true);
+});
+map.on('pitchstart', () => {
+  if(seguirOn) mostrarBotonCentrar(true);
+});
+
+function mostrarBotonCentrar(on){
+  const btn = document.getElementById('btnCentrar');
+  if(on){
+    btn.classList.add('on');
+    mapaMovidoAMano = true;
+  } else {
+    btn.classList.remove('on');
+    mapaMovidoAMano = false;
+  }
+}
+
+function centrarEnMi(){
+  if(!lastFix) return;
+  camaraLibre = false;
+  camPosActual = [lastFix.lon, lastFix.lat];
+  camPosObjetivo = [lastFix.lon, lastFix.lat];
+  camBearingActual = heading;
+  camBearingObjetivo = heading;
+  camZoomActual = navZoomBase;
+  camZoomObjetivo = navZoomBase;
+  map.jumpTo({
+    center:[lastFix.lon, lastFix.lat],
+    bearing: heading,
+    zoom: navZoomBase,
+    pitch: 60,
+    duration: 400
+  });
+  mostrarBotonCentrar(false);
+}
+document.getElementById('btnCentrar').onclick = centrarEnMi;
+
 document.getElementById('btnGPS').onclick = function(){
   gpsOn = !gpsOn;
   this.textContent = '📍 GPS: '+(gpsOn?'ON':'OFF');
@@ -724,9 +784,7 @@ document.getElementById('btnSeguir').onclick = function(){
   this.textContent = '🧭 Seguir: '+(seguirOn?'ON':'OFF');
   this.classList.toggle('on', seguirOn);
   if(seguirOn && lastFix){
-    camaraLibre = false;
-    camZoomObjetivo = navZoomBase;
-    map.jumpTo({center:[lastFix.lon,lastFix.lat], bearing:heading, zoom:camZoomObjetivo, pitch:60});
+    centrarEnMi();
   }
 };
 let fpsMarchaUltimoT=0, fpsMarchaUltimoConteo=0;
@@ -752,9 +810,7 @@ document.getElementById('btnDestino').onclick = async function(){
     const ok = await calcularRuta([lastFix.lat,lastFix.lon], ultimaRutaDestino);
     if(ok){
       if(seguirOn){
-        camaraLibre = false;
-        camZoomObjetivo = navZoomBase;
-        map.jumpTo({center:[lastFix.lon,lastFix.lat], bearing:heading, zoom:navZoomBase, pitch:60});
+        centrarEnMi();
       } else {
         const bounds = routeCoordsLL.reduce((b,c)=>b.extend([c[1],c[0]]),
           new maplibregl.LngLatBounds([routeCoordsLL[0][1],routeCoordsLL[0][0]],
