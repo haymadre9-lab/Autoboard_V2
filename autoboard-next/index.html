@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>autoboard-next · Fase 4b · coche 3D + navegación</title>
+<title>autoboard-next · Fase 5 · navegación 2D</title>
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
 <style>
 html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
@@ -23,7 +23,7 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
   border:1px solid #232c33;border-radius:10px;padding:8px 12px;color:#ff8a8a;
   font:11px/1.5 ui-monospace,monospace;max-width:280px;max-height:40vh;overflow-y:auto;display:none}
 #errlog.on{display:block}
-.coche{width:22px;height:22px}
+.coche{width:28px;height:28px}
 #diag2{position:fixed;top:10px;left:340px;z-index:10;background:rgba(10,13,16,.88);
   border:1px solid #232c33;border-radius:10px;padding:10px 14px;color:#e8eef2;
   font:12px/1.6 ui-monospace,monospace;max-width:290px}
@@ -38,16 +38,6 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #navd{font:800 26px system-ui,sans-serif;color:#fff}
 #navsub{font:600 13px system-ui,sans-serif;color:#9aa7b2;max-width:220px;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#cochePanel{position:fixed;right:10px;bottom:92px;z-index:15;background:rgba(10,13,16,.92);
-  border:1px solid #232c33;border-radius:12px;padding:10px 12px;color:#e8eef2;
-  font:11px/1.45 ui-monospace,monospace;width:230px;display:none;box-sizing:border-box}
-#cochePanel.on{display:block}
-#cochePanel .titulo{font-weight:800;color:#9ae6b4;margin-bottom:7px}
-#cochePanel label{display:block;margin:6px 0 2px}
-#cochePanel .val{float:right;color:#ffd166}
-#cochePanel input{width:100%;box-sizing:border-box}
-#cochePanel .nota{margin-top:6px;color:#8d99a5;font-size:10px}
-@media(max-width:900px){#cochePanel{right:10px;bottom:145px;width:210px}}
 #modos{position:fixed;top:10px;right:10px;z-index:25;display:flex;gap:6px;flex-wrap:wrap;
   justify-content:flex-end;max-width:70vw}
 #modos button{background:rgba(10,13,16,.85);border:1px solid #232c33;color:#e8eef2;
@@ -61,11 +51,10 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #minihud .sep{color:#4a5560}
 #minihud .vel{color:#fff}
 #minihud .rum{color:#9ae6b4}
-body.modo-calibracion #diag,body.modo-calibracion #diag2,body.modo-calibracion #controles{display:none}
 body.modo-navegacion #diag,body.modo-navegacion #diag2,
-body.modo-navegacion #controles,body.modo-navegacion #cochePanel{display:none}
+body.modo-navegacion #controles{display:none}
 body.modo-solomapa #diag,body.modo-solomapa #diag2,
-body.modo-solomapa #controles,body.modo-solomapa #cochePanel,
+body.modo-solomapa #controles,
 body.modo-solomapa #navbanner,body.modo-solomapa #minihud{display:none}
 </style>
 </head>
@@ -101,18 +90,7 @@ body.modo-solomapa #navbanner,body.modo-solomapa #minihud{display:none}
   <div>Rumbo: <span id="g3">-</span></div>
   <div>FPS en marcha: <span id="g4">-</span></div>
   <div>Ruta: <span id="g5">sin destino</span></div>
-  <div>Coche 3D: <span id="g6">GPS apagado</span></div>
   <div>Desvío: <span id="g7">-</span></div>
-</div>
-<div id="cochePanel">
-  <div class="titulo">🚗 Coche 3D — calibracion</div>
-  <label>Escala <span class="val" id="escVal">1.00x</span></label>
-  <input type="range" id="escSlider" min="0.01" max="10" step="0.01" value="1.00">
-  <label>Altura <span class="val" id="altVal">0.00 m</span></label>
-  <input type="range" id="altSlider" min="-2" max="20" step="0.1" value="0">
-  <label>Giro Z <span class="val" id="rotZVal">0°</span></label>
-  <input type="range" id="rotZSlider" min="-180" max="180" step="1" value="0">
-  <div class="nota">Escala y giro se aplican al GLB. La altura es sobre el terreno.</div>
 </div>
 <div id="navbanner">
   <div id="navarrow"></div>
@@ -125,174 +103,11 @@ body.modo-solomapa #navbanner,body.modo-solomapa #minihud{display:none}
 </div>
 <div id="modos">
   <button id="modoDebug" class="on">🔧 Debug</button>
-  <button id="modoCalib">🚙 Calibrar</button>
   <button id="modoNav">🧭 Navegar</button>
   <button id="modoSolo">🗺 Solo mapa</button>
 </div>
 
-<script type="importmap">
-{"imports":{
-  "three":"https://unpkg.com/three@0.160.0/build/three.module.js",
-  "three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"
-}}
-</script>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-
-<script type="module">
-import * as THREE from 'three';
-import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-
-let mapRef=null, carLayer=null, carModel=null, carLngLat=null;
-let carBearing=0, carScale=1.0, carAltura=0.0, carRotationZ=0, modeloListo=false;
-
-function actualizarEstado(texto, clase=''){
-  const el=document.getElementById('g6');
-  if(!el) return;
-  el.innerHTML = clase ? '<span class="'+clase+'">'+texto+'</span>' : texto;
-}
-
-async function cargarModelo(capa){
-  const loader = new GLTFLoader();
-  actualizarEstado('cargando car.glb…','aviso');
-  try{
-    const gltf = await new Promise((resolve,reject)=>loader.load(
-      './assets/car.glb', resolve,
-      ev => { if(ev.lengthComputable) actualizarEstado('cargando… '+Math.round(ev.loaded/ev.total*100)+'%','aviso'); },
-      reject
-    ));
-    const modelo = gltf.scene;
-    modelo.updateMatrixWorld(true);
-
-    // Diagnostico en consola (util si algo se ve raro)
-    console.log('=== ESTRUCTURA DEL GLB ===');
-    modelo.traverse(o => {
-      if (!o.isMesh) return;
-      const box = new THREE.Box3().setFromObject(o);
-      const size = new THREE.Vector3();
-      box.getSize(size);
-      console.log('[MESH] ' + (o.name||'(sin nombre)') + ' | ' +
-        size.x.toFixed(2) + ' × ' + size.y.toFixed(2) + ' × ' + size.z.toFixed(2));
-    });
-
-    // Centrar en XZ (para girar sobre si mismo) y apoyar en Y=0
-    const box = new THREE.Box3().setFromObject(modelo);
-    const c = box.getCenter(new THREE.Vector3());
-    modelo.position.x -= c.x;
-    modelo.position.z -= c.z;
-    modelo.position.y -= box.min.y;
-    modelo.traverse(o => { if(o.isMesh){ o.castShadow=false; o.receiveShadow=false; } });
-
-    capa.innerGroup.add(modelo);
-    carModel = modelo;
-    modeloListo = true;
-    actualizarEstado('listo · 3D');
-    document.getElementById('cochePanel').classList.add('on');
-    if(window.__show2DCar) window.__show2DCar(false);
-
-    const tam = new THREE.Vector3();
-    new THREE.Box3().setFromObject(modelo).getSize(tam);
-    console.log('TAMAÑO COCHE (sin filtros):',
-      tam.x.toFixed(2), '×', tam.y.toFixed(2), '×', tam.z.toFixed(2));
-  }catch(e){
-    modeloListo = false;
-    actualizarEstado('ERROR: '+(e.message||e),'mal');
-    console.error(e);
-    if(typeof registrarError==='function') registrarError('coche-3d', e.message||String(e));
-  }
-}
-
-function crearCapaCoche(){
-  return {
-    id:'coche-3d', type:'custom', renderingMode:'3d',
-    onAdd(map, gl){
-      mapRef = map; this.map = map;
-      this.camera = new THREE.Camera();
-      this.scene = new THREE.Scene();
-      this.scene.add(new THREE.AmbientLight(0xffffff, 2.0));
-      const dir = new THREE.DirectionalLight(0xffffff, 2);
-      dir.position.set(0,-1,1).normalize();
-      this.scene.add(dir);
-
-      this.renderer = new THREE.WebGLRenderer({
-        canvas: map.getCanvas(),
-        context: gl,
-        antialias: true
-      });
-      this.renderer.autoClear = false;
-      this.renderer.autoClearColor = false;
-      this.renderer.autoClearDepth = false;
-      this.renderer.autoClearStencil = false;
-      this.renderer.setPixelRatio(1);
-      this.renderer.setClearColor(0x000000, 0);
-      this.renderer.setClearAlpha(0);
-
-      this.modelGroup = new THREE.Group();
-      this.innerGroup = new THREE.Group();
-      this.innerGroup.rotation.x = Math.PI / 2;
-      this.modelGroup.add(this.innerGroup);
-      this.scene.add(this.modelGroup);
-
-      carLayer = this;
-      actualizarEstado('inicializando…','aviso');
-      cargarModelo(this);
-    },
-    render(gl, matrix){
-      if(!this.renderer || !this.camera || !this.modelGroup) return;
-      if(!carModel || !carLngLat) return;
-
-      const mc = maplibregl.MercatorCoordinate.fromLngLat(
-        { lng: carLngLat[0], lat: carLngLat[1] }, carAltura);
-      const s = mc.meterInMercatorCoordinateUnits();
-
-      const rz = new THREE.Matrix4().makeRotationZ(
-        (-carBearing + carRotationZ) * Math.PI/180);
-      const mt = new THREE.Matrix4()
-        .makeTranslation(mc.x, mc.y, mc.z)
-        .scale(new THREE.Vector3(s*carScale, -s*carScale, s*carScale))
-        .multiply(rz);
-
-      this.modelGroup.matrix = mt;
-      this.modelGroup.matrixAutoUpdate = false;
-
-      this.camera.projectionMatrix = new THREE.Matrix4().fromArray(matrix);
-      this.renderer.resetState();
-      this.renderer.render(this.scene, this.camera);
-    },
-    onRemove(){
-      if(this.renderer) this.renderer.dispose();
-    }
-  };
-}
-
-function instalarCapa(){
-  const m = window.__mapReady;
-  if(!m) return;
-  if(m.getLayer('coche-3d')) return;
-  try{
-    if(m.isStyleLoaded()) m.addLayer(window.__crearCapaCoche());
-    else m.once('load', () => { if(!m.getLayer('coche-3d')) m.addLayer(window.__crearCapaCoche()); });
-  }catch(e){
-    actualizarEstado('ERROR capa: '+e.message,'mal');
-    if(typeof registrarError==='function') registrarError('coche-3d', e.message);
-  }
-}
-
-window.__crearCapaCoche = crearCapaCoche;
-window.__setCarPos = (lng,lat,brg) => {
-  carLngLat = [lng,lat];
-  if(Number.isFinite(brg)) carBearing = brg;
-};
-window.__activarCoche3D = () => {
-  window.__gpsActivo3D = true;
-  actualizarEstado(modeloListo ? 'listo · 3D' : 'GPS activo · inicializando…','aviso');
-  instalarCapa();
-};
-window.__setCarScale = v => { carScale = Number(v)||1.0; };
-window.__setCarAltura = v => { carAltura = Number(v)||0; };
-window.__setCarRotationZ = v => { carRotationZ = Number(v)||0; };
-window.__car3DReady = () => modeloListo;
-</script>
-
 <script>
 const MAPTILER_KEY='sG00UkBX9Ig2ifguvPgU';
 const antialiasActivo = new URLSearchParams(location.search).get('aa')==='1';
@@ -312,7 +127,6 @@ const map = new maplibregl.Map({
   center:[-2.9387,43.2678], zoom:16, pitch:60, bearing:0,
   antialias: antialiasActivo
 });
-window.__mapReady = map;
 
 document.getElementById('btnAA').textContent = antialiasActivo?'🪄 Antialias: ON (recargar)':'🪄 Antialias: OFF (recargar)';
 document.getElementById('btnAA').onclick = () => { location.href = location.pathname + (antialiasActivo?'':'?aa=1'); };
@@ -433,7 +247,6 @@ document.getElementById('btnPitchTest').onclick = async function(){
 
 const botonesModo = {
   modoDebug: 'modo-debug',
-  modoCalib: 'modo-calibracion',
   modoNav:   'modo-navegacion',
   modoSolo:  'modo-solomapa'
 };
@@ -450,25 +263,6 @@ for(const id in botonesModo){
   const btn = document.getElementById(id);
   if(btn) btn.onclick = () => aplicarModo(botonesModo[id]);
 }
-
-const escSlider = document.getElementById('escSlider');
-const altSlider = document.getElementById('altSlider');
-const rotZSlider = document.getElementById('rotZSlider');
-escSlider.oninput = () => {
-  const v = +escSlider.value;
-  document.getElementById('escVal').textContent = v.toFixed(2)+'x';
-  if(window.__setCarScale) window.__setCarScale(v);
-};
-altSlider.oninput = () => {
-  const v = +altSlider.value;
-  document.getElementById('altVal').textContent = v.toFixed(2)+' m';
-  if(window.__setCarAltura) window.__setCarAltura(v);
-};
-rotZSlider.oninput = () => {
-  const v = +rotZSlider.value;
-  document.getElementById('rotZVal').textContent = (v>0?'+':'')+v+'°';
-  if(window.__setCarRotationZ) window.__setCarRotationZ(v);
-};
 
 const TT = 'zMPqeYVXNoQw4rJ1ycr8QdywkDFNx0tF';
 function dist(a,b){
@@ -608,7 +402,6 @@ function filtrarHeading(h){
 const elCoche = document.createElement('div');
 elCoche.innerHTML = '<svg class="coche" viewBox="0 0 24 24"><path d="M12 2 L20 20 L12 16 L4 20 Z" fill="#3fa9ff" stroke="#fff" stroke-width="1.5"/></svg>';
 const marcadorCoche = new maplibregl.Marker({element:elCoche, rotationAlignment:'map'});
-window.__show2DCar = on => { elCoche.style.display = on?'block':'none'; };
 let distanciaFueraRuta=0, fueraDesde=0, recalculando=false, ultimoRecalculo=0;
 const DESVIO_M=45, CONFIRMACION_MS=2500, COOLDOWN_MS=10000;
 function distanciaRutaActual(ll){
@@ -681,12 +474,10 @@ function onFix(pos){
   const now={lat:c.latitude, lon:c.longitude, t:pos.timestamp||Date.now()};
   const v = Number.isFinite(c.speed) ? Math.max(0,c.speed) : 0;
   speedKmh = v*3.6;
-  if(window.__activarCoche3D) window.__activarCoche3D();
   if(v<3 && lastFix){
     document.getElementById('g2').textContent = Math.round(speedKmh)+' km/h';
     document.getElementById('g3').textContent = Math.round(heading)+'°';
     actualizarHUD();
-    if(window.__setCarPos) window.__setCarPos(now.lon, now.lat, heading);
     comprobarDesvio([now.lat, now.lon]);
     return;
   }
@@ -695,7 +486,6 @@ function onFix(pos){
   if(!marcadorCoche._map) marcadorCoche.setLngLat([now.lon,now.lat]).addTo(map);
   else marcadorCoche.setLngLat([now.lon,now.lat]);
   marcadorCoche.setRotation(heading);
-  if(window.__setCarPos) window.__setCarPos(now.lon, now.lat, heading);
   document.getElementById('g2').textContent = Math.round(speedKmh)+' km/h';
   document.getElementById('g3').textContent = Math.round(heading)+'°';
   actualizarHUD();
@@ -763,7 +553,6 @@ document.getElementById('btnGPS').onclick = function(){
   this.classList.toggle('on', gpsOn);
   if(gpsOn){
     document.getElementById('g1').innerHTML = '<b>activo</b>';
-    if(window.__activarCoche3D) window.__activarCoche3D();
     watchId = navigator.geolocation.watchPosition(onFix, e => {
       document.getElementById('g1').innerHTML = '<span class="mal">error: '+e.message+'</span>';
       registrarError('gps', e.message);
@@ -771,8 +560,6 @@ document.getElementById('btnGPS').onclick = function(){
   } else {
     if(watchId!==null) navigator.geolocation.clearWatch(watchId);
     document.getElementById('g1').textContent = 'apagado';
-    document.getElementById('g6').textContent = 'GPS apagado';
-    window.__show2DCar(true);
   }
 };
 document.getElementById('btnSeguir').onclick = function(){
