@@ -46,7 +46,6 @@ body.modo-navegacion #diag,body.modo-navegacion #diag2,body.modo-navegacion #con
 body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #controles,body.modo-solomapa #navbanner,body.modo-solomapa #minihud{display:none}
 .coche-marcador{width:48px!important;height:48px!important;will-change:transform}
 .coche-marcador svg{width:48px;height:48px;display:block;filter:drop-shadow(0 0 6px rgba(41,182,246,.75))}
-/* ==== RADARES: reflejo rojo parpadeante por los bordes ==== */
 #radarAlerta{position:fixed;inset:0;z-index:18;pointer-events:none;display:none;
   box-shadow:inset 0 0 80px 20px rgba(255,0,0,.55), inset 0 0 200px 60px rgba(255,0,0,.25);
   animation:radarPulse 1s ease-in-out infinite}
@@ -56,7 +55,6 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #controles
   50%{opacity:1}
   100%{opacity:.35}
 }
-/* Aviso compacto en el centro-arriba, debajo del navbanner */
 #radarInfo{position:fixed;left:50%;transform:translateX(-50%);top:100px;z-index:19;display:none;
   background:rgba(120,10,10,.92);border:2px solid #ff5252;border-radius:12px;
   padding:8px 16px;color:#fff;font:700 14px/1.2 system-ui,sans-serif;text-align:center;
@@ -170,37 +168,30 @@ function crearChevronGiro(){
   ctx.fillStyle='#ffffff';ctx.fill();
   return {data:ctx.getImageData(0,0,size,size),width:size,height:size};
 }
-// ==== RADARES: dibujar icono por tipo ====
 function crearIconoRadar(tipo, velocidad){
   const size=64,c=document.createElement('canvas');c.width=size;c.height=size;
   const ctx=c.getContext('2d');
   ctx.clearRect(0,0,size,size);
-  // Color por velocidad
   let color='#2196f3';
   if(velocidad>=120) color='#d32f2f';
   else if(velocidad>=90) color='#ff6f00';
   else if(velocidad>=60) color='#f9a825';
-  // Circulo exterior
   ctx.beginPath();ctx.arc(size/2,size/2,size/2-4,0,Math.PI*2);
   ctx.fillStyle=color;ctx.fill();
   ctx.lineWidth=3;ctx.strokeStyle='#ffffff';ctx.stroke();
-  // Icono segun tipo
   ctx.fillStyle='#ffffff';
   if(tipo==='semaforo'){
-    // Forma de semaforo
     ctx.fillRect(size/2-8,10,16,34);
     ctx.fillStyle=color;
     ctx.beginPath();ctx.arc(size/2,18,4,0,Math.PI*2);ctx.fill();
     ctx.beginPath();ctx.arc(size/2,28,4,0,Math.PI*2);ctx.fill();
     ctx.beginPath();ctx.arc(size/2,38,4,0,Math.PI*2);ctx.fill();
   } else if(tipo==='movil'){
-    // Coche
     ctx.fillRect(14,26,36,12);
     ctx.fillRect(20,18,24,10);
     ctx.beginPath();ctx.arc(20,42,5,0,Math.PI*2);ctx.fill();
     ctx.beginPath();ctx.arc(44,42,5,0,Math.PI*2);ctx.fill();
   } else {
-    // Camara (fijo/tramo)
     ctx.fillRect(18,24,28,16);
     ctx.beginPath();ctx.arc(46,32,6,0,Math.PI*2);ctx.fill();
     ctx.fillRect(26,40,12,6);
@@ -214,12 +205,11 @@ const TERRENO_EXAG=1.5;
 let trimSoportado=true;
 let idFuenteBuildings=null,sourceLayerBuildings=null,edificiosOn=true;
 let limiteVelocidadVia=0;
-// ==== RADARES: variables de estado ====
 let radaresCargados=[];
 let radaresOn=true;
 let alertaRadarActiva=false;
-const RADAR_DIST_AVISO=500;   // metros
-const RADAR_DIST_APAGADO=550; // histeresis para apagar
+const RADAR_DIST_AVISO=500;
+const RADAR_DIST_APAGADO=550;
 
 map.on('load',()=>{
   document.getElementById('rArranque').innerHTML='<b>OK</b>';
@@ -227,8 +217,6 @@ map.on('load',()=>{
   try{
     if(!map.hasImage('ruta-flecha')) map.addImage('ruta-flecha',crearFlechaRuta(),{sdf:false});
     if(!map.hasImage('chevron-giro')) map.addImage('chevron-giro',crearChevronGiro(),{sdf:false});
-    // ==== RADARES: iconos por tipo+velocidad ====
-    // Se registran varios para cubrir los colores y tipos mas comunes
     const tipos=['fijo','tramo','movil','semaforo'];
     const velocidades=[40,50,60,70,80,90,100,110,120];
     for(const t of tipos){
@@ -260,7 +248,6 @@ map.on('load',()=>{
     map.setPaintProperty('ruta','line-trim-offset',[0,0]);
     map.setPaintProperty('ruta-casco','line-trim-offset',[0,0]);
   }catch(e){trimSoportado=false;document.getElementById('rTrim').innerHTML='<span class="aviso">no soportado</span>';}
-  // ==== RADARES: cargar el JSON ====
   cargarRadares();
   const estilo=map.getStyle();
   const fuentes=Object.keys(estilo.sources).filter(k=>estilo.sources[k].type==='vector');
@@ -285,33 +272,65 @@ map.on('load',()=>{
   }
 });
 
-// ==== RADARES: carga del JSON y capa ====
+// ==== RADARES: carga con normalizacion y doble capa ====
 async function cargarRadares(){
   try{
     const r=await fetch('./assets/radares.json');
     if(!r.ok) throw new Error('HTTP '+r.status);
     const datos=await r.json();
     radaresCargados=datos;
-    // Construir GeoJSON con los radares
-    const features=datos.map((rd,i)=>({
-      type:'Feature',
-      geometry:{type:'Point',coordinates:[rd.lon,rd.lat]},
-      properties:{
-        idx:i,
-        tipo:(rd.t||'fijo').toLowerCase(),
-        velocidad:Number(rd.max)||50
-      }
-    }));
+    const features=datos.map((rd,i)=>{
+      let tipo=String(rd.t||'fijo').toLowerCase().trim();
+      if(tipo.includes('tramo')) tipo='tramo';
+      else if(tipo.includes('movil')||tipo.includes('móvil')) tipo='movil';
+      else if(tipo.includes('semaforo')||tipo.includes('semáforo')) tipo='semaforo';
+      else tipo='fijo';
+      let v=Number(rd.max);
+      if(!Number.isFinite(v) || v<=0 || v>200) v=50;
+      if(v<=40) v=40;
+      else if(v<=50) v=50;
+      else if(v<=60) v=60;
+      else if(v<=70) v=70;
+      else if(v<=80) v=80;
+      else if(v<=90) v=90;
+      else if(v<=100) v=100;
+      else if(v<=110) v=110;
+      else v=120;
+      return {
+        type:'Feature',
+        geometry:{type:'Point',coordinates:[rd.lon,rd.lat]},
+        properties:{ idx:i, tipo:tipo, velocidad:v, velReal:Number(rd.max)||0 }
+      };
+    });
     const geojson={type:'FeatureCollection',features:features};
     map.addSource('radares',{type:'geojson',data:geojson});
-    // Capa symbol con icono segun tipo+velocidad usando expresiones
+    // Capa 1: circulo base
+    map.addLayer({
+      id:'radares-circulo',
+      type:'circle',
+      source:'radares',
+      minzoom:11,
+      paint:{
+        'circle-radius':['interpolate',['linear'],['zoom'],11,2,14,4,17,7,20,10],
+        'circle-color':[
+          'step',['get','velocidad'],
+          '#2196f3',
+          60,'#f9a825',
+          90,'#ff6f00',
+          120,'#d32f2f'
+        ],
+        'circle-stroke-width':1.5,
+        'circle-stroke-color':'#ffffff',
+        'circle-opacity':0.95
+      }
+    });
+    // Capa 2: icono encima del circulo
     map.addLayer({
       id:'radares',
       type:'symbol',
       source:'radares',
-      minzoom:13,
+      minzoom:14,
       layout:{
-        // El icono se construye con concatenacion: 'radar-fijo-50', etc.
         'icon-image':[
           'concat',
           'radar-',
@@ -319,25 +338,23 @@ async function cargarRadares(){
           '-',
           ['to-string',['get','velocidad']]
         ],
-        'icon-size':0.5,
+        'icon-size':['interpolate',['linear'],['zoom'],14,0.35,17,0.5,20,0.65],
         'icon-allow-overlap':true,
         'icon-ignore-placement':true
       }
     });
-    document.getElementById('rRadares').innerHTML='<b>'+datos.length+'</b> cargados';
+    document.getElementById('rRadares').innerHTML='<b>'+datos.length+'</b> cargados (2 capas)';
   }catch(e){
     document.getElementById('rRadares').innerHTML='<span class="mal">error: '+e.message+'</span>';
     registrarError('radares',e.message);
   }
 }
 
-// ==== RADARES: comprobar proximidad en cada fix ====
 function comprobarRadaresCercanos(lat,lon,velocidadActualKmh){
   if(!radaresCargados.length || !radaresOn){
     apagarAlertaRadar();
     return;
   }
-  // Filtrar por bounding box rapido: ~0.01 grados (~1.1km) alrededor
   const dLat=0.01, dLon=0.01;
   let masCercano=null, distMin=Infinity;
   for(const rd of radaresCargados){
@@ -353,7 +370,6 @@ function comprobarRadaresCercanos(lat,lon,velocidadActualKmh){
   }
   const limRadar=Number(masCercano.max)||50;
   g9.textContent=Math.round(distMin)+' m · '+limRadar+' km/h';
-  // Mostrar aviso si estamos a menos de 500m y por encima de la velocidad del radar
   if(distMin<RADAR_DIST_AVISO && velocidadActualKmh>limRadar){
     activarAlertaRadar(distMin, limRadar);
   } else {
@@ -382,10 +398,12 @@ document.getElementById('btnEdificios').onclick=function(){
   this.textContent='🏢 Edificios: '+(edificiosOn?'ON':'OFF');
   this.classList.toggle('on',edificiosOn);
 };
-// ==== RADARES: boton ON/OFF ====
+// ==== RADARES: boton ON/OFF para las dos capas ====
 document.getElementById('btnRadares').onclick=function(){
   radaresOn=!radaresOn;
-  if(map.getLayer('radares')) map.setLayoutProperty('radares','visibility',radaresOn?'visible':'none');
+  const vis=radaresOn?'visible':'none';
+  if(map.getLayer('radares-circulo')) map.setLayoutProperty('radares-circulo','visibility',vis);
+  if(map.getLayer('radares')) map.setLayoutProperty('radares','visibility',vis);
   this.textContent='📸 Radares: '+(radaresOn?'ON':'OFF');
   this.classList.toggle('on',radaresOn);
   if(!radaresOn) apagarAlertaRadar();
@@ -713,7 +731,6 @@ function onFix(pos){
     camaraLibre=parado;
     document.getElementById('g8').textContent=parado?'libre (parado)':'seguir';
   }
-  // ==== RADARES: comprobar en cada fix ====
   comprobarRadaresCercanos(now.lat,now.lon,speedKmh);
   if(parado&&lastFix){
     document.getElementById('g2').textContent=Math.round(speedKmh)+' km/h';
