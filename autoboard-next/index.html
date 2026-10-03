@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>autoboard-next · Fase 7 · UI limpia</title>
+<title>autoboard-next · Fase 8 · tráfico en vivo</title>
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
 <style>
 html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
@@ -18,9 +18,12 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 @media(max-width:900px){#diag2.on{left:10px;top:260px}}
 #errlog{position:fixed;top:10px;right:10px;z-index:10;background:rgba(10,13,16,.88);border:1px solid #232c33;border-radius:10px;padding:8px 12px;color:#ff8a8a;font:11px/1.5 ui-monospace,monospace;max-width:280px;max-height:40vh;overflow-y:auto;display:none}
 #errlog.on{display:block}
-#controlesAbajo{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:8px;justify-content:center}
+#controlesAbajo{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:8px;justify-content:center;flex-direction:column;align-items:center}
 #controlesAbajo button{background:#12161c;border:1px solid #232c33;color:#e8eef2;border-radius:10px;padding:12px 18px;font-size:14px;font-weight:700}
 #controlesAbajo button.on{background:#1d3a2c;border-color:#2e6b4a}
+#avisoInicial{background:rgba(20,80,50,.92);border:2px solid #2e6b4a;border-radius:12px;padding:10px 20px;color:#9ae6b4;font:700 15px system-ui,sans-serif;margin-bottom:8px;animation:avisoPulse 2s ease-in-out infinite}
+#avisoInicial.oculto{display:none}
+@keyframes avisoPulse{0%,100%{opacity:1}50%{opacity:.6}}
 #navbanner{position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:20;display:none;align-items:center;gap:12px;background:rgba(10,13,16,.9);border:1px solid #232c33;border-radius:16px;padding:8px 18px 8px 10px}
 #navbanner.hw{background:rgba(10,30,70,.92);border-color:#1e4a8a}
 #navarrow{width:78px;height:84px;flex:0 0 auto}
@@ -142,7 +145,8 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
 <div id="errlog"></div>
 
 <div id="controlesAbajo">
-  <button id="btnGPS">📍 GPS: OFF</button>
+  <div id="avisoInicial">📍 Toca GPS para empezar</div>
+  <button id="btnGPS">📍 GPS: ON</button>
 </div>
 
 <div id="grupoArribaDer">
@@ -296,6 +300,18 @@ map.on('load',()=>{
     map.addSource('terreno',{type:'raster-dem',url:'https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key='+MAPTILER_KEY,tileSize:256,maxzoom:12});
     document.getElementById('rTerreno').textContent='listo (OFF)';
   }catch(e){document.getElementById('rTerreno').innerHTML='<span class="mal">fallo fuente: '+e.message+'</span>';}
+  // ==== CAPA DE TRAFICO GENERAL (TomTom raster) ====
+  map.addSource('trafico-tiles',{
+    type:'raster',
+    tiles:['https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key='+TT],
+    tileSize:256
+  });
+  map.addLayer({
+    id:'trafico-flujo',
+    type:'raster',
+    source:'trafico-tiles',
+    paint:{'raster-opacity':0.7}
+  });
   map.addSource('giro-pos',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
   map.addLayer({id:'giro-pos',type:'symbol',source:'giro-pos',
     layout:{'icon-image':'chevron-giro','icon-size':0.85,'icon-rotate':['get','bearing'],'icon-rotation-alignment':'map','icon-allow-overlap':true,'icon-ignore-placement':true,'icon-pitch-alignment':'map'}});
@@ -590,11 +606,14 @@ document.getElementById('btnDebug').onclick=function(){
   this.textContent='🔧 Paneles Debug: '+(activo?'ON':'OFF');
   this.classList.toggle('on',activo);
 };
-// ==== BOTON TRAFICO ====
+// ==== BOTON TRAFICO: controla ruta Y capa general ====
 document.getElementById('btnTrafico').onclick=function(){
   traficoOn=!traficoOn;
   this.textContent='🚦 Tráfico: '+(traficoOn?'ON':'OFF');
   this.classList.toggle('on',traficoOn);
+  if(map.getLayer('trafico-flujo')){
+    map.setLayoutProperty('trafico-flujo','visibility',traficoOn?'visible':'none');
+  }
   if(routeCoordsLL.length) repintarRutaConNiveles();
 };
 function repintarRutaConNiveles(){
@@ -925,7 +944,6 @@ function onFix(pos){
     camaraLibre=parado;
     document.getElementById('g8').textContent=parado?'libre (parado)':'seguir';
   }
-  // NOTA: ya NO forzamos seguirBloqueado=false al arrancar.
   comprobarRadaresCercanos(now.lat,now.lon,speedKmh);
   if(cargadoresOn) cargarCargadores(now.lat,now.lon);
   if(parado&&lastFix){
@@ -1032,6 +1050,9 @@ document.getElementById('btnGPS').onclick=function(){
   this.classList.toggle('on',gpsOn);
   document.body.classList.toggle('modo-navegacion',gpsOn);
   if(gpsOn){
+    // Ocultar aviso inicial
+    const aviso=document.getElementById('avisoInicial');
+    if(aviso) aviso.classList.add('oculto');
     document.getElementById('g1').innerHTML='<b>activo</b>';
     watchId=navigator.geolocation.watchPosition(onFix,e=>{
       document.getElementById('g1').innerHTML='<span class="mal">error: '+e.message+'</span>';
@@ -1048,6 +1069,9 @@ document.getElementById('btnGPS').onclick=function(){
     seguirOn=false;
     const btn=document.getElementById('btnSeguir');
     if(btn){btn.classList.remove('activo');}
+    // Mostrar aviso inicial otra vez
+    const aviso=document.getElementById('avisoInicial');
+    if(aviso) aviso.classList.remove('oculto');
   }
 };
 document.getElementById('btnSeguir').onclick=function(){
