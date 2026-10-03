@@ -146,7 +146,7 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
 
 <div id="controlesAbajo">
   <div id="avisoInicial">📍 Toca GPS para empezar</div>
-  <button id="btnGPS">📍 GPS: ON</button>
+  <button id="btnGPS">📍 GPS: OFF</button>
 </div>
 
 <div id="grupoArribaDer">
@@ -300,7 +300,7 @@ map.on('load',()=>{
     map.addSource('terreno',{type:'raster-dem',url:'https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key='+MAPTILER_KEY,tileSize:256,maxzoom:12});
     document.getElementById('rTerreno').textContent='listo (OFF)';
   }catch(e){document.getElementById('rTerreno').innerHTML='<span class="mal">fallo fuente: '+e.message+'</span>';}
-  // ==== CAPA DE TRAFICO GENERAL (TomTom raster) ====
+  // CAPA DE TRAFICO GENERAL (TomTom raster)
   map.addSource('trafico-tiles',{
     type:'raster',
     tiles:['https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key='+TT],
@@ -316,19 +316,35 @@ map.on('load',()=>{
   map.addLayer({id:'giro-pos',type:'symbol',source:'giro-pos',
     layout:{'icon-image':'chevron-giro','icon-size':0.85,'icon-rotate':['get','bearing'],'icon-rotation-alignment':'map','icon-allow-overlap':true,'icon-ignore-placement':true,'icon-pitch-alignment':'map'}});
   map.addSource('ruta',{type:'geojson',data:{type:'FeatureCollection',features:[]},lineMetrics:true});
-  const paintBase={'line-opacity':0.85,'line-width':['interpolate',['linear'],['zoom'],14,8,16,14,18,20,20,26]};
+  const paintBase={'line-opacity':0.95,'line-width':['interpolate',['linear'],['zoom'],14,10,16,16,18,22,20,28]};
   const layoutBase={'line-cap':'round','line-join':'round','line-round-limit':1.0};
+  // CAPAS DE COLOR DE TRAFICO
   map.addLayer({id:'ruta-0',type:'line',source:'ruta',filter:['==',['get','nivel'],0],paint:{...paintBase,'line-color':'#1e88e5'},layout:layoutBase});
   map.addLayer({id:'ruta-1',type:'line',source:'ruta',filter:['==',['get','nivel'],1],paint:{...paintBase,'line-color':'#f9a825'},layout:layoutBase});
   map.addLayer({id:'ruta-2',type:'line',source:'ruta',filter:['==',['get','nivel'],2],paint:{...paintBase,'line-color':'#ff6f00'},layout:layoutBase});
   map.addLayer({id:'ruta-3',type:'line',source:'ruta',filter:['==',['get','nivel'],3],paint:{...paintBase,'line-color':'#d32f2f'},layout:layoutBase});
+  // CAPAS DE RAYAS BLANCAS (doble carril sobre el color)
+  const paintCarril={'line-color':'#ffffff','line-opacity':0.85,
+    'line-width':['interpolate',['linear'],['zoom'],14,1.5,16,2.5,18,3.5,20,4],
+    'line-offset':['interpolate',['linear'],['zoom'],14,2,16,4,18,6,20,8]};
+  map.addLayer({id:'ruta-carril-izq',type:'line',source:'ruta',filter:['==',['get','nivel'],0],paint:paintCarril,layout:layoutBase});
+  map.addLayer({id:'ruta-carril-izq-1',type:'line',source:'ruta',filter:['==',['get','nivel'],1],paint:paintCarril,layout:layoutBase});
+  map.addLayer({id:'ruta-carril-izq-2',type:'line',source:'ruta',filter:['==',['get','nivel'],2],paint:paintCarril,layout:layoutBase});
+  map.addLayer({id:'ruta-carril-izq-3',type:'line',source:'ruta',filter:['==',['get','nivel'],3],paint:paintCarril,layout:layoutBase});
+  const paintCarrilDer={...paintCarril,'line-offset':['interpolate',['linear'],['zoom'],14,-2,16,-4,18,-6,20,-8]};
+  map.addLayer({id:'ruta-carril-der',type:'line',source:'ruta',filter:['==',['get','nivel'],0],paint:paintCarrilDer,layout:layoutBase});
+  map.addLayer({id:'ruta-carril-der-1',type:'line',source:'ruta',filter:['==',['get','nivel'],1],paint:paintCarrilDer,layout:layoutBase});
+  map.addLayer({id:'ruta-carril-der-2',type:'line',source:'ruta',filter:['==',['get','nivel'],2],paint:paintCarrilDer,layout:layoutBase});
+  map.addLayer({id:'ruta-carril-der-3',type:'line',source:'ruta',filter:['==',['get','nivel'],3],paint:paintCarrilDer,layout:layoutBase});
   try{
-    for(const id of ['ruta-0','ruta-1','ruta-2','ruta-3']) map.setPaintProperty(id,'line-trim-offset',[0,0]);
+    const capasRuta=['ruta-0','ruta-1','ruta-2','ruta-3'];
+    for(const id of capasRuta) map.setPaintProperty(id,'line-trim-offset',[0,0]);
   }catch(e){trimSoportado=false;document.getElementById('rTrim').innerHTML='<span class="aviso">no soportado</span>';}
   cargarRadares();
+  // Capa cargadores con minzoom 9 (antes 11)
   map.addSource('cargadores',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
-  map.addLayer({id:'cargadores',type:'symbol',source:'cargadores',minzoom:11,
-    layout:{'icon-image':['get','icono'],'icon-size':['interpolate',['linear'],['zoom'],11,0.35,15,0.5,18,0.65],
+  map.addLayer({id:'cargadores',type:'symbol',source:'cargadores',minzoom:9,
+    layout:{'icon-image':['get','icono'],'icon-size':['interpolate',['linear'],['zoom'],9,0.25,11,0.35,15,0.5,18,0.65],
       'icon-allow-overlap':true,'icon-ignore-placement':true}});
   map.on('click','cargadores',(e)=>{
     if(!e.features||!e.features.length) return;
@@ -1052,6 +1068,17 @@ document.getElementById('btnGPS').onclick=function(){
     const aviso=document.getElementById('avisoInicial');
     if(aviso) aviso.classList.add('oculto');
     document.getElementById('g1').innerHTML='<b>activo</b>';
+    // Cargar cargadores con getCurrentPosition (rapido, una sola vez)
+    navigator.geolocation.getCurrentPosition(
+      pos=>{
+        cargarCargadores(pos.coords.latitude,pos.coords.longitude);
+      },
+      err=>{
+        // Si falla, cargar con Bilbao por defecto
+        cargarCargadores(43.2678,-2.9387);
+      },
+      {enableHighAccuracy:true,maximumAge:0,timeout:10000}
+    );
     watchId=navigator.geolocation.watchPosition(onFix,e=>{
       document.getElementById('g1').innerHTML='<span class="mal">error: '+e.message+'</span>';
       registrarError('gps',e.message);
