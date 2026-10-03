@@ -621,7 +621,7 @@ function actualizarZoomManiobra(distSiguiente, tipoSiguiente){
   try{ map.setZoom(z, { animate:true }); }catch(e){}
 }
 
-const VERSION = '2026.10.03-h3d';
+const VERSION = '2026.10.03-h3d2';
 // X dibujada: el caracter U+2715 no esta en la fuente del navegador y salia como un rectangulo
 const X_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>';
 try{ $('ver').textContent = 'v'+VERSION; }catch(e){}
@@ -1212,12 +1212,13 @@ function cargarScript3D(u){ return new Promise((ok, ko) => { const sc = document
 function alimentarHud3D(){
   if (!hud3dActivo || !window.HUD3D) return;
   let hw = false; try{ const st = routeOn ? steps[stepIdx] : null; hw = !!(st && (st.hw || isHighway(st))); }catch(e){}
-  try{ HUD3D.update({ speed: speedKmh, head: heading, t: performance.now()/1000, road: hw ? 'motorway' : 'road', rain: !!hudCfg.rain, night: noche3D() }); }catch(e){}
+  // road: no se manda; el modulo decide solo (autovia de la ruta, o >=100 km/h sostenidos). brake: tampoco, lo deduce de la deceleracion y de estar parado.
+  try{ HUD3D.update({ speed: speedKmh, head: heading, t: performance.now()/1000, hw: (routeOn && hw) ? true : undefined, rain: !!hudCfg.rain, night: noche3D() }); }catch(e){}
 }
 async function intentar3D(){
   if (hud3dFallo || !h3dPreferido()) return false;
   try{
-    if (!window.HUD3D) await cargarScript3D(HUD3D_BASE + 'hud3d.js');
+    if (!window.HUD3D) await cargarScript3D(HUD3D_BASE + 'hud3d.js?v=' + VERSION);   // la version en la URL evita que el navegador sirva un hud3d.js viejo
     await HUD3D.init({ base: HUD3D_BASE, host: $('hud2wrap'), z: 1,
       onSlow: fps => { hud3dFallo = true; console.warn('[hud3d] FPS bajos:', fps); setStatus('HUD 3D lento (' + fps + ' fps): vuelvo al HUD 2'); if (hudAbierto){ cerrarHud(); abrirHud(); } } });
     try{ HUD3D.setBodyColor(hudCfg.carColor); }catch(e){}

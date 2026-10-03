@@ -20,6 +20,7 @@ try{ renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true,alpha:true,p
 catch(e){ throw new Error('WebGL no disponible: '+e.message); }
 renderer.outputEncoding=THREE.sRGBEncoding;
 renderer.setClearColor(0x000000,0);
+renderer.localClippingEnabled=true;                 // para la transición carretera -> autopista
 var scene=new THREE.Scene();
 var FOG_DAY=0x0c1a2e, FOG_NIGHT=0x04070d;
 scene.fog=new THREE.Fog(FOG_DAY,30,92);
@@ -87,9 +88,9 @@ function makeConcreteTexture(){
   var t=new THREE.CanvasTexture(c); t.wrapS=THREE.RepeatWrapping; t.wrapT=THREE.ClampToEdgeWrapping; t.encoding=THREE.sRGBEncoding; t.anisotropy=4; t.needsUpdate=true; return t;
 }
 // carretera convencional: 1 carril por sentido, eje central discontinuo, líneas de borde continuas
-var texRoad=makeAsphaltTexture({CW:1024,W:11.6,a0:1.5,a1:10.1,base:'#2a303b',verge:'#2e3529',tracks:[3.37,4.93,6.67,8.23],lines:[{m:2.5,w:0.16},{m:9.1,w:0.16},{m:5.8,w:0.17,per:12,on:3.5}]});
+var texRoad=makeAsphaltTexture({CW:1024,W:11.6,a0:1.5,a1:10.1,base:'#2a303b',verge:'#2e3529',tracks:[3.37,4.93,6.67,8.23],lines:[]});
 // autopista: cada calzada con 2 carriles + arcén; asfalto MÁS OSCURO
-var texMw=makeAsphaltTexture({CW:512,W:10.5,a0:0,a1:10.5,base:'#171b22',verge:null,tracks:[1.97,3.53,5.47,7.03],lines:[{m:1.0,w:0.17},{m:8.0,w:0.17},{m:4.5,w:0.17,per:6,on:3}]});
+var texMw=makeAsphaltTexture({CW:512,W:10.5,a0:0,a1:10.5,base:'#171b22',verge:null,tracks:[1.97,3.53,5.47,7.03],lines:[]});
 var grassTex=makeGrassTexture(), railTex=makeRailTexture(), concTex=makeConcreteTexture();
 
 /* ---------- cintas que se curvan con la carretera ---------- */
@@ -99,14 +100,14 @@ function makeRibbon(u0,u1,cols,repU,pat,mat,opt){
   for(r=0;r<rows;r++){ for(c=0;c<=cols;c++){ var s=S0+r*STEP; uv[vi*2]=(opt.flip?(1-c/cols):c/cols)*repU; uv[vi*2+1]=s/pat; nor[vi*3+1]=1; vi++; } }
   for(r=0;r<rows-1;r++){ for(c=0;c<cols;c++){ var a=r*(cols+1)+c, b=a+1, d=a+(cols+1), e=d+1; idx.push(a,d,b,b,d,e); } }
   geo.setAttribute('position',new THREE.BufferAttribute(pos,3).setUsage(THREE.DynamicDrawUsage)); geo.setAttribute('uv',new THREE.BufferAttribute(uv,2)); geo.setAttribute('normal',new THREE.BufferAttribute(nor,3)); geo.setIndex(idx);
-  var m=new THREE.Mesh(geo,mat); m.frustumCulled=false; scene.add(m); var o={geo:geo,pos:pos,u0:u0,u1:u1,cols:cols,mesh:m,y:opt.y||0}; ribbons.push(o); return o;
+  var m=new THREE.Mesh(geo,mat); m.frustumCulled=false; scene.add(m); var o={geo:geo,pos:pos,u0:u0,u1:u1,cols:cols,mesh:m,y:opt.y||0,lc:null,cloned:false}; ribbons.push(o); return o;
 }
 function makeWall(u,y0,y1,pat,mat){
   var geo=new THREE.BufferGeometry(), n=rows*2, pos=new Float32Array(n*3), uv=new Float32Array(n*2), nor=new Float32Array(n*3), idx=[], r;
   for(r=0;r<rows;r++){ var s=S0+r*STEP; uv[(r*2)*2]=s/pat; uv[(r*2)*2+1]=0; uv[(r*2+1)*2]=s/pat; uv[(r*2+1)*2+1]=1; nor[(r*2)*3]=nor[(r*2+1)*3]=(u<0?1:-1); }
   for(r=0;r<rows-1;r++){ var a=r*2, b=a+1, d=a+2, e=a+3; idx.push(a,d,b,b,d,e); }
   geo.setAttribute('position',new THREE.BufferAttribute(pos,3).setUsage(THREE.DynamicDrawUsage)); geo.setAttribute('uv',new THREE.BufferAttribute(uv,2)); geo.setAttribute('normal',new THREE.BufferAttribute(nor,3)); geo.setIndex(idx);
-  var m=new THREE.Mesh(geo,mat); m.frustumCulled=false; scene.add(m); var o={geo:geo,pos:pos,u:u,y0:y0,y1:y1,mesh:m}; walls.push(o); return o;
+  var m=new THREE.Mesh(geo,mat); m.frustumCulled=false; scene.add(m); var o={geo:geo,pos:pos,u:u,y0:y0,y1:y1,mesh:m,lc:null,cloned:false}; walls.push(o); return o;
 }
 var matRoad=new THREE.MeshStandardMaterial({map:texRoad,roughness:0.92,metalness:0.0});
 var matMw=new THREE.MeshStandardMaterial({map:texMw,roughness:0.92,metalness:0.0});
@@ -115,17 +116,49 @@ var railMat=new THREE.MeshStandardMaterial({map:railTex,alphaTest:0.5,side:THREE
 var concMat=new THREE.MeshStandardMaterial({map:concTex,side:THREE.DoubleSide,roughness:0.9,metalness:0});
 var capMat=new THREE.MeshStandardMaterial({color:0x8a8f96,roughness:0.9,metalness:0});
 
-function clearLayout(){
-  var i; for(i=0;i<ribbons.length;i++){ scene.remove(ribbons[i].mesh); ribbons[i].geo.dispose(); }
-  for(i=0;i<walls.length;i++){ scene.remove(walls[i].mesh); walls[i].geo.dispose(); }
-  ribbons.length=0; walls.length=0;
+/* líneas pintadas: cintas de 20 cm de ancho (no dependen de la textura, que a ras de suelo se emborrona) */
+var lineMat=new THREE.MeshBasicMaterial({color:0xf2f4f6,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
+var dashCache={}, dashTexList=[];
+function dashMat(per,on){
+  var key=per+'_'+on; if(dashCache[key]) return dashCache[key];
+  var c=document.createElement('canvas'); c.width=8; c.height=1024; var g=c.getContext('2d'), ppl=1024/PAT; g.fillStyle='#ffffff';
+  for(var d=0;d<Math.round(PAT/per);d++) g.fillRect(0,d*per*ppl,8,on*ppl);
+  var t=new THREE.CanvasTexture(c); t.wrapS=THREE.ClampToEdgeWrapping; t.wrapT=THREE.RepeatWrapping; t.needsUpdate=true; dashTexList.push(t);
+  var m=new THREE.MeshBasicMaterial({map:t,transparent:true,alphaTest:0.3,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}); dashCache[key]=m; return m;
 }
-function buildLayout(type){
-  clearLayout(); state.road=type;
+function addLine(u,w,per,on){ return makeRibbon(u-w/2,u+w/2,1,1,PAT,per?dashMat(per,on):lineMat,{y:0.012}); }
+
+var LAYINFO={road:{outer:6.3,lc:1.65},motorway:{outer:13.0,lc:8.25}};
+var trans=null, planeNear=new THREE.Plane(new THREE.Vector3(0,0,1),0), planeFar=new THREE.Plane(new THREE.Vector3(0,0,-1),0);
+function envAt(s){   // qué tipo de vía hay a s metros (durante la transición, delante del límite ya es la nueva)
+  var tp=(trans&&s<trans.s)?trans.oldType:state.road, li=LAYINFO[tp];
+  return {type:tp,outer:li.outer,lc:(tp===state.road)?laneC:(trans?trans.oldLc:li.lc)};
+}
+function disposeSet(rs,ws){
+  var i; for(i=0;i<rs.length;i++){ scene.remove(rs[i].mesh); rs[i].geo.dispose(); if(rs[i].cloned) rs[i].mesh.material.dispose(); }
+  for(i=0;i<ws.length;i++){ scene.remove(ws[i].mesh); ws[i].geo.dispose(); if(ws[i].cloned) ws[i].mesh.material.dispose(); }
+}
+function clearLayout(){ disposeSet(ribbons,walls); ribbons.length=0; walls.length=0; }
+function finishTrans(){
+  if(!trans) return; disposeSet(trans.oldR,trans.oldW);
+  var all=ribbons.concat(walls), i; for(i=0;i<all.length;i++){ if(all[i].cloned){ all[i].mesh.material.clippingPlanes=null; all[i].mesh.material.needsUpdate=true; } }
+  trans=null;
+}
+function applyPlanes(){ if(trans){ planeNear.constant=trans.s; planeFar.constant=-trans.s; } }
+function buildLayout(type,smooth){
+  finishTrans();
+  var oldR=null, oldW=null, oldType=state.road, lc0=laneC, i, all;
+  if(smooth){
+    oldR=ribbons.slice(); oldW=walls.slice(); ribbons.length=0; walls.length=0; all=oldR.concat(oldW);
+    for(i=0;i<all.length;i++){ all[i].lc=lc0; all[i].cloned=true; all[i].mesh.material=all[i].mesh.material.clone(); all[i].mesh.material.clippingPlanes=[planeNear]; }   // lo viejo: solo lo que queda detrás del límite
+  } else clearLayout();
+  state.road=type;
   if(type==='motorway'){
     OUTER=13.0; lanes=[4.75,8.25];
     makeRibbon(2.0,12.5,COLS,1,PAT,matMw);                       // nuestra calzada: arcén izq. 1 m + 2 carriles + arcén dcho. 2,5 m
     makeRibbon(-12.5,-2.0,COLS,1,PAT,matMw,{flip:true});         // calzada contraria (espejo)
+    addLine(3.0,0.2); addLine(10.0,0.2); addLine(6.5,0.18,6,2.5);      // nuestra: borde izq., borde dcho., divisoria discontinua
+    addLine(-3.0,0.2); addLine(-10.0,0.2); addLine(-6.5,0.18,6,2.5);   // la contraria
     makeRibbon(-2.0,2.0,2,1,GPAT,grassMat);                       // mediana
     makeWall(-0.35,0,0.85,12,concMat); makeWall(0.35,0,0.85,12,concMat);   // barrera de hormigón central
     makeRibbon(-0.35,0.35,1,1,GPAT,capMat,{y:0.85});
@@ -134,16 +167,33 @@ function buildLayout(type){
   } else {
     OUTER=6.3; lanes=[1.65];
     makeRibbon(-5.8,5.8,COLS,1,PAT,matRoad);                      // 2 carriles: el nuestro a la derecha, el contrario a la izquierda
+    addLine(-3.3,0.2); addLine(3.3,0.2); addLine(0,0.18,12,3.5);  // bordes continuos + eje central discontinuo
     makeRibbon(5.8,39.8,4,34/GPAT,GPAT,grassMat,{y:-0.01}); makeRibbon(-39.8,-5.8,4,34/GPAT,GPAT,grassMat,{y:-0.01});
     makeWall(6.3,0,0.8,12,railMat); makeWall(-6.3,0,0.8,12,railMat);
   }
   laneIdx=lanes.length-1; laneT=lanes[laneIdx]; laneC=laneT;
+  if(smooth){
+    all=ribbons.concat(walls);
+    for(i=0;i<all.length;i++){ all[i].cloned=true; all[i].mesh.material=all[i].mesh.material.clone(); all[i].mesh.material.clippingPlanes=[planeFar]; }   // lo nuevo: solo lo que queda delante
+    trans={s:88,oldR:oldR,oldW:oldW,oldType:oldType,oldLc:lc0,to:type}; applyPlanes();
+  }
+}
+function updRibbon(o){
+  var lc=(o.lc!==null?o.lc:laneC), r, c, vi=0;
+  for(r=0;r<rows;r++){ var s=S0+r*STEP; for(c=0;c<=o.cols;c++){ var u=o.u0+(o.u1-o.u0)*c/o.cols-lc; roadPoint(s,u,tmp); o.pos[vi*3]=tmp.x; o.pos[vi*3+1]=o.y; o.pos[vi*3+2]=tmp.z; vi++; } }
+  o.geo.attributes.position.needsUpdate=true;
+}
+function updWall(o){
+  var lc=(o.lc!==null?o.lc:laneC), r;
+  for(r=0;r<rows;r++){ var s2=S0+r*STEP; roadPoint(s2,o.u-lc,tmp); o.pos[(r*2)*3]=tmp.x; o.pos[(r*2)*3+1]=o.y0; o.pos[(r*2)*3+2]=tmp.z; o.pos[(r*2+1)*3]=tmp.x; o.pos[(r*2+1)*3+1]=o.y1; o.pos[(r*2+1)*3+2]=tmp.z; }
+  o.geo.attributes.position.needsUpdate=true;
 }
 function updateRoad(){
-  var i, r, c, vi, o;
-  for(i=0;i<ribbons.length;i++){ o=ribbons[i]; vi=0; for(r=0;r<rows;r++){ var s=S0+r*STEP; for(c=0;c<=o.cols;c++){ var u=o.u0+(o.u1-o.u0)*c/o.cols-laneC; roadPoint(s,u,tmp); o.pos[vi*3]=tmp.x; o.pos[vi*3+1]=o.y; o.pos[vi*3+2]=tmp.z; vi++; } } o.geo.attributes.position.needsUpdate=true; }
-  for(i=0;i<walls.length;i++){ o=walls[i]; for(r=0;r<rows;r++){ var s2=S0+r*STEP; roadPoint(s2,o.u-laneC,tmp); o.pos[(r*2)*3]=tmp.x; o.pos[(r*2)*3+1]=o.y0; o.pos[(r*2)*3+2]=tmp.z; o.pos[(r*2+1)*3]=tmp.x; o.pos[(r*2+1)*3+1]=o.y1; o.pos[(r*2+1)*3+2]=tmp.z; } o.geo.attributes.position.needsUpdate=true; }
+  var i;
+  for(i=0;i<ribbons.length;i++) updRibbon(ribbons[i]); for(i=0;i<walls.length;i++) updWall(walls[i]);
+  if(trans){ for(i=0;i<trans.oldR.length;i++) updRibbon(trans.oldR[i]); for(i=0;i<trans.oldW.length;i++) updWall(trans.oldW[i]); }
   texRoad.offset.y=(state.D/PAT)%1; texMw.offset.y=(state.D/PAT)%1; grassTex.offset.y=(state.D/GPAT)%1; railTex.offset.x=(state.D/12)%1; concTex.offset.x=(state.D/12)%1;
+  for(i=0;i<dashTexList.length;i++) dashTexList[i].offset.y=(state.D/PAT)%1;
 }
 
 /* ---------- entorno: terreno, árboles, farolas y montañas ---------- */
@@ -151,19 +201,56 @@ var FOGC_DAY=new THREE.Color(FOG_DAY), FOGC_NIGHT=new THREE.Color(FOG_NIGHT);
 var ground=new THREE.Mesh(new THREE.PlaneGeometry(500,500),new THREE.MeshStandardMaterial({color:0x0b141a,roughness:1,metalness:0}));
 ground.rotation.x=-Math.PI/2; ground.position.y=-0.05; scene.add(ground);
 
-// árboles (2 conos apilados, instanciados)
-var NTREE=46, LTREE=S1-S0-10, trees=[], treeLow, treeUp, treeDummy=new THREE.Object3D();
+// árboles: SOLO en autopista y pocos (14)
+var NTREE=14, LTREE=S1-S0-10, trees=[], treeLow, treeUp, treeDummy=new THREE.Object3D();
 (function(){ var lowG=new THREE.ConeGeometry(1.5,3.4,6), upG=new THREE.ConeGeometry(1.05,2.8,6);
   treeLow=new THREE.InstancedMesh(lowG,new THREE.MeshStandardMaterial({color:0x173522,roughness:1}),NTREE);
   treeUp=new THREE.InstancedMesh(upG,new THREE.MeshStandardMaterial({color:0x1d4129,roughness:1}),NTREE);
   treeLow.frustumCulled=false; treeUp.frustumCulled=false; scene.add(treeLow); scene.add(treeUp);
-  for(var i=0;i<NTREE;i++){ var side=(i%2?1:-1); trees.push({b:(i/NTREE)*LTREE+Math.random()*1.5, side:side, off:rnd(5,26), sc:rnd(0.75,1.7), rot:rnd(0,6.28)}); } })();
+  for(var i=0;i<NTREE;i++){ trees.push({b:(i/NTREE)*LTREE+rnd(0,3), side:(i%2?1:-1), off:rnd(8,30), sc:rnd(0.8,1.6), rot:rnd(0,6.28)}); } })();
 function updateTrees(){
   var vis=state.quality<2; treeLow.visible=vis; treeUp.visible=vis; if(!vis)return;
-  for(var i=0;i<NTREE;i++){ var t=trees[i], s=S0+5+(((t.b-state.D)%LTREE)+LTREE)%LTREE; roadPoint(s,t.side*(OUTER+t.off)-laneC,tmp);
-    treeDummy.position.set(tmp.x,1.7*t.sc,tmp.z); treeDummy.rotation.set(0,t.rot,0); treeDummy.scale.setScalar(t.sc); treeDummy.updateMatrix(); treeLow.setMatrixAt(i,treeDummy.matrix);
-    treeDummy.position.y=(1.7+2.3)*t.sc; treeDummy.updateMatrix(); treeUp.setMatrixAt(i,treeDummy.matrix); }
+  for(var i=0;i<NTREE;i++){ var t=trees[i], s=S0+5+(((t.b-state.D)%LTREE)+LTREE)%LTREE, env=envAt(s), k=(env.type==='motorway')?t.sc:0.0001;
+    roadPoint(s,t.side*(env.outer+t.off)-env.lc,tmp);
+    treeDummy.position.set(tmp.x,1.7*k,tmp.z); treeDummy.rotation.set(0,t.rot,0); treeDummy.scale.setScalar(k); treeDummy.updateMatrix(); treeLow.setMatrixAt(i,treeDummy.matrix);
+    treeDummy.position.y=(1.7+2.3)*k; treeDummy.updateMatrix(); treeUp.setMatrixAt(i,treeDummy.matrix); }
   treeLow.instanceMatrix.needsUpdate=true; treeUp.instanceMatrix.needsUpdate=true;
+}
+
+// edificios: SOLO en carretera de 2 carriles y pocos (7): casas, un bloque y una nave
+var BT=[{n:4,w:9,d:8,h:5.2,rh:2.6,pyr:true,wall:'#e4d6bb',roof:0x9a4a32,cols:3,rows:2},
+        {n:2,w:12,d:10,h:14,rh:0,pyr:false,wall:'#c3c7cd',roof:0x6c7076,cols:4,rows:5},
+        {n:1,w:22,d:13,h:6.5,rh:0,pyr:false,wall:'#adb3b9',roof:0x5b6168,cols:6,rows:2}];
+function winTexture(cols,rws,wall,lit){
+  var c=document.createElement('canvas'); c.width=c.height=256; var g=c.getContext('2d'); g.fillStyle=lit?'#000000':wall; g.fillRect(0,0,256,256);
+  var cw=256/cols, rh=256/rws, i, j;
+  for(i=0;i<cols;i++) for(j=0;j<rws;j++){ var x=i*cw+cw*0.22, y=j*rh+rh*0.2, w=cw*0.56, h=rh*0.55;
+    if(lit){ if(Math.random()<0.45){ g.fillStyle='#ffd58a'; g.fillRect(x,y,w,h); } } else { g.fillStyle='#2b3a52'; g.fillRect(x,y,w,h); g.fillStyle='rgba(255,255,255,0.18)'; g.fillRect(x,y,w,h*0.3); } }
+  var t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.anisotropy=4; t.needsUpdate=true; return t;
+}
+var bGroups=[], bAll=[], bDummy=new THREE.Object3D(), bMats=[];
+(function(){
+  BT.forEach(function(T,ti){
+    var geo=new THREE.BoxGeometry(T.d,T.h,T.w), mat=new THREE.MeshStandardMaterial({map:winTexture(T.cols,T.rows,T.wall,false),emissiveMap:winTexture(T.cols,T.rows,T.wall,true),emissive:0xffffff,emissiveIntensity:0,roughness:0.9,metalness:0});
+    bMats.push(mat);
+    var body=new THREE.InstancedMesh(geo,mat,T.n), rgeo, rmat=new THREE.MeshStandardMaterial({color:T.roof,roughness:0.95});
+    if(T.pyr){ rgeo=new THREE.ConeGeometry(0.7071,1,4); rgeo.rotateY(Math.PI/4); } else { rgeo=new THREE.BoxGeometry(1,0.3,1); }
+    var roof=new THREE.InstancedMesh(rgeo,rmat,T.n); body.frustumCulled=false; roof.frustumCulled=false; scene.add(body); scene.add(roof);
+    for(var k=0;k<T.n;k++) bAll.push({T:T,k:k,body:body,roof:roof}); bGroups.push({body:body,roof:roof});
+  });
+  var order=bAll.slice(), i, j, t0; for(i=order.length-1;i>0;i--){ j=Math.floor(Math.random()*(i+1)); t0=order[i]; order[i]=order[j]; order[j]=t0; }
+  order.forEach(function(B,n){ B.b=(n/order.length)*LTREE+rnd(0,6); B.side=(n%2?1:-1); B.off=rnd(6,20); });
+})();
+function updateBuildings(){
+  var vis=state.quality<2, q;
+  for(q=0;q<bGroups.length;q++){ bGroups[q].body.visible=vis; bGroups[q].roof.visible=vis; } if(!vis) return;
+  for(var n=0;n<bAll.length;n++){ var B=bAll[n], T=B.T, s=S0+5+(((B.b-state.D)%LTREE)+LTREE)%LTREE, env=envAt(s), sc=(env.type==='road')?1:0.0001;
+    roadPoint(s,B.side*(env.outer+B.off+T.d/2)-env.lc,tmp);
+    bDummy.position.set(tmp.x,T.h/2*sc,tmp.z); bDummy.rotation.set(0,-tmp.th,0); bDummy.scale.set(sc,sc,sc); bDummy.updateMatrix(); B.body.setMatrixAt(B.k,bDummy.matrix);
+    if(T.pyr){ bDummy.position.set(tmp.x,(T.h+T.rh/2)*sc,tmp.z); bDummy.scale.set(sc*T.d*1.08,sc*T.rh,sc*T.w*1.08); }
+    else { bDummy.position.set(tmp.x,(T.h+0.15)*sc,tmp.z); bDummy.scale.set(sc*(T.d+0.5),sc,sc*(T.w+0.5)); }
+    bDummy.updateMatrix(); B.roof.setMatrixAt(B.k,bDummy.matrix); }
+  for(q=0;q<bGroups.length;q++){ bGroups[q].body.instanceMatrix.needsUpdate=true; bGroups[q].roof.instanceMatrix.needsUpdate=true; }
 }
 
 // farolas (lado derecho): luz cálida y mancha de luz en el asfalto solo de noche
@@ -177,7 +264,7 @@ var NLAMP=4, LAMPGAP=36, lamps=[];
     g.add(pole); g.add(arm); g.add(head); g.add(glow); scene.add(g); lamps.push({g:g,head:head,glow:glow,m:headM}); } })();
 function updateLamps(){
   var off=state.D%LAMPGAP;
-  for(var n=0;n<lamps.length;n++){ var L=lamps[n], s=n*LAMPGAP-off-LAMPGAP*0.5; if(s<S0+4||s>S1-10){ L.g.visible=false; continue; } L.g.visible=true; var mw=state.road==='motorway'; roadPoint(s,(mw?0:OUTER+1.3)-laneC,tmp); L.g.position.set(tmp.x,0,tmp.z); L.g.rotation.y=-tmp.th; L.g.scale.x=mw?-1:1; L.glow.visible=state.night&&state.quality<2; }
+  for(var n=0;n<lamps.length;n++){ var L=lamps[n], s=n*LAMPGAP-off-LAMPGAP*0.5; if(s<S0+4||s>S1-10){ L.g.visible=false; continue; } L.g.visible=true; var env=envAt(s), mw=(env.type==='motorway'); roadPoint(s,(mw?0:env.outer+1.3)-env.lc,tmp); L.g.position.set(tmp.x,0,tmp.z); L.g.rotation.y=-tmp.th; L.g.scale.x=mw?-1:1; L.glow.visible=state.night&&state.quality<2; }
 }
 
 // panorama de montañas (gira con el rumbo acumulado: la sensación de que el mapa gira)
@@ -224,13 +311,13 @@ function spawnSign(kind,val,ahead){
   var g=new THREE.Group(), pole=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.045,h,6),poleMat); pole.position.y=h/2;
   var pm=new THREE.MeshBasicMaterial({map:signTexture(kind,val),transparent:true,alphaTest:0.08,fog:true}); pm.color.setRGB(signTint,signTint,signTint);
   var plate=new THREE.Mesh(new THREE.PlaneGeometry(size,size),pm); plate.position.set(0,h-size*0.25+0.12,0.06);
-  g.add(pole); g.add(plate); scene.add(g); signs.push({g:g,kind:kind,val:val,D0:state.D,s0:ahead,u:OUTER+0.9,mat:pm});
+  g.add(pole); g.add(plate); scene.add(g); signs.push({g:g,kind:kind,val:val,D0:state.D,s0:ahead,u:OUTER+0.9,mat:pm,layout:state.road,lc0:laneC});
 }
 function clearSigns(){ for(var i=0;i<signs.length;i++){ scene.remove(signs[i].g); } signs.length=0; }
 function updateSigns(){
   for(var i=signs.length-1;i>=0;i--){ var sg=signs[i], s=sg.s0-(state.D-sg.D0);
     if(s<S0+0.5){ scene.remove(sg.g); signs.splice(i,1); continue; }
-    roadPoint(s,sg.u-laneC,tmp); sg.g.position.set(tmp.x,0,tmp.z); sg.g.rotation.y=-tmp.th; }
+    roadPoint(s,sg.u-(sg.layout===state.road?laneC:sg.lc0),tmp); sg.g.position.set(tmp.x,0,tmp.z); sg.g.rotation.y=-tmp.th; }
 }
 
 /* ---------- coche ---------- */
@@ -329,6 +416,7 @@ function setNight(n){
   stage.style.filter=n?'brightness(.85)':'none';
   mountains.material.color.setRGB(n?0.33:1,n?0.27:1,n?0.28:1);
   for(var li=0;li<lamps.length;li++) lamps[li].m.emissiveIntensity=n?2.2:0;
+  for(var bi=0;bi<bMats.length;bi++) bMats[bi].emissiveIntensity=n?1.0:0;
   signTint=n?0.62:1; for(var si=0;si<signs.length;si++) signs[si].mat.color.setRGB(signTint,signTint,signTint);
   for(var i=0;i<heads.length;i++) heads[i].intensity=n?2.4:0;
 }
@@ -389,9 +477,10 @@ function setLimit(n,announce){
   state.limit=n; $('limN').textContent=n; $('limN').style.fontSize=String(n).length>2?'19px':'24px'; $('limS').value=String(n);
   if(announce!==false) spawnSign('speed',n,85);
 }
-function setRoadType(t,announce){
-  if(t===state.road && announce!==false) return;
-  buildLayout(t); clearSigns(); updateRoad();
+function setRoadType(t,announce,smooth){
+  if(t===state.road) return;
+  var sm=(smooth!==undefined)?!!smooth:(carReady&&announce!==false);
+  buildLayout(t,sm); if(!sm) clearSigns(); updateRoad();
   $('rRoad').classList.toggle('on',t==='road'); $('rMw').classList.toggle('on',t==='motorway'); $('bLane').style.display=(t==='motorway')?'':'none';
   if(announce!==false){ if(t==='motorway'){ spawnSign('blue','AUTOPISTA',55); setLimit(120); } else setLimit(90); }
 }
@@ -442,11 +531,12 @@ function frame(now){
   state.k+=(state.kT-state.k)*Math.min(1,dt*(mode==='manual'?2.2:1.3));   // la curva entra y sale suave (más aún con GPS)
   var k=state.k;
   state.H+=v*k*dt;                                                         // rumbo acumulado: mueve las montañas
-  updateRoad(); updateTrees(); updateLamps(); updateSigns();
+  if(trans){ trans.s-=v*dt; applyPlanes(); if(trans.s<S0+2) finishTrans(); }
+  updateRoad(); updateTrees(); updateBuildings(); updateLamps(); updateSigns();
   mountains.rotation.y=state.H; mountains.position.x=camera.position.x; mountains.position.z=camera.position.z;
   // dinámica del coche: guiñada hacia la curva + alabeo por aceleración lateral + cabeceo al frenar
   var ay=v*v*k;                                           // aceleración lateral (m/s²)
-  var tYaw=clamp(k*15+laneVel*0.05,-0.34,0.34), tRoll=clamp(ay*0.011,-0.15,0.15), tPitch=state.brake?-0.035:0;
+  var tYaw=clamp(k*15+laneVel*0.05,-0.34,0.34), tRoll=clamp(ay*0.011,-0.15,0.15), tPitch=((state.nose!==undefined)?state.nose:state.brake)?-0.035:0;
   yaw+=(tYaw-yaw)*Math.min(1,dt*4); roll+=(tRoll-roll)*Math.min(1,dt*5); pitch+=(tPitch-pitch)*Math.min(1,dt*6);
   bob+=dt*(6+v*0.35);
   yawG.rotation.y=-yaw; rollG.rotation.z=roll; rollG.rotation.x=pitch; rollG.position.y=(v>1?Math.sin(bob)*0.004*Math.min(1,v/15):0);
@@ -464,16 +554,32 @@ function frame(now){
     $('info').innerHTML=fps+' FPS<br>'+Math.round(triCount+3000).toLocaleString('es-ES')+' triángulos (coche + entorno)<br>'+renderer.info.render.calls+' draw calls'; }
   requestAnimationFrame(frame);
 }
-buildLayout('road'); resizeAll(); setNight(false); setWet(); setLimit(90,false); updateRoad(); updateTrees(); updateLamps();
+buildLayout('road',false); resizeAll(); setNight(false); setWet(); setLimit(90,false); updateRoad(); updateTrees(); updateBuildings(); updateLamps();
 setMode('feed');
+var spPrev=null, tPrev=0, dec=0, brakeUntil=0, hiT=null, loT=null;
+function autoBrakeStep(sp,t,d){
+  if(d.brake!==undefined){ state.brake=!!d.brake; state.nose=undefined; return; }      // si la app lo manda, manda ella
+  if(spPrev===null){ spPrev=sp; tPrev=t; }
+  else if(t-tPrev>=0.4){ var a=((sp-spPrev)/3.6)/(t-tPrev); dec+=(a-dec)*0.5; spPrev=sp; tPrev=t; }   // deceleración suavizada (m/s²)
+  if(dec<-1.3 || sp<3) brakeUntil=t+0.8;                                                 // frenada fuerte o parado -> luces de freno
+  state.brake=(t<brakeUntil); state.nose=(dec<-2.2 && sp>8);                              // el morro solo baja con frenadas de verdad
+}
+function autoRoadStep(sp,t,d){
+  var want=null;
+  if(d.hw===true){ hiT=null; loT=null; want='motorway'; }                                 // la ruta dice autovía
+  else if(sp>=100){ loT=null; if(hiT===null) hiT=t; if(t-hiT>=6) want='motorway'; }       // >=100 km/h sostenidos 6 s
+  else if(sp<85){ hiT=null; if(loT===null) loT=t; if(t-loT>=12) want='road'; }            // <85 km/h sostenidos 12 s vuelve a carretera
+  else { hiT=null; loT=null; }
+  if(want && want!==state.road){ setRoadType(want,false,true); if(want==='motorway') spawnSign('blue','AUTOPISTA',55); }
+}
 API._hooks=function(ok,fail){ onCarReady=ok; onCarFail=fail; };
 API.update=function(d){
   if(!d) return;
-  if(d.speed!=null) setSpeed(d.speed);
-  if(d.head!=null) feedHeading(d.head,(d.t!=null?d.t:performance.now()/1000));
-  if(d.road && d.road!==state.road){ setRoadType(d.road,false); if(d.road==='motorway') spawnSign('blue','AUTOPISTA',55); }   // solo cartel de autopista: el limite NO se inventa
-  if(d.limit && d.limit!==state.limit) setLimit(d.limit);
-  if('brake' in d) state.brake=!!d.brake;
+  var t=(d.t!=null?d.t:performance.now()/1000);
+  if(d.speed!=null){ setSpeed(d.speed); autoBrakeStep(d.speed,t,d); if(d.road===undefined) autoRoadStep(d.speed,t,d); }
+  if(d.head!=null) feedHeading(d.head,t);
+  if(d.road && d.road!==state.road){ setRoadType(d.road,false,true); if(d.road==='motorway') spawnSign('blue','AUTOPISTA',55); }
+  if(d.limit && d.limit!==state.limit) setLimit(d.limit);                                 // sin dato de límite no se inventa ninguno
   if('rain' in d && !!d.rain!==state.rain){ state.rain=!!d.rain; setWet(); }
   if('night' in d && !!d.night!==state.night) setNight(!!d.night);
 };
@@ -481,6 +587,7 @@ API.show=function(){ if(!REAL.stage) return; REAL.stage.style.display=''; if(!ru
 API.hide=function(){ running=false; if(REAL.stage) REAL.stage.style.display='none'; };
 API.setQuality=function(q){ state.quality=q; resizeAll(); };
 API.setBodyColor=setBodyColor; API.setInterior=function(on){ interiorMeshes.forEach(function(o){ o.visible=!!on; }); countTris(); };
+API._dbg=function(){ return {trans:trans,ribbons:ribbons,walls:walls,bAll:bAll,treeLow:treeLow,bodyMats:bodyMats,envAt:envAt}; };
 API.laneChange=laneChange; API.spawnSign=spawnSign; API.state=state;
 API.stats=function(){ return {fps:fps,tris:Math.round(triCount),calls:renderer.info.render.calls,running:running}; };
 
