@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>autoboard-next · Fase 7 · UI limpia</title>
+<title>autoboard-next · Fase 8 · tráfico v3</title>
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
 <style>
 html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
@@ -419,7 +419,6 @@ async function cargarCargadores(lat,lon){
     if(d<0.03) return;
   }
   const dLat=0.15,dLon=0.15;
-  // FIX: OCM espera (lat_arriba,lon_izq),(lat_abajo,lon_der)
   const bbox='('+(lat+dLat)+','+(lon-dLon)+'),('+(lat-dLat)+','+(lon+dLon)+')';
   const url='https://api.openchargemap.io/v3/poi/?key='+OCM_API_KEY
     +'&boundingbox='+encodeURIComponent(bbox)
@@ -831,15 +830,38 @@ async function calcularRuta(origen,destino,modo='normal'){
     const ruta=j.routes[0];
     const coords=ruta.legs.flatMap(l=>l.points.map(p=>[p.longitude,p.latitude]));
     const nivelesPorPunto=new Array(coords.length).fill(0);
-    if(ruta.sections && ruta.sections.length){
-      for(const sec of ruta.sections){
-        if(sec.sectionType && sec.sectionType!=='TRAFFIC') continue;
-        const mag=typeof sec.magnitudeOfDelay==='number'?sec.magnitudeOfDelay:0;
+    // ==== LECTURA DE TRAFICO V3 (Orbis) ====
+    // Estructura: ruta.sections.traffic[].delayMagnitude ('minor'|'moderate'|'major'|'unknown')
+    // Indices: startPathIndex / endPathIndex
+    if(ruta.sections && ruta.sections.traffic && Array.isArray(ruta.sections.traffic)){
+      for(const sec of ruta.sections.traffic){
         let nivel=0;
-        if(mag>=3) nivel=3;else if(mag===2) nivel=2;else if(mag===1) nivel=1;
-        const a=sec.startPointIndex||0,b=sec.endPointIndex||coords.length-1;
+        const mag=(sec.delayMagnitude||'').toString().toLowerCase();
+        if(mag==='major') nivel=3;
+        else if(mag==='moderate') nivel=2;
+        else if(mag==='minor') nivel=1;
+        else nivel=0;
+        const a=Number.isInteger(sec.startPathIndex)?sec.startPathIndex:0;
+        const b=Number.isInteger(sec.endPathIndex)?sec.endPathIndex:coords.length-1;
         for(let i=a;i<=b&&i<coords.length;i++) nivelesPorPunto[i]=nivel;
       }
+      console.log('Secciones trafico v3:', ruta.sections.traffic.length,
+        '| magnitudes:', ruta.sections.traffic.map(s=>s.delayMagnitude).join(','));
+    } else {
+      // Fallback a v1 por si acaso
+      if(ruta.sections && Array.isArray(ruta.sections)){
+        for(const sec of ruta.sections){
+          if(sec.sectionType && sec.sectionType!=='TRAFFIC') continue;
+          let mag=sec.magnitudeOfDelay;
+          if(typeof mag==='string') mag=parseInt(mag,10);
+          if(!Number.isFinite(mag)) mag=0;
+          let nivel=0;
+          if(mag>=3) nivel=3; else if(mag===2) nivel=2; else if(mag===1) nivel=1;
+          const a=sec.startPointIndex||0, b=sec.endPointIndex||coords.length-1;
+          for(let i=a;i<=b&&i<coords.length;i++) nivelesPorPunto[i]=nivel;
+        }
+      }
+      console.log('Sin sections.traffic, usando formato v1 o vacio');
     }
     const segmentos=[];
     let inicioSeg=0;
@@ -1080,7 +1102,16 @@ document.getElementById('btnPitchTest').onclick=async function(){
 };
 function dist(a,b){const R=6371000,la1=a[0]*Math.PI/180,la2=b[0]*Math.PI/180;const dla=(b[0]-a[0])*Math.PI/180,dlo=(b[1]-a[1])*Math.PI/180;const h=Math.sin(dla/2)**2+Math.cos(la1)*Math.cos(la2)*Math.sin(dlo/2)**2;return 2*R*Math.asin(Math.sqrt(h));}
 function bearing(a,b){const la1=a[0]*Math.PI/180,la2=b[0]*Math.PI/180,dlo=(b[1]-a[1])*Math.PI/180;const y=Math.sin(dlo)*Math.cos(la2);const x=Math.cos(la1)*Math.sin(la2)-Math.sin(la1)*Math.cos(la2)*Math.cos(dlo);return ((Math.atan2(y,x)*180/Math.PI)+360)%360;}
-function urlRutaTomTom(o,d){return 'https://api.tomtom.com/routing/1/calculateRoute/'+o[0]+','+o[1]+':'+d[0]+','+d[1]+'/json?key='+TT+'&routeType=fastest&traffic=true&travelMode=car&instructionsType=text&language=es-ES';}
+// ==== URL de routing TomTom: ahora v3 (Orbis) con traffic=live ====
+function urlRutaTomTom(o,d){
+  return 'https://api.tomtom.com/routing/3/calculateRoute/'+o[0]+','+o[1]+':'+d[0]+','+d[1]
+    +'/json?key='+TT
+    +'&routeType=fastest'
+    +'&traffic=live'
+    +'&travelMode=car'
+    +'&instructionsType=text'
+    +'&language=es-ES';
+}
 const TURN_GEOM={'straight':{turn:0,R:0},'slight right':{turn:35,R:26},right:{turn:90,R:15},'sharp right':{turn:150,R:10},uturn:{turn:178,R:9},'sharp left':{turn:-150,R:10},left:{turn:-90,R:15},'slight left':{turn:-35,R:26}};
 function triHead(x,y,t,c,len,hw){
   len=len||10;hw=hw||7;
