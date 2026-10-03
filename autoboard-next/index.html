@@ -49,6 +49,7 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #grupoAbajoDer{position:fixed;right:14px;bottom:16px;z-index:20;display:flex;flex-direction:column;gap:10px;align-items:flex-end}
 #btnCentrar{display:none}
 #btnCentrar.on{display:flex}
+#btnSeguir.activo{background:#1d3a2c;border-color:#4a9e6a;color:#9ae6b4}
 #panelAjustes{position:fixed;top:0;right:0;bottom:0;z-index:40;width:340px;max-width:92vw;background:rgba(10,13,16,.98);border-left:1px solid #232c33;padding:20px 18px;color:#e8eef2;font:14px/1.5 system-ui,sans-serif;overflow-y:auto;transform:translateX(100%);transition:transform .25s ease}
 #panelAjustes.on{transform:translateX(0)}
 #panelAjustes h2{margin:0 0 16px;color:#9ae6b4;font-size:18px}
@@ -101,6 +102,7 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
   <button class="ajuste on" id="btnRadares">📸 Radares: ON</button>
   <button class="ajuste on" id="btnCargadores">🔌 Cargadores: ON</button>
   <button class="ajuste on" id="btnPitch">📐 Pitch: ON</button>
+  <button class="ajuste on" id="btnTrafico">🚦 Tráfico: ON</button>
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <div class="seccion">Diagnóstico</div>
@@ -141,7 +143,6 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
 
 <div id="controlesAbajo">
   <button id="btnGPS">📍 GPS: OFF</button>
-  <button id="btnSeguir">🧭 Seguir: OFF</button>
 </div>
 
 <div id="grupoArribaDer">
@@ -163,6 +164,7 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
 <div id="minihud"><span class="vel" id="hudVel">0</span><span class="limite oculto" id="hudLimite">50</span></div>
 
 <div id="grupoAbajoDer">
+  <button class="botonMapa" id="btnSeguir" title="Seguir">🧭</button>
   <button class="botonMapa" id="btnCentrar" title="Centrar en mi posición">🎯</button>
   <button class="botonMapa" id="btnAjustes" title="Ajustes">⚙️</button>
 </div>
@@ -258,6 +260,7 @@ let radaresOn=true;
 let alertaRadarActiva=false;
 const RADAR_DIST_AVISO=500,RADAR_DIST_APAGADO=550;
 let cargadoresOn=true;
+let traficoOn=true;
 let ultimoCentroCargadores=null;
 let cargadoresData=[];
 let favoritos=JSON.parse(localStorage.getItem('cargadores_favs')||'[]');
@@ -587,13 +590,37 @@ document.getElementById('btnDebug').onclick=function(){
   this.textContent='🔧 Paneles Debug: '+(activo?'ON':'OFF');
   this.classList.toggle('on',activo);
 };
+// ==== BOTON TRAFICO ====
+document.getElementById('btnTrafico').onclick=function(){
+  traficoOn=!traficoOn;
+  this.textContent='🚦 Tráfico: '+(traficoOn?'ON':'OFF');
+  this.classList.toggle('on',traficoOn);
+  if(routeCoordsLL.length) repintarRutaConNiveles();
+};
+function repintarRutaConNiveles(){
+  if(!routeCoordsLL.length) return;
+  const coords=routeCoordsLL.map(c=>[c[1],c[0]]);
+  const niveles=routeNivelesPorPunto.length===coords.length?routeNivelesPorPunto:new Array(coords.length).fill(0);
+  const segmentos=[];
+  let inicioSeg=0;
+  for(let i=1;i<coords.length;i++){
+    const nivelActual=traficoOn?(niveles[i]||0):0;
+    const nivelInicio=traficoOn?(niveles[inicioSeg]||0):0;
+    if(nivelActual!==nivelInicio){
+      segmentos.push({nivel:nivelInicio,coords:coords.slice(inicioSeg,i+1)});
+      inicioSeg=i;
+    }
+  }
+  segmentos.push({nivel:traficoOn?(niveles[inicioSeg]||0):0,coords:coords.slice(inicioSeg)});
+  const features=segmentos.filter(s=>s.coords.length>=2).map(s=>({type:'Feature',geometry:{type:'LineString',coordinates:s.coords},properties:{nivel:s.nivel}}));
+  map.getSource('ruta').setData({type:'FeatureCollection',features:features});
+}
 document.getElementById('btnLimpiarFavs').onclick=()=>{
   if(!confirm('¿Borrar todos los cargadores favoritos?')) return;
   favoritos=[];guardarFavoritos();refrescarIconosCargadores();
   alert('Favoritos borrados.');
 };
 
-// ==== BUSQUEDA TomTom (search/2 con typeahead, sin restriccion geografica) ====
 const barraB=document.getElementById('barraBusqueda');
 const inputB=document.getElementById('inputBusqueda');
 const sugs=document.getElementById('sugerencias');
@@ -691,6 +718,7 @@ map.on('click',()=>{
 let steps=[],stepIdx=0,routeCoordsLL=[],routeCumDist=[],routeProgIdx=0;
 let ultimoStepPintado='',zoomManiobraOn=false;
 let ultimaRutaDestino=null;
+let routeNivelesPorPunto=[];
 function segDistM2(p,a,b){const mx=111320*Math.cos(p[0]*Math.PI/180),my=110540;const px=p[1]*mx,py=p[0]*my,ax=a[1]*mx,ay=a[0]*my,bx=b[1]*mx,by=b[0]*my;const dx=bx-ax,dy=by-ay,L2=dx*dx+dy*dy;const t=L2?Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/L2)):0;return Math.hypot(px-(ax+t*dx),py-(ay+t*dy));}
 function actualizarRouteProgIdx(ll){
   if(!routeCoordsLL.length) return;
@@ -782,6 +810,7 @@ let camPosActual=null,camPosObjetivo=null;
 let camBearingActual=0,camBearingObjetivo=0;
 let camZoomActual=17.2,camZoomObjetivo=17.2;
 let camaraLibre=false;
+let seguirBloqueado=false;
 function rumboDelGPS(c,now,v){
   histFixes.push(now);if(histFixes.length>14) histFixes.shift();
   if(Number.isFinite(c.heading)&&v>=3) return ((c.heading%360)+360)%360;
@@ -825,6 +854,7 @@ async function calcularRuta(origen,destino,modo='normal'){
     const ruta=j.routes[0];
     const coords=ruta.legs.flatMap(l=>l.points.map(p=>[p.longitude,p.latitude]));
     const nivelesPorPunto=new Array(coords.length).fill(0);
+    routeNivelesPorPunto=nivelesPorPunto;
     if(ruta.sections && ruta.sections.length){
       for(const sec of ruta.sections){
         if(sec.sectionType && sec.sectionType!=='TRAFFIC') continue;
@@ -838,12 +868,14 @@ async function calcularRuta(origen,destino,modo='normal'){
     const segmentos=[];
     let inicioSeg=0;
     for(let i=1;i<coords.length;i++){
-      if(nivelesPorPunto[i]!==nivelesPorPunto[inicioSeg]){
-        segmentos.push({nivel:nivelesPorPunto[inicioSeg],coords:coords.slice(inicioSeg,i+1)});
+      const nivelActual=traficoOn?(nivelesPorPunto[i]||0):0;
+      const nivelInicio=traficoOn?(nivelesPorPunto[inicioSeg]||0):0;
+      if(nivelActual!==nivelInicio){
+        segmentos.push({nivel:nivelInicio,coords:coords.slice(inicioSeg,i+1)});
         inicioSeg=i;
       }
     }
-    segmentos.push({nivel:nivelesPorPunto[inicioSeg],coords:coords.slice(inicioSeg)});
+    segmentos.push({nivel:traficoOn?(nivelesPorPunto[inicioSeg]||0):0,coords:coords.slice(inicioSeg)});
     const features=segmentos.filter(s=>s.coords.length>=2).map(s=>({type:'Feature',geometry:{type:'LineString',coordinates:s.coords},properties:{nivel:s.nivel}}));
     map.getSource('ruta').setData({type:'FeatureCollection',features:features});
     routeCoordsLL=coords.map(c=>[c[1],c[0]]);
@@ -893,6 +925,7 @@ function onFix(pos){
     camaraLibre=parado;
     document.getElementById('g8').textContent=parado?'libre (parado)':'seguir';
   }
+  // NOTA: ya NO forzamos seguirBloqueado=false al arrancar.
   comprobarRadaresCercanos(now.lat,now.lon,speedKmh);
   if(cargadoresOn) cargarCargadores(now.lat,now.lon);
   if(parado&&lastFix){
@@ -956,7 +989,7 @@ function ocultarHUD(){
   if(lim) lim.classList.add('oculto');
 }
 function bucleSeguimiento(){
-  if(seguirOn&&!camaraLibre&&camPosActual&&camPosObjetivo){
+  if(seguirOn&&!camaraLibre&&!seguirBloqueado&&camPosActual&&camPosObjetivo){
     const k=.18;
     camPosActual[0]+=(camPosObjetivo[0]-camPosActual[0])*k;
     camPosActual[1]+=(camPosObjetivo[1]-camPosActual[1])*k;
@@ -974,9 +1007,9 @@ function bucleSeguimiento(){
   requestAnimationFrame(bucleSeguimiento);
 }
 requestAnimationFrame(bucleSeguimiento);
-map.on('dragstart',()=>{if(seguirOn) mostrarBotonCentrar(true);});
-map.on('rotatestart',()=>{if(seguirOn) mostrarBotonCentrar(true);});
-map.on('pitchstart',()=>{if(seguirOn) mostrarBotonCentrar(true);});
+map.on('dragstart',()=>{if(seguirOn){seguirBloqueado=true;mostrarBotonCentrar(true);}});
+map.on('rotatestart',()=>{if(seguirOn){seguirBloqueado=true;mostrarBotonCentrar(true);}});
+map.on('pitchstart',()=>{if(seguirOn){seguirBloqueado=true;mostrarBotonCentrar(true);}});
 function mostrarBotonCentrar(on){
   const btn=document.getElementById('btnCentrar');
   if(on) btn.classList.add('on'); else btn.classList.remove('on');
@@ -984,6 +1017,7 @@ function mostrarBotonCentrar(on){
 function centrarEnMi(){
   if(!lastFix) return;
   camaraLibre=false;
+  seguirBloqueado=false;
   camPosActual=[lastFix.lon,lastFix.lat];
   camPosObjetivo=[lastFix.lon,lastFix.lat];
   camBearingActual=heading;camBearingObjetivo=heading;
@@ -1003,18 +1037,30 @@ document.getElementById('btnGPS').onclick=function(){
       document.getElementById('g1').innerHTML='<span class="mal">error: '+e.message+'</span>';
       registrarError('gps',e.message);
     },{enableHighAccuracy:true,maximumAge:0,timeout:15000});
+    seguirOn=true;
+    const btn=document.getElementById('btnSeguir');
+    if(btn){btn.classList.add('activo');}
   }else{
     if(watchId!==null) navigator.geolocation.clearWatch(watchId);
     document.getElementById('g1').textContent='apagado';
     apagarAlertaRadar();
     ocultarHUD();
+    seguirOn=false;
+    const btn=document.getElementById('btnSeguir');
+    if(btn){btn.classList.remove('activo');}
   }
 };
 document.getElementById('btnSeguir').onclick=function(){
+  if(!gpsOn){
+    alert('Activa el GPS primero.');
+    return;
+  }
   seguirOn=!seguirOn;
-  this.textContent='🧭 Seguir: '+(seguirOn?'ON':'OFF');
-  this.classList.toggle('on',seguirOn);
-  if(seguirOn&&lastFix) centrarEnMi();
+  this.classList.toggle('activo',seguirOn);
+  if(seguirOn){
+    seguirBloqueado=false;
+    if(lastFix) centrarEnMi();
+  }
 };
 let fpsMarchaUltimoT=0,fpsMarchaUltimoConteo=0;
 setInterval(()=>{
@@ -1028,6 +1074,7 @@ setInterval(()=>{
 function detenerRuta(){
   steps=[];stepIdx=0;routeCoordsLL=[];routeCumDist=[];routeProgIdx=0;
   ultimaRutaDestino=null;limiteVelocidadVia=0;ultimoStepPintado='';zoomManiobraOn=false;
+  routeNivelesPorPunto=[];
   const srcRuta=map.getSource('ruta');
   if(srcRuta) srcRuta.setData({type:'FeatureCollection',features:[]});
   const srcGiro=map.getSource('giro-pos');
