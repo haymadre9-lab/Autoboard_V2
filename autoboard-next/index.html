@@ -419,7 +419,6 @@ async function cargarCargadores(lat,lon){
     if(d<0.03) return;
   }
   const dLat=0.15,dLon=0.15;
-  // FIX: OCM pide esquina superior izquierda primero (lat mayor) y esquina inferior derecha después (lat menor)
   const bbox='('+(lat+dLat)+','+(lon-dLon)+'),('+(lat-dLat)+','+(lon+dLon)+')';
   const url='https://api.openchargemap.io/v3/poi/?key='+OCM_API_KEY
     +'&boundingbox='+encodeURIComponent(bbox)
@@ -594,6 +593,7 @@ document.getElementById('btnLimpiarFavs').onclick=()=>{
   alert('Favoritos borrados.');
 };
 
+// ==== BUSQUEDA TomTom (search/2 con typeahead, sin restriccion geografica) ====
 const barraB=document.getElementById('barraBusqueda');
 const inputB=document.getElementById('inputBusqueda');
 const sugs=document.getElementById('sugerencias');
@@ -618,16 +618,12 @@ inputB.addEventListener('input',()=>{
   debounceTimer=setTimeout(()=>buscarSugerencias(q),250);
 });
 async function buscarSugerencias(q){
-  const centro=lastFix?[lastFix.lat,lastFix.lon]:[43.2678,-2.9387];
   const url='https://api.tomtom.com/search/2/search/'+encodeURIComponent(q)+'.json'
     +'?key='+TT
     +'&language=es-ES'
     +'&countrySet=ES'
-    +'&limit=6'
-    +'&typeahead=true'
-    +'&lat='+centro[0]
-    +'&lon='+centro[1]
-    +'&radius=50000';
+    +'&limit=8'
+    +'&typeahead=true';
   try{
     const r=await fetch(url);
     const j=await r.json();
@@ -661,10 +657,8 @@ document.getElementById('btnCasa').onclick=async()=>{
   if(!casa){
     const dir=prompt('¿Cuál es tu dirección de casa?');
     if(!dir) return;
-    const centro=lastFix?[lastFix.lat,lastFix.lon]:[43.2678,-2.9387];
     const url='https://api.tomtom.com/search/2/search/'+encodeURIComponent(dir)+'.json'
-      +'?key='+TT+'&language=es-ES&countrySet=ES&limit=1'
-      +'&lat='+centro[0]+'&lon='+centro[1];
+      +'?key='+TT+'&language=es-ES&countrySet=ES&limit=1';
     try{
       const r=await fetch(url);
       const j=await r.json();
