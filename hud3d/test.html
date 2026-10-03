@@ -1,0 +1,24 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Prueba HUD 3D — AutoBoard</title>
+<style>html,body{margin:0;height:100%;background:#05070d;color:#e7eaf0;font-family:system-ui,sans-serif;overflow:hidden}
+#host{position:absolute;inset:0}#bar{position:absolute;left:8px;top:8px;z-index:50;background:rgba(14,16,22,.85);border:1px solid #26303f;border-radius:12px;padding:8px 10px;font-size:13px;line-height:1.5}
+button{border:0;border-radius:9px;padding:7px 10px;font-weight:800;background:#1b2130;color:#e7eaf0;margin:2px}</style></head><body>
+<div id="host"></div>
+<div id="bar"><div id="st">cargando módulo…</div>
+<button id="bR">Lluvia</button><button id="bN">Noche</button><button id="bM">Autopista</button><button id="bI">Interior sí/no</button><button id="bF">Parar/Seguir</button></div>
+<script src="hud3d.js"></script>
+<script>
+/* Simula lo que hará AutoBoard: velocidad + rumbo del mapa cada frame. El rumbo gira como al tomar curvas reales. */
+var st=document.getElementById('st'), rain=false, night=false, mw=false, inter=true, go=true, t0=performance.now(), head=0;
+HUD3D.init({base:'./',host:document.getElementById('host'),onSlow:function(f){ st.textContent='⚠ FPS bajos ('+f+'): AutoBoard volvería al HUD 2D'; }})
+ .then(function(){ HUD3D.show(); loop(); })
+ .catch(function(e){ st.textContent='✖ '+e.message+' → AutoBoard se quedaría con el HUD 2D'; });
+function loop(){ var t=(performance.now()-t0)/1000;
+  if(go){ head=(40*Math.sin(t*0.22)+25*Math.sin(t*0.51)+360)%360; }          // rumbo "del mapa" oscilando
+  HUD3D.update({speed:mw?110:75,head:head,t:t,limit:mw?120:90,road:mw?'motorway':'road',rain:rain,night:night});
+  var s=HUD3D.stats(); st.textContent='HUD 3D · '+s.fps+' FPS · '+s.tris.toLocaleString('es-ES')+' triángulos · '+s.calls+' draw calls · rumbo '+Math.round(head)+'°';
+  requestAnimationFrame(loop); }
+document.getElementById('bR').onclick=function(){rain=!rain}; document.getElementById('bN').onclick=function(){night=!night};
+document.getElementById('bM').onclick=function(){mw=!mw}; document.getElementById('bF').onclick=function(){go=!go};
+document.getElementById('bI').onclick=function(){inter=!inter; HUD3D.setInterior(inter)};
+</script></body></html>

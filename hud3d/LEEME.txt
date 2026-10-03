@@ -1,0 +1,16 @@
+HUD 3D para AutoBoard — paquete de integración
+===============================================
+hud3d.js       módulo (42 KB). Carga perezosa: no descarga nada hasta HUD3D.init().
+three.min.js   Three.js r128 (MIT)         — se carga solo al hacer init()
+GLTFLoader.js  cargador de modelos (MIT)   — idem
+car.glb        modelo del coche (8 MB)     — idem (el service worker lo cachea tras la primera vez)
+test.html      página de prueba: simula el rumbo del mapa y muestra FPS (ábrela primero EN EL TESLA)
+
+Subir la carpeta hud3d/ entera a la raíz del repo de AutoBoard (junto a index.html). No hay que tocar index.html.
+
+Uso desde leaflet-map.js:
+  // al entrar en la pestaña HUD (una sola vez; si falla, seguir con el HUD 2D de siempre)
+  HUD3D.init({host:document.getElementById('hud2wrap'), onSlow:function(){ volverAlHud2D(); }})
+       .then(function(){ HUD3D.show(); }).catch(function(){ /* HUD 2D */ });
+  // al salir de la pestaña HUD:   HUD3D.hide();   (deja de renderizar, no gasta CPU/GPU)
+  // en cada frame o fix GPS:      HUD3D.update({speed:kmh, head:grados, limit:90, road:'road'|'motorway', brake:false, rain:false, night:false});
