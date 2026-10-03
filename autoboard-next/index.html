@@ -373,7 +373,6 @@ async function cargarRadares(){
   }
 }
 function comprobarRadaresCercanos(lat,lon,velocidadActualKmh){
-  // Sin GPS activo no hay avisos
   if(!gpsOn){apagarAlertaRadar();return;}
   if(!radaresCargados.length || !radaresOn){apagarAlertaRadar();return;}
   const dLat=0.01,dLon=0.01;
@@ -420,7 +419,8 @@ async function cargarCargadores(lat,lon){
     if(d<0.03) return;
   }
   const dLat=0.15,dLon=0.15;
-  const bbox='('+(lat-dLat)+','+(lon-dLon)+'),('+(lat+dLat)+','+(lon+dLon)+')';
+  // FIX: OCM espera (lat_arriba,lon_izq),(lat_abajo,lon_der)
+  const bbox='('+(lat+dLat)+','+(lon-dLon)+'),('+(lat-dLat)+','+(lon+dLon)+')';
   const url='https://api.openchargemap.io/v3/poi/?key='+OCM_API_KEY
     +'&boundingbox='+encodeURIComponent(bbox)
     +'&maxresults=300&compact=true&verbose=false&connectiontypeid=25,32';
