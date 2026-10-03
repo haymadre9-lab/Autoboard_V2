@@ -606,7 +606,6 @@ document.getElementById('btnDebug').onclick=function(){
   this.textContent='🔧 Paneles Debug: '+(activo?'ON':'OFF');
   this.classList.toggle('on',activo);
 };
-// ==== BOTON TRAFICO: controla ruta Y capa general ====
 document.getElementById('btnTrafico').onclick=function(){
   traficoOn=!traficoOn;
   this.textContent='🚦 Tráfico: '+(traficoOn?'ON':'OFF');
@@ -1050,7 +1049,6 @@ document.getElementById('btnGPS').onclick=function(){
   this.classList.toggle('on',gpsOn);
   document.body.classList.toggle('modo-navegacion',gpsOn);
   if(gpsOn){
-    // Ocultar aviso inicial
     const aviso=document.getElementById('avisoInicial');
     if(aviso) aviso.classList.add('oculto');
     document.getElementById('g1').innerHTML='<b>activo</b>';
@@ -1069,7 +1067,6 @@ document.getElementById('btnGPS').onclick=function(){
     seguirOn=false;
     const btn=document.getElementById('btnSeguir');
     if(btn){btn.classList.remove('activo');}
-    // Mostrar aviso inicial otra vez
     const aviso=document.getElementById('avisoInicial');
     if(aviso) aviso.classList.remove('oculto');
   }
@@ -1145,7 +1142,7 @@ document.getElementById('btnPitchTest').onclick=async function(){
 };
 function dist(a,b){const R=6371000,la1=a[0]*Math.PI/180,la2=b[0]*Math.PI/180;const dla=(b[0]-a[0])*Math.PI/180,dlo=(b[1]-a[1])*Math.PI/180;const h=Math.sin(dla/2)**2+Math.cos(la1)*Math.cos(la2)*Math.sin(dlo/2)**2;return 2*R*Math.asin(Math.sqrt(h));}
 function bearing(a,b){const la1=a[0]*Math.PI/180,la2=b[0]*Math.PI/180,dlo=(b[1]-a[1])*Math.PI/180;const y=Math.sin(dlo)*Math.cos(la2);const x=Math.cos(la1)*Math.sin(la2)-Math.sin(la1)*Math.cos(la2)*Math.cos(dlo);return ((Math.atan2(y,x)*180/Math.PI)+360)%360;}
-function urlRutaTomTom(o,d){return 'https://api.tomtom.com/routing/1/calculateRoute/'+o[0]+','+o[1]+':'+d[0]+','+d[1]+'/json?key='+TT+'&routeType=fastest&traffic=true&travelMode=car&instructionsType=text&language=es-ES';}
+function urlRutaTomTom(o,d){return 'https://api.tomtom.com/routing/1/calculateRoute/'+o[0]+','+o[1]+':'+d[0]+','+d[1]+'/json?key='+TT+'&routeType=fastest&traffic=true&travelMode=car&instructionsType=text&language=es-ES&sectionType=traffic';}
 const TURN_GEOM={'straight':{turn:0,R:0},'slight right':{turn:35,R:26},right:{turn:90,R:15},'sharp right':{turn:150,R:10},uturn:{turn:178,R:9},'sharp left':{turn:-150,R:10},left:{turn:-90,R:15},'slight left':{turn:-35,R:26}};
 function triHead(x,y,t,c,len,hw){
   len=len||10;hw=hw||7;
