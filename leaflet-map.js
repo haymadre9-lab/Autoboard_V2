@@ -600,6 +600,7 @@ let wps = [], rutaVersion = 0;   // wps = paradas intermedias pendientes, ordena
 let offAcc = 0, lastRecalc = 0;
 let follow = true, lastFix = null, heading = 0, speedKmh = 0;
 let hud2 = null, hudAbierto = false, hudCargando = false, hudDemo = false;
+let hud3dActivo = false, hud3dFallo = false;   // HUD 3D (opcional): ver bloque "HUD 3D" mas abajo
 let mapaOculto = false;   // HUD 2: no existe hasta que se abre por primera vez
 /* Zoom real de conduccion (el encuadre inicial de la ruta se aleja a proposito, pero el seguimiento
    no debe heredar ese alejamiento). Leaflet pide las teselas del nivel ENTERO mas cercano al zoom:
@@ -620,7 +621,7 @@ function actualizarZoomManiobra(distSiguiente, tipoSiguiente){
   try{ map.setZoom(z, { animate:true }); }catch(e){}
 }
 
-const VERSION = '2026.09.29-c';
+const VERSION = '2026.10.03-h3d';
 // X dibujada: el caracter U+2715 no esta en la fuente del navegador y salia como un rectangulo
 const X_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>';
 try{ $('ver').textContent = 'v'+VERSION; }catch(e){}
@@ -687,7 +688,8 @@ if (navigator.geolocation){
       }
       if (follow) seguirCamara([now.lat, now.lon], dt);
     }
-    if (hudAbierto && hud2){ try{ hud2.setSpeed(hudDemo ? Math.max(speedKmh/3.6, 15) : speedKmh/3.6); if (!hudDemo) hud2.syncPosition(now.lat, now.lon); }catch(e){} }
+    if (hudAbierto && hud2 && !hud3dActivo){ try{ hud2.setSpeed(hudDemo ? Math.max(speedKmh/3.6, 15) : speedKmh/3.6); if (!hudDemo) hud2.syncPosition(now.lat, now.lon); }catch(e){} }
+    if (hudAbierto && hud3dActivo) alimentarHud3D();
     $('spd').textContent = Math.round(speedKmh)+' km/h';
     $('spd2').textContent = Math.round(speedKmh);
     // Discreta: solo aparece cuando la precision es mala de verdad -- por debajo de
@@ -1197,12 +1199,45 @@ function rutaDemo(){
 function avisoHud(msg){ const e = $('hud2err'); if (e.textContent !== msg) e.textContent = msg; e.style.display = msg ? 'block' : 'none'; }
 function marcarPestana(cual){ ['tabMapa','tabHud','tabFaro'].forEach(id => $(id).classList.toggle('on', id === cual)); }
 
+/* ==== HUD 3D (opcional) =======================================================
+   Coche en 3D (Three.js + hud3d/car.glb) que sigue el rumbo del mapa: cuando el mapa gira, la
+   carretera se curva y el coche se inclina un poco, solo para dar sensacion realista (no es la
+   geometria exacta). Vive en hud3d/ y se descarga SOLO al abrir el HUD con el ajuste activado.
+   Seguridad: si falla WebGL, si falta algo, o si los FPS bajan de 18 durante unos segundos, se
+   vuelve solo al HUD 2 de siempre (hud3dFallo=true hasta recargar). Mapa y navegacion no cambian. */
+const HUD3D_BASE = RAIZ + 'hud3d/';
+function h3dPreferido(){ try{ return localStorage.getItem('hud3dOn') !== '0'; }catch(e){ return true; } }
+function noche3D(){ const t = hudCfg.theme; if (t === 'night') return true; if (t === 'auto'){ const h = new Date().getHours(); return h >= 21 || h < 7; } return false; }
+function cargarScript3D(u){ return new Promise((ok, ko) => { const sc = document.createElement('script'); sc.src = u; sc.onload = ok; sc.onerror = () => ko(new Error('no se pudo cargar ' + u)); document.head.appendChild(sc); }); }
+function alimentarHud3D(){
+  if (!hud3dActivo || !window.HUD3D) return;
+  let hw = false; try{ const st = routeOn ? steps[stepIdx] : null; hw = !!(st && (st.hw || isHighway(st))); }catch(e){}
+  try{ HUD3D.update({ speed: speedKmh, head: heading, t: performance.now()/1000, road: hw ? 'motorway' : 'road', rain: !!hudCfg.rain, night: noche3D() }); }catch(e){}
+}
+async function intentar3D(){
+  if (hud3dFallo || !h3dPreferido()) return false;
+  try{
+    if (!window.HUD3D) await cargarScript3D(HUD3D_BASE + 'hud3d.js');
+    await HUD3D.init({ base: HUD3D_BASE, host: $('hud2wrap'), z: 1,
+      onSlow: fps => { hud3dFallo = true; console.warn('[hud3d] FPS bajos:', fps); setStatus('HUD 3D lento (' + fps + ' fps): vuelvo al HUD 2'); if (hudAbierto){ cerrarHud(); abrirHud(); } } });
+    try{ HUD3D.setBodyColor(hudCfg.carColor); }catch(e){}
+    $('hud2canvas').style.visibility = 'hidden';
+    HUD3D.show(); hud3dActivo = true; alimentarHud3D();
+    return true;
+  }catch(e){
+    console.warn('[hud3d] no disponible, uso el HUD 2:', e.message); hud3dFallo = true; hud3dActivo = false;
+    try{ if (window.HUD3D && HUD3D.hide) HUD3D.hide(); }catch(er){}
+    return false;
+  }
+}
+
 async function abrirHud(){
   if (hudAbierto || hudCargando) return;
   if (faroOn) cerrarFaro();
   hudCargando = true; setStatus('Cargando HUD 2…'); avisoHud('');
   try{
-    if (!hud2){
+    hud3dActivo = await intentar3D();
+    if (!hud3dActivo && !hud2){
       const mod = await import(RAIZ + 'hud2.js');
       hud2 = mod.createHud2($('hud2canvas'), Object.assign({}, hudCfg));   // escala 0,6 = el 36 % de los pixeles, como en AutoBoard
       aplicarFotoAlMotor();                                                   // tu coche, si lo elegiste
@@ -1215,6 +1250,7 @@ async function abrirHud(){
     // Si al cerrar la ultima vez se encogio el lienzo a 1x1 para liberar memoria de
     // video (ver cerrarHud), hay que devolverle su tamano real ANTES de resize(), o
     // reconstruiria el buffer con un lienzo practicamente vacio.
+    if (!hud3dActivo){
     const cv = $('hud2canvas');
     if (cv && cv.width <= 2 && cv.__w){ try{ cv.width = cv.__w; cv.height = cv.__h; }catch(e){} }
     hud2.resize();
@@ -1223,11 +1259,13 @@ async function abrirHud(){
     else ponerRutaEnHud();
     hud2.start();
     if (lastFix && !hudDemo){ hud2.setSpeed(speedKmh/3.6); hud2.syncPosition(lastFix.lat, lastFix.lon); }
+    }
     marcarPestana('tabHud'); $('settings').classList.remove('open');
-    setStatus(hudDemo ? 'HUD 2: sin ruta activa, trazado de ejemplo' : 'HUD 2 activo');
+    setStatus(hud3dActivo ? 'HUD 3D activo' : hudDemo ? 'HUD 2: sin ruta activa, trazado de ejemplo' : 'HUD 2 activo');
   }catch(e){
     console.warn('[hud2]', e);
     hudAbierto = false; hudDemo = false; $('hud2wrap').classList.remove('on'); $('map').style.visibility = '';
+    if (hud3dActivo){ try{ HUD3D.hide(); }catch(er){} hud3dActivo = false; } $('hud2canvas').style.visibility = '';
     marcarPestana('tabMapa');
     avisoHud('No se pudo abrir el HUD 2: ' + e.message + '. Comprueba que hud2.js esta en la raiz del repositorio.');
     setStatus('HUD 2 no disponible');
@@ -1235,6 +1273,7 @@ async function abrirHud(){
 }
 function cerrarHud(){
   if (!hudAbierto) return;
+  if (hud3dActivo){ try{ HUD3D.hide(); }catch(e){} hud3dActivo = false; $('hud2canvas').style.visibility = ''; }   // el 3D deja de renderizar
   try{ hud2.stop(); }catch(e){}
   // LIBERAR MEMORIA DE VIDEO: parar el bucle no basta, el lienzo sigue reservando su
   // buffer entero aunque este oculto. Encogerlo a 1x1 devuelve esa memoria al
@@ -1488,6 +1527,7 @@ function hudSet(k, v){
   hudCfg[k] = v;
   try{ localStorage.setItem('hudCfgLT', JSON.stringify(hudCfg)); }catch(e){}
   if (hud2){ try{ hud2.set({[k]: v}); }catch(e){ if (hud2.onError) hud2.onError(e); } }
+  if (hud3dActivo){ try{ if (k === 'carColor') HUD3D.setBodyColor(v); alimentarHud3D(); }catch(e){} }
 }
 function pintarAjustesHud(){
   const seg = (k, ops) => '<div class="seg" data-k="'+k+'">' + ops.map(o => '<button data-v="'+o[0]+'"'+(String(hudCfg[k])===String(o[0])?' class="on"':'')+'>'+o[1]+'</button>').join('') + '</div>';
@@ -1518,6 +1558,7 @@ function pintarAjustesHud(){
     + HUD_COLORES.map(c => '<button class="sw'+(hudCfg.carColor===c[0]?' on':'')+'" data-v="'+c[0]+'" style="background:'+c[0]+';color:'+(['#eef1f4','#c3c9ce','#8f979e'].indexOf(c[0])>=0?'#111':'#fff')+'">'+c[1]+'</button>').join('')
     + '</div>'
     + '<h4>Elementos</h4>'
+    + '<label class="hs-c"><input type="checkbox" id="h3dChk"'+(h3dPreferido()?' checked':'')+'> HUD 3D (coche en 3D que sigue el rumbo; si va lento vuelve solo al HUD 2)</label>'
     + chk('hud','Panel propio del motor: maniobra, velocidad y límite (repite los de la app)') + chk('carteles','Carteles de dirección')
     + chk('ambiente','Bruma, viñeteado y captafaros') + chk('detalleCoche','Detalles del coche')
     + chk('rain','Lluvia') + chk('spray','Agua de las ruedas')
@@ -1543,6 +1584,7 @@ $('hudsetBody').addEventListener('input', e => {
 });
 $('hudsetBody').addEventListener('change', e => {
   const c = e.target;
+  if (c.id === 'h3dChk'){ try{ localStorage.setItem('hud3dOn', c.checked ? '1' : '0'); }catch(er){} if (c.checked) hud3dFallo = false; setStatus(c.checked ? 'HUD 3D activado: se usa la proxima vez que abras el HUD' : 'HUD 3D desactivado: se usa el HUD 2'); return; }
   if (c.id === 'hfUrl'){ ponerFotoUrl(c.value); return; }
   if (c.id === 'hfFile'){ if (c.files && c.files[0]) cargarFotoArchivo(c.files[0]); return; }
   if (c.type === 'checkbox') hudSet(c.dataset.k, c.checked);
