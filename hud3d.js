@@ -304,6 +304,7 @@ var heads=[];
 var rainC=$('rain'), rainX=rainC.getContext('2d'), drops=null, splash=[];
 function resizeAll(){
   var w=stage.clientWidth, h=stage.clientHeight, pr=[Math.min(2,window.devicePixelRatio||1),1,0.75][state.quality];
+  if(!w||!h) return;                                  // contenedor aún oculto o sin tamaño: no tocar (aspect sería NaN)
   renderer.setPixelRatio(pr); renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix();
   rainC.width=w; rainC.height=h;
 }
@@ -426,9 +427,14 @@ function demoStep(dt){ if(!state.demo)return; var t0=demoT; demoT+=dt; function 
 
 /* ---------- bucle ---------- */
 var curveArm=true, last=performance.now(), fpsN=0, fpsT=0, fps=0, bob=0, roll=0, yaw=0, pitch=0, look=0;
+var szW=0, szH=0, firstRender=true;
 function frame(now){
   if(!running) return;
   var dt=Math.min(0.1,(now-last)/1000); last=now;
+  var cw=stage.clientWidth, ch=stage.clientHeight;
+  if(cw!==szW||ch!==szH){ szW=cw; szH=ch; resizeAll(); }       // el contenedor puede aparecer o cambiar de tamaño DESPUÉS de show()
+  if(!cw||!ch){ requestAnimationFrame(frame); return; }         // todavía invisible: esperar sin dibujar
+  if(firstRender){ firstRender=false; console.info('[hud3d] primer render', cw+'x'+ch); }
   demoStep(dt); gpsStep(dt);
   var v=state.speed/3.6; state.D+=v*dt;
   var lc0=laneC; laneC+=(laneT-laneC)*Math.min(1,dt*1.8); laneVel=dt>0?(laneC-lc0)/dt:0;     // cambio de carril suave

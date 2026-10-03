@@ -1222,7 +1222,7 @@ async function intentar3D(){
       onSlow: fps => { hud3dFallo = true; console.warn('[hud3d] FPS bajos:', fps); setStatus('HUD 3D lento (' + fps + ' fps): vuelvo al HUD 2'); if (hudAbierto){ cerrarHud(); abrirHud(); } } });
     try{ HUD3D.setBodyColor(hudCfg.carColor); }catch(e){}
     $('hud2canvas').style.visibility = 'hidden';
-    HUD3D.show(); hud3dActivo = true; alimentarHud3D();
+    hud3dActivo = true;      // se muestra en abrirHud(), cuando #hud2wrap ya es visible (si no, mide 0x0 y no dibuja nada)
     return true;
   }catch(e){
     console.warn('[hud3d] no disponible, uso el HUD 2:', e.message); hud3dFallo = true; hud3dActivo = false;
@@ -1245,6 +1245,7 @@ async function abrirHud(){
       console.log('[hud2] motor version', hud2.version);
     }
     $('hud2wrap').classList.add('on');
+    if (hud3dActivo){ try{ HUD3D.show(); alimentarHud3D(); }catch(e){ console.warn('[hud3d] show:', e.message); } }
     hudAbierto = true;
     $('map').style.visibility = 'hidden';                        // mapa fuera de juego mientras el HUD esta abierto
     // Si al cerrar la ultima vez se encogio el lienzo a 1x1 para liberar memoria de
