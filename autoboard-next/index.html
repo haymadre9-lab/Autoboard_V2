@@ -19,8 +19,6 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #errlog{position:fixed;top:10px;right:10px;z-index:10;background:rgba(10,13,16,.88);border:1px solid #232c33;border-radius:10px;padding:8px 12px;color:#ff8a8a;font:11px/1.5 ui-monospace,monospace;max-width:280px;max-height:40vh;overflow-y:auto;display:none}
 #errlog.on{display:block}
 #controlesAbajo{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:8px;justify-content:center;flex-direction:column;align-items:center}
-#controlesAbajo button{background:#12161c;border:1px solid #232c33;color:#e8eef2;border-radius:10px;padding:12px 18px;font-size:14px;font-weight:700}
-#controlesAbajo button.on{background:#1d3a2c;border-color:#2e6b4a}
 #avisoInicial{background:rgba(20,80,50,.92);border:2px solid #2e6b4a;border-radius:12px;padding:10px 20px;color:#9ae6b4;font:700 15px system-ui,sans-serif;margin-bottom:8px;animation:avisoPulse 2s ease-in-out infinite}
 #avisoInicial.oculto{display:none}
 @keyframes avisoPulse{0%,100%{opacity:1}50%{opacity:.6}}
@@ -53,6 +51,8 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #btnCentrar{display:none}
 #btnCentrar.on{display:flex}
 #btnSeguir.activo{background:#1d3a2c;border-color:#4a9e6a;color:#9ae6b4}
+#btnGPS{background:#3a1a1a;border-color:#5a2020;color:#ff8a8a}
+#btnGPS.on{background:#1d3a2c;border-color:#4a9e6a;color:#9ae6b4}
 #panelAjustes{position:fixed;top:0;right:0;bottom:0;z-index:40;width:340px;max-width:92vw;background:rgba(10,13,16,.98);border-left:1px solid #232c33;padding:20px 18px;color:#e8eef2;font:14px/1.5 system-ui,sans-serif;overflow-y:auto;transform:translateX(100%);transition:transform .25s ease}
 #panelAjustes.on{transform:translateX(0)}
 #panelAjustes h2{margin:0 0 16px;color:#9ae6b4;font-size:18px}
@@ -72,10 +72,10 @@ body.modo-navegacion #minihud{display:flex}
 #radarAlerta{position:fixed;inset:0;z-index:18;pointer-events:none;display:none;box-shadow:inset 0 0 80px 20px rgba(255,0,0,.55), inset 0 0 200px 60px rgba(255,0,0,.25);animation:radarPulse 1s ease-in-out infinite}
 #radarAlerta.on{display:block}
 @keyframes radarPulse{0%{opacity:.35}50%{opacity:1}100%{opacity:.35}}
-#radarInfo{position:fixed;left:50%;transform:translateX(-50%);bottom:110px;z-index:19;display:none;flex-direction:column;align-items:center;gap:8px;text-align:center}
+#radarInfo{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;z-index:19;display:none;flex-direction:row;align-items:center;gap:14px;text-align:center}
 #radarInfo.on{display:flex}
-#radarInfo .senalRadar{width:90px;height:90px;border-radius:50%;background:#ffffff;border:8px solid #d32f2f;display:flex;align-items:center;justify-content:center;font:800 42px/1 system-ui,sans-serif;color:#000;box-shadow:0 4px 20px rgba(255,0,0,.7);animation:radarPulse 1s ease-in-out infinite}
-#radarInfo .dist{font:800 18px/1.2 system-ui,sans-serif;color:#fff;background:rgba(120,10,10,.92);border-radius:8px;padding:6px 14px;border:2px solid #ff5252}
+#radarInfo .senalRadar{width:64px;height:64px;border-radius:50%;background:#ffffff;border:6px solid #d32f2f;display:flex;align-items:center;justify-content:center;font:800 28px/1 system-ui,sans-serif;color:#000;box-shadow:0 4px 16px rgba(255,0,0,.7);animation:radarPulse 1s ease-in-out infinite}
+#radarInfo .dist{font:800 18px/1.2 system-ui,sans-serif;color:#fff;background:rgba(120,10,10,.92);border-radius:8px;padding:8px 14px;border:2px solid #ff5252}
 #radarInfo .lim{display:none}
 #popupCargador{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;z-index:30;display:none;background:rgba(15,20,26,.96);border:2px solid #2e6b4a;border-radius:16px;padding:16px 20px;color:#e8eef2;font:14px/1.5 system-ui,sans-serif;max-width:520px;width:92vw;box-shadow:0 4px 20px rgba(0,0,0,.6)}
 #popupCargador.on{display:block}
@@ -151,7 +151,6 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
 
 <div id="controlesAbajo">
   <div id="avisoInicial">📍 Toca GPS para empezar</div>
-  <button id="btnGPS">📍 GPS: OFF</button>
 </div>
 
 <div id="grupoArribaDer">
@@ -175,6 +174,7 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
 <div id="grupoAbajoDer">
   <button class="botonMapa" id="btnSeguir" title="Seguir">🧭</button>
   <button class="botonMapa" id="btnCentrar" title="Centrar en mi posición">🎯</button>
+  <button class="botonMapa" id="btnGPS" title="GPS">📍</button>
   <button class="botonMapa" id="btnAjustes" title="Ajustes">⚙️</button>
 </div>
 
@@ -284,7 +284,6 @@ function actualizarBotonCasa(){
 }
 
 map.on('load',()=>{
-  // Reserva 80px abajo para que la flecha quede mas baja y se vea mas calle por delante
   map.setPadding({top:0,bottom:80,left:0,right:0});
   document.getElementById('rArranque').innerHTML='<b>OK</b>';
   document.getElementById('rWebgl').innerHTML=webglOk?'<b>OK</b>':'<span class="mal">FALLO</span>';
@@ -411,14 +410,23 @@ function comprobarRadaresCercanos(lat,lon,velocidadActualKmh){
   if(!masCercano||distMin>RADAR_DIST_APAGADO){apagarAlertaRadar();g9.textContent='-';return;}
   const limRadar=Number(masCercano.max)||50;
   g9.textContent=Math.round(distMin)+' m · '+limRadar+' km/h';
-  if(distMin<RADAR_DIST_AVISO) activarAlertaRadar(distMin,limRadar);
-  else apagarAlertaRadar();
+  if(distMin<RADAR_DIST_AVISO){
+    const porEncima = velocidadActualKmh > limRadar;
+    activarAlertaRadar(distMin, limRadar, porEncima);
+  }else{
+    apagarAlertaRadar();
+  }
 }
-function activarAlertaRadar(distancia,limite){
-  document.getElementById('radarAlerta').classList.add('on');
+function activarAlertaRadar(distancia, limite, porEncima){
   document.getElementById('radarInfo').classList.add('on');
   document.getElementById('senalRadar').textContent=limite;
   document.getElementById('radarDist').textContent=Math.round(distancia)+' m';
+  const halo=document.getElementById('radarAlerta');
+  if(porEncima){
+    halo.classList.add('on');
+  }else{
+    halo.classList.remove('on');
+  }
   alertaRadarActiva=true;
 }
 function apagarAlertaRadar(){
@@ -1033,7 +1041,6 @@ function bucleSeguimiento(){
 }
 requestAnimationFrame(bucleSeguimiento);
 
-// Temporizador para volver a seguir tras soltar el mapa
 let timerVolverSeguir=null;
 function bloquearTemporalmente(){
   if(!seguirOn) return;
@@ -1082,7 +1089,6 @@ function centrarEnMi(){
 document.getElementById('btnCentrar').onclick=centrarEnMi;
 document.getElementById('btnGPS').onclick=function(){
   gpsOn=!gpsOn;
-  this.textContent='📍 GPS: '+(gpsOn?'ON':'OFF');
   this.classList.toggle('on',gpsOn);
   document.body.classList.toggle('modo-navegacion',gpsOn);
   if(gpsOn){
