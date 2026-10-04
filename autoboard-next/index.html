@@ -1255,23 +1255,29 @@ function triHead(x,y,t,c,len,hw){
   const l={x:bx+lat.x*hw,y:by+lat.y*hw},r={x:bx-lat.x*hw,y:by-lat.y*hw};
   return '<path d="M'+x.toFixed(1)+' '+y.toFixed(1)+' L'+l.x.toFixed(1)+' '+l.y.toFixed(1)+' L'+r.x.toFixed(1)+' '+r.y.toFixed(1)+' Z" fill="'+c+'"/>';
 }
-function roundaboutSVG(exit,col){
-  col=col||'#0a8a34';
-  const c=24,r=12,grosor=5;
-  const exitReal=Math.max(1,parseInt(exit,10)||1);
-  let s='<svg viewBox="0 0 48 52">';
-  s+='<circle cx="'+c+'" cy="26" r="'+r+'" fill="none" stroke="'+col+'" stroke-width="'+grosor+'" opacity="0.9"/>';
-  s+='<path d="M'+c+' 50 L'+c+' '+(26+r)+'" stroke="'+col+'" stroke-width="'+grosor+'" stroke-linecap="round"/>';
-  const NEXITS=3,pasoDeg=360/NEXITS,a0=Math.PI/2;
+
+// ====== ROTONDA — coherente con el cartel + salida elegida en ámbar ======
+function roundaboutSVG(exit, colores){
+  const col = colores.flecha;
+  const c = 24, r = 12, grosor = 5;
+  const exitReal = Math.max(1, parseInt(exit,10) || 1);
+  let s = '<svg viewBox="0 0 48 52">';
+  s += '<circle cx="'+c+'" cy="26" r="'+r+'" fill="none" stroke="'+col+'" stroke-width="'+grosor+'" opacity="0.9"/>';
+  s += '<path d="M'+c+' 50 L'+c+' '+(26+r)+'" stroke="'+col+'" stroke-width="'+grosor+'" stroke-linecap="round"/>';
+  const NEXITS = 3, pasoDeg = 360/NEXITS, a0 = Math.PI/2;
   for(let k=0;k<NEXITS;k++){
-    const a=a0-(k*pasoDeg)*Math.PI/180;
-    const x1=c+Math.cos(a)*r,y1=26+Math.sin(a)*r,x2=c+Math.cos(a)*(r+7),y2=26+Math.sin(a)*(r+7);
-    const esElegida=(k===Math.min(exitReal,NEXITS-1));
-    s+='<path d="M'+x1.toFixed(1)+' '+y1.toFixed(1)+' L'+x2.toFixed(1)+' '+y2.toFixed(1)+'" stroke="'+(esElegida?'#ffb020':col)+'" stroke-width="'+(esElegida?5:3)+'" stroke-linecap="round"/>';
+    const a = a0 - (k*pasoDeg)*Math.PI/180;
+    const x1 = c + Math.cos(a)*r,     y1 = 26 + Math.sin(a)*r;
+    const x2 = c + Math.cos(a)*(r+7), y2 = 26 + Math.sin(a)*(r+7);
+    const esElegida = (k === Math.min(exitReal-1, NEXITS-1));
+    const stroke   = esElegida ? '#ffb020' : col;
+    const grosorSalida = esElegida ? 5 : 3;
+    s += '<path d="M'+x1.toFixed(1)+' '+y1.toFixed(1)+' L'+x2.toFixed(1)+' '+y2.toFixed(1)+'" stroke="'+stroke+'" stroke-width="'+grosorSalida+'" stroke-linecap="round"/>';
   }
-  s+='<text x="'+c+'" y="31" text-anchor="middle" font-size="14" font-weight="800" fill="'+col+'" font-family="system-ui,sans-serif">'+exitReal+'</text>';
-  return s+'</svg>';
+  s += '<text x="'+c+'" y="31" text-anchor="middle" font-size="14" font-weight="800" fill="'+col+'" font-family="system-ui,sans-serif">'+exitReal+'</text>';
+  return s + '</svg>';
 }
+
 function ttMan(it){
   const m=(it.maneuver||it.instructionType||'').toString().toUpperCase();
   if(m.includes('ARRIVE')||m.includes('WAYPOINT')) return {type:'arrive'};
@@ -1287,9 +1293,9 @@ function ttMan(it){
   return {type:'turn',modifier:mod};
 }
 
-// ==== SISTEMA DE CARTELES — VARIANTE A (punta al borde exacto) ====
+// ==== SISTEMA DE CARTELES — VARIANTE A ====
 function colorCartel(hw){
-  if(hw) return {fondo:'#1565c0', borde:'#0d47a1', flecha:'#ffffff', flechaInactiva:'#90caf9'};
+  if(hw) return {fondo:'#1565c0', borde:'#ffffff', flecha:'#ffffff', flechaInactiva:'#90caf9'};
   return {fondo:'#ffffff', borde:'#000000', flecha:'#000000', flechaInactiva:'#bdbdbd'};
 }
 function dibujarFlechaA(mod, colores, grosor, tamPunta){
@@ -1381,12 +1387,16 @@ function cartelSimple(mod, hw){
 }
 function maneuverSVG(s, hw){
   const m = s.maneuver || {};
-  const col = hw ? '#ffffff' : '#0a8a34';
+  const colores = colorCartel(hw);
+  const col = colores.flecha;
   if(m.type === 'arrive'){
-    return '<svg viewBox="0 0 48 52"><circle cx="24" cy="26" r="15" fill="'+col+'"/><circle cx="24" cy="26" r="6" fill="#fff"/></svg>';
+    return '<svg viewBox="0 0 48 52">'
+      + '<circle cx="24" cy="26" r="15" fill="'+col+'"/>'
+      + '<circle cx="24" cy="26" r="6" fill="'+colores.fondo+'"/>'
+      + '</svg>';
   }
   if(m.type === 'roundabout' || m.type === 'rotary'){
-    return roundaboutSVG(m.exit, col);
+    return roundaboutSVG(m.exit, colores);
   }
   if(s.lanes && s.lanes.length){
     return cartelConCarriles(s.lanes, m.modifier, hw);
