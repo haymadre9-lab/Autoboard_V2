@@ -19,7 +19,7 @@ svg{display:block}
 </head>
 <body>
 <h1>Test de carteles — elige los que te gusten</h1>
-<p class="intro">Anota los números de los carteles que quieras. Con eso ajusto el código final. Los tamaños son los que tendrán en el navbanner real.</p>
+<p class="intro">Variante E corregida (punta al borde, sin redondeo). Bug del 302 arreglado.</p>
 
 <h2>1. Vía normal — fondo blanco, borde negro, flecha negra</h2>
 <div class="grid" id="sec1"></div>
@@ -30,24 +30,18 @@ svg{display:block}
 <h2>3. Rotondas</h2>
 <div class="grid" id="sec3"></div>
 
-<h2>4. Carteles con carriles (cuando TomTom los dé)</h2>
+<h2>4. Carteles con carriles (sin flecha grande a la derecha)</h2>
 <div class="grid" id="sec4"></div>
 
-<h2>5. Variantes de flecha — elige el estilo de la flecha de giro</h2>
+<h2>5. Variantes de flecha</h2>
 <div class="grid" id="sec5"></div>
 
 <script>
-// ============================================================================
-// Aquí van las funciones de generación de carteles.
-// Son las MISMAS que tienes en el index, más algunas variantes nuevas para
-// que puedas comparar estilos.
-// ============================================================================
-
-// ---------- Paletas de colores ----------
+// ---------- Paletas ----------
 function paletaNormal(){ return {fondo:'#ffffff', borde:'#000000', flecha:'#000000', flechaInactiva:'#bbbbbb'}; }
 function paletaAutopista(){ return {fondo:'#1e4a8a', borde:'#ffffff', flecha:'#ffffff', flechaInactiva:'#7fb0e8'}; }
 
-// ---------- VARIANTE A: flecha con curva suave (la que tienes ahora) ----------
+// ---------- VARIANTES ----------
 function pathVarianteA(mod){
   if(mod==='straight' || !mod) return 'M24 44 L24 14';
   if(mod==='slight right') return 'M24 44 L24 26 Q24 14 34 14 L40 14';
@@ -71,7 +65,6 @@ function puntaVarianteA(mod){
   return {x:24, y:14, ang:0};
 }
 
-// ---------- VARIANTE B: ángulo recto duro (como Tesla, sin curva) ----------
 function pathVarianteB(mod){
   if(mod==='straight' || !mod) return 'M24 44 L24 14';
   if(mod==='slight right') return 'M24 44 L24 18 L34 14 L40 14';
@@ -95,7 +88,6 @@ function puntaVarianteB(mod){
   return {x:24, y:14, ang:0};
 }
 
-// ---------- VARIANTE C: esquina muy redondeada, punta grande ----------
 function pathVarianteC(mod){
   if(mod==='straight' || !mod) return 'M24 44 L24 16';
   if(mod==='slight right') return 'M24 44 L24 28 Q24 16 34 16 L38 16';
@@ -119,11 +111,9 @@ function puntaVarianteC(mod){
   return {x:24, y:16, ang:0};
 }
 
-// ---------- VARIANTE D: trazo más grueso, punta más ancha ----------
 function pathVarianteD(mod){ return pathVarianteB(mod); }
 function puntaVarianteD(mod){ return puntaVarianteB(mod); }
 
-// ---------- VARIANTE E: estilo Google Maps, curva cuadrática marcada ----------
 function pathVarianteE(mod){
   if(mod==='straight' || !mod) return 'M24 44 L24 12';
   if(mod==='slight right') return 'M24 44 L24 24 Q24 12 36 12 L40 12';
@@ -147,9 +137,55 @@ function puntaVarianteE(mod){
   return {x:24, y:12, ang:0};
 }
 
-// ---------- Función genérica para dibujar la flecha ----------
+// ---------- CLAVE: recortar el path hasta la base de la punta ----------
+// Devuelve el path "acortado" para que el trazo termine en la base del triángulo
+// y no sobresalga redondeado por delante de la punta.
+function recortarPath(pathD, punta, tamPunta){
+  // Parseamos el path buscando el último "L x y" o "Q ... x y" y lo sustituimos
+  // por un punto en la base de la punta.
+  const ang = punta.ang;
+  const len = tamPunta;
+  const tan = {x:Math.sin(ang), y:-Math.cos(ang)};
+  const bx = punta.x - tan.x*len;
+  const by = punta.y - tan.y*len;
+
+  // Encontramos la última coordenada del path (destino final)
+  const matches = [...pathD.matchAll(/([MLQ])\s*([-\d.]+)[ ,]+([-\d.]+)/g)];
+  if(!matches.length) return pathD;
+
+  // El path siempre acaba con un L o Q cuya última coord es el destino.
+  // Reemplazamos el último par de coordenadas por (bx, by).
+  const last = matches[matches.length-1];
+  const idx = last.index + last[0].length - (last[2].length + last[3].length + 1);
+  // más robusto: reconstruir el path desde cero troceando
+  const re = /([MLQ])([^MLQ]*)/g;
+  let out = '';
+  let m;
+  const partes = [];
+  while((m = re.exec(pathD)) !== null){
+    partes.push({cmd:m[1], args:m[2].trim()});
+  }
+  // Modificamos el último punto del último comando
+  if(partes.length){
+    const lastP = partes[partes.length-1];
+    const nums = lastP.args.match(/-?\d+(\.\d+)?/g).map(Number);
+    if(lastP.cmd === 'L'){
+      nums[nums.length-2] = +bx.toFixed(2);
+      nums[nums.length-1] = +by.toFixed(2);
+    } else if(lastP.cmd === 'Q'){
+      // Q cx cy x y  → modificamos x y
+      nums[nums.length-2] = +bx.toFixed(2);
+      nums[nums.length-1] = +by.toFixed(2);
+    }
+    lastP.args = nums.join(' ');
+  }
+  out = partes.map(p => p.cmd + p.args).join(' ');
+  return out;
+}
+
+// ---------- Flecha con punta al borde exacto ----------
 function flechaSVG(pathFn, puntaFn, mod, colores, grosor, tamPunta){
-  const path = pathFn(mod);
+  const pathOriginal = pathFn(mod);
   const p = puntaFn(mod);
   const {x, y, ang} = p;
   const len = tamPunta || 10;
@@ -157,30 +193,36 @@ function flechaSVG(pathFn, puntaFn, mod, colores, grosor, tamPunta){
   const tan = {x:Math.sin(ang), y:-Math.cos(ang)};
   const lat = {x:Math.cos(ang), y:Math.sin(ang)};
   const bx = x - tan.x*len, by = y - tan.y*len;
+
+  // ACORTAMOS el path para que termine en la base del triángulo.
+  const path = recortarPath(pathOriginal, p, len);
+
   const l = {x:bx + lat.x*hw, y:by + lat.y*hw};
   const r = {x:bx - lat.x*hw, y:by - lat.y*hw};
-  const punta = 'M'+x.toFixed(1)+' '+y.toFixed(1)+' L'+l.x.toFixed(1)+' '+l.y.toFixed(1)+' L'+r.x.toFixed(1)+' '+r.y.toFixed(1)+' Z';
-  return '<path d="'+path+'" stroke="'+colores.flecha+'" stroke-width="'+grosor+'" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
+  const punta = 'M'+x.toFixed(1)+' '+y.toFixed(1)
+              + ' L'+l.x.toFixed(1)+' '+l.y.toFixed(1)
+              + ' L'+r.x.toFixed(1)+' '+r.y.toFixed(1)+' Z';
+
+  // stroke-linecap="butt" para que no sobresalga nada por delante de la base.
+  return '<path d="'+path+'" stroke="'+colores.flecha+'" stroke-width="'+grosor+'" stroke-linecap="butt" stroke-linejoin="round" fill="none"/>'
     + '<path d="'+punta+'" fill="'+colores.flecha+'"/>';
 }
 
-// ---------- Cartel completo simple ----------
+// ---------- Cartel simple ----------
 function cartel(pathFn, puntaFn, mod, paleta, grosor, tamPunta){
   const colores = paleta();
   const ancho = 120, alto = 120, radio = 16;
   let svg = '<svg viewBox="0 0 '+ancho+' '+alto+'" width="'+ancho+'" height="'+alto+'">';
   svg += '<rect x="3" y="3" width="'+(ancho-6)+'" height="'+(alto-6)+'" rx="'+radio+'" ry="'+radio+'" fill="'+colores.fondo+'" stroke="'+colores.borde+'" stroke-width="4"/>';
-  // Centro de la flecha: el path está pensado en 48x48, así que lo escalamos y centramos
   svg += '<g transform="translate('+(ancho/2-36)+','+(alto/2-36)+') scale(1.5)">';
   svg += flechaSVG(pathFn, puntaFn, mod, colores, grosor||6.5, tamPunta||10);
-  svg += '</g>';
-  svg += '</svg>';
+  svg += '</g></svg>';
   return svg;
 }
 
 // ---------- Rotonda ----------
 function roundaboutSVG(exit, colores){
-  const c = 24, r = 12, grosor = 5;
+  const r = 12, grosor = 5;
   const exitReal = Math.max(1, parseInt(exit,10) || 1);
   const col = colores.flecha;
   let s = '<g transform="translate(24,26)">';
@@ -191,7 +233,7 @@ function roundaboutSVG(exit, colores){
     const a = a0 + (k*pasoDeg)*Math.PI/180;
     const x1 = Math.cos(a)*r, y1 = Math.sin(a)*r;
     const x2 = Math.cos(a)*(r+7), y2 = Math.sin(a)*(r+7);
-    const esElegida = (k === Math.min(exitReal, NEXITS-1));
+    const esElegida = (k === Math.min(exitReal-1, NEXITS-1));
     s += '<path d="M'+x1.toFixed(1)+' '+y1.toFixed(1)+' L'+x2.toFixed(1)+' '+y2.toFixed(1)+'" stroke="'+(esElegida?'#ffb020':col)+'" stroke-width="'+(esElegida?5:3)+'" stroke-linecap="round"/>';
   }
   s += '<text x="0" y="5" text-anchor="middle" font-size="14" font-weight="800" fill="'+col+'" font-family="system-ui,sans-serif">'+exitReal+'</text>';
@@ -205,51 +247,76 @@ function cartelRotonda(exit, paleta){
   svg += '<rect x="3" y="3" width="'+(ancho-6)+'" height="'+(alto-6)+'" rx="'+radio+'" ry="'+radio+'" fill="'+colores.fondo+'" stroke="'+colores.borde+'" stroke-width="4"/>';
   svg += '<g transform="translate('+(ancho/2-24)+','+(alto/2-30)+') scale(1.5)">';
   svg += roundaboutSVG(exit, colores);
-  svg += '</g>';
-  svg += '</svg>';
+  svg += '</g></svg>';
   return svg;
 }
 
-// ---------- Cartel con carriles ----------
+// ---------- Flecha de carril: AHORA soporta varias direcciones ----------
 function flechaCarril(dirs, activo, colores, x, y){
-  const dirPrincipal = dirs[0] || 'straight';
   const color = activo ? colores.flecha : colores.flechaInactiva;
-  let path = '';
   const cy = y + 24;
-  if(dirPrincipal==='straight') path = 'M'+x+' '+cy+' L'+x+' '+(y+6);
-  else if(dirPrincipal==='right') path = 'M'+x+' '+cy+' L'+x+' '+(y+14)+' Q'+x+' '+(y+6)+' '+(x+8)+' '+(y+6);
-  else if(dirPrincipal==='left') path = 'M'+x+' '+cy+' L'+x+' '+(y+14)+' Q'+x+' '+(y+6)+' '+(x-8)+' '+(y+6);
-  else if(dirPrincipal==='slight right') path = 'M'+x+' '+cy+' L'+x+' '+(y+12)+' Q'+x+' '+(y+6)+' '+(x+6)+' '+(y+6);
-  else if(dirPrincipal==='slight left') path = 'M'+x+' '+cy+' L'+x+' '+(y+12)+' Q'+x+' '+(y+6)+' '+(x-6)+' '+(y+6);
-  else if(dirPrincipal==='uturn') path = 'M'+x+' '+cy+' L'+x+' '+(y+12)+' Q'+x+' '+(y+4)+' '+(x+8)+' '+(y+4)+' Q'+(x+14)+' '+(y+4)+' '+(x+14)+' '+(y+14);
-  let puntaX=x, puntaY=y+6, ang=0;
-  if(dirPrincipal==='right'){ puntaX=x+8; puntaY=y+6; ang=Math.PI/2; }
-  else if(dirPrincipal==='left'){ puntaX=x-8; puntaY=y+6; ang=-Math.PI/2; }
-  else if(dirPrincipal==='slight right'){ puntaX=x+6; puntaY=y+6; ang=Math.PI/4; }
-  else if(dirPrincipal==='slight left'){ puntaX=x-6; puntaY=y+6; ang=-Math.PI/4; }
-  else if(dirPrincipal==='uturn'){ puntaX=x+14; puntaY=y+14; ang=Math.PI; }
-  const len=7, hw=5;
-  const tan={x:Math.sin(ang), y:-Math.cos(ang)};
-  const lat={x:Math.cos(ang), y:Math.sin(ang)};
-  const bx=puntaX-tan.x*len, by=puntaY-tan.y*len;
-  const l={x:bx+lat.x*hw, y:by+lat.y*hw};
-  const r={x:bx-lat.x*hw, y:by-lat.y*hw};
-  return '<path d="'+path+'" stroke="'+color+'" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
-    + '<path d="M'+puntaX.toFixed(1)+' '+puntaY.toFixed(1)+' L'+l.x.toFixed(1)+' '+l.y.toFixed(1)+' L'+r.x.toFixed(1)+' '+r.y.toFixed(1)+' Z" fill="'+color+'"/>';
+  let out = '';
+
+  // Pintamos CADA dirección que tenga el carril (una al lado de otra o la principal arriba)
+  // Si hay varias, la primera es la principal (más grande) y las demás más pequeñas al lado.
+  const lista = Array.isArray(dirs) && dirs.length ? dirs : ['straight'];
+
+  // Para simplificar: si hay 2 direcciones (ej. straight+right), dibujamos
+  // la primera en el centro y la segunda desplazada.
+  lista.forEach((dirPrincipal, i) => {
+    const dx = (i===0 && lista.length>1) ? -6 : (i===1 ? 6 : 0);
+    const escala = (i===0) ? 1 : 0.75;
+    const xx = x + dx * escala;
+    const g = 3.5 * escala;
+
+    let path = '';
+    if(dirPrincipal==='straight') path = 'M'+xx+' '+cy+' L'+xx+' '+(y+6);
+    else if(dirPrincipal==='right') path = 'M'+xx+' '+cy+' L'+xx+' '+(y+14)+' Q'+xx+' '+(y+6)+' '+(xx+8)+' '+(y+6);
+    else if(dirPrincipal==='left') path = 'M'+xx+' '+cy+' L'+xx+' '+(y+14)+' Q'+xx+' '+(y+6)+' '+(xx-8)+' '+(y+6);
+    else if(dirPrincipal==='slight right') path = 'M'+xx+' '+cy+' L'+xx+' '+(y+12)+' Q'+xx+' '+(y+6)+' '+(xx+6)+' '+(y+6);
+    else if(dirPrincipal==='slight left') path = 'M'+xx+' '+cy+' L'+xx+' '+(y+12)+' Q'+xx+' '+(y+6)+' '+(xx-6)+' '+(y+6);
+    else if(dirPrincipal==='uturn') path = 'M'+xx+' '+cy+' L'+xx+' '+(y+12)+' Q'+xx+' '+(y+4)+' '+(xx+8)+' '+(y+4)+' Q'+(xx+14)+' '+(y+4)+' '+(xx+14)+' '+(y+14);
+
+    let puntaX=xx, puntaY=y+6, ang=0;
+    if(dirPrincipal==='right'){ puntaX=xx+8; puntaY=y+6; ang=Math.PI/2; }
+    else if(dirPrincipal==='left'){ puntaX=xx-8; puntaY=y+6; ang=-Math.PI/2; }
+    else if(dirPrincipal==='slight right'){ puntaX=xx+6; puntaY=y+6; ang=Math.PI/4; }
+    else if(dirPrincipal==='slight left'){ puntaX=xx-6; puntaY=y+6; ang=-Math.PI/4; }
+    else if(dirPrincipal==='uturn'){ puntaX=xx+14; puntaY=y+14; ang=Math.PI; }
+
+    const len=7*escala, hw=5*escala;
+    const tan={x:Math.sin(ang), y:-Math.cos(ang)};
+    const lat={x:Math.cos(ang), y:Math.sin(ang)};
+    const bx=puntaX-tan.x*len, by=puntaY-tan.y*len;
+    const l={x:bx+lat.x*hw, y:by+lat.y*hw};
+    const r={x:bx-lat.x*hw, y:by-lat.y*hw};
+
+    // Acortamos el path para que la punta quede en el borde exacto
+    let pathFinal = path;
+    if(dirPrincipal==='straight') pathFinal = 'M'+xx+' '+cy+' L'+xx+' '+by.toFixed(1);
+    else if(dirPrincipal==='right') pathFinal = 'M'+xx+' '+cy+' L'+xx+' '+(y+14)+' Q'+xx+' '+(y+6)+' '+bx.toFixed(1)+' '+by.toFixed(1);
+    else if(dirPrincipal==='left') pathFinal = 'M'+xx+' '+cy+' L'+xx+' '+(y+14)+' Q'+xx+' '+(y+6)+' '+bx.toFixed(1)+' '+by.toFixed(1);
+    else if(dirPrincipal==='slight right') pathFinal = 'M'+xx+' '+cy+' L'+xx+' '+(y+12)+' Q'+xx+' '+(y+6)+' '+bx.toFixed(1)+' '+by.toFixed(1);
+    else if(dirPrincipal==='slight left') pathFinal = 'M'+xx+' '+cy+' L'+xx+' '+(y+12)+' Q'+xx+' '+(y+6)+' '+bx.toFixed(1)+' '+by.toFixed(1);
+    else if(dirPrincipal==='uturn') pathFinal = 'M'+xx+' '+cy+' L'+xx+' '+(y+12)+' Q'+xx+' '+(y+4)+' '+(xx+8)+' '+(y+4)+' Q'+(xx+14)+' '+(y+4)+' '+bx.toFixed(1)+' '+by.toFixed(1);
+
+    out += '<path d="'+pathFinal+'" stroke="'+color+'" stroke-width="'+g+'" stroke-linecap="butt" stroke-linejoin="round" fill="none"/>'
+         + '<path d="M'+puntaX.toFixed(1)+' '+puntaY.toFixed(1)+' L'+l.x.toFixed(1)+' '+l.y.toFixed(1)+' L'+r.x.toFixed(1)+' '+r.y.toFixed(1)+' Z" fill="'+color+'"/>';
+  });
+  return out;
 }
+
+// ---------- Cartel con carriles SIN flecha grande a la derecha ----------
 function cartelCarriles(lanes, mod, paleta){
   const colores = paleta();
   const nCarriles = lanes.length;
   const anchoCarril = 36;
   const padding = 12;
-  const anchoCarriles = nCarriles * anchoCarril;
-  const anchoFlecha = 60;
-  const anchoTotal = padding + anchoCarriles + padding + anchoFlecha + padding;
+  const anchoTotal = padding + nCarriles*anchoCarril + padding; // sin bloque de flecha grande
   const alto = 120;
   const radio = 16;
   let svg = '<svg viewBox="0 0 '+anchoTotal+' '+alto+'" width="'+anchoTotal+'" height="'+alto+'">';
   svg += '<rect x="3" y="3" width="'+(anchoTotal-6)+'" height="'+(alto-6)+'" rx="'+radio+'" ry="'+radio+'" fill="'+colores.fondo+'" stroke="'+colores.borde+'" stroke-width="4"/>';
-  svg += '<line x1="'+(padding+anchoCarriles+padding/2)+'" y1="18" x2="'+(padding+anchoCarriles+padding/2)+'" y2="'+(alto-18)+'" stroke="'+colores.borde+'" stroke-width="1.5" opacity="0.4"/>';
   for(let i=0;i<nCarriles;i++){
     const carril = lanes[i];
     const dirs = (carril.lane && carril.lane.directions) || ['straight'];
@@ -257,17 +324,18 @@ function cartelCarriles(lanes, mod, paleta){
     const cx = padding + anchoCarril*i + anchoCarril/2;
     const cy = 34;
     svg += flechaCarril(dirs, activo, colores, cx, cy);
+    // Separadores verticales entre carriles
+    if(i < nCarriles-1){
+      const sx = padding + anchoCarril*(i+1);
+      svg += '<line x1="'+sx+'" y1="18" x2="'+sx+'" y2="'+(alto-18)+'" stroke="'+colores.borde+'" stroke-width="1" opacity="0.25"/>';
+    }
   }
-  const offsetFlecha = padding + anchoCarriles + padding;
-  svg += '<g transform="translate('+offsetFlecha+','+(alto/2-36)+') scale(1.5)">';
-  svg += flechaSVG(pathVarianteB, puntaVarianteB, mod, colores, 6.5, 10);
-  svg += '</g>';
   svg += '</svg>';
   return svg;
 }
 
 // ============================================================================
-// A partir de aquí: rellenar la página con todos los ejemplos
+// Pintado
 // ============================================================================
 const maniobras = [
   ['straight','Sigue recto'],
@@ -295,16 +363,13 @@ function pintarSeccion(id, paleta, variante, grosor, tamPunta){
   });
 }
 
-// Sección 1: vía normal, variante B (ángulo recto duro)
 pintarSeccion('sec1', paletaNormal, 'B', 7, 11);
-
-// Sección 2: autopista, variante B
 pintarSeccion('sec2', paletaAutopista, 'B', 7, 11);
 
-// Sección 3: rotondas (numeración 201-204)
+// Rotondas
 {
   const cont = document.getElementById('sec3');
-  for(let i=1;i<=4;i++){
+  for(let i=1;i<=3;i++){
     const div = document.createElement('div');
     div.className = 'celda';
     div.innerHTML = cartelRotonda(i, paletaNormal)
@@ -313,16 +378,16 @@ pintarSeccion('sec2', paletaAutopista, 'B', 7, 11);
   }
 }
 
-// Sección 4: carriles (numeración 301-304)
+// Carriles — el 302 ahora con dos carriles a la derecha activos
 {
   const cont = document.getElementById('sec4');
   const ejemplos = [
     [{lane:{directions:['left'],active:false}},{lane:{directions:['straight'],active:true}},{lane:{directions:['right'],active:false}}],
-    [{lane:{directions:['left'],active:false}},{lane:{directions:['right'],active:true}},{lane:{directions:['right'],active:false}}],
+    [{lane:{directions:['left'],active:false}},{lane:{directions:['right'],active:true}},{lane:{directions:['right'],active:true}}], // ← 302 corregido
     [{lane:{directions:['left'],active:false}},{lane:{directions:['straight','right'],active:true}},{lane:{directions:['straight','right'],active:true}},{lane:{directions:['right'],active:false}}],
     [{lane:{directions:['left'],active:true}},{lane:{directions:['left','straight'],active:true}},{lane:{directions:['straight'],active:false}},{lane:{directions:['right'],active:false}}]
   ];
-  const nombres = ['3 carriles, giro recto','3 carriles, giro derecha','4 carriles, dos activos','4 carriles mixto'];
+  const nombres = ['3 carriles, giro recto','3 carriles, giro derecha (dos carriles)','4 carriles, dos activos','4 carriles mixto'];
   ejemplos.forEach((ej, idx) => {
     const div = document.createElement('div');
     div.className = 'celda';
@@ -332,7 +397,7 @@ pintarSeccion('sec2', paletaAutopista, 'B', 7, 11);
   });
 }
 
-// Sección 5: variantes de flecha (numeración 401-405)
+// Variantes
 {
   const cont = document.getElementById('sec5');
   const variantes = [
@@ -340,18 +405,7 @@ pintarSeccion('sec2', paletaAutopista, 'B', 7, 11);
     {id:'B', pathFn:pathVarianteB, puntaFn:puntaVarianteB, grosor:7, tamPunta:11, nota:'Ángulo recto duro (Tesla)'},
     {id:'C', pathFn:pathVarianteC, puntaFn:puntaVarianteC, grosor:6, tamPunta:13, nota:'Curva muy redondeada, punta grande'},
     {id:'D', pathFn:pathVarianteD, puntaFn:puntaVarianteD, grosor:9, tamPunta:13, nota:'Trazo grueso'},
-    {id:'E', pathFn:pathVarianteE, puntaFn:puntaVarianteE, grosor:6.5, tamPunta:10, nota:'Google Maps'}
+    {id:'E', pathFn:pathVarianteE, puntaFn:puntaVarianteE, grosor:6.5, tamPunta:10, nota:'Google Maps — punta al borde corregida'}
   ];
   variantes.forEach((v, idx) => {
-    const div = document.createElement('div');
-    div.className = 'celda';
-    const svg = cartel(v.pathFn, v.puntaFn, 'right', paletaNormal, v.grosor, v.tamPunta);
-    div.innerHTML = svg
-      + '<div class="etiqueta"><span class="num">#'+(401+idx)+'</span>Variante '+v.id+'</div>'
-      + '<div class="nota">'+v.nota+'</div>';
-    cont.appendChild(div);
-  });
-}
-</script>
-</body>
-</html>
+    const div = document.createElement
