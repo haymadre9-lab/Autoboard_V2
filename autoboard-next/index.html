@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>autoboard-next · Fase 9 · radares y UI</title>
+<title>autoboard-next · Fase 10 · celebración</title>
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
 <style>
 html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
@@ -89,6 +89,32 @@ body.modo-navegacion #minihud{display:flex}
 #popupCargador .acciones button.cerrar{flex:0 0 auto;min-width:auto;background:#2a1a1a;border-color:#5a2020;color:#ff8a8a}
 body.modo-navegacion #diag,body.modo-navegacion #diag2{display:none}
 body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner,body.modo-solomapa #minihud,body.modo-solomapa #controlesAbajo,body.modo-solomapa #grupoArribaDer,body.modo-solomapa #grupoAbajoDer{display:none}
+
+/* ==== CELEBRACION AL LLEGAR ==== */
+#celebracion{position:fixed;inset:0;z-index:50;pointer-events:none;display:none;overflow:hidden}
+#celebracion.on{display:block}
+#celebracion .textoCentral{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(0);
+  font-family:Verdana,Tahoma,Geneva,sans-serif;font-weight:900;font-size:96px;letter-spacing:8px;
+  color:#fff;text-shadow:0 4px 20px rgba(0,0,0,.8),0 0 40px rgba(255,215,0,.9);
+  animation:ianPop 3.5s ease-out forwards}
+#celebracion .textoCentral .iLatina{display:inline-block;text-decoration:overline;text-decoration-thickness:6px}
+@keyframes ianPop{
+  0%{transform:translate(-50%,-50%) scale(0) rotate(-15deg);opacity:0}
+  15%{transform:translate(-50%,-50%) scale(1.2) rotate(3deg);opacity:1}
+  25%{transform:translate(-50%,-50%) scale(1) rotate(0deg);opacity:1}
+  85%{transform:translate(-50%,-50%) scale(1) rotate(0deg);opacity:1}
+  100%{transform:translate(-50%,-50%) scale(1.3) rotate(0deg);opacity:0}
+}
+#celebracion .subtitulo{position:absolute;left:50%;top:65%;transform:translate(-50%,-50%);
+  font-family:Verdana,Tahoma,sans-serif;font-weight:700;font-size:24px;color:#ffd166;
+  text-shadow:0 2px 10px rgba(0,0,0,.8);opacity:0;animation:ianSub 3.5s ease-out forwards}
+@keyframes ianSub{
+  0%,15%{opacity:0;transform:translate(-50%,-50%) translateY(20px)}
+  30%{opacity:1;transform:translate(-50%,-50%) translateY(0)}
+  85%{opacity:1;transform:translate(-50%,-50%) translateY(0)}
+  100%{opacity:0;transform:translate(-50%,-50%) translateY(-20px)}
+}
+.confeti{position:absolute;width:10px;height:16px;opacity:.95;pointer-events:none;will-change:transform}
 </style>
 </head>
 <body class="modo-debug">
@@ -100,6 +126,7 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
   <div class="lim" id="radarLim">-</div>
 </div>
 <div id="popupCargador"></div>
+<div id="celebracion"></div>
 
 <div id="panelAjustes">
   <button class="cerrarPanel" id="btnCerrarAjustes">✕</button>
@@ -111,6 +138,7 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
   <button class="ajuste on" id="btnCargadores">🔌 Cargadores: ON</button>
   <button class="ajuste on" id="btnPitch">📐 Pitch: ON</button>
   <button class="ajuste on" id="btnTrafico">🚦 Tráfico: ON</button>
+  <button class="ajuste on" id="btnCelebracion">🎉 Celebración: ON</button>
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <div class="seccion">Diagnóstico</div>
@@ -270,6 +298,8 @@ let alertaRadarActiva=false;
 const RADAR_DIST_AVISO=500,RADAR_DIST_APAGADO=550;
 let cargadoresOn=true;
 let traficoOn=true;
+let celebracionOn=true;
+let celebracionDisparada=false;
 let ultimoCentroCargadores=null;
 let cargadoresData=[];
 let favoritos=JSON.parse(localStorage.getItem('cargadores_favs')||'[]');
@@ -630,6 +660,11 @@ document.getElementById('btnTrafico').onclick=function(){
   }
   if(routeCoordsLL.length) repintarRutaConNiveles();
 };
+document.getElementById('btnCelebracion').onclick=function(){
+  celebracionOn=!celebracionOn;
+  this.textContent='🎉 Celebración: '+(celebracionOn?'ON':'OFF');
+  this.classList.toggle('on',celebracionOn);
+};
 function repintarRutaConNiveles(){
   if(!routeCoordsLL.length) return;
   const coords=routeCoordsLL.map(c=>[c[1],c[0]]);
@@ -774,17 +809,36 @@ function recorridoAhora(ll){
 }
 function avanzarPaso(r){while(stepIdx<steps.length-1&&(steps[stepIdx].metro||0)<=r+15) stepIdx++;}
 function actualizarTrimRuta(){
-  if(!trimSoportado) return;
-  if(!routeCoordsLL.length||!routeCumDist.length) return;
-  if(!map.getLayer('ruta-0')) return;
+  if(!routeCoordsLL.length || !routeNivelesPorPunto.length) return;
   const total=routeCumDist[routeCumDist.length-1];
   if(total<=0) return;
   const recorrido=routeCumDist[routeProgIdx]||0;
   const fraccion=Math.max(0,Math.min(1,recorrido/total));
-  try{
-    for(const id of ['ruta-0','ruta-1','ruta-2','ruta-3']) map.setPaintProperty(id,'line-trim-offset',[0,fraccion]);
-    document.getElementById('rTrim').textContent=Math.round(fraccion*100)+'%';
-  }catch(e){trimSoportado=false;document.getElementById('rTrim').innerHTML='<span class="aviso">no soportado</span>';}
+  let idxFuturo=routeProgIdx;
+  for(let i=routeProgIdx;i<routeCoordsLL.length;i++){
+    if((routeCumDist[i]||0) >= recorrido){ idxFuturo=i; break; }
+  }
+  if(idxFuturo>=routeCoordsLL.length-1){
+    map.getSource('ruta').setData({type:'FeatureCollection',features:[]});
+    document.getElementById('rTrim').textContent='100%';
+    return;
+  }
+  const coordsFuturas=routeCoordsLL.slice(idxFuturo).map(c=>[c[1],c[0]]);
+  const nivelesFuturos=routeNivelesPorPunto.slice(idxFuturo);
+  const segmentos=[];
+  let inicioSeg=0;
+  for(let i=1;i<coordsFuturas.length;i++){
+    const nivelActual=traficoOn?(nivelesFuturos[i]||0):0;
+    const nivelInicio=traficoOn?(nivelesFuturos[inicioSeg]||0):0;
+    if(nivelActual!==nivelInicio){
+      segmentos.push({nivel:nivelInicio,coords:coordsFuturas.slice(inicioSeg,i+1)});
+      inicioSeg=i;
+    }
+  }
+  segmentos.push({nivel:traficoOn?(nivelesFuturos[inicioSeg]||0):0,coords:coordsFuturas.slice(inicioSeg)});
+  const features=segmentos.filter(s=>s.coords.length>=2).map(s=>({type:'Feature',geometry:{type:'LineString',coordinates:s.coords},properties:{nivel:s.nivel}}));
+  map.getSource('ruta').setData({type:'FeatureCollection',features:features});
+  document.getElementById('rTrim').textContent=Math.round(fraccion*100)+'%';
 }
 function actualizarChevronGiro(){
   const src=map.getSource('giro-pos');
@@ -992,6 +1046,10 @@ function onFix(pos){
     const d=renderStep();
     actualizarTrimRuta();
     const s=steps[stepIdx];
+    // Disparar celebracion si llegamos al destino
+    if(s && s.maneuver && s.maneuver.type==='arrive' && d<50){
+      dispararCelebracion();
+    }
     if(s&&seguirOn){
       const cerca=d<180&&s.maneuver&&s.maneuver.type!=='arrive';
       if(cerca!==zoomManiobraOn){
@@ -1155,6 +1213,7 @@ function detenerRuta(){
   document.getElementById('rTrim').textContent='-';
   camZoomObjetivo=navZoomBase;
   actualizarHUD();
+  celebracionDisparada=false;
 }
 document.getElementById('btnPararRuta').onclick=detenerRuta;
 let contadorRenders=0;
@@ -1252,6 +1311,162 @@ function ttMan(it){
   else if(m.includes('RIGHT')) mod='right';
   else if(m.includes('UTURN')||m.includes('U_TURN')) mod='uturn';
   return {type:'turn',modifier:mod};
+}
+
+// ==== CELEBRACION AL LLEGAR ====
+function dispararCelebracion(){
+  if(!celebracionOn) return;
+  if(celebracionDisparada) return;
+  celebracionDisparada=true;
+  const cont=document.getElementById('celebracion');
+  cont.classList.add('on');
+  cont.innerHTML='';
+  const texto=document.createElement('div');
+  texto.className='textoCentral';
+  texto.innerHTML='<span class="iLatina">I</span>AN';
+  cont.appendChild(texto);
+  const mensajes=[
+    '¡Destino conseguido!',
+    '¡Lo lograste!',
+    '¡Bien hecho IAN!',
+    '¡Llegaste!',
+    '¡Enhorabuena!',
+    '¡Meta alcanzada!'
+  ];
+  const sub=document.createElement('div');
+  sub.className='subtitulo';
+  sub.textContent=mensajes[Math.floor(Math.random()*mensajes.length)];
+  cont.appendChild(sub);
+  const estilo=1+Math.floor(Math.random()*5);
+  lanzarParticulas(cont,estilo);
+  setTimeout(()=>{
+    cont.classList.remove('on');
+    cont.innerHTML='';
+    celebracionDisparada=false;
+  },4000);
+}
+
+function lanzarParticulas(cont,estilo){
+  const colores=['#ff5252','#ffd166','#06d6a0','#118ab2','#ef476f','#f78c6b','#9b5de5','#00bbf9'];
+  if(estilo===1){
+    // Confetis clasicos cayendo
+    if(!document.getElementById('cssConfeti')){
+      const s=document.createElement('style');
+      s.id='cssConfeti';
+      s.textContent='@keyframes caeConfeti{0%{transform:translateY(0) rotate(0)}100%{transform:translateY(110vh) rotate(720deg);opacity:0}}';
+      document.head.appendChild(s);
+    }
+    for(let i=0;i<120;i++){
+      const c=document.createElement('div');
+      c.className='confeti';
+      c.style.left=Math.random()*100+'%';
+      c.style.top='-20px';
+      c.style.background=colores[Math.floor(Math.random()*colores.length)];
+      c.style.width=(6+Math.random()*8)+'px';
+      c.style.height=(10+Math.random()*10)+'px';
+      c.style.animation='caeConfeti '+(2.5+Math.random()*1.5)+'s linear forwards';
+      c.style.animationDelay=(Math.random()*0.5)+'s';
+      cont.appendChild(c);
+    }
+  }else if(estilo===2){
+    // Fuegos artificiales
+    if(!document.getElementById('cssFuegos')){
+      const s=document.createElement('style');
+      s.id='cssFuegos';
+      s.textContent='@keyframes explota{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--dx),var(--dy)) scale(0.3);opacity:0}}';
+      document.head.appendChild(s);
+    }
+    for(let centro=0;centro<5;centro++){
+      const cx=15+Math.random()*70, cy=15+Math.random()*40;
+      const t0=centro*300;
+      setTimeout(()=>{
+        for(let i=0;i<30;i++){
+          const c=document.createElement('div');
+          c.className='confeti';
+          const ang=Math.random()*Math.PI*2;
+          const dist=80+Math.random()*120;
+          c.style.left=cx+'%';
+          c.style.top=cy+'%';
+          c.style.background=colores[Math.floor(Math.random()*colores.length)];
+          c.style.borderRadius='50%';
+          c.style.width=c.style.height=(4+Math.random()*5)+'px';
+          c.style.setProperty('--dx',Math.cos(ang)*dist+'px');
+          c.style.setProperty('--dy',Math.sin(ang)*dist+'px');
+          c.style.animation='explota '+(1+Math.random()*0.8)+'s ease-out forwards';
+          cont.appendChild(c);
+        }
+      },t0);
+    }
+  }else if(estilo===3){
+    // Estrellas girando
+    if(!document.getElementById('cssEstrellas')){
+      const s=document.createElement('style');
+      s.id='cssEstrellas';
+      s.textContent='@keyframes estrellaCae{0%{transform:translateY(0) rotate(0) scale(1);opacity:1}100%{transform:translateY(110vh) rotate(1080deg) scale(0.4);opacity:0}}';
+      document.head.appendChild(s);
+    }
+    for(let i=0;i<80;i++){
+      const c=document.createElement('div');
+      c.className='confeti';
+      c.style.left=Math.random()*100+'%';
+      c.style.top='-20px';
+      c.style.background='transparent';
+      c.style.width='20px';
+      c.style.height='20px';
+      c.style.fontSize='20px';
+      c.textContent='⭐';
+      c.style.animation='estrellaCae '+(2.5+Math.random()*1.5)+'s linear forwards';
+      c.style.animationDelay=(Math.random()*0.5)+'s';
+      cont.appendChild(c);
+    }
+  }else if(estilo===4){
+    // Cohetes
+    if(!document.getElementById('cssCohetes')){
+      const s=document.createElement('style');
+      s.id='cssCohetes';
+      s.textContent='@keyframes subeCohete{0%{transform:translateY(0);opacity:1}100%{transform:translateY(-110vh);opacity:0.2}}';
+      document.head.appendChild(s);
+    }
+    for(let i=0;i<15;i++){
+      const c=document.createElement('div');
+      c.className='confeti';
+      c.style.left=(5+Math.random()*90)+'%';
+      c.style.bottom='-30px';
+      c.style.top='auto';
+      c.style.background='transparent';
+      c.style.width='30px';
+      c.style.height='30px';
+      c.style.fontSize='28px';
+      c.textContent='🚀';
+      c.style.animation='subeCohete '+(1.5+Math.random()*1)+'s ease-out forwards';
+      c.style.animationDelay=(Math.random()*1)+'s';
+      cont.appendChild(c);
+    }
+  }else{
+    // Globos subiendo
+    if(!document.getElementById('cssGlobos')){
+      const s=document.createElement('style');
+      s.id='cssGlobos';
+      s.textContent='@keyframes subeGlobo{0%{transform:translateY(0) translateX(0);opacity:1}100%{transform:translateY(-110vh) translateX(var(--dx));opacity:0}}';
+      document.head.appendChild(s);
+    }
+    for(let i=0;i<25;i++){
+      const c=document.createElement('div');
+      c.className='confeti';
+      c.style.left=Math.random()*100+'%';
+      c.style.bottom='-40px';
+      c.style.top='auto';
+      c.style.background='transparent';
+      c.style.width='30px';
+      c.style.height='30px';
+      c.style.fontSize='28px';
+      c.textContent='🎈';
+      c.style.setProperty('--dx',((Math.random()-0.5)*60)+'px');
+      c.style.animation='subeGlobo '+(2+Math.random()*1.5)+'s ease-out forwards';
+      c.style.animationDelay=(Math.random()*0.7)+'s';
+      cont.appendChild(c);
+    }
+  }
 }
 </script>
 </body>
