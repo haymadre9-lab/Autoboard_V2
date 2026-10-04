@@ -621,7 +621,7 @@ function actualizarZoomManiobra(distSiguiente, tipoSiguiente){
   try{ map.setZoom(z, { animate:true }); }catch(e){}
 }
 
-const VERSION = '2026.10.03-h3d2';
+const VERSION = '2026.10.03-h3d3';
 // X dibujada: el caracter U+2715 no esta en la fuente del navegador y salia como un rectangulo
 const X_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>';
 try{ $('ver').textContent = 'v'+VERSION; }catch(e){}
@@ -1207,13 +1207,13 @@ function marcarPestana(cual){ ['tabMapa','tabHud','tabFaro'].forEach(id => $(id)
    vuelve solo al HUD 2 de siempre (hud3dFallo=true hasta recargar). Mapa y navegacion no cambian. */
 const HUD3D_BASE = RAIZ + 'hud3d/';
 function h3dPreferido(){ try{ return localStorage.getItem('hud3dOn') !== '0'; }catch(e){ return true; } }
-function noche3D(){ const t = hudCfg.theme; if (t === 'night') return true; if (t === 'auto'){ const h = new Date().getHours(); return h >= 21 || h < 7; } return false; }
+function noche3D(){ const t = h3dCfg.theme; if (t === 'night') return true; if (t === 'auto'){ const h = new Date().getHours(); return h >= 21 || h < 7; } return false; }
 function cargarScript3D(u){ return new Promise((ok, ko) => { const sc = document.createElement('script'); sc.src = u; sc.onload = ok; sc.onerror = () => ko(new Error('no se pudo cargar ' + u)); document.head.appendChild(sc); }); }
 function alimentarHud3D(){
   if (!hud3dActivo || !window.HUD3D) return;
   let hw = false; try{ const st = routeOn ? steps[stepIdx] : null; hw = !!(st && (st.hw || isHighway(st))); }catch(e){}
   // road: no se manda; el modulo decide solo (autovia de la ruta, o >=100 km/h sostenidos). brake: tampoco, lo deduce de la deceleracion y de estar parado.
-  try{ HUD3D.update({ speed: speedKmh, head: heading, t: performance.now()/1000, hw: (routeOn && hw) ? true : undefined, rain: !!hudCfg.rain, night: noche3D() }); }catch(e){}
+  try{ HUD3D.update({ speed: speedKmh, head: heading, t: performance.now()/1000, hw: (routeOn && hw) ? true : undefined, rain: !!h3dCfg.rain, night: noche3D() }); }catch(e){}
 }
 async function intentar3D(){
   if (hud3dFallo || !h3dPreferido()) return false;
@@ -1221,7 +1221,7 @@ async function intentar3D(){
     if (!window.HUD3D) await cargarScript3D(HUD3D_BASE + 'hud3d.js?v=' + VERSION);   // la version en la URL evita que el navegador sirva un hud3d.js viejo
     await HUD3D.init({ base: HUD3D_BASE, host: $('hud2wrap'), z: 1,
       onSlow: fps => { hud3dFallo = true; console.warn('[hud3d] FPS bajos:', fps); setStatus('HUD 3D lento (' + fps + ' fps): vuelvo al HUD 2'); if (hudAbierto){ cerrarHud(); abrirHud(); } } });
-    try{ HUD3D.setBodyColor(hudCfg.carColor); }catch(e){}
+    aplicarCfg3D();
     $('hud2canvas').style.visibility = 'hidden';
     hud3dActivo = true;      // se muestra en abrirHud(), cuando #hud2wrap ya es visible (si no, mide 0x0 y no dibuja nada)
     return true;
@@ -1435,6 +1435,31 @@ function cargarHudCfg(){
   catch(e){ return Object.assign({}, HUD_DEF); }
 }
 let hudCfg = cargarHudCfg();   // la configuracion del HUD se guarda de una sesion a otra -- tamano, coche, todo
+/* ==== Ajustes del HUD 3D ======================================================
+   Sustituyen a los del HUD 2 (que queda solo como respaldo si el 3D no puede arrancar).
+   Se guardan aparte ('hud3dCfg') y se aplican al modulo con HUD3D.configure(). */
+const H3D_DEF = { theme:'auto', carColor: hudCfg.carColor || '#8f979e', road:'auto', env:'auto', dens:2, lane:'right',
+  quality:0, vista:1, carScale:1, curva:2, interior:true, signs:true, rain:false, spray:true };
+const H3D_NUM = ['dens','quality','curva','vista','carScale'];
+function cargarH3dCfg(){
+  try{ const g = JSON.parse(localStorage.getItem('hud3dCfg')||'null'); return g ? Object.assign({}, H3D_DEF, g) : Object.assign({}, H3D_DEF); }
+  catch(e){ return Object.assign({}, H3D_DEF); }
+}
+let h3dCfg = cargarH3dCfg();
+function aplicarCfg3D(){
+  if (!window.HUD3D) return;
+  try{
+    HUD3D.setBodyColor(h3dCfg.carColor);
+    HUD3D.configure({ road:h3dCfg.road, env:h3dCfg.env, dens:h3dCfg.dens, lane:h3dCfg.lane, quality:h3dCfg.quality, vista:h3dCfg.vista,
+      carScale:h3dCfg.carScale, curva:h3dCfg.curva, interior:h3dCfg.interior, signs:h3dCfg.signs, spray:h3dCfg.spray });
+  }catch(e){ console.warn('[hud3d] ajustes:', e.message); }
+}
+function h3dSet(k, v){
+  h3dCfg[k] = v;
+  try{ localStorage.setItem('hud3dCfg', JSON.stringify(h3dCfg)); }catch(e){}
+  if (!hud3dActivo || !window.HUD3D) return;     // si el HUD no esta abierto, se aplican al abrirlo
+  try{ if (k === 'carColor') HUD3D.setBodyColor(v); else if (k !== 'theme' && k !== 'rain') HUD3D.configure({[k]: v}); alimentarHud3D(); }catch(e){}
+}
 /* Foto del coche, como en AutoBoard. Lo unico que se recuerda de un dia para otro es la URL
    de la foto del repositorio (una cadena corta): repetir la eleccion cada vez seria un
    fastidio, y es una preferencia de identidad mas que un ajuste. Una foto cargada desde el
@@ -1531,65 +1556,60 @@ function hudSet(k, v){
   if (hud2){ try{ hud2.set({[k]: v}); }catch(e){ if (hud2.onError) hud2.onError(e); } }
   if (hud3dActivo){ try{ if (k === 'carColor') HUD3D.setBodyColor(v); alimentarHud3D(); }catch(e){} }
 }
+const H3D_COLORES = HUD_COLORES.concat([['#c9a227','Amarillo'],['#c2571a','Naranja'],['#4b3a7a','Morado']]);
 function pintarAjustesHud(){
-  const seg = (k, ops) => '<div class="seg" data-k="'+k+'">' + ops.map(o => '<button data-v="'+o[0]+'"'+(String(hudCfg[k])===String(o[0])?' class="on"':'')+'>'+o[1]+'</button>').join('') + '</div>';
-  const rng = (k, tx, mn, mx, st, u) => '<label class="hs-r"><span>'+tx+'</span><em id="hv_'+k+'">'+hudCfg[k]+(u||'')+'</em><input type="range" data-k="'+k+'" data-u="'+(u||'')+'" min="'+mn+'" max="'+mx+'" step="'+st+'" value="'+hudCfg[k]+'"></label>';
-  const chk = (k, tx) => '<label class="hs-c"><input type="checkbox" data-k="'+k+'"'+(hudCfg[k]?' checked':'')+'> '+tx+'</label>';
+  const seg = (k, ops) => '<div class="seg" data-h3d="'+k+'">' + ops.map(o => '<button data-v="'+o[0]+'"'+(String(h3dCfg[k])===String(o[0])?' class="on"':'')+'>'+o[1]+'</button>').join('') + '</div>';
+  const rng = (k, tx, mn, mx, st) => '<label class="hs-r"><span>'+tx+'</span><em id="hv3_'+k+'">'+h3dCfg[k]+'</em><input type="range" data-h3d="'+k+'" min="'+mn+'" max="'+mx+'" step="'+st+'" value="'+h3dCfg[k]+'"></label>';
+  const chk = (k, tx) => '<label class="hs-c"><input type="checkbox" data-h3d="'+k+'"'+(h3dCfg[k]?' checked':'')+'> '+tx+'</label>';
+  const nota = t => '<div class="hs-nota">'+t+'</div>';
+  const claro = c => ['#eef1f4','#c3c9ce','#8f979e','#c9a227'].indexOf(c) >= 0;
   $('hudsetBody').innerHTML =
-      '<h4>Tema</h4>' + seg('theme', [['auto','Auto'],['day','Día'],['dusk','Tarde'],['night','Noche']])
-    + '<h4>Rendimiento</h4>'
-    + seg('escala', [[0.5,'Resolución 50 %'],[0.6,'60 %'],[0.8,'80 %'],[1,'100 %']])
-    + '<div style="height:6px"></div>' + seg('maxFps', [[0,'FPS libres'],[30,'30'],[45,'45'],[60,'60']])
-    + '<div style="height:6px"></div>' + seg('perfil', [['auto','Perfil auto'],['ligero','Ligero'],['completo','Completo']])
-    + '<h4>Trazado</h4>' + seg('estilo', [['suave','Suave'],['real','Real']])
-    + rng('radioMin', 'Radio mínimo de curva', 60, 400, 10, ' m')
+      '<h4>Color del coche</h4><div class="sws">'
+    + H3D_COLORES.map(c => '<button class="sw'+(h3dCfg.carColor===c[0]?' on':'')+'" data-v="'+c[0]+'" style="background:'+c[0]+';color:'+(claro(c[0])?'#111':'#fff')+'">'+c[1]+'</button>').join('')
+    + '</div><label class="hs-r"><span>Otro color</span><input type="color" id="h3dColor" value="'+escAttr(/^#[0-9a-f]{6}$/i.test(h3dCfg.carColor)?h3dCfg.carColor:'#8f979e')+'" style="width:64px;height:38px;border:0;background:none"></label>'
+    + '<h4>Carretera</h4>' + seg('road', [['auto','Auto'],['road','2 carriles'],['motorway','Autopista 2+2']])
+    + nota('Auto: autopista si la ruta pasa por una autovía o si vas a 100 km/h o más; vuelve a la carretera de 2 carriles al bajar de 85 km/h.')
+    + '<h4>Carril del coche</h4>' + seg('lane', [['right','Derecha'],['left','Izquierda']])
+    + nota('En la carretera de 2 carriles el coche va siempre por el carril derecho. El carril izquierdo solo existe en autopista.')
+    + '<h4>Entorno</h4>' + seg('env', [['auto','Auto'],['buildings','Edificios'],['trees','Árboles'],['none','Nada']])
+    + '<div style="height:6px"></div>' + seg('dens', [[1,'Muy pocos'],[2,'Pocos'],[3,'Más']])
+    + nota('Auto: edificios en la carretera de 2 carriles y árboles en la autopista.')
+    + '<h4>Tema</h4>' + seg('theme', [['auto','Auto'],['day','Día'],['night','Noche']])
     + '<h4>Vista</h4>'
-    + rng('vista', 'Distancia de cámara', 1, 1.6, 0.1, '')
-    + rng('carScale', 'Tamaño del coche', 0.6, 1.6, 0.1, '')
-    + rng('hudScale', 'Tamaño de los textos', 0.7, 1.5, 0.1, '')
-    + '<h4>Tráfico en la escena</h4>' + seg('traffic', [['off','Sin'],['poca','Poco'],['normal','Normal'],['mucha','Mucho']])
-    + '<h4>Foto del coche</h4>'
-    + '<div class="foto-fila"><input type="text" id="hfUrl" value="'+escAttr(hudFotoUrl)+'" placeholder="'+RAIZ+'coche.png">'
-    + '<button id="hfMiCoche">Mi coche</button><button id="hfSin">Dibujado</button></div>'
-    + '<input type="file" id="hfFile" accept="image/*" style="display:none">'
-    + '<button class="reset" id="hfCargar" style="margin-top:8px">'+(hudFotoSesion ? 'Cambiar foto' : 'Cargar foto de tu coche')+'</button>'
-    + '<div class="hs-nota" id="hfEstado">'+escAttr(hudFotoEstado || (hudFotoUrl ? 'Foto en uso: '+hudFotoUrl : 'Sin foto · se usa el coche dibujado'))+'</div>'
-    + (hudFotoOrig ? '<label class="hs-r"><span>Tolerancia del recorte</span><em id="hfTolV">28</em><input type="range" id="hfTol" min="6" max="90" value="28"></label>'
-                   + '<button class="reset" id="hfCortar" style="margin-top:0">Quitar fondo</button>' : '')
-    + '<h4>Color del coche (si no hay foto)</h4><div class="sws">'
-    + HUD_COLORES.map(c => '<button class="sw'+(hudCfg.carColor===c[0]?' on':'')+'" data-v="'+c[0]+'" style="background:'+c[0]+';color:'+(['#eef1f4','#c3c9ce','#8f979e'].indexOf(c[0])>=0?'#111':'#fff')+'">'+c[1]+'</button>').join('')
-    + '</div>'
+    + rng('vista', 'Distancia de cámara', 0.8, 1.5, 0.1)
+    + rng('carScale', 'Tamaño del coche', 0.8, 1.3, 0.1)
+    + seg('curva', [[1,'Curva suave'],[2,'Normal'],[3,'Marcada']])
+    + nota('Cuánto gira el coche y se curva la carretera cuando gira el mapa. Es solo sensación: no sigue la geometría exacta.')
+    + '<h4>Rendimiento</h4>' + seg('quality', [[0,'Alta'],[1,'Media'],[2,'Baja']])
+    + nota('Baja quita edificios, árboles y manchas de luz. Si el HUD cae por debajo de 18 FPS vuelve solo al HUD 2.')
     + '<h4>Elementos</h4>'
-    + '<label class="hs-c"><input type="checkbox" id="h3dChk"'+(h3dPreferido()?' checked':'')+'> HUD 3D (coche en 3D que sigue el rumbo; si va lento vuelve solo al HUD 2)</label>'
-    + chk('hud','Panel propio del motor: maniobra, velocidad y límite (repite los de la app)') + chk('carteles','Carteles de dirección')
-    + chk('ambiente','Bruma, viñeteado y captafaros') + chk('detalleCoche','Detalles del coche')
-    + chk('rain','Lluvia') + chk('spray','Agua de las ruedas')
-    + chk('rotondaInvertida','Invertir lado de las rotondas') + chk('frenarCamara','Sujetar cámara en curva cerrada')
+    + chk('signs', 'Señales de la vía (cartel de autopista, curvas)') + chk('interior', 'Interior del coche (más detalle, más carga)')
+    + chk('rain', 'Lluvia') + chk('spray', 'Agua de las ruedas')
+    + '<h4>HUD</h4><label class="hs-c"><input type="checkbox" id="h3dChk"'+(h3dPreferido()?' checked':'')+'> Usar el HUD 3D (si lo desmarcas se usa el HUD 2 de respaldo)</label>'
     + '<button class="reset" id="hudReset">Restablecer valores</button>';
 }
 $('hudsetBody').addEventListener('click', e => {
-  if (e.target.id === 'hudReset'){ hudCfg = Object.assign({}, HUD_DEF); try{ localStorage.removeItem('hudCfgLT'); }catch(e){} if (hud2){ try{ hud2.set(HUD_DEF); }catch(er){ if (hud2.onError) hud2.onError(er); } } pintarAjustesHud(); return; }
-  if (e.target.id === 'hfMiCoche'){ ponerFotoUrl(RAIZ + 'coche.png'); return; }      // el coche.png del repositorio (../ porque esta pagina vive en leaflet-test/)
-  if (e.target.id === 'hfSin'){ ponerFotoUrl(''); return; }
-  if (e.target.id === 'hfCargar'){ $('hfFile').click(); return; }
-  if (e.target.id === 'hfCortar'){ recortarFondo(+$('hfTol').value); return; }
+  if (e.target.id === 'hudReset'){
+    h3dCfg = Object.assign({}, H3D_DEF); try{ localStorage.removeItem('hud3dCfg'); }catch(er){}
+    if (hud3dActivo) aplicarCfg3D(); pintarAjustesHud(); return;
+  }
   const sw = e.target.closest ? e.target.closest('.sw') : null;
-  if (sw){ hudSet('carColor', sw.dataset.v); $('hudsetBody').querySelectorAll('.sw').forEach(x => x.classList.toggle('on', x === sw)); return; }
+  if (sw){ h3dSet('carColor', sw.dataset.v); $('hudsetBody').querySelectorAll('.sw').forEach(x => x.classList.toggle('on', x === sw)); const ci = $('h3dColor'); if (ci && /^#[0-9a-f]{6}$/i.test(sw.dataset.v)) ci.value = sw.dataset.v; return; }
   const b = e.target.closest ? e.target.closest('.seg button') : null; if (!b) return;
-  const g = b.parentNode, k = g.dataset.k; hudSet(k, HUD_NUM.indexOf(k) >= 0 ? +b.dataset.v : b.dataset.v);
+  const g = b.parentNode, k = g.dataset.h3d; if (!k) return;
+  h3dSet(k, H3D_NUM.indexOf(k) >= 0 ? +b.dataset.v : b.dataset.v);
   g.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
 });
 $('hudsetBody').addEventListener('input', e => {
-  const r = e.target; if (r.type !== 'range') return;
-  if (r.id === 'hfTol'){ $('hfTolV').textContent = r.value; return; }   // el deslizador de tolerancia no es un ajuste del motor
-  hudSet(r.dataset.k, +r.value); $('hv_'+r.dataset.k).textContent = r.value + (r.dataset.u||'');
+  const r = e.target;
+  if (r.id === 'h3dColor'){ h3dSet('carColor', r.value); $('hudsetBody').querySelectorAll('.sw').forEach(x => x.classList.remove('on')); return; }
+  if (r.type !== 'range' || !r.dataset.h3d) return;
+  h3dSet(r.dataset.h3d, +r.value); const hv = $('hv3_'+r.dataset.h3d); if (hv) hv.textContent = r.value;
 });
 $('hudsetBody').addEventListener('change', e => {
   const c = e.target;
   if (c.id === 'h3dChk'){ try{ localStorage.setItem('hud3dOn', c.checked ? '1' : '0'); }catch(er){} if (c.checked) hud3dFallo = false; setStatus(c.checked ? 'HUD 3D activado: se usa la proxima vez que abras el HUD' : 'HUD 3D desactivado: se usa el HUD 2'); return; }
-  if (c.id === 'hfUrl'){ ponerFotoUrl(c.value); return; }
-  if (c.id === 'hfFile'){ if (c.files && c.files[0]) cargarFotoArchivo(c.files[0]); return; }
-  if (c.type === 'checkbox') hudSet(c.dataset.k, c.checked);
+  if (c.type === 'checkbox' && c.dataset.h3d) h3dSet(c.dataset.h3d, c.checked);
 });
 $('tabAjHud').onclick = () => { pintarAjustesHud(); $('hudset').classList.add('open'); };
 $('closeHudset').onclick = () => $('hudset').classList.remove('open');
