@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>autoboard-next · Fase 8 · tráfico en vivo</title>
+<title>autoboard-next · Fase 9 · radares y UI</title>
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
 <style>
 html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
@@ -61,21 +61,22 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #panelAjustes button.ajuste.on{background:#1d3a2c;border-color:#2e6b4a;color:#9ae6b4}
 #panelAjustes button.ajuste.peligro{background:#2a1a1a;border-color:#5a2020;color:#ff8a8a}
 #panelAjustes .seccion{margin-top:16px;margin-bottom:6px;color:#8d99a5;font-size:12px;text-transform:uppercase;letter-spacing:1px}
-#minihud{position:fixed;left:14px;bottom:80px;z-index:15;display:none;background:rgba(10,13,16,.85);border:1px solid #232c33;border-radius:14px;padding:12px 16px;color:#fff;font:800 44px/1 system-ui,sans-serif;align-items:center;gap:14px;min-width:88px;justify-content:center}
+#minihud{position:fixed;left:14px;bottom:80px;z-index:15;display:none;background:rgba(10,13,16,.85);border:1px solid #232c33;border-radius:14px;padding:14px 18px;color:#fff;font:800 52px/1 system-ui,sans-serif;align-items:center;gap:16px;min-width:100px;justify-content:center}
 #minihud.on{display:flex}
 body.modo-navegacion #minihud{display:flex}
 #minihud .vel{color:#fff;font-weight:900;letter-spacing:-1px}
-#minihud .limite{width:56px;height:56px;border-radius:50%;background:#ffffff;border:6px solid #d32f2f;display:flex;align-items:center;justify-content:center;font:800 22px/1 system-ui,sans-serif;color:#000;box-shadow:0 2px 6px rgba(0,0,0,.4)}
+#minihud .limite{width:72px;height:72px;border-radius:50%;background:#ffffff;border:7px solid #d32f2f;display:flex;align-items:center;justify-content:center;font:800 28px/1 system-ui,sans-serif;color:#000;box-shadow:0 2px 6px rgba(0,0,0,.4)}
 #minihud .limite.oculto{display:none}
 .coche-marcador{width:48px!important;height:48px!important;will-change:transform}
 .coche-marcador svg{width:48px;height:48px;display:block;filter:drop-shadow(0 0 6px rgba(41,182,246,.75))}
 #radarAlerta{position:fixed;inset:0;z-index:18;pointer-events:none;display:none;box-shadow:inset 0 0 80px 20px rgba(255,0,0,.55), inset 0 0 200px 60px rgba(255,0,0,.25);animation:radarPulse 1s ease-in-out infinite}
 #radarAlerta.on{display:block}
 @keyframes radarPulse{0%{opacity:.35}50%{opacity:1}100%{opacity:.35}}
-#radarInfo{position:fixed;left:50%;transform:translateX(-50%);top:100px;z-index:19;display:none;background:rgba(120,10,10,.92);border:2px solid #ff5252;border-radius:12px;padding:8px 16px;color:#fff;font:700 14px/1.2 system-ui,sans-serif;text-align:center;box-shadow:0 2px 12px rgba(255,0,0,.5)}
-#radarInfo.on{display:block}
-#radarInfo .dist{font-size:22px;font-weight:900}
-#radarInfo .lim{font-size:13px;color:#ffcdd2;margin-top:2px}
+#radarInfo{position:fixed;left:50%;transform:translateX(-50%);bottom:110px;z-index:19;display:none;flex-direction:column;align-items:center;gap:8px;text-align:center}
+#radarInfo.on{display:flex}
+#radarInfo .senalRadar{width:90px;height:90px;border-radius:50%;background:#ffffff;border:8px solid #d32f2f;display:flex;align-items:center;justify-content:center;font:800 42px/1 system-ui,sans-serif;color:#000;box-shadow:0 4px 20px rgba(255,0,0,.7);animation:radarPulse 1s ease-in-out infinite}
+#radarInfo .dist{font:800 18px/1.2 system-ui,sans-serif;color:#fff;background:rgba(120,10,10,.92);border-radius:8px;padding:6px 14px;border:2px solid #ff5252}
+#radarInfo .lim{display:none}
 #popupCargador{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;z-index:30;display:none;background:rgba(15,20,26,.96);border:2px solid #2e6b4a;border-radius:16px;padding:16px 20px;color:#e8eef2;font:14px/1.5 system-ui,sans-serif;max-width:520px;width:92vw;box-shadow:0 4px 20px rgba(0,0,0,.6)}
 #popupCargador.on{display:block}
 #popupCargador h3{margin:0 0 8px;color:#9ae6b4;font-size:18px}
@@ -93,7 +94,11 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
 <body class="modo-debug">
 <div id="map"></div>
 <div id="radarAlerta"></div>
-<div id="radarInfo"><div class="dist" id="radarDist">-</div><div class="lim" id="radarLim">-</div></div>
+<div id="radarInfo">
+  <div class="senalRadar" id="senalRadar">-</div>
+  <div class="dist" id="radarDist">-</div>
+  <div class="lim" id="radarLim">-</div>
+</div>
 <div id="popupCargador"></div>
 
 <div id="panelAjustes">
@@ -279,6 +284,8 @@ function actualizarBotonCasa(){
 }
 
 map.on('load',()=>{
+  // Reserva 80px abajo para que la flecha quede mas baja y se vea mas calle por delante
+  map.setPadding({top:0,bottom:80,left:0,right:0});
   document.getElementById('rArranque').innerHTML='<b>OK</b>';
   document.getElementById('rWebgl').innerHTML=webglOk?'<b>OK</b>':'<span class="mal">FALLO</span>';
   try{
@@ -404,14 +411,14 @@ function comprobarRadaresCercanos(lat,lon,velocidadActualKmh){
   if(!masCercano||distMin>RADAR_DIST_APAGADO){apagarAlertaRadar();g9.textContent='-';return;}
   const limRadar=Number(masCercano.max)||50;
   g9.textContent=Math.round(distMin)+' m · '+limRadar+' km/h';
-  if(distMin<RADAR_DIST_AVISO && velocidadActualKmh>limRadar) activarAlertaRadar(distMin,limRadar);
+  if(distMin<RADAR_DIST_AVISO) activarAlertaRadar(distMin,limRadar);
   else apagarAlertaRadar();
 }
 function activarAlertaRadar(distancia,limite){
   document.getElementById('radarAlerta').classList.add('on');
   document.getElementById('radarInfo').classList.add('on');
+  document.getElementById('senalRadar').textContent=limite;
   document.getElementById('radarDist').textContent=Math.round(distancia)+' m';
-  document.getElementById('radarLim').textContent='Límite del radar: '+limite+' km/h';
   alertaRadarActiva=true;
 }
 function apagarAlertaRadar(){
@@ -938,7 +945,6 @@ function onFix(pos){
   const now={lat:c.latitude,lon:c.longitude,t:pos.timestamp||Date.now()};
   const v=Number.isFinite(c.speed)?Math.max(0,c.speed):0;
   speedKmh=v*3.6;
-  // FIX: si vamos en marcha con Seguir activo, desbloquear la camara por si un toque fantasma la bloqueo
   if(seguirOn && speedKmh>=3) seguirBloqueado=false;
   const parado=speedKmh<3;
   if(parado!==camaraLibre){
@@ -1026,9 +1032,31 @@ function bucleSeguimiento(){
   requestAnimationFrame(bucleSeguimiento);
 }
 requestAnimationFrame(bucleSeguimiento);
-map.on('dragstart',()=>{if(seguirOn){seguirBloqueado=true;mostrarBotonCentrar(true);}});
-map.on('rotatestart',()=>{if(seguirOn){seguirBloqueado=true;mostrarBotonCentrar(true);}});
-map.on('pitchstart',()=>{if(seguirOn){seguirBloqueado=true;mostrarBotonCentrar(true);}});
+
+// Temporizador para volver a seguir tras soltar el mapa
+let timerVolverSeguir=null;
+function bloquearTemporalmente(){
+  if(!seguirOn) return;
+  seguirBloqueado=true;
+  mostrarBotonCentrar(true);
+  if(timerVolverSeguir) clearTimeout(timerVolverSeguir);
+}
+function programarVolverSeguir(){
+  if(timerVolverSeguir) clearTimeout(timerVolverSeguir);
+  timerVolverSeguir=setTimeout(()=>{
+    if(seguirOn && gpsOn){
+      seguirBloqueado=false;
+      if(lastFix) centrarEnMi();
+    }
+  },3000);
+}
+map.on('dragstart',bloquearTemporalmente);
+map.on('rotatestart',bloquearTemporalmente);
+map.on('pitchstart',bloquearTemporalmente);
+map.on('dragend',programarVolverSeguir);
+map.on('rotateend',programarVolverSeguir);
+map.on('pitchend',programarVolverSeguir);
+
 function mostrarBotonCentrar(on){
   const btn=document.getElementById('btnCentrar');
   if(on) btn.classList.add('on'); else btn.classList.remove('on');
