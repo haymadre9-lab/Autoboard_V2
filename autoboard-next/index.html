@@ -191,8 +191,6 @@ const map=new maplibregl.Map({
   style:'https://api.maptiler.com/maps/streets-v2/style.json?key='+MAPTILER_KEY,
   center:[-2.9387,43.2678],zoom:17.2,pitch:60,bearing:0,antialias:antialiasActivo
 });
-// Padding inferior para que la flecha quede mas abajo y se vea mas ruta por delante
-map.setPadding({top:0,bottom:180,left:0,right:0});
 document.getElementById('btnAA').textContent=antialiasActivo?'🪄 Antialias: ON (recargar)':'🪄 Antialias: OFF (recargar)';
 let webglOk=true;
 map.on('error',e=>{
@@ -317,12 +315,15 @@ map.on('load',()=>{
   map.addLayer({id:'giro-pos',type:'symbol',source:'giro-pos',
     layout:{'icon-image':'chevron-giro','icon-size':0.85,'icon-rotate':['get','bearing'],'icon-rotation-alignment':'map','icon-allow-overlap':true,'icon-ignore-placement':true,'icon-pitch-alignment':'map'}});
   map.addSource('ruta',{type:'geojson',data:{type:'FeatureCollection',features:[]},lineMetrics:true});
-  const paintBase={'line-opacity':0.95,'line-width':['interpolate',['linear'],['zoom'],14,10,16,16,18,22,20,28]};
+  const paintBase={'line-opacity':0.85,'line-width':['interpolate',['linear'],['zoom'],14,8,16,14,18,20,20,26]};
   const layoutBase={'line-cap':'round','line-join':'round','line-round-limit':1.0};
   map.addLayer({id:'ruta-0',type:'line',source:'ruta',filter:['==',['get','nivel'],0],paint:{...paintBase,'line-color':'#1e88e5'},layout:layoutBase});
   map.addLayer({id:'ruta-1',type:'line',source:'ruta',filter:['==',['get','nivel'],1],paint:{...paintBase,'line-color':'#f9a825'},layout:layoutBase});
   map.addLayer({id:'ruta-2',type:'line',source:'ruta',filter:['==',['get','nivel'],2],paint:{...paintBase,'line-color':'#ff6f00'},layout:layoutBase});
   map.addLayer({id:'ruta-3',type:'line',source:'ruta',filter:['==',['get','nivel'],3],paint:{...paintBase,'line-color':'#d32f2f'},layout:layoutBase});
+  try{
+    for(const id of ['ruta-0','ruta-1','ruta-2','ruta-3']) map.setPaintProperty(id,'line-trim-offset',[0,0]);
+  }catch(e){trimSoportado=false;document.getElementById('rTrim').innerHTML='<span class="aviso">no soportado</span>';}
   cargarRadares();
   map.addSource('cargadores',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
   map.addLayer({id:'cargadores',type:'symbol',source:'cargadores',minzoom:9,
@@ -612,8 +613,26 @@ document.getElementById('btnTrafico').onclick=function(){
   if(map.getLayer('trafico-flujo')){
     map.setLayoutProperty('trafico-flujo','visibility',traficoOn?'visible':'none');
   }
-  if(routeCoordsLL.length) actualizarTrimRuta();
+  if(routeCoordsLL.length) repintarRutaConNiveles();
 };
+function repintarRutaConNiveles(){
+  if(!routeCoordsLL.length) return;
+  const coords=routeCoordsLL.map(c=>[c[1],c[0]]);
+  const niveles=routeNivelesPorPunto.length===coords.length?routeNivelesPorPunto:new Array(coords.length).fill(0);
+  const segmentos=[];
+  let inicioSeg=0;
+  for(let i=1;i<coords.length;i++){
+    const nivelActual=traficoOn?(niveles[i]||0):0;
+    const nivelInicio=traficoOn?(niveles[inicioSeg]||0):0;
+    if(nivelActual!==nivelInicio){
+      segmentos.push({nivel:nivelInicio,coords:coords.slice(inicioSeg,i+1)});
+      inicioSeg=i;
+    }
+  }
+  segmentos.push({nivel:traficoOn?(niveles[inicioSeg]||0):0,coords:coords.slice(inicioSeg)});
+  const features=segmentos.filter(s=>s.coords.length>=2).map(s=>({type:'Feature',geometry:{type:'LineString',coordinates:s.coords},properties:{nivel:s.nivel}}));
+  map.getSource('ruta').setData({type:'FeatureCollection',features:features});
+}
 document.getElementById('btnLimpiarFavs').onclick=()=>{
   if(!confirm('¿Borrar todos los cargadores favoritos?')) return;
   favoritos=[];guardarFavoritos();refrescarIconosCargadores();
@@ -739,40 +758,18 @@ function recorridoAhora(ll){
   return base+t*Math.sqrt(L2);
 }
 function avanzarPaso(r){while(stepIdx<steps.length-1&&(steps[stepIdx].metro||0)<=r+15) stepIdx++;}
-// ==== TRIM RUTA: recorta el GeoJSON por delante de la posicion ====
 function actualizarTrimRuta(){
-  if(!routeCoordsLL.length || !routeNivelesPorPunto.length) return;
-  if(!map.getSource('ruta')) return;
-  const total=routeCumDist[routeCumDist.length-1]||0;
+  if(!trimSoportado) return;
+  if(!routeCoordsLL.length||!routeCumDist.length) return;
+  if(!map.getLayer('ruta-0')) return;
+  const total=routeCumDist[routeCumDist.length-1];
   if(total<=0) return;
   const recorrido=routeCumDist[routeProgIdx]||0;
-  // Indice del primer punto NO recorrido
-  let idx=routeProgIdx;
-  for(let i=routeProgIdx;i<routeCoordsLL.length;i++){
-    if((routeCumDist[i]||0) >= recorrido){ idx=i; break; }
-  }
-  // Reconstruir con los puntos futuros
-  const coordsFuturas=routeCoordsLL.slice(idx).map(c=>[c[1],c[0]]);
-  const nivelesFuturos=routeNivelesPorPunto.slice(idx);
-  if(coordsFuturas.length<2){
-    map.getSource('ruta').setData({type:'FeatureCollection',features:[]});
-    document.getElementById('rTrim').textContent='100%';
-    return;
-  }
-  const segmentos=[];
-  let inicioSeg=0;
-  for(let i=1;i<coordsFuturas.length;i++){
-    const nA=traficoOn?(nivelesFuturos[i]||0):0;
-    const nI=traficoOn?(nivelesFuturos[inicioSeg]||0):0;
-    if(nA!==nI){
-      segmentos.push({nivel:nI,coords:coordsFuturas.slice(inicioSeg,i+1)});
-      inicioSeg=i;
-    }
-  }
-  segmentos.push({nivel:traficoOn?(nivelesFuturos[inicioSeg]||0):0,coords:coordsFuturas.slice(inicioSeg)});
-  const features=segmentos.filter(s=>s.coords.length>=2).map(s=>({type:'Feature',geometry:{type:'LineString',coordinates:s.coords},properties:{nivel:s.nivel}}));
-  map.getSource('ruta').setData({type:'FeatureCollection',features:features});
-  document.getElementById('rTrim').textContent=Math.round(recorrido/total*100)+'%';
+  const fraccion=Math.max(0,Math.min(1,recorrido/total));
+  try{
+    for(const id of ['ruta-0','ruta-1','ruta-2','ruta-3']) map.setPaintProperty(id,'line-trim-offset',[0,fraccion]);
+    document.getElementById('rTrim').textContent=Math.round(fraccion*100)+'%';
+  }catch(e){trimSoportado=false;document.getElementById('rTrim').innerHTML='<span class="aviso">no soportado</span>';}
 }
 function actualizarChevronGiro(){
   const src=map.getSource('giro-pos');
@@ -886,24 +883,22 @@ async function calcularRuta(origen,destino,modo='normal'){
         for(let i=a;i<=b&&i<coords.length;i++) nivelesPorPunto[i]=nivel;
       }
     }
-    // Guardar todos los datos
-    routeCoordsLL=coords.map(c=>[c[1],c[0]]);
-    routeCumDist=[0];
-    for(let i=1;i<routeCoordsLL.length;i++) routeCumDist.push(routeCumDist[i-1]+dist(routeCoordsLL[i-1],routeCoordsLL[i]));
-    // Pintar la ruta entera
     const segmentos=[];
     let inicioSeg=0;
     for(let i=1;i<coords.length;i++){
-      const nA=traficoOn?(nivelesPorPunto[i]||0):0;
-      const nI=traficoOn?(nivelesPorPunto[inicioSeg]||0):0;
-      if(nA!==nI){
-        segmentos.push({nivel:nI,coords:coords.slice(inicioSeg,i+1)});
+      const nivelActual=traficoOn?(nivelesPorPunto[i]||0):0;
+      const nivelInicio=traficoOn?(nivelesPorPunto[inicioSeg]||0):0;
+      if(nivelActual!==nivelInicio){
+        segmentos.push({nivel:nivelInicio,coords:coords.slice(inicioSeg,i+1)});
         inicioSeg=i;
       }
     }
     segmentos.push({nivel:traficoOn?(nivelesPorPunto[inicioSeg]||0):0,coords:coords.slice(inicioSeg)});
     const features=segmentos.filter(s=>s.coords.length>=2).map(s=>({type:'Feature',geometry:{type:'LineString',coordinates:s.coords},properties:{nivel:s.nivel}}));
     map.getSource('ruta').setData({type:'FeatureCollection',features:features});
+    routeCoordsLL=coords.map(c=>[c[1],c[0]]);
+    routeCumDist=[0];
+    for(let i=1;i<routeCoordsLL.length;i++) routeCumDist.push(routeCumDist[i-1]+dist(routeCoordsLL[i-1],routeCoordsLL[i]));
     steps=(ruta.guidance&&ruta.guidance.instructions||[]).map(it=>{
       const off=it.routeOffsetInMeters,pi=it.pointIndex;
       const porIndice=Number.isInteger(pi)&&pi>=0&&pi<routeCumDist.length?routeCumDist[pi]:null;
@@ -943,6 +938,8 @@ function onFix(pos){
   const now={lat:c.latitude,lon:c.longitude,t:pos.timestamp||Date.now()};
   const v=Number.isFinite(c.speed)?Math.max(0,c.speed):0;
   speedKmh=v*3.6;
+  // FIX: si vamos en marcha con Seguir activo, desbloquear la camara por si un toque fantasma la bloqueo
+  if(seguirOn && speedKmh>=3) seguirBloqueado=false;
   const parado=speedKmh<3;
   if(parado!==camaraLibre){
     camaraLibre=parado;
@@ -1042,8 +1039,15 @@ function centrarEnMi(){
   seguirBloqueado=false;
   camPosActual=[lastFix.lon,lastFix.lat];
   camPosObjetivo=[lastFix.lon,lastFix.lat];
-  camBearingActual=heading;camBearingObjetivo=heading;
-  camZoomActual=navZoomBase;camZoomObjetivo=navZoomBase;
+  camBearingActual=heading;
+  camBearingObjetivo=heading;
+  camZoomActual=navZoomBase;
+  camZoomObjetivo=navZoomBase;
+  if(!seguirOn){
+    seguirOn=true;
+    const btn=document.getElementById('btnSeguir');
+    if(btn) btn.classList.add('activo');
+  }
   map.jumpTo({center:[lastFix.lon,lastFix.lat],bearing:heading,zoom:navZoomBase,pitch:60,duration:400});
   mostrarBotonCentrar(false);
 }
@@ -1058,8 +1062,8 @@ document.getElementById('btnGPS').onclick=function(){
     if(aviso) aviso.classList.add('oculto');
     document.getElementById('g1').innerHTML='<b>activo</b>';
     navigator.geolocation.getCurrentPosition(
-      pos=>{cargarCargadores(pos.coords.latitude,pos.coords.longitude);},
-      err=>{cargarCargadores(43.2678,-2.9387);},
+      pos=>{ cargarCargadores(pos.coords.latitude,pos.coords.longitude); },
+      err=>{ cargarCargadores(43.2678,-2.9387); },
       {enableHighAccuracy:true,maximumAge:0,timeout:10000}
     );
     watchId=navigator.geolocation.watchPosition(onFix,e=>{
