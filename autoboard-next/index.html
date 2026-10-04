@@ -1287,114 +1287,110 @@ function ttMan(it){
   return {type:'turn',modifier:mod};
 }
 
-// ==== SISTEMA DE CARTELES ESTILO GOOGLE MAPS ====
+// ==== SISTEMA DE CARTELES — VARIANTE A (punta al borde exacto) ====
 function colorCartel(hw){
   if(hw) return {fondo:'#1565c0', borde:'#0d47a1', flecha:'#ffffff', flechaInactiva:'#90caf9'};
   return {fondo:'#ffffff', borde:'#000000', flecha:'#000000', flechaInactiva:'#bdbdbd'};
 }
-
-function flechaGiroPath(mod){
-  if(mod==='straight' || !mod) return 'M24 44 L24 10';
-  if(mod.includes('slight right')) return 'M24 44 L24 26 Q24 14 34 14 L40 14';
-  if(mod.includes('slight left')) return 'M24 44 L24 26 Q24 14 14 14 L8 14';
-  if(mod==='right') return 'M24 44 L24 22 Q24 12 34 12 L40 12';
-  if(mod==='left') return 'M24 44 L24 22 Q24 12 14 12 L8 12';
-  if(mod==='sharp right') return 'M24 44 L24 28 Q24 20 32 20 Q40 20 40 28 L40 34';
-  if(mod==='sharp left') return 'M24 44 L24 28 Q24 20 16 20 Q8 20 8 28 L8 34';
-  if(mod==='uturn') return 'M24 44 L24 20 Q24 8 34 8 Q44 8 44 20 L44 32';
-  return 'M24 44 L24 10';
-}
-function flechaGiroFinal(mod){
-  if(mod==='straight' || !mod) return {x:24, y:10, ang:0};
-  if(mod.includes('slight right')) return {x:40, y:14, ang:Math.PI/2};
-  if(mod.includes('slight left')) return {x:8, y:14, ang:-Math.PI/2};
-  if(mod==='right') return {x:40, y:12, ang:Math.PI/2};
-  if(mod==='left') return {x:8, y:12, ang:-Math.PI/2};
-  if(mod==='sharp right') return {x:40, y:34, ang:Math.PI};
-  if(mod==='sharp left') return {x:8, y:34, ang:Math.PI};
-  if(mod==='uturn') return {x:44, y:32, ang:Math.PI};
-  return {x:24, y:10, ang:0};
+function dibujarFlechaA(mod, colores, grosor, tamPunta){
+  const LEN = tamPunta;
+  const HW  = tamPunta * 0.75;
+  let d = '', vx, vy, ang;
+  switch(mod){
+    case 'straight': vx=24; vy=12; ang=0; d='M24 44 L24 '+(vy+LEN); break;
+    case 'slight right': vx=40; vy=14; ang=Math.PI/2; d='M24 44 L24 26 Q24 14 34 14 L'+(vx-LEN)+' 14'; break;
+    case 'slight left': vx=8; vy=14; ang=-Math.PI/2; d='M24 44 L24 26 Q24 14 14 14 L'+(vx+LEN)+' 14'; break;
+    case 'right': vx=40; vy=12; ang=Math.PI/2; d='M24 44 L24 22 Q24 12 34 12 L'+(vx-LEN)+' 12'; break;
+    case 'left': vx=8; vy=12; ang=-Math.PI/2; d='M24 44 L24 22 Q24 12 14 12 L'+(vx+LEN)+' 12'; break;
+    case 'sharp right': vx=40; vy=34; ang=Math.PI; d='M24 44 L24 28 Q24 20 32 20 Q40 20 40 28 L40 '+(vy-LEN); break;
+    case 'sharp left': vx=8; vy=34; ang=Math.PI; d='M24 44 L24 28 Q24 20 16 20 Q8 20 8 28 L8 '+(vy-LEN); break;
+    case 'uturn': vx=44; vy=32; ang=Math.PI; d='M24 44 L24 20 Q24 8 34 8 Q44 8 44 20 L44 '+(vy-LEN); break;
+    default: vx=24; vy=12; ang=0; d='M24 44 L24 '+(vy+LEN);
+  }
+  const tan={x:Math.sin(ang),y:-Math.cos(ang)},lat={x:Math.cos(ang),y:Math.sin(ang)};
+  const bx=vx-tan.x*LEN,by=vy-tan.y*LEN;
+  const l={x:bx+lat.x*HW,y:by+lat.y*HW},r={x:bx-lat.x*HW,y:by-lat.y*HW};
+  const tri='M'+vx+' '+vy+' L'+l.x.toFixed(1)+' '+l.y.toFixed(1)+' L'+r.x.toFixed(1)+' '+r.y.toFixed(1)+' Z';
+  return '<path d="'+d+'" stroke="'+colores.flecha+'" stroke-width="'+grosor+'" stroke-linecap="butt" stroke-linejoin="round" fill="none"/>'
+    + '<path d="'+tri+'" fill="'+colores.flecha+'"/>';
 }
 function flechaGiroSVG(mod, colores){
-  const path=flechaGiroPath(mod);
-  const {x,y,ang}=flechaGiroFinal(mod);
-  const len=10, hw=7;
-  const tan={x:Math.sin(ang), y:-Math.cos(ang)};
-  const lat={x:Math.cos(ang), y:Math.sin(ang)};
-  const bx=x-tan.x*len, by=y-tan.y*len;
-  const l={x:bx+lat.x*hw, y:by+lat.y*hw};
-  const r={x:bx-lat.x*hw, y:by-lat.y*hw};
-  const punta='M'+x.toFixed(1)+' '+y.toFixed(1)+' L'+l.x.toFixed(1)+' '+l.y.toFixed(1)+' L'+r.x.toFixed(1)+' '+r.y.toFixed(1)+' Z';
-  return '<path d="'+path+'" stroke="'+colores.flecha+'" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
-    +'<path d="'+punta+'" fill="'+colores.flecha+'"/>';
+  return dibujarFlechaA(mod||'straight', colores, 6.5, 10);
 }
 function flechaCarrilSVG(dirs, activo, colores, x, y){
-  const dirPrincipal=dirs[0]||'straight';
-  const color=activo?colores.flecha:colores.flechaInactiva;
-  let path='';
-  const cy=y+24;
-  if(dirPrincipal==='straight') path='M'+x+' '+cy+' L'+x+' '+(y+6);
-  else if(dirPrincipal==='right') path='M'+x+' '+cy+' L'+x+' '+(y+14)+' Q'+x+' '+(y+6)+' '+(x+8)+' '+(y+6);
-  else if(dirPrincipal==='left') path='M'+x+' '+cy+' L'+x+' '+(y+14)+' Q'+x+' '+(y+6)+' '+(x-8)+' '+(y+6);
-  else if(dirPrincipal==='slight right') path='M'+x+' '+cy+' L'+x+' '+(y+12)+' Q'+x+' '+(y+6)+' '+(x+6)+' '+(y+6);
-  else if(dirPrincipal==='slight left') path='M'+x+' '+cy+' L'+x+' '+(y+12)+' Q'+x+' '+(y+6)+' '+(x-6)+' '+(y+6);
-  else if(dirPrincipal==='uturn') path='M'+x+' '+cy+' L'+x+' '+(y+12)+' Q'+x+' '+(y+4)+' '+(x+8)+' '+(y+4)+' Q'+(x+14)+' '+(y+4)+' '+(x+14)+' '+(y+14);
-  let puntaX=x, puntaY=y+6, ang=0;
-  if(dirPrincipal==='right'){ puntaX=x+8; puntaY=y+6; ang=Math.PI/2; }
-  else if(dirPrincipal==='left'){ puntaX=x-8; puntaY=y+6; ang=-Math.PI/2; }
-  else if(dirPrincipal==='slight right'){ puntaX=x+6; puntaY=y+6; ang=Math.PI/4; }
-  else if(dirPrincipal==='slight left'){ puntaX=x-6; puntaY=y+6; ang=-Math.PI/4; }
-  else if(dirPrincipal==='uturn'){ puntaX=x+14; puntaY=y+14; ang=Math.PI; }
-  const len=7, hw=5;
-  const tan={x:Math.sin(ang), y:-Math.cos(ang)};
-  const lat={x:Math.cos(ang), y:Math.sin(ang)};
-  const bx=puntaX-tan.x*len, by=puntaY-tan.y*len;
-  const l={x:bx+lat.x*hw, y:by+lat.y*hw};
-  const r={x:bx-lat.x*hw, y:by-lat.y*hw};
-  return '<path d="'+path+'" stroke="'+color+'" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
-    +'<path d="M'+puntaX.toFixed(1)+' '+puntaY.toFixed(1)+' L'+l.x.toFixed(1)+' '+l.y.toFixed(1)+' L'+r.x.toFixed(1)+' '+r.y.toFixed(1)+' Z" fill="'+color+'"/>';
+  const color = activo ? colores.flecha : colores.flechaInactiva;
+  const cy = y + 24;
+  const lista = Array.isArray(dirs) && dirs.length ? dirs : ['straight'];
+  let out = '';
+  lista.forEach((dir, i) => {
+    const offset = lista.length > 1 ? (i === 0 ? -5 : 5) : 0;
+    const xx = x + offset;
+    const escala = lista.length > 1 ? 0.8 : 1;
+    const g  = 3.2 * escala;
+    const len = 6 * escala;
+    const hw  = 4.5 * escala;
+    let d = '', vx, vy, ang;
+    if(dir === 'straight'){ vx=xx; vy=y+6; ang=0; d='M'+xx+' '+cy+' L'+xx+' '+(vy+len); }
+    else if(dir === 'right'){ vx=xx+8; vy=y+6; ang=Math.PI/2; d='M'+xx+' '+cy+' L'+xx+' '+(y+14)+' Q'+xx+' '+(y+6)+' '+(vx-len)+' '+(y+6); }
+    else if(dir === 'left'){ vx=xx-8; vy=y+6; ang=-Math.PI/2; d='M'+xx+' '+cy+' L'+xx+' '+(y+14)+' Q'+xx+' '+(y+6)+' '+(vx+len)+' '+(y+6); }
+    else if(dir === 'slight right'){ vx=xx+6; vy=y+6; ang=Math.PI/4; d='M'+xx+' '+cy+' L'+xx+' '+(y+12)+' Q'+xx+' '+(y+6)+' '+(vx-len*0.7)+' '+(y+6); }
+    else if(dir === 'slight left'){ vx=xx-6; vy=y+6; ang=-Math.PI/4; d='M'+xx+' '+cy+' L'+xx+' '+(y+12)+' Q'+xx+' '+(y+6)+' '+(vx+len*0.7)+' '+(y+6); }
+    else if(dir === 'uturn'){ vx=xx+14; vy=y+14; ang=Math.PI; d='M'+xx+' '+cy+' L'+xx+' '+(y+12)+' Q'+xx+' '+(y+4)+' '+(xx+8)+' '+(y+4)+' Q'+(xx+14)+' '+(y+4)+' '+vx+' '+(vy-len); }
+    else { vx=xx; vy=y+6; ang=0; d='M'+xx+' '+cy+' L'+xx+' '+(vy+len); }
+    const tan={x:Math.sin(ang),y:-Math.cos(ang)},lat={x:Math.cos(ang),y:Math.sin(ang)};
+    const bx=vx-tan.x*len,by=vy-tan.y*len;
+    const l={x:bx+lat.x*hw,y:by+lat.y*hw},r={x:bx-lat.x*hw,y:by-lat.y*hw};
+    const tri='M'+vx.toFixed(1)+' '+vy.toFixed(1)+' L'+l.x.toFixed(1)+' '+l.y.toFixed(1)+' L'+r.x.toFixed(1)+' '+r.y.toFixed(1)+' Z';
+    out += '<path d="'+d+'" stroke="'+color+'" stroke-width="'+g+'" stroke-linecap="butt" stroke-linejoin="round" fill="none"/>'
+      + '<path d="'+tri+'" fill="'+color+'"/>';
+  });
+  return out;
 }
 function cartelConCarriles(lanes, mod, hw){
-  const colores=colorCartel(hw);
-  const nCarriles=lanes.length;
-  const anchoCarril=32;
-  const padding=8;
-  const anchoCarriles=nCarriles*anchoCarril;
-  const anchoFlecha=48;
-  const anchoTotal=padding+anchoCarriles+padding+anchoFlecha+padding;
-  const alto=60;
-  const radio=8;
-  let svg='<svg viewBox="0 0 '+anchoTotal+' '+alto+'">';
-  svg+='<rect x="1" y="1" width="'+(anchoTotal-2)+'" height="'+(alto-2)+'" rx="'+radio+'" ry="'+radio+'" fill="'+colores.fondo+'" stroke="'+colores.borde+'" stroke-width="2"/>';
-  svg+='<line x1="'+(padding+anchoCarriles+padding/2)+'" y1="8" x2="'+(padding+anchoCarriles+padding/2)+'" y2="'+(alto-8)+'" stroke="'+colores.borde+'" stroke-width="1" opacity="0.35"/>';
-  for(let i=0;i<nCarriles;i++){
-    const carril=lanes[i];
-    const dirs=(carril.lane&&carril.lane.directions)||['straight'];
-    const activo=!!(carril.lane&&carril.lane.active);
-    const cx=padding+anchoCarril*i+anchoCarril/2;
-    const cy=8;
-    svg+=flechaCarrilSVG(dirs, activo, colores, cx, cy+4);
+  const colores = colorCartel(hw);
+  const n = lanes.length;
+  const anchoCarril = 40;
+  const padding = 10;
+  const anchoTotal = padding + n*anchoCarril + padding;
+  const alto = 64;
+  const radio = 10;
+  let svg = '<svg viewBox="0 0 '+anchoTotal+' '+alto+'">';
+  svg += '<rect x="1" y="1" width="'+(anchoTotal-2)+'" height="'+(alto-2)+'" rx="'+radio+'" ry="'+radio+'" fill="'+colores.fondo+'" stroke="'+colores.borde+'" stroke-width="2"/>';
+  for(let i=0;i<n;i++){
+    const carril = lanes[i];
+    const dirs = (carril.lane && carril.lane.directions) || ['straight'];
+    const activo = !!(carril.lane && carril.lane.active);
+    const cx = padding + anchoCarril*i + anchoCarril/2;
+    svg += flechaCarrilSVG(dirs, activo, colores, cx, 6);
+    if(i < n-1){
+      const sx = padding + anchoCarril*(i+1);
+      svg += '<line x1="'+sx+'" y1="10" x2="'+sx+'" y2="'+(alto-10)+'" stroke="'+colores.borde+'" stroke-width="1" opacity="0.25"/>';
+    }
   }
-  const offsetFlecha=padding+anchoCarriles+padding;
-  svg+='<g transform="translate('+offsetFlecha+',2) scale(0.85)">'+flechaGiroSVG(mod, colores)+'</g>';
-  svg+='</svg>';
+  svg += '</svg>';
   return svg;
 }
 function cartelSimple(mod, hw){
-  const colores=colorCartel(hw);
-  const ancho=64, alto=64, radio=10;
-  let svg='<svg viewBox="0 0 '+ancho+' '+alto+'">';
-  svg+='<rect x="1" y="1" width="'+(ancho-2)+'" height="'+(alto-2)+'" rx="'+radio+'" ry="'+radio+'" fill="'+colores.fondo+'" stroke="'+colores.borde+'" stroke-width="2"/>';
-  svg+='<g transform="translate(8,4) scale(1.0)">'+flechaGiroSVG(mod, colores)+'</g>';
-  svg+='</svg>';
+  const colores = colorCartel(hw);
+  const ancho = 64, alto = 64, radio = 10;
+  let svg = '<svg viewBox="0 0 '+ancho+' '+alto+'">';
+  svg += '<rect x="1" y="1" width="'+(ancho-2)+'" height="'+(alto-2)+'" rx="'+radio+'" ry="'+radio+'" fill="'+colores.fondo+'" stroke="'+colores.borde+'" stroke-width="2"/>';
+  svg += '<g transform="translate(8,4) scale(1.0)">'+flechaGiroSVG(mod, colores)+'</g>';
+  svg += '</svg>';
   return svg;
 }
-function maneuverSVG(s,hw){
-  const m=s.maneuver||{};
-  const col=hw?'#ffffff':'#0a8a34';
-  if(m.type==='arrive') return '<svg viewBox="0 0 48 52"><circle cx="24" cy="26" r="15" fill="'+col+'"/><circle cx="24" cy="26" r="6" fill="#fff"/></svg>';
-  if(m.type==='roundabout'||m.type==='rotary') return roundaboutSVG(m.exit,col);
-  if(s.lanes && s.lanes.length) return cartelConCarriles(s.lanes, m.modifier, hw);
+function maneuverSVG(s, hw){
+  const m = s.maneuver || {};
+  const col = hw ? '#ffffff' : '#0a8a34';
+  if(m.type === 'arrive'){
+    return '<svg viewBox="0 0 48 52"><circle cx="24" cy="26" r="15" fill="'+col+'"/><circle cx="24" cy="26" r="6" fill="#fff"/></svg>';
+  }
+  if(m.type === 'roundabout' || m.type === 'rotary'){
+    return roundaboutSVG(m.exit, col);
+  }
+  if(s.lanes && s.lanes.length){
+    return cartelConCarriles(s.lanes, m.modifier, hw);
+  }
   return cartelSimple(m.modifier, hw);
 }
 
