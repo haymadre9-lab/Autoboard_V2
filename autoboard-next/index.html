@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>autoboard-next · Fase 10 · celebración</title>
+<title>autoboard-next · Fase 11 · carteles</title>
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
 <style>
 html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
@@ -22,10 +22,10 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #avisoInicial{background:rgba(20,80,50,.92);border:2px solid #2e6b4a;border-radius:12px;padding:10px 20px;color:#9ae6b4;font:700 15px system-ui,sans-serif;margin-bottom:8px;animation:avisoPulse 2s ease-in-out infinite}
 #avisoInicial.oculto{display:none}
 @keyframes avisoPulse{0%,100%{opacity:1}50%{opacity:.6}}
-#navbanner{position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:20;display:none;align-items:center;gap:12px;background:rgba(10,13,16,.9);border:1px solid #232c33;border-radius:16px;padding:8px 18px 8px 10px}
+#navbanner{position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:20;display:none;align-items:center;gap:14px;background:rgba(10,13,16,.9);border:1px solid #232c33;border-radius:16px;padding:10px 20px 10px 12px;max-width:94vw}
 #navbanner.hw{background:rgba(10,30,70,.92);border-color:#1e4a8a}
-#navarrow{width:78px;height:84px;flex:0 0 auto}
-#navarrow svg{width:78px;height:84px;display:block}
+#navarrow{min-width:64px;max-width:240px;height:64px;flex:0 0 auto;display:flex;align-items:center;justify-content:center}
+#navarrow svg{width:100%;height:64px;display:block}
 #navd{font:800 26px system-ui,sans-serif;color:#fff}
 #navsub{font:600 13px system-ui,sans-serif;color:#9aa7b2;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #navbanner #btnPararRuta{width:38px;height:38px;border-radius:50%;border:2px solid #5a2020;background:rgba(60,20,20,.85);color:#ff8a8a;font-size:20px;font-weight:900;cursor:pointer;display:none;align-items:center;justify-content:center;margin-left:8px;flex:0 0 auto;padding:0}
@@ -357,9 +357,6 @@ map.on('load',()=>{
   map.addLayer({id:'ruta-1',type:'line',source:'ruta',filter:['==',['get','nivel'],1],paint:{...paintBase,'line-color':'#f9a825'},layout:layoutBase});
   map.addLayer({id:'ruta-2',type:'line',source:'ruta',filter:['==',['get','nivel'],2],paint:{...paintBase,'line-color':'#ff6f00'},layout:layoutBase});
   map.addLayer({id:'ruta-3',type:'line',source:'ruta',filter:['==',['get','nivel'],3],paint:{...paintBase,'line-color':'#d32f2f'},layout:layoutBase});
-  try{
-    for(const id of ['ruta-0','ruta-1','ruta-2','ruta-3']) map.setPaintProperty(id,'line-trim-offset',[0,0]);
-  }catch(e){trimSoportado=false;document.getElementById('rTrim').innerHTML='<span class="aviso">no soportado</span>';}
   cargarRadares();
   map.addSource('cargadores',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
   map.addLayer({id:'cargadores',type:'symbol',source:'cargadores',minzoom:9,
@@ -973,7 +970,8 @@ async function calcularRuta(origen,destino,modo='normal'){
       const porIndice=Number.isInteger(pi)&&pi>=0&&pi<routeCumDist.length?routeCumDist[pi]:null;
       const metroFinal=porIndice!==null&&(off==null||Math.abs(porIndice-off)<=Math.max(300,off*.1))?porIndice:(off||0);
       const limiteKmh=(typeof it.speedLimitInKilometersPerHour==='number')?it.speedLimitInKilometersPerHour:0;
-      return {metro:metroFinal,calle:it.street||'',msg:it.message||'',maneuver:ttMan(it),hw:/autopista|autov[ií]a|\b(a|ap)-?\d/i.test(it.street||''),limiteKmh:limiteKmh};
+      const lanes=Array.isArray(it.lanes)?it.lanes:[];
+      return {metro:metroFinal,calle:it.street||'',msg:it.message||'',maneuver:ttMan(it),hw:/autopista|autov[ií]a|\b(a|ap)-?\d/i.test(it.street||''),limiteKmh:limiteKmh,lanes:lanes};
     });
     stepIdx=0;routeProgIdx=0;ultimoStepPintado='';zoomManiobraOn=false;
     camZoomObjetivo=navZoomBase;
@@ -1046,7 +1044,6 @@ function onFix(pos){
     const d=renderStep();
     actualizarTrimRuta();
     const s=steps[stepIdx];
-    // Disparar celebracion si llegamos al destino
     if(s && s.maneuver && s.maneuver.type==='arrive' && d<50){
       dispararCelebracion();
     }
@@ -1250,29 +1247,13 @@ document.getElementById('btnPitchTest').onclick=async function(){
 function dist(a,b){const R=6371000,la1=a[0]*Math.PI/180,la2=b[0]*Math.PI/180;const dla=(b[0]-a[0])*Math.PI/180,dlo=(b[1]-a[1])*Math.PI/180;const h=Math.sin(dla/2)**2+Math.cos(la1)*Math.cos(la2)*Math.sin(dlo/2)**2;return 2*R*Math.asin(Math.sqrt(h));}
 function bearing(a,b){const la1=a[0]*Math.PI/180,la2=b[0]*Math.PI/180,dlo=(b[1]-a[1])*Math.PI/180;const y=Math.sin(dlo)*Math.cos(la2);const x=Math.cos(la1)*Math.sin(la2)-Math.sin(la1)*Math.cos(la2)*Math.cos(dlo);return ((Math.atan2(y,x)*180/Math.PI)+360)%360;}
 function urlRutaTomTom(o,d){return 'https://api.tomtom.com/routing/1/calculateRoute/'+o[0]+','+o[1]+':'+d[0]+','+d[1]+'/json?key='+TT+'&routeType=fastest&traffic=true&travelMode=car&instructionsType=text&language=es-ES&sectionType=traffic';}
-const TURN_GEOM={'straight':{turn:0,R:0},'slight right':{turn:35,R:26},right:{turn:90,R:15},'sharp right':{turn:150,R:10},uturn:{turn:178,R:9},'sharp left':{turn:-150,R:10},left:{turn:-90,R:15},'slight left':{turn:-35,R:26}};
+
 function triHead(x,y,t,c,len,hw){
   len=len||10;hw=hw||7;
   const tan={x:Math.sin(t),y:-Math.cos(t)},lat={x:Math.cos(t),y:Math.sin(t)};
   const bx=x-tan.x*len,by=y-tan.y*len;
   const l={x:bx+lat.x*hw,y:by+lat.y*hw},r={x:bx-lat.x*hw,y:by-lat.y*hw};
   return '<path d="M'+x.toFixed(1)+' '+y.toFixed(1)+' L'+l.x.toFixed(1)+' '+l.y.toFixed(1)+' L'+r.x.toFixed(1)+' '+r.y.toFixed(1)+' Z" fill="'+c+'"/>';
-}
-function arrowSVG(mod,col){
-  col=col||'#0a8a34';
-  const g=TURN_GEOM[mod]||TURN_GEOM.straight;
-  if(!g.turn) return '<svg viewBox="0 0 48 52"><path d="M24 48V10" stroke="'+col+'" stroke-width="7" stroke-linecap="round" fill="none"/>'+triHead(24,6,0,col,12,9)+'</svg>';
-  const dir=g.turn>0?1:-1;
-  const pts=[];
-  for(let i=0;i<=20;i++){
-    const a=(180+dir*Math.abs(g.turn)*i/20)*Math.PI/180;
-    pts.push({x:24+dir*g.R+g.R*Math.cos(a),y:46+g.R*Math.sin(a)});
-  }
-  const last=pts[pts.length-1],prev=pts[pts.length-2];
-  const ang=Math.atan2(last.x-prev.x,-(last.y-prev.y));
-  return '<svg viewBox="0 0 48 52"><path d="'+pts.map((p,i)=>(i?'L':'M')+p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' ')
-    +'" fill="none" stroke="'+col+'" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>'
-    +triHead(last.x,last.y,ang,col,11,9)+'</svg>';
 }
 function roundaboutSVG(exit,col){
   col=col||'#0a8a34';
@@ -1291,13 +1272,6 @@ function roundaboutSVG(exit,col){
   s+='<text x="'+c+'" y="31" text-anchor="middle" font-size="14" font-weight="800" fill="'+col+'" font-family="system-ui,sans-serif">'+exitReal+'</text>';
   return s+'</svg>';
 }
-function maneuverSVG(s,hw){
-  const m=s.maneuver||{};
-  const col=hw?'#fff':'#0a8a34';
-  if(m.type==='arrive') return '<svg viewBox="0 0 48 52"><circle cx="24" cy="26" r="15" fill="'+col+'"/><circle cx="24" cy="26" r="6" fill="#fff"/></svg>';
-  if(m.type==='roundabout'||m.type==='rotary') return roundaboutSVG(m.exit,col);
-  return arrowSVG(m.modifier,col);
-}
 function ttMan(it){
   const m=(it.maneuver||it.instructionType||'').toString().toUpperCase();
   if(m.includes('ARRIVE')||m.includes('WAYPOINT')) return {type:'arrive'};
@@ -1313,6 +1287,117 @@ function ttMan(it){
   return {type:'turn',modifier:mod};
 }
 
+// ==== SISTEMA DE CARTELES ESTILO GOOGLE MAPS ====
+function colorCartel(hw){
+  if(hw) return {fondo:'#1565c0', borde:'#0d47a1', flecha:'#ffffff', flechaInactiva:'#90caf9'};
+  return {fondo:'#ffffff', borde:'#000000', flecha:'#000000', flechaInactiva:'#bdbdbd'};
+}
+
+function flechaGiroPath(mod){
+  if(mod==='straight' || !mod) return 'M24 44 L24 10';
+  if(mod.includes('slight right')) return 'M24 44 L24 26 Q24 14 34 14 L40 14';
+  if(mod.includes('slight left')) return 'M24 44 L24 26 Q24 14 14 14 L8 14';
+  if(mod==='right') return 'M24 44 L24 22 Q24 12 34 12 L40 12';
+  if(mod==='left') return 'M24 44 L24 22 Q24 12 14 12 L8 12';
+  if(mod==='sharp right') return 'M24 44 L24 28 Q24 20 32 20 Q40 20 40 28 L40 34';
+  if(mod==='sharp left') return 'M24 44 L24 28 Q24 20 16 20 Q8 20 8 28 L8 34';
+  if(mod==='uturn') return 'M24 44 L24 20 Q24 8 34 8 Q44 8 44 20 L44 32';
+  return 'M24 44 L24 10';
+}
+function flechaGiroFinal(mod){
+  if(mod==='straight' || !mod) return {x:24, y:10, ang:0};
+  if(mod.includes('slight right')) return {x:40, y:14, ang:Math.PI/2};
+  if(mod.includes('slight left')) return {x:8, y:14, ang:-Math.PI/2};
+  if(mod==='right') return {x:40, y:12, ang:Math.PI/2};
+  if(mod==='left') return {x:8, y:12, ang:-Math.PI/2};
+  if(mod==='sharp right') return {x:40, y:34, ang:Math.PI};
+  if(mod==='sharp left') return {x:8, y:34, ang:Math.PI};
+  if(mod==='uturn') return {x:44, y:32, ang:Math.PI};
+  return {x:24, y:10, ang:0};
+}
+function flechaGiroSVG(mod, colores){
+  const path=flechaGiroPath(mod);
+  const {x,y,ang}=flechaGiroFinal(mod);
+  const len=10, hw=7;
+  const tan={x:Math.sin(ang), y:-Math.cos(ang)};
+  const lat={x:Math.cos(ang), y:Math.sin(ang)};
+  const bx=x-tan.x*len, by=y-tan.y*len;
+  const l={x:bx+lat.x*hw, y:by+lat.y*hw};
+  const r={x:bx-lat.x*hw, y:by-lat.y*hw};
+  const punta='M'+x.toFixed(1)+' '+y.toFixed(1)+' L'+l.x.toFixed(1)+' '+l.y.toFixed(1)+' L'+r.x.toFixed(1)+' '+r.y.toFixed(1)+' Z';
+  return '<path d="'+path+'" stroke="'+colores.flecha+'" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
+    +'<path d="'+punta+'" fill="'+colores.flecha+'"/>';
+}
+function flechaCarrilSVG(dirs, activo, colores, x, y){
+  const dirPrincipal=dirs[0]||'straight';
+  const color=activo?colores.flecha:colores.flechaInactiva;
+  let path='';
+  const cy=y+24;
+  if(dirPrincipal==='straight') path='M'+x+' '+cy+' L'+x+' '+(y+6);
+  else if(dirPrincipal==='right') path='M'+x+' '+cy+' L'+x+' '+(y+14)+' Q'+x+' '+(y+6)+' '+(x+8)+' '+(y+6);
+  else if(dirPrincipal==='left') path='M'+x+' '+cy+' L'+x+' '+(y+14)+' Q'+x+' '+(y+6)+' '+(x-8)+' '+(y+6);
+  else if(dirPrincipal==='slight right') path='M'+x+' '+cy+' L'+x+' '+(y+12)+' Q'+x+' '+(y+6)+' '+(x+6)+' '+(y+6);
+  else if(dirPrincipal==='slight left') path='M'+x+' '+cy+' L'+x+' '+(y+12)+' Q'+x+' '+(y+6)+' '+(x-6)+' '+(y+6);
+  else if(dirPrincipal==='uturn') path='M'+x+' '+cy+' L'+x+' '+(y+12)+' Q'+x+' '+(y+4)+' '+(x+8)+' '+(y+4)+' Q'+(x+14)+' '+(y+4)+' '+(x+14)+' '+(y+14);
+  let puntaX=x, puntaY=y+6, ang=0;
+  if(dirPrincipal==='right'){ puntaX=x+8; puntaY=y+6; ang=Math.PI/2; }
+  else if(dirPrincipal==='left'){ puntaX=x-8; puntaY=y+6; ang=-Math.PI/2; }
+  else if(dirPrincipal==='slight right'){ puntaX=x+6; puntaY=y+6; ang=Math.PI/4; }
+  else if(dirPrincipal==='slight left'){ puntaX=x-6; puntaY=y+6; ang=-Math.PI/4; }
+  else if(dirPrincipal==='uturn'){ puntaX=x+14; puntaY=y+14; ang=Math.PI; }
+  const len=7, hw=5;
+  const tan={x:Math.sin(ang), y:-Math.cos(ang)};
+  const lat={x:Math.cos(ang), y:Math.sin(ang)};
+  const bx=puntaX-tan.x*len, by=puntaY-tan.y*len;
+  const l={x:bx+lat.x*hw, y:by+lat.y*hw};
+  const r={x:bx-lat.x*hw, y:by-lat.y*hw};
+  return '<path d="'+path+'" stroke="'+color+'" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
+    +'<path d="M'+puntaX.toFixed(1)+' '+puntaY.toFixed(1)+' L'+l.x.toFixed(1)+' '+l.y.toFixed(1)+' L'+r.x.toFixed(1)+' '+r.y.toFixed(1)+' Z" fill="'+color+'"/>';
+}
+function cartelConCarriles(lanes, mod, hw){
+  const colores=colorCartel(hw);
+  const nCarriles=lanes.length;
+  const anchoCarril=32;
+  const padding=8;
+  const anchoCarriles=nCarriles*anchoCarril;
+  const anchoFlecha=48;
+  const anchoTotal=padding+anchoCarriles+padding+anchoFlecha+padding;
+  const alto=60;
+  const radio=8;
+  let svg='<svg viewBox="0 0 '+anchoTotal+' '+alto+'">';
+  svg+='<rect x="1" y="1" width="'+(anchoTotal-2)+'" height="'+(alto-2)+'" rx="'+radio+'" ry="'+radio+'" fill="'+colores.fondo+'" stroke="'+colores.borde+'" stroke-width="2"/>';
+  svg+='<line x1="'+(padding+anchoCarriles+padding/2)+'" y1="8" x2="'+(padding+anchoCarriles+padding/2)+'" y2="'+(alto-8)+'" stroke="'+colores.borde+'" stroke-width="1" opacity="0.35"/>';
+  for(let i=0;i<nCarriles;i++){
+    const carril=lanes[i];
+    const dirs=(carril.lane&&carril.lane.directions)||['straight'];
+    const activo=!!(carril.lane&&carril.lane.active);
+    const cx=padding+anchoCarril*i+anchoCarril/2;
+    const cy=8;
+    svg+=flechaCarrilSVG(dirs, activo, colores, cx, cy+4);
+  }
+  const offsetFlecha=padding+anchoCarriles+padding;
+  svg+='<g transform="translate('+offsetFlecha+',2) scale(0.85)">'+flechaGiroSVG(mod, colores)+'</g>';
+  svg+='</svg>';
+  return svg;
+}
+function cartelSimple(mod, hw){
+  const colores=colorCartel(hw);
+  const ancho=64, alto=64, radio=10;
+  let svg='<svg viewBox="0 0 '+ancho+' '+alto+'">';
+  svg+='<rect x="1" y="1" width="'+(ancho-2)+'" height="'+(alto-2)+'" rx="'+radio+'" ry="'+radio+'" fill="'+colores.fondo+'" stroke="'+colores.borde+'" stroke-width="2"/>';
+  svg+='<g transform="translate(8,4) scale(1.0)">'+flechaGiroSVG(mod, colores)+'</g>';
+  svg+='</svg>';
+  return svg;
+}
+function maneuverSVG(s,hw){
+  const m=s.maneuver||{};
+  const col=hw?'#ffffff':'#0a8a34';
+  if(m.type==='arrive') return '<svg viewBox="0 0 48 52"><circle cx="24" cy="26" r="15" fill="'+col+'"/><circle cx="24" cy="26" r="6" fill="#fff"/></svg>';
+  if(m.type==='roundabout'||m.type==='rotary') return roundaboutSVG(m.exit,col);
+  if(s.lanes && s.lanes.length) return cartelConCarriles(s.lanes, m.modifier, hw);
+  return cartelSimple(m.modifier, hw);
+}
+
 // ==== CELEBRACION AL LLEGAR ====
 function dispararCelebracion(){
   if(!celebracionOn) return;
@@ -1325,147 +1410,32 @@ function dispararCelebracion(){
   texto.className='textoCentral';
   texto.innerHTML='<span class="iLatina">I</span>AN';
   cont.appendChild(texto);
-  const mensajes=[
-    '¡Destino conseguido!',
-    '¡Lo lograste!',
-    '¡Bien hecho IAN!',
-    '¡Llegaste!',
-    '¡Enhorabuena!',
-    '¡Meta alcanzada!'
-  ];
+  const mensajes=['¡Destino conseguido!','¡Lo lograste!','¡Bien hecho IAN!','¡Llegaste!','¡Enhorabuena!','¡Meta alcanzada!'];
   const sub=document.createElement('div');
   sub.className='subtitulo';
   sub.textContent=mensajes[Math.floor(Math.random()*mensajes.length)];
   cont.appendChild(sub);
   const estilo=1+Math.floor(Math.random()*5);
   lanzarParticulas(cont,estilo);
-  setTimeout(()=>{
-    cont.classList.remove('on');
-    cont.innerHTML='';
-    celebracionDisparada=false;
-  },4000);
+  setTimeout(()=>{ cont.classList.remove('on'); cont.innerHTML=''; celebracionDisparada=false; },4000);
 }
-
 function lanzarParticulas(cont,estilo){
   const colores=['#ff5252','#ffd166','#06d6a0','#118ab2','#ef476f','#f78c6b','#9b5de5','#00bbf9'];
   if(estilo===1){
-    // Confetis clasicos cayendo
-    if(!document.getElementById('cssConfeti')){
-      const s=document.createElement('style');
-      s.id='cssConfeti';
-      s.textContent='@keyframes caeConfeti{0%{transform:translateY(0) rotate(0)}100%{transform:translateY(110vh) rotate(720deg);opacity:0}}';
-      document.head.appendChild(s);
-    }
-    for(let i=0;i<120;i++){
-      const c=document.createElement('div');
-      c.className='confeti';
-      c.style.left=Math.random()*100+'%';
-      c.style.top='-20px';
-      c.style.background=colores[Math.floor(Math.random()*colores.length)];
-      c.style.width=(6+Math.random()*8)+'px';
-      c.style.height=(10+Math.random()*10)+'px';
-      c.style.animation='caeConfeti '+(2.5+Math.random()*1.5)+'s linear forwards';
-      c.style.animationDelay=(Math.random()*0.5)+'s';
-      cont.appendChild(c);
-    }
+    if(!document.getElementById('cssConfeti')){ const s=document.createElement('style'); s.id='cssConfeti'; s.textContent='@keyframes caeConfeti{0%{transform:translateY(0) rotate(0)}100%{transform:translateY(110vh) rotate(720deg);opacity:0}}'; document.head.appendChild(s); }
+    for(let i=0;i<120;i++){ const c=document.createElement('div'); c.className='confeti'; c.style.left=Math.random()*100+'%'; c.style.top='-20px'; c.style.background=colores[Math.floor(Math.random()*colores.length)]; c.style.width=(6+Math.random()*8)+'px'; c.style.height=(10+Math.random()*10)+'px'; c.style.animation='caeConfeti '+(2.5+Math.random()*1.5)+'s linear forwards'; c.style.animationDelay=(Math.random()*0.5)+'s'; cont.appendChild(c); }
   }else if(estilo===2){
-    // Fuegos artificiales
-    if(!document.getElementById('cssFuegos')){
-      const s=document.createElement('style');
-      s.id='cssFuegos';
-      s.textContent='@keyframes explota{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--dx),var(--dy)) scale(0.3);opacity:0}}';
-      document.head.appendChild(s);
-    }
-    for(let centro=0;centro<5;centro++){
-      const cx=15+Math.random()*70, cy=15+Math.random()*40;
-      const t0=centro*300;
-      setTimeout(()=>{
-        for(let i=0;i<30;i++){
-          const c=document.createElement('div');
-          c.className='confeti';
-          const ang=Math.random()*Math.PI*2;
-          const dist=80+Math.random()*120;
-          c.style.left=cx+'%';
-          c.style.top=cy+'%';
-          c.style.background=colores[Math.floor(Math.random()*colores.length)];
-          c.style.borderRadius='50%';
-          c.style.width=c.style.height=(4+Math.random()*5)+'px';
-          c.style.setProperty('--dx',Math.cos(ang)*dist+'px');
-          c.style.setProperty('--dy',Math.sin(ang)*dist+'px');
-          c.style.animation='explota '+(1+Math.random()*0.8)+'s ease-out forwards';
-          cont.appendChild(c);
-        }
-      },t0);
-    }
+    if(!document.getElementById('cssFuegos')){ const s=document.createElement('style'); s.id='cssFuegos'; s.textContent='@keyframes explota{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--dx),var(--dy)) scale(0.3);opacity:0}}'; document.head.appendChild(s); }
+    for(let centro=0;centro<5;centro++){ const cx=15+Math.random()*70, cy=15+Math.random()*40; setTimeout(()=>{ for(let i=0;i<30;i++){ const c=document.createElement('div'); c.className='confeti'; const ang=Math.random()*Math.PI*2; const dist=80+Math.random()*120; c.style.left=cx+'%'; c.style.top=cy+'%'; c.style.background=colores[Math.floor(Math.random()*colores.length)]; c.style.borderRadius='50%'; c.style.width=c.style.height=(4+Math.random()*5)+'px'; c.style.setProperty('--dx',Math.cos(ang)*dist+'px'); c.style.setProperty('--dy',Math.sin(ang)*dist+'px'); c.style.animation='explota '+(1+Math.random()*0.8)+'s ease-out forwards'; cont.appendChild(c); } },centro*300); }
   }else if(estilo===3){
-    // Estrellas girando
-    if(!document.getElementById('cssEstrellas')){
-      const s=document.createElement('style');
-      s.id='cssEstrellas';
-      s.textContent='@keyframes estrellaCae{0%{transform:translateY(0) rotate(0) scale(1);opacity:1}100%{transform:translateY(110vh) rotate(1080deg) scale(0.4);opacity:0}}';
-      document.head.appendChild(s);
-    }
-    for(let i=0;i<80;i++){
-      const c=document.createElement('div');
-      c.className='confeti';
-      c.style.left=Math.random()*100+'%';
-      c.style.top='-20px';
-      c.style.background='transparent';
-      c.style.width='20px';
-      c.style.height='20px';
-      c.style.fontSize='20px';
-      c.textContent='⭐';
-      c.style.animation='estrellaCae '+(2.5+Math.random()*1.5)+'s linear forwards';
-      c.style.animationDelay=(Math.random()*0.5)+'s';
-      cont.appendChild(c);
-    }
+    if(!document.getElementById('cssEstrellas')){ const s=document.createElement('style'); s.id='cssEstrellas'; s.textContent='@keyframes estrellaCae{0%{transform:translateY(0) rotate(0) scale(1);opacity:1}100%{transform:translateY(110vh) rotate(1080deg) scale(0.4);opacity:0}}'; document.head.appendChild(s); }
+    for(let i=0;i<80;i++){ const c=document.createElement('div'); c.className='confeti'; c.style.left=Math.random()*100+'%'; c.style.top='-20px'; c.style.background='transparent'; c.style.width='20px'; c.style.height='20px'; c.style.fontSize='20px'; c.textContent='⭐'; c.style.animation='estrellaCae '+(2.5+Math.random()*1.5)+'s linear forwards'; c.style.animationDelay=(Math.random()*0.5)+'s'; cont.appendChild(c); }
   }else if(estilo===4){
-    // Cohetes
-    if(!document.getElementById('cssCohetes')){
-      const s=document.createElement('style');
-      s.id='cssCohetes';
-      s.textContent='@keyframes subeCohete{0%{transform:translateY(0);opacity:1}100%{transform:translateY(-110vh);opacity:0.2}}';
-      document.head.appendChild(s);
-    }
-    for(let i=0;i<15;i++){
-      const c=document.createElement('div');
-      c.className='confeti';
-      c.style.left=(5+Math.random()*90)+'%';
-      c.style.bottom='-30px';
-      c.style.top='auto';
-      c.style.background='transparent';
-      c.style.width='30px';
-      c.style.height='30px';
-      c.style.fontSize='28px';
-      c.textContent='🚀';
-      c.style.animation='subeCohete '+(1.5+Math.random()*1)+'s ease-out forwards';
-      c.style.animationDelay=(Math.random()*1)+'s';
-      cont.appendChild(c);
-    }
+    if(!document.getElementById('cssCohetes')){ const s=document.createElement('style'); s.id='cssCohetes'; s.textContent='@keyframes subeCohete{0%{transform:translateY(0);opacity:1}100%{transform:translateY(-110vh);opacity:0.2}}'; document.head.appendChild(s); }
+    for(let i=0;i<15;i++){ const c=document.createElement('div'); c.className='confeti'; c.style.left=(5+Math.random()*90)+'%'; c.style.bottom='-30px'; c.style.top='auto'; c.style.background='transparent'; c.style.width='30px'; c.style.height='30px'; c.style.fontSize='28px'; c.textContent='🚀'; c.style.animation='subeCohete '+(1.5+Math.random()*1)+'s ease-out forwards'; c.style.animationDelay=(Math.random()*1)+'s'; cont.appendChild(c); }
   }else{
-    // Globos subiendo
-    if(!document.getElementById('cssGlobos')){
-      const s=document.createElement('style');
-      s.id='cssGlobos';
-      s.textContent='@keyframes subeGlobo{0%{transform:translateY(0) translateX(0);opacity:1}100%{transform:translateY(-110vh) translateX(var(--dx));opacity:0}}';
-      document.head.appendChild(s);
-    }
-    for(let i=0;i<25;i++){
-      const c=document.createElement('div');
-      c.className='confeti';
-      c.style.left=Math.random()*100+'%';
-      c.style.bottom='-40px';
-      c.style.top='auto';
-      c.style.background='transparent';
-      c.style.width='30px';
-      c.style.height='30px';
-      c.style.fontSize='28px';
-      c.textContent='🎈';
-      c.style.setProperty('--dx',((Math.random()-0.5)*60)+'px');
-      c.style.animation='subeGlobo '+(2+Math.random()*1.5)+'s ease-out forwards';
-      c.style.animationDelay=(Math.random()*0.7)+'s';
-      cont.appendChild(c);
-    }
+    if(!document.getElementById('cssGlobos')){ const s=document.createElement('style'); s.id='cssGlobos'; s.textContent='@keyframes subeGlobo{0%{transform:translateY(0) translateX(0);opacity:1}100%{transform:translateY(-110vh) translateX(var(--dx));opacity:0}}'; document.head.appendChild(s); }
+    for(let i=0;i<25;i++){ const c=document.createElement('div'); c.className='confeti'; c.style.left=Math.random()*100+'%'; c.style.bottom='-40px'; c.style.top='auto'; c.style.background='transparent'; c.style.width='30px'; c.style.height='30px'; c.style.fontSize='28px'; c.textContent='🎈'; c.style.setProperty('--dx',((Math.random()-0.5)*60)+'px'); c.style.animation='subeGlobo '+(2+Math.random()*1.5)+'s ease-out forwards'; c.style.animationDelay=(Math.random()*0.7)+'s'; cont.appendChild(c); }
   }
 }
 </script>
