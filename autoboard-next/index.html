@@ -23,7 +23,7 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #avisoInicial.oculto{display:none}
 @keyframes avisoPulse{0%,100%{opacity:1}50%{opacity:.6}}
 
-/* ============ NAVBANNER (rectángulo entero blanco/azul) ============ */
+/* ============ NAVBANNER ============ */
 #navbanner{
   position:fixed !important;left:50% !important;transform:translateX(-50%) !important;
   top:8px !important;z-index:20 !important;display:none;align-items:center !important;gap:14px !important;
@@ -99,7 +99,6 @@ body.modo-navegacion #minihud{display:flex}
 #popupCargador .acciones button{flex:1;min-width:120px;background:#1d3a2c;border:1px solid #2e6b4a;color:#e8eef2;border-radius:10px;padding:12px 16px;font-size:14px;font-weight:700;cursor:pointer}
 #popupCargador .acciones button.cerrar{flex:0 0 auto;min-width:auto;background:#2a1a1a;border-color:#5a2020;color:#ff8a8a}
 
-/* ============ LISTA DE CARGADORES — panel lateral izquierdo compacto ============ */
 #listaCargadores{
   position:fixed;top:76px;left:10px;z-index:35;
   width:220px;max-height:calc(100vh - 100px);
@@ -349,11 +348,10 @@ const OPERADORES_COLORES={
   3534:{nombre:'Zunder',color:'#ffd600'},
   3478:{nombre:'Ionity',color:'#536dfe'}
 };
-// Colores por tipo de potencia (reutilizados de los iconos del mapa)
 function colorPotencia(kw){
-  if(kw>72) return '#d32f2f';       // rojo — 72+
-  if(kw>=50) return '#ff6f00';      // naranja — 50-72
-  return '#f9a825';                 // ámbar — 11-22
+  if(kw>72) return '#d32f2f';
+  if(kw>=50) return '#ff6f00';
+  return '#f9a825';
 }
 
 let navZoomBase=17.2;
@@ -422,7 +420,6 @@ map.on('load',()=>{
   map.addLayer({id:'giro-pos',type:'symbol',source:'giro-pos',
     layout:{'icon-image':'chevron-giro','icon-size':0.85,'icon-rotate':['get','bearing'],'icon-rotation-alignment':'map','icon-allow-overlap':true,'icon-ignore-placement':true,'icon-pitch-alignment':'map'}});
   map.addSource('ruta',{type:'geojson',data:{type:'FeatureCollection',features:[]},lineMetrics:true});
-  // Vuelta a la opacidad original 0.85
   const paintBase={'line-opacity':0.85,'line-width':['interpolate',['linear'],['zoom'],14,8,16,14,18,20,20,26]};
   const layoutBase={'line-cap':'round','line-join':'round','line-round-limit':1.0};
   map.addLayer({id:'ruta-0',type:'line',source:'ruta',filter:['==',['get','nivel'],0],paint:{...paintBase,'line-color':'#1e88e5'},layout:layoutBase});
@@ -754,13 +751,12 @@ document.getElementById('btnLimpiarFavs').onclick=()=>{
   alert('Favoritos borrados.');
 };
 
-/* ========== LISTA DE CARGADORES CERCANOS (panel lateral) ========== */
+/* ========== LISTA DE CARGADORES CERCANOS ========== */
 document.getElementById('btnListaCargadores').onclick = async ()=>{
   if(!lastFix){ alert('Activa el GPS primero.'); return; }
   const panel = document.getElementById('listaCargadores');
   const cont  = document.getElementById('listaCargadoresItems');
   panel.classList.add('on');
-  // Cerrar panel de ajustes para que no estorbe
   document.getElementById('panelAjustes').classList.remove('on');
   cont.innerHTML = '<div style="color:#8d99a5;padding:14px;text-align:center;font-size:11px">Buscando…</div>';
   if(!cargadoresData.length){
@@ -782,7 +778,6 @@ document.getElementById('btnListaCargadores').onclick = async ()=>{
     const titulo = ai.Title || ai.AddressLine1 || 'Cargador';
     const dir = [ai.AddressLine1, ai.Town].filter(Boolean).join(', ') || '—';
     const distTxt = d<1000 ? Math.round(d)+' m' : (d/1000).toFixed(1)+' km';
-    // Potencia con su color asignado por tipo (Tesla va aparte con rojo vivo + clase .tesla)
     const colorKw = esSC ? '#ff1744' : colorPotencia(kw);
     return ''
       + '<div class="cargadorItem'+(esSC?' tesla':'')+'" data-lat="'+ai.Latitude+'" data-lon="'+ai.Longitude+'" style="border-left-color:'+(esSC?'#ff1744':op.color)+'">'
@@ -810,16 +805,72 @@ document.getElementById('btnCerrarListaCargadores').onclick = ()=>{
   document.getElementById('listaCargadores').classList.remove('on');
 };
 
+/* ========== FAVORITOS DE DIRECCIONES ========== */
+let favsDir = JSON.parse(localStorage.getItem('dirs_favs') || '[]');
+function guardarFavsDir(){ localStorage.setItem('dirs_favs', JSON.stringify(favsDir)); }
+function esFavDir(lat,lon){
+  return favsDir.findIndex(f => Math.abs(f.lat-lat) < 1e-6 && Math.abs(f.lon-lon) < 1e-6);
+}
+function toggleFavDir(item){
+  const i = esFavDir(item.lat, item.lon);
+  if(i >= 0){ favsDir.splice(i,1); }
+  else {
+    favsDir.unshift(item);
+    if(favsDir.length > 8) favsDir.length = 8;
+  }
+  guardarFavsDir();
+}
+
 const barraB=document.getElementById('barraBusqueda');
 const inputB=document.getElementById('inputBusqueda');
 const sugs=document.getElementById('sugerencias');
 let debounceTimer=null;
 
+function pintarFavoritos(){
+  if(!favsDir.length){
+    sugs.innerHTML = '<div class="sug" style="color:#8d99a5;cursor:default">Sin favoritos guardados.<br>Busca una dirección y pulsa ☆ para guardarla.</div>';
+    sugs.classList.add('on');
+    return;
+  }
+  const cinco = favsDir.slice(0,5);
+  sugs.innerHTML = cinco.map((f,i)=>{
+    const dir = f.dir || '';
+    return ''
+      + '<div class="sug sugFav" data-idx="'+i+'" style="display:flex;justify-content:space-between;align-items:center;gap:10px">'
+      +   '<div style="flex:1;min-width:0">'
+      +     '<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">⭐ '+escapeHTML(f.nombre)+'</div>'
+      +     (dir?'<div class="sub" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHTML(dir)+'</div>':'')
+      +   '</div>'
+      +   '<button class="quitarFav" data-idx="'+i+'" title="Quitar de favoritos" style="background:transparent;border:0;color:#ffd166;font-size:20px;cursor:pointer;padding:6px 10px;flex:0 0 auto">✕</button>'
+      + '</div>';
+  }).join('');
+  sugs.classList.add('on');
+  sugs.querySelectorAll('.sugFav').forEach(el=>{
+    el.onclick = (ev)=>{
+      if(ev.target.classList.contains('quitarFav')) return;
+      const f = cinco[Number(el.dataset.idx)];
+      barraB.classList.remove('on');
+      sugs.classList.remove('on');
+      inputB.value='';
+      navegarA(f.lat, f.lon);
+    };
+  });
+  sugs.querySelectorAll('.quitarFav').forEach(btn=>{
+    btn.onclick = (ev)=>{
+      ev.stopPropagation();
+      const f = cinco[Number(btn.dataset.idx)];
+      const i = esFavDir(f.lat, f.lon);
+      if(i>=0) favsDir.splice(i,1);
+      guardarFavsDir();
+      pintarFavoritos();
+    };
+  });
+}
+
 document.getElementById('btnLupa').onclick=()=>{
   barraB.classList.add('on');
   inputB.value='';
-  sugs.classList.remove('on');
-  sugs.innerHTML='';
+  pintarFavoritos();
   setTimeout(()=>inputB.focus(),100);
 };
 document.getElementById('btnCerrarBusqueda').onclick=()=>{
@@ -830,9 +881,14 @@ document.getElementById('btnCerrarBusqueda').onclick=()=>{
 inputB.addEventListener('input',()=>{
   clearTimeout(debounceTimer);
   const q=inputB.value.trim();
-  if(q.length<3){sugs.classList.remove('on');return;}
+  if(q.length < 3){
+    if(q.length === 0) pintarFavoritos();
+    else sugs.classList.remove('on');
+    return;
+  }
   debounceTimer=setTimeout(()=>buscarSugerencias(q),250);
 });
+
 async function buscarSugerencias(q){
   const url='https://api.tomtom.com/search/2/search/'+encodeURIComponent(q)+'.json'
     +'?key='+TT
@@ -851,11 +907,45 @@ async function buscarSugerencias(q){
     sugs.innerHTML=j.results.map((s,i)=>{
       const direccion=s.address?(s.address.freeformAddress||''):(s.poi?s.poi.name:'');
       const sub=s.poi&&s.poi.name?s.poi.name:'';
-      return '<div class="sug" data-idx="'+i+'">'+escapeHTML(direccion)+(sub?'<div class="sub">'+escapeHTML(sub)+'</div>':'')+'</div>';
+      const lat=s.position.lat, lon=s.position.lon;
+      const yaFav = esFavDir(lat,lon) >= 0;
+      const estrella = yaFav ? '★' : '☆';
+      const colorEstrella = yaFav ? '#ffd166' : '#8d99a5';
+      return ''
+        + '<div class="sug sugRes" data-idx="'+i+'" style="display:flex;justify-content:space-between;align-items:center;gap:10px">'
+        +   '<div style="flex:1;min-width:0">'
+        +     '<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHTML(direccion)+'</div>'
+        +     (sub?'<div class="sub" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHTML(sub)+'</div>':'')
+        +   '</div>'
+        +   '<button class="favBtn" data-idx="'+i+'" title="Guardar en favoritos" '
+        +     'style="background:transparent;border:0;color:'+colorEstrella+';font-size:22px;cursor:pointer;padding:6px 10px;flex:0 0 auto">'
+        +     estrella
+        +   '</button>'
+        + '</div>';
     }).join('');
     sugs.classList.add('on');
-    sugs.querySelectorAll('.sug').forEach((el,idx)=>{
-      el.onclick=()=>seleccionarSugerencia(j.results[idx]);
+
+    sugs.querySelectorAll('.sugRes').forEach(el=>{
+      el.onclick = (ev)=>{
+        if(ev.target.classList.contains('favBtn')) return;
+        seleccionarSugerencia(j.results[Number(el.dataset.idx)]);
+      };
+    });
+    sugs.querySelectorAll('.favBtn').forEach(btn=>{
+      btn.onclick = (ev)=>{
+        ev.stopPropagation();
+        const idx = Number(btn.dataset.idx);
+        const res = j.results[idx];
+        const nombre = (res.poi && res.poi.name) || (res.address && res.address.freeformAddress) || 'Dirección';
+        const item = {
+          nombre: nombre,
+          dir: (res.address && res.address.freeformAddress) || '',
+          lat: res.position.lat,
+          lon: res.position.lon
+        };
+        toggleFavDir(item);
+        buscarSugerencias(q);
+      };
     });
   }catch(e){console.warn('sug error',e);}
 }
@@ -1475,7 +1565,6 @@ function flechaCarrilSVG(dirs, activo, colores, x, y){
   });
   return out;
 }
-// CARTELES SIN BORDE — el SVG no pinta rect, el fondo lo pone el navbar
 function cartelConCarriles(lanes, mod, hw){
   const colores = colorCartel(hw);
   const n = lanes.length;
