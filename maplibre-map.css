@@ -45,8 +45,8 @@ html,body{margin:0;height:100%;background:#0b0e12;color:#e8eef2;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* coche: flecha simple; MapLibre la gira y la tumba sobre el asfalto (Marker con alineacion 'map') */
-.car{width:26px;height:26px;display:flex;align-items:center;justify-content:center}
-.car svg{width:26px;height:26px;transform-origin:50% 50%;filter:drop-shadow(0 1px 3px rgba(0,0,0,.6))}
+.car{width:34px;height:34px;display:flex;align-items:center;justify-content:center}
+.car svg{width:34px;height:34px;transform-origin:50% 50%;filter:drop-shadow(0 1px 3px rgba(0,0,0,.6))}
 
 .maplibregl-ctrl-attrib{font-size:9px!important;background:rgba(10,14,20,.6)!important;color:#7b8b96!important}
 .maplibregl-ctrl-attrib a{color:#9aa7b2!important}
