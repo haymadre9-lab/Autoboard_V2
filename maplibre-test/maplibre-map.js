@@ -591,23 +591,43 @@ function bucleCamara(ts){
   }
   const dB = diffAngulo(camBearing, camBearingObj);
   if (Math.abs(dB) > 0.05){ camBearing = (((camBearing + dB*(1 - Math.exp(-dtMs/550))) % 360) + 360) % 360; mover = true; }
-  else if (dB !== 0){ camBearing = ((camBearingObj % 360) + 360) % 360; mover = true; }
+  else if (Math.abs(dB) > 1e-6){ camBearing = ((camBearingObj % 360) + 360) % 360; mover = true; }   // ultimo ajuste, UNA vez
   if (camZoom === null){ camZoom = camZoomObj = navZoom; }
   let zoomCambia = false;
   const dz = camZoomObj - camZoom;
   if (Math.abs(dz) > 0.001){ camZoom += dz*(1 - Math.exp(-dtMs/350)); zoomCambia = true; }
-  else if (dz !== 0){ camZoom = camZoomObj; zoomCambia = true; }
+  else if (Math.abs(dz) > 1e-6){ camZoom = camZoomObj; zoomCambia = true; }
   // flecha: con el mapa girando con el rumbo apunta siempre arriba (rotacion = bearing del mapa);
   // con el mapa fijo al norte, apunta al rumbo real
   const rot = girarMapaOn ? camBearing : heading;
   if (rotMostrada === null || Math.abs(diffAngulo(rotMostrada, rot)) > 0.1){ carMk.setRotation(rot); rotMostrada = rot; }
-  if (follow && (mover || zoomCambia)){
-    const o = { center: carPos, bearing: camBearing };
-    if (zoomCambia) o.zoom = camZoom;
-    map.jumpTo(o);
+  if (!follow) camSucia = false;
+  else if (mover || zoomCambia || camSucia){
+    // jumpTo() empieza llamando a stop(), y stop() REINICIA los gestos tactiles de MapLibre: llamarlo en cada
+    // fotograma mientras hay un dedo en el mapa lo deja sin zoom ni arrastre. Mientras dura el gesto la camara
+    // se pausa (camSucia = pendiente de reencuadrar) y al soltar se reencuadra de una vez.
+    if (mapaTocado()) camSucia = true;
+    else {
+      const o = { center: carPos, bearing: camBearing };
+      if (zoomCambia) o.zoom = camZoom;
+      map.jumpTo(o); camSucia = false;
+    }
   }
 }
 requestAnimationFrame(bucleCamara);
+let camSucia = false;
+// Seguimiento de los dedos (o la rueda) sobre el mapa. Un puntero que no avisa de que se ha soltado caduca a los 8 s.
+const _punteros = new Set(); let _tPtr = 0, _rueda = 0;
+const _cm = map.getCanvasContainer();
+_cm.addEventListener('pointerdown', e => { _punteros.add(e.pointerId); _tPtr = performance.now(); }, { passive:true });
+addEventListener('pointermove', () => { if (_punteros.size) _tPtr = performance.now(); }, { passive:true, capture:true });
+function _suelta(e){
+  _punteros.delete(e.pointerId);
+  if (!_punteros.size && camZoom !== null && Math.abs(map.getZoom() - camZoom) > 0.01){ camZoom = camZoomObj = map.getZoom(); }   // el zoom que dejo el usuario es el nuevo
+}
+addEventListener('pointerup', _suelta, true); addEventListener('pointercancel', _suelta, true);
+_cm.addEventListener('wheel', () => { _rueda = performance.now() + 500; }, { passive:true });
+function mapaTocado(){ const n = performance.now(); return (_punteros.size > 0 && n - _tPtr < 8000) || n < _rueda; }
 
 // Si el usuario hace zoom con los dedos, el bucle no debe pelearse con el: se toma su zoom como nuevo objetivo.
 map.on('zoomend', e => { if (e && e.originalEvent){ camZoom = camZoomObj = map.getZoom(); } });
@@ -659,10 +679,10 @@ function montarCapas(){
     // ruta + tramos con congestion
     src('ruta', { type:'geojson', data: datosFuente['ruta'] });
     add({ id:'ruta', type:'line', source:'ruta', layout:{ 'line-cap':'round', 'line-join':'round' },
-      paint:{ 'line-color':'#1e88e5', 'line-width':['interpolate',['linear'],['zoom'],14,6,16,10,18,15,20,22] } });
+      paint:{ 'line-color':'#1e88e5', 'line-width':['interpolate',['linear'],['zoom'],14,5,16,9,17,15,18,22,19,28,20,34] } });
     src('ruta-tramos', { type:'geojson', data: datosFuente['ruta-tramos'] });
     add({ id:'ruta-tramos', type:'line', source:'ruta-tramos', layout:{ 'line-cap':'round', 'line-join':'round' },
-      paint:{ 'line-color':['get','color'], 'line-width':['interpolate',['linear'],['zoom'],14,4,16,7,18,11,20,16] } });
+      paint:{ 'line-color':['get','color'], 'line-width':['interpolate',['linear'],['zoom'],14,4,16,7,17,11,18,16,19,21,20,26] } });
 
     // radares: circulos (fijo/movil/semaforo) y diamantes (tramo)
     src('radares', { type:'geojson', data: datosFuente['radares'] });
@@ -684,6 +704,22 @@ function montarCapas(){
   }catch(e){ console.warn('[capas] ', e.message); try{ setStatus('Capas: ' + e.message); }catch(er){} }
 }
 map.on('style.load', montarCapas);
+/* Red de seguridad: al volver del HUD/Faro (o si el navegador suelta y recupera el contexto WebGL) se comprueba que las
+   capas siguen en el mapa; si no, se montan otra vez, y si si estan, se reenvian los datos. Si hizo falta restaurarlas,
+   avisa en la franja roja: asi sabremos que el fallo existe y cuando pasa. */
+function restaurarCapas(motivo){
+  try{
+    if (!estiloListo) return;
+    if (!map.getLayer('ruta')){
+      montarCapas();
+      console.warn('[capas] perdidas (' + motivo + '): restauradas');
+      if (window.__show) window.__show('AVISO: capas del mapa perdidas (' + motivo + ') y restauradas');
+      return;
+    }
+    for (const id in datosFuente){ const sr = map.getSource(id); if (sr) sr.setData(datosFuente[id]); }
+  }catch(e){ console.warn('[capas]', e.message); }
+}
+map.on('webglcontextrestored', () => restaurarCapas('webgl'));
 // Los iconos que faltan en el estilo (p. ej. si un cargador usa una clave nueva) no deben llenar la consola.
 map.on('styleimagemissing', e => { if (registroImagenes.has(e.id)){ const im = registroImagenes.get(e.id); try{ map.addImage(e.id, im.data, { pixelRatio: im.pixelRatio }); }catch(er){} } });
 
@@ -768,6 +804,29 @@ function rumboDelGPS(c, now, v){
 function fmtDist(m){ return m<1000 ? Math.round(m)+' m' : (m/1000).toFixed(1)+' km'; }
 function setStatus(t){ $('status').textContent = t; }
 
+/* ---- Posicion MOSTRADA ajustada a la ruta ----------------------------------------------------
+   El GPS cae unos metros a un lado de la linea (vas por el carril derecho, la linea es el eje de la
+   via, y el GPS tiene su propio ruido lateral); con la camara inclinada ese desfase se ve como una
+   flecha que "se sale por la derecha y vuelve". Con ruta activa, la flecha y el arranque de la
+   linea se dibujan sobre el punto mas cercano de la ruta si esta a menos de SNAP_M metros; si no,
+   la posicion real. SOLO es para dibujar: velocidad, progreso, radares y HUD siguen usando el fix real. */
+const SNAP_M = 25;
+function ajustarARuta(lat, lon){
+  if (!routeOn || routeCoordsLL.length < 2) return [lat, lon];
+  const kx = 111320*Math.cos(lat*Math.PI/180), ky = 110540;
+  let mejor = null, md = 1e9;
+  const i0 = Math.max(1, routeProgIdx - 5), i1 = Math.min(routeCoordsLL.length, routeProgIdx + 160);
+  for (let i = i0; i < i1; i++){
+    const a = routeCoordsLL[i-1], b = routeCoordsLL[i];
+    const ax = (a[1]-lon)*kx, ay = (a[0]-lat)*ky, bx = (b[1]-lon)*kx, by = (b[0]-lat)*ky;   // el coche es el origen
+    const dx = bx-ax, dy = by-ay, L2 = dx*dx + dy*dy;
+    const t = L2 ? Math.max(0, Math.min(1, (-ax*dx - ay*dy)/L2)) : 0;
+    const px = ax + t*dx, py = ay + t*dy, d = Math.hypot(px, py);
+    if (d < md){ md = d; mejor = [lat + py/ky, lon + px/kx]; }
+  }
+  return (mejor && md <= SNAP_M) ? mejor : [lat, lon];
+}
+
 /* ---- GPS: mismo patron que index.html --------------------------------- */
 if (navigator.geolocation){
   navigator.geolocation.watchPosition(p => {
@@ -791,11 +850,12 @@ if (navigator.geolocation){
     // es lo primero que hay que descartar: se deja el mapa quieto del todo mientras
     // cualquiera de los dos este abierto, no solo con el HUD como hasta ahora.
     mapaOculto = hudAbierto || faroOn;
-    nuevoTramoCoche([now.lon, now.lat], mapaOculto ? 0 : dt);
+    const vis = ajustarARuta(now.lat, now.lon);   // posicion para DIBUJAR (ajustada a la ruta si la hay)
+    nuevoTramoCoche([vis[1], vis[0]], mapaOculto ? 0 : dt);
     if (!mapaOculto){
       // El mapa gira con el rumbo (suavizado por actualizarBearing) o se queda al norte.
       camBearingObj = girarMapaOn ? actualizarBearing(heading, now.t) : 0;
-      if (follow) seguirCamara([now.lat, now.lon], dt);
+      if (follow) seguirCamara(vis, dt);
     }
     if (hudAbierto && hud2 && !hud3dActivo){ try{ hud2.setSpeed(hudDemo ? Math.max(speedKmh/3.6, 15) : speedKmh/3.6); if (!hudDemo) hud2.syncPosition(now.lat, now.lon); }catch(e){} }
     if (hudAbierto && hud3dActivo) alimentarHud3D();
@@ -1066,11 +1126,80 @@ function trimRoute(){
     if (routeOn && routeDraw.length){
       let lo=0, hi=routeDrawIdx.length-1;
       while (lo<hi){ const mid=(lo+hi)>>1; if (routeDrawIdx[mid]<routeProgIdx) lo=mid+1; else hi=mid; }
-      const ahead = routeDraw.slice(lo); ahead.unshift([here[1], here[0]]);
+      const ahead = routeDraw.slice(lo); const vis = ajustarARuta(here[0], here[1]); ahead.unshift([vis[1], vis[0]]);
       if (ahead.length>=2) setRutaDraw(ahead);
     }
   }
 }
+
+/* ---- Trafico sobre la ruta ----------------------------------------------------------------
+   TomTom devuelve, junto con la ruta, los tramos con retenciones (sectionType TRAFFIC) y su magnitud:
+   1 leve -> AMARILLO, 2 moderada -> NARANJA, 3 grave / 4 cortada / velocidad 0 -> ROJO. Se pintan
+   encima de la linea azul. Salen del trafico en tiempo real de TomTom: no es el color de CADA calle
+   por su velocidad, sino los tramos en los que TomTom ha registrado retencion. */
+function colorTramoTrafico(sec){
+  const mag = sec.magnitudeOfDelay || 0;
+  if (sec.simpleCategory === 'ROAD_CLOSURE' || sec.effectiveSpeedInKmh === 0 || mag >= 3) return '#ff2d2d';
+  if (mag === 2) return '#ff9a1f';
+  if (mag === 1) return '#ffd000';
+  return null;
+}
+function tramosDeTrafico(route, pts){
+  const out = [];
+  (route.sections || []).forEach(sec => {
+    if (sec.sectionType !== 'TRAFFIC') return;
+    const a = sec.startPointIndex, b = sec.endPointIndex; if (a == null || b == null || b <= a) return;
+    const seg = pts.slice(a, b+1); if (seg.length < 2) return;
+    const col = colorTramoTrafico(sec); if (!col) return;
+    out.push({ type:'Feature', properties:{ color:col }, geometry:{ type:'LineString', coordinates: seg.map(q => [q[1], q[0]]) } });
+  });
+  return out;
+}
+/* Actualizacion del trafico mientras conduces: cada 3 min se pide la ruta otra vez a TomTom SOLO para
+   leer el trafico. Si la ruta nueva coincide con la que llevas (misma longitud restante y 12 puntos
+   repartidos a menos de 25 m), se actualizan los colores y el tiempo restante; si es distinta, se IGNORA
+   y se sigue con la tuya (nada de cambiar de ruta por sorpresa; para eso esta el recalculo por desvio). */
+const TRAFICO_CADA_MS = 180000;
+let trafUlt = 0, trafOcupado = false;
+function mismaRuta(nuevos){
+  if (nuevos.length < 2 || routeCoordsLL.length < 2) return false;
+  const resto = (routeCumDist[routeCumDist.length-1] || 0) - recorridoAhora();
+  let nl = 0; for (let i = 1; i < nuevos.length; i++) nl += dist(nuevos[i-1], nuevos[i]);
+  if (Math.abs(nl - resto) > Math.max(200, resto*0.03)) return false;
+  const n = 12;
+  for (let k = 1; k <= n; k++){
+    const q = nuevos[Math.min(nuevos.length-1, Math.round(k*(nuevos.length-1)/n))];
+    let md = 1e9;
+    for (let i = Math.max(1, routeProgIdx-5); i < routeCoordsLL.length; i++){
+      const dd = segDistM(q, {lat:routeCoordsLL[i-1][0], lon:routeCoordsLL[i-1][1]}, {lat:routeCoordsLL[i][0], lon:routeCoordsLL[i][1]});
+      if (dd < md) md = dd; if (md < 25) break;
+    }
+    if (md >= 25) return false;
+  }
+  return true;
+}
+async function refrescarTrafico(forzar){
+  if (!routeOn || !lastFix || !destLL || trafOcupado) return;
+  if (!forzar && performance.now() - trafUlt < TRAFICO_CADA_MS) return;
+  trafOcupado = true;
+  const ver0 = rutaVersion;
+  try{
+    const locs = lastFix.lat+','+lastFix.lon + wps.map(w => ':'+w.ll[0]+','+w.ll[1]).join('') + ':'+destLL[0]+','+destLL[1];
+    const r = await fetch('https://api.tomtom.com/routing/1/calculateRoute/'+locs+'/json?key='+TT
+      +'&traffic=true&travelMode=car&instructionsType=text&language=es-ES&sectionType=traffic');
+    const j = await r.json();
+    const route = j.routes && j.routes[0];
+    if (!route || !routeOn || ver0 !== rutaVersion) return;   // ruta cancelada o cambiada mientras tanto
+    const pts = []; route.legs.forEach(leg => leg.points.forEach(q => pts.push([q.latitude, q.longitude])));
+    trafUlt = performance.now();
+    if (!mismaRuta(pts)){ console.log('[trafico] TomTom propone otra ruta: se conserva la actual'); return; }
+    trafficFeatures = tramosDeTrafico(route, pts); pintarTrafico();
+    if (route.summary){ rutaTiempoTotal = route.summary.travelTimeInSeconds; rutaDistTotal = route.summary.lengthInMeters; }
+    console.log('[trafico] actualizado:', trafficFeatures.length, 'tramos con retencion');
+  }catch(e){ console.warn('[trafico]', e.message); }
+  finally{ trafOcupado = false; }
+}
+setInterval(() => { if (!document.hidden) refrescarTrafico(false); }, 30000);
 
 /* ---- ruta: mismo endpoint y parametros que AutoBoard, con guidance ------ */
 let destNombre = '';
@@ -1108,15 +1237,7 @@ async function irA(destino, nombre, opc){
     setRutaDraw(routeDraw);
 
     // Tramos de congestion sobre la propia ruta, extraido literal de AutoBoard.
-    trafficFeatures = [];
-    (route.sections||[]).forEach(sec => { if (sec.sectionType!=='TRAFFIC') return;
-      const a=sec.startPointIndex, b=sec.endPointIndex; if (a==null||b==null||b<=a) return;
-      const seg = pts.slice(a,b+1); if (seg.length<2) return;
-      const mag = sec.magnitudeOfDelay||0; let col=null;
-      if (sec.simpleCategory==='ROAD_CLOSURE'||sec.effectiveSpeedInKmh===0) col='#ff2d2d';
-      else if (mag>=3) col='#ff2d2d'; else if (mag>=1) col='#ff9a1f';
-      if (col) trafficFeatures.push({ type:'Feature', properties:{ color:col }, geometry:{ type:'LineString', coordinates: seg.map(p=>[p[1],p[0]]) } });
-    });
+    trafficFeatures = tramosDeTrafico(route, pts); trafUlt = performance.now();
     pintarTrafico();
     if (trafficFeatures.length) console.log('[ruta] tramos de trafico:', trafficFeatures.length);
 
@@ -1397,6 +1518,7 @@ function cerrarHud(){
   $('hud2wrap').classList.remove('on'); $('map').style.visibility = ''; avisoHud('');
   hudAbierto = false; hudDemo = false; marcarPestana('tabMapa');
   follow = true; zoomPendiente = true; if (lastFix) seguirCamara([lastFix.lat, lastFix.lon], 0);   // el mapa vuelve donde esta el coche
+  restaurarCapas('hud');
   fpsArrancar();
 }
 
@@ -1433,6 +1555,7 @@ function cerrarFaro(){
   marcarPestana('tabMapa');
   fpsArrancar();
   follow = true; zoomPendiente = true; if (lastFix) seguirCamara([lastFix.lat, lastFix.lon], 0);
+  restaurarCapas('faro');
 }
 setInterval(() => { if (!faroOn) return; faroBlinkT = !faroBlinkT; $('fSpeed').classList.toggle('blink', faroBlinkT && $('fSpeed').classList.contains('alerta')); }, 450);
 
