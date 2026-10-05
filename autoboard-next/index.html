@@ -23,29 +23,36 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #avisoInicial.oculto{display:none}
 @keyframes avisoPulse{0%,100%{opacity:1}50%{opacity:.6}}
 
-/* ==== NAVBANNER: rectángulo entero blanco/azul ==== */
+/* ============ NAVBANNER (forzado con !important) ============ */
 #navbanner{
-  position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:20;
-  display:none;align-items:center;gap:14px;
-  background:#ffffff;
-  border:3px solid #000000;
-  border-radius:16px;
-  padding:10px 20px 10px 12px;
-  max-width:94vw;
-  box-shadow:0 4px 16px rgba(0,0,0,.5);
+  position:fixed !important;
+  left:50% !important;
+  transform:translateX(-50%) !important;
+  top:8px !important;
+  z-index:20 !important;
+  display:none;
+  align-items:center !important;
+  gap:14px !important;
+  background:#ffffff !important;
+  border:3px solid #000000 !important;
+  border-radius:16px !important;
+  padding:10px 20px 10px 12px !important;
+  max-width:94vw !important;
+  box-shadow:0 4px 16px rgba(0,0,0,.5) !important;
 }
+#navbanner.on{display:flex !important}
 #navbanner.hw{
-  background:#1565c0;
-  border-color:#ffffff;
+  background:#1565c0 !important;
+  border-color:#ffffff !important;
 }
-#navarrow{min-width:64px;max-width:240px;height:64px;flex:0 0 auto;display:flex;align-items:center;justify-content:center}
-#navarrow svg{height:64px;width:auto;display:block;max-width:none}
-#navd{font:800 26px system-ui,sans-serif;color:#000000}
-#navsub{font:600 13px system-ui,sans-serif;color:#000000;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#navbanner.hw #navd{color:#ffffff}
-#navbanner.hw #navsub{color:#ffffff}
-#navbanner #btnPararRuta{width:38px;height:38px;border-radius:50%;border:2px solid #5a2020;background:rgba(60,20,20,.85);color:#ff8a8a;font-size:20px;font-weight:900;cursor:pointer;display:none;align-items:center;justify-content:center;margin-left:8px;flex:0 0 auto;padding:0}
-#navbanner #btnPararRuta.on{display:flex}
+#navarrow{min-width:64px !important;max-width:240px !important;height:64px !important;flex:0 0 auto !important;display:flex !important;align-items:center !important;justify-content:center !important}
+#navarrow svg{height:64px !important;width:auto !important;display:block !important;max-width:none !important}
+#navd{font:800 26px system-ui,sans-serif !important;color:#000000 !important}
+#navsub{font:600 13px system-ui,sans-serif !important;color:#000000 !important;max-width:220px !important;overflow:hidden !important;text-overflow:ellipsis !important;white-space:nowrap !important}
+#navbanner.hw #navd{color:#ffffff !important}
+#navbanner.hw #navsub{color:#ffffff !important}
+#navbanner #btnPararRuta{width:38px !important;height:38px !important;border-radius:50% !important;border:2px solid #5a2020 !important;background:rgba(60,20,20,.85) !important;color:#ff8a8a !important;font-size:20px !important;font-weight:900 !important;cursor:pointer !important;display:none;align-items:center !important;justify-content:center !important;margin-left:8px !important;flex:0 0 auto !important;padding:0 !important}
+#navbanner #btnPararRuta.on{display:flex !important}
 
 #grupoArribaDer{position:fixed;top:14px;right:14px;z-index:25;display:flex;align-items:center;gap:10px}
 #barraBusqueda{display:none;align-items:center;background:rgba(10,13,16,.95);border:2px solid #2e6b4a;border-radius:14px;padding:0 8px;height:52px;min-width:320px;max-width:60vw}
