@@ -23,35 +23,22 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #avisoInicial.oculto{display:none}
 @keyframes avisoPulse{0%,100%{opacity:1}50%{opacity:.6}}
 
-/* ============ NAVBANNER (forzado con !important) ============ */
+/* ============ NAVBANNER (rectángulo entero blanco/azul) ============ */
 #navbanner{
-  position:fixed !important;
-  left:50% !important;
-  transform:translateX(-50%) !important;
-  top:8px !important;
-  z-index:20 !important;
-  display:none;
-  align-items:center !important;
-  gap:14px !important;
-  background:#ffffff !important;
-  border:3px solid #000000 !important;
-  border-radius:16px !important;
-  padding:10px 20px 10px 12px !important;
-  max-width:94vw !important;
+  position:fixed !important;left:50% !important;transform:translateX(-50%) !important;
+  top:8px !important;z-index:20 !important;display:none;align-items:center !important;gap:14px !important;
+  background:#ffffff !important;border:3px solid #000000 !important;border-radius:16px !important;
+  padding:8px 20px 8px 12px !important;max-width:94vw !important;
   box-shadow:0 4px 16px rgba(0,0,0,.5) !important;
 }
-#navbanner.on{display:flex !important}
-#navbanner.hw{
-  background:#1565c0 !important;
-  border-color:#ffffff !important;
-}
-#navarrow{min-width:64px !important;max-width:240px !important;height:64px !important;flex:0 0 auto !important;display:flex !important;align-items:center !important;justify-content:center !important}
-#navarrow svg{height:64px !important;width:auto !important;display:block !important;max-width:none !important}
-#navd{font:800 26px system-ui,sans-serif !important;color:#000000 !important}
-#navsub{font:600 13px system-ui,sans-serif !important;color:#000000 !important;max-width:220px !important;overflow:hidden !important;text-overflow:ellipsis !important;white-space:nowrap !important}
+#navbanner.hw{background:#1565c0 !important;border-color:#ffffff !important;}
+#navarrow{min-width:60px !important;max-width:240px !important;height:56px !important;flex:0 0 auto !important;display:flex !important;align-items:center !important;justify-content:center !important}
+#navarrow svg{height:56px !important;width:auto !important;display:block !important;max-width:none !important}
+#navd{font:800 24px system-ui,sans-serif !important;color:#000000 !important}
+#navsub{font:600 12px system-ui,sans-serif !important;color:#000000 !important;max-width:220px !important;overflow:hidden !important;text-overflow:ellipsis !important;white-space:nowrap !important}
 #navbanner.hw #navd{color:#ffffff !important}
 #navbanner.hw #navsub{color:#ffffff !important}
-#navbanner #btnPararRuta{width:38px !important;height:38px !important;border-radius:50% !important;border:2px solid #5a2020 !important;background:rgba(60,20,20,.85) !important;color:#ff8a8a !important;font-size:20px !important;font-weight:900 !important;cursor:pointer !important;display:none;align-items:center !important;justify-content:center !important;margin-left:8px !important;flex:0 0 auto !important;padding:0 !important}
+#navbanner #btnPararRuta{width:36px !important;height:36px !important;border-radius:50% !important;border:2px solid #5a2020 !important;background:rgba(60,20,20,.85) !important;color:#ff8a8a !important;font-size:18px !important;font-weight:900 !important;cursor:pointer !important;display:none;align-items:center !important;justify-content:center !important;margin-left:8px !important;flex:0 0 auto !important;padding:0 !important}
 #navbanner #btnPararRuta.on{display:flex !important}
 
 #grupoArribaDer{position:fixed;top:14px;right:14px;z-index:25;display:flex;align-items:center;gap:10px}
@@ -111,22 +98,42 @@ body.modo-navegacion #minihud{display:flex}
 #popupCargador .acciones{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
 #popupCargador .acciones button{flex:1;min-width:120px;background:#1d3a2c;border:1px solid #2e6b4a;color:#e8eef2;border-radius:10px;padding:12px 16px;font-size:14px;font-weight:700;cursor:pointer}
 #popupCargador .acciones button.cerrar{flex:0 0 auto;min-width:auto;background:#2a1a1a;border-color:#5a2020;color:#ff8a8a}
-#listaCargadores{position:fixed;inset:0;z-index:45;background:rgba(10,13,16,.97);display:none;overflow-y:auto;padding:16px 16px 40px}
-#listaCargadores.on{display:block}
-#listaCargadores h2{color:#9ae6b4;margin:0;font-size:18px}
-#listaCargadores .cabecera{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;position:sticky;top:0;background:rgba(10,13,16,.97);padding:6px 0;z-index:2}
-#listaCargadores .cerrarLista{background:#2a1a1a;border:1px solid #5a2020;color:#ff8a8a;border-radius:8px;padding:8px 14px;font-size:16px;font-weight:700;cursor:pointer}
-.cargadorItem{background:#12161c;border-radius:12px;padding:14px;margin-bottom:10px;cursor:pointer;transition:transform .1s}
-.cargadorItem:active{transform:scale(.98)}
-.cargadorItem .fila1{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
-.cargadorItem .titulo{font-weight:800;color:#e8eef2;font-size:15px}
-.cargadorItem .kw{color:#fff;padding:4px 10px;border-radius:8px;font-weight:800;font-size:13px}
-.cargadorItem .dir{color:#b8c0cc;font-size:13px;margin-bottom:8px}
-.cargadorItem .fila2{display:flex;justify-content:space-between;align-items:center}
-.cargadorItem .operador{font-weight:700;font-size:13px}
-.cargadorItem .dist{color:#ffd166;font-weight:800;font-size:14px}
+
+/* ============ LISTA DE CARGADORES — panel lateral izquierdo compacto ============ */
+#listaCargadores{
+  position:fixed;top:76px;left:10px;z-index:35;
+  width:220px;max-height:calc(100vh - 100px);
+  background:rgba(10,13,16,.94);border:2px solid #2e6b4a;border-radius:12px;
+  display:none;flex-direction:column;overflow:hidden;
+  box-shadow:0 4px 20px rgba(0,0,0,.6);
+}
+#listaCargadores.on{display:flex}
+#listaCargadores .cabecera{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:8px 10px;background:#0f1318;border-bottom:1px solid #232c33;flex:0 0 auto;
+}
+#listaCargadores h2{color:#9ae6b4;margin:0;font-size:12px;font-weight:800;letter-spacing:.5px;text-transform:uppercase}
+#listaCargadores .cerrarLista{background:transparent;border:0;color:#ff8a8a;font-size:16px;font-weight:900;cursor:pointer;padding:2px 6px;line-height:1}
+#listaCargadoresItems{overflow-y:auto;padding:6px;flex:1 1 auto}
+#listaCargadores .cargadorItem{
+  background:#12161c;border-radius:8px;padding:7px 8px;margin-bottom:6px;cursor:pointer;
+  border-left:4px solid #8d99a5;transition:background .12s;
+}
+#listaCargadores .cargadorItem:active{background:#1d262f}
+#listaCargadores .cargadorItem .fila1{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:3px}
+#listaCargadores .cargadorItem .titulo{font-weight:800;color:#e8eef2;font-size:11px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+#listaCargadores .cargadorItem .kw{color:#fff;padding:2px 6px;border-radius:5px;font-weight:800;font-size:10px;flex:0 0 auto}
+#listaCargadores .cargadorItem .dir{color:#8d99a5;font-size:10px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:3px}
+#listaCargadores .cargadorItem .fila2{display:flex;justify-content:space-between;align-items:center;font-size:10px}
+#listaCargadores .cargadorItem .operador{font-weight:700}
+#listaCargadores .cargadorItem .dist{color:#ffd166;font-weight:800}
+#listaCargadores .cargadorItem.tesla{border-left-color:#ff1744;box-shadow:0 0 8px rgba(255,23,68,.4)}
+#listaCargadores .cargadorItem.tesla .titulo{color:#ff8a95}
+#listaCargadores .cargadorItem.tesla .kw{background:#ff1744 !important;color:#fff;text-shadow:0 0 6px rgba(255,255,255,.4)}
+#listaCargadores .cargadorItem.tesla .operador{color:#ff1744}
+
 body.modo-navegacion #diag,body.modo-navegacion #diag2{display:none}
-body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner,body.modo-solomapa #minihud,body.modo-solomapa #controlesAbajo,body.modo-solomapa #grupoArribaDer,body.modo-solomapa #grupoAbajoDer{display:none}
+body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner,body.modo-solomapa #minihud,body.modo-solomapa #controlesAbajo,body.modo-solomapa #grupoArribaDer,body.modo-solomapa #grupoAbajoDer,body.modo-solomapa #listaCargadores{display:none}
 
 /* ==== CELEBRACION AL LLEGAR ==== */
 #celebracion{position:fixed;inset:0;z-index:50;pointer-events:none;display:none;overflow:hidden}
@@ -166,7 +173,7 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
 <div id="popupCargador"></div>
 <div id="listaCargadores">
   <div class="cabecera">
-    <h2>⚡ Cargadores cercanos</h2>
+    <h2>⚡ Cargadores</h2>
     <button class="cerrarLista" id="btnCerrarListaCargadores">✕</button>
   </div>
   <div id="listaCargadoresItems"></div>
@@ -184,6 +191,8 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
   <button class="ajuste on" id="btnPitch">📐 Pitch: ON</button>
   <button class="ajuste on" id="btnTrafico">🚦 Tráfico: ON</button>
   <button class="ajuste on" id="btnCelebracion">🎉 Celebración: ON</button>
+  <div class="seccion">Cargadores</div>
+  <button class="ajuste" id="btnListaCargadores">⚡ Ver 10 más cercanos</button>
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <div class="seccion">Diagnóstico</div>
@@ -232,7 +241,6 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
     <button id="btnCerrarBusqueda">✕</button>
   </div>
   <button class="botonMapa" id="btnCasa" title="Ir a casa">🏠</button>
-  <button class="botonMapa" id="btnListaCargadores" title="Cargadores cercanos">⚡</button>
   <button class="botonMapa" id="btnLupa" title="Buscar destino">🔍</button>
 </div>
 <div id="sugerencias"></div>
@@ -321,7 +329,7 @@ function crearIconoSupercharger(){
   const size=72,c=document.createElement('canvas');c.width=size;c.height=size;
   const ctx=c.getContext('2d');ctx.clearRect(0,0,size,size);
   ctx.beginPath();ctx.arc(size/2,size/2,size/2-3,0,Math.PI*2);
-  ctx.fillStyle='#d32f2f';ctx.fill();ctx.lineWidth=4;ctx.strokeStyle='#ffffff';ctx.stroke();
+  ctx.fillStyle='#ff1744';ctx.fill();ctx.lineWidth=4;ctx.strokeStyle='#ffffff';ctx.stroke();
   ctx.fillStyle='#ffffff';ctx.font='bold 38px system-ui,sans-serif';
   ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillText('T',size/2,size/2-6);
@@ -331,7 +339,7 @@ function crearIconoSupercharger(){
 }
 const OPERADORES={23:'Tesla',1:'ChargePoint',3449:'EasyGo',3586:'Repsol',3355:'Iberdrola',3515:'Endesa',3524:'Wenea',3534:'Zunder',3478:'Ionity'};
 const OPERADORES_COLORES={
-  23:{nombre:'Tesla',color:'#d32f2f'},
+  23:{nombre:'Tesla',color:'#ff1744'},
   1:{nombre:'ChargePoint',color:'#00b0ff'},
   3449:{nombre:'EasyGo',color:'#7c4dff'},
   3586:{nombre:'Repsol',color:'#ff6f00'},
@@ -341,6 +349,12 @@ const OPERADORES_COLORES={
   3534:{nombre:'Zunder',color:'#ffd600'},
   3478:{nombre:'Ionity',color:'#536dfe'}
 };
+// Colores por tipo de potencia (reutilizados de los iconos del mapa)
+function colorPotencia(kw){
+  if(kw>72) return '#d32f2f';       // rojo — 72+
+  if(kw>=50) return '#ff6f00';      // naranja — 50-72
+  return '#f9a825';                 // ámbar — 11-22
+}
 
 let navZoomBase=17.2;
 const ZOOM_MANIOBRA_EXTRA=2.2;
@@ -408,7 +422,8 @@ map.on('load',()=>{
   map.addLayer({id:'giro-pos',type:'symbol',source:'giro-pos',
     layout:{'icon-image':'chevron-giro','icon-size':0.85,'icon-rotate':['get','bearing'],'icon-rotation-alignment':'map','icon-allow-overlap':true,'icon-ignore-placement':true,'icon-pitch-alignment':'map'}});
   map.addSource('ruta',{type:'geojson',data:{type:'FeatureCollection',features:[]},lineMetrics:true});
-  const paintBase={'line-opacity':0.55,'line-width':['interpolate',['linear'],['zoom'],14,8,16,14,18,20,20,26]};
+  // Vuelta a la opacidad original 0.85
+  const paintBase={'line-opacity':0.85,'line-width':['interpolate',['linear'],['zoom'],14,8,16,14,18,20,20,26]};
   const layoutBase={'line-cap':'round','line-join':'round','line-round-limit':1.0};
   map.addLayer({id:'ruta-0',type:'line',source:'ruta',filter:['==',['get','nivel'],0],paint:{...paintBase,'line-color':'#1e88e5'},layout:layoutBase});
   map.addLayer({id:'ruta-1',type:'line',source:'ruta',filter:['==',['get','nivel'],1],paint:{...paintBase,'line-color':'#f9a825'},layout:layoutBase});
@@ -739,13 +754,15 @@ document.getElementById('btnLimpiarFavs').onclick=()=>{
   alert('Favoritos borrados.');
 };
 
-/* ========== LISTA DE CARGADORES CERCANOS ========== */
+/* ========== LISTA DE CARGADORES CERCANOS (panel lateral) ========== */
 document.getElementById('btnListaCargadores').onclick = async ()=>{
   if(!lastFix){ alert('Activa el GPS primero.'); return; }
   const panel = document.getElementById('listaCargadores');
   const cont  = document.getElementById('listaCargadoresItems');
   panel.classList.add('on');
-  cont.innerHTML = '<div style="color:#8d99a5;padding:20px;text-align:center">Buscando cargadores cercanos…</div>';
+  // Cerrar panel de ajustes para que no estorbe
+  document.getElementById('panelAjustes').classList.remove('on');
+  cont.innerHTML = '<div style="color:#8d99a5;padding:14px;text-align:center;font-size:11px">Buscando…</div>';
   if(!cargadoresData.length){
     await cargarCargadores(lastFix.lat, lastFix.lon);
   }
@@ -754,25 +771,28 @@ document.getElementById('btnListaCargadores').onclick = async ()=>{
     return {cp,d};
   }).sort((a,b)=>a.d-b.d).slice(0,10);
   if(!conDist.length){
-    cont.innerHTML = '<div style="color:#ff8a8a;padding:20px;text-align:center">No hay cargadores en la zona.</div>';
+    cont.innerHTML = '<div style="color:#ff8a8a;padding:14px;text-align:center;font-size:11px">Sin cargadores en la zona.</div>';
     return;
   }
   cont.innerHTML = conDist.map(({cp,d})=>{
     const ai = cp.AddressInfo||{};
     const kw = potenciaMaxima(cp);
+    const esSC = cp.OperatorID===23;
     const op = OPERADORES_COLORES[cp.OperatorID] || {nombre:'Otro',color:'#8d99a5'};
     const titulo = ai.Title || ai.AddressLine1 || 'Cargador';
     const dir = [ai.AddressLine1, ai.Town].filter(Boolean).join(', ') || '—';
     const distTxt = d<1000 ? Math.round(d)+' m' : (d/1000).toFixed(1)+' km';
+    // Potencia con su color asignado por tipo (Tesla va aparte con rojo vivo + clase .tesla)
+    const colorKw = esSC ? '#ff1744' : colorPotencia(kw);
     return ''
-      + '<div class="cargadorItem" data-lat="'+ai.Latitude+'" data-lon="'+ai.Longitude+'" style="border:2px solid '+op.color+'">'
+      + '<div class="cargadorItem'+(esSC?' tesla':'')+'" data-lat="'+ai.Latitude+'" data-lon="'+ai.Longitude+'" style="border-left-color:'+(esSC?'#ff1744':op.color)+'">'
       +   '<div class="fila1">'
       +     '<div class="titulo">'+escapeHTML(titulo)+'</div>'
-      +     '<div class="kw" style="background:'+op.color+'">'+kw+' kW</div>'
+      +     '<div class="kw" style="background:'+colorKw+'">'+kw+' kW</div>'
       +   '</div>'
       +   '<div class="dir">'+escapeHTML(dir)+'</div>'
       +   '<div class="fila2">'
-      +     '<div class="operador" style="color:'+op.color+'">'+op.nombre+'</div>'
+      +     '<div class="operador" style="color:'+op.color+'">'+(esSC?'⚡ Tesla':op.nombre)+'</div>'
       +     '<div class="dist">📍 '+distTxt+'</div>'
       +   '</div>'
       + '</div>';
@@ -1455,25 +1475,24 @@ function flechaCarrilSVG(dirs, activo, colores, x, y){
   });
   return out;
 }
+// CARTELES SIN BORDE — el SVG no pinta rect, el fondo lo pone el navbar
 function cartelConCarriles(lanes, mod, hw){
   const colores = colorCartel(hw);
   const n = lanes.length;
-  const anchoCarril = 40;
-  const padding = 10;
+  const anchoCarril = 36;
+  const padding = 6;
   const anchoTotal = padding + n*anchoCarril + padding;
-  const alto = 64;
-  const radio = 10;
+  const alto = 56;
   let svg = '<svg viewBox="0 0 '+anchoTotal+' '+alto+'" width="'+anchoTotal+'" height="'+alto+'">';
-  svg += '<rect x="1.5" y="1.5" width="'+(anchoTotal-3)+'" height="'+(alto-3)+'" rx="'+radio+'" ry="'+radio+'" fill="'+colores.fondo+'" stroke="'+colores.borde+'" stroke-width="3"/>';
   for(let i=0;i<n;i++){
     const carril = lanes[i];
     const dirs = (carril.lane && carril.lane.directions) || ['straight'];
     const activo = !!(carril.lane && carril.lane.active);
     const cx = padding + anchoCarril*i + anchoCarril/2;
-    svg += flechaCarrilSVG(dirs, activo, colores, cx, 6);
+    svg += flechaCarrilSVG(dirs, activo, colores, cx, 4);
     if(i < n-1){
       const sx = padding + anchoCarril*(i+1);
-      svg += '<line x1="'+sx+'" y1="10" x2="'+sx+'" y2="'+(alto-10)+'" stroke="'+colores.borde+'" stroke-width="1" opacity="0.3"/>';
+      svg += '<line x1="'+sx+'" y1="8" x2="'+sx+'" y2="'+(alto-8)+'" stroke="'+colores.flecha+'" stroke-width="1" opacity="0.25"/>';
     }
   }
   svg += '</svg>';
@@ -1481,10 +1500,9 @@ function cartelConCarriles(lanes, mod, hw){
 }
 function cartelSimple(mod, hw){
   const colores = colorCartel(hw);
-  const ancho = 64, alto = 64, radio = 10;
+  const ancho = 56, alto = 56;
   let svg = '<svg viewBox="0 0 '+ancho+' '+alto+'" width="'+ancho+'" height="'+alto+'">';
-  svg += '<rect x="1.5" y="1.5" width="'+(ancho-3)+'" height="'+(alto-3)+'" rx="'+radio+'" ry="'+radio+'" fill="'+colores.fondo+'" stroke="'+colores.borde+'" stroke-width="3"/>';
-  svg += '<g transform="translate(8,4) scale(1.0)">'+flechaGiroSVG(mod, colores)+'</g>';
+  svg += '<g transform="translate(4,0) scale(1.0)">'+flechaGiroSVG(mod, colores)+'</g>';
   svg += '</svg>';
   return svg;
 }
@@ -1493,9 +1511,9 @@ function maneuverSVG(s, hw){
   const colores = colorCartel(hw);
   const col = colores.flecha;
   if(m.type === 'arrive'){
-    return '<svg viewBox="0 0 48 52" width="48" height="52">'
-      + '<circle cx="24" cy="26" r="15" fill="'+col+'"/>'
-      + '<circle cx="24" cy="26" r="6" fill="'+colores.fondo+'"/>'
+    return '<svg viewBox="0 0 48 48" width="48" height="48">'
+      + '<circle cx="24" cy="24" r="15" fill="'+col+'"/>'
+      + '<circle cx="24" cy="24" r="6" fill="'+colores.fondo+'"/>'
       + '</svg>';
   }
   if(m.type === 'roundabout' || m.type === 'rotary'){
