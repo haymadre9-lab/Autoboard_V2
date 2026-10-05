@@ -25,7 +25,7 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #navbanner{position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:20;display:none;align-items:center;gap:14px;background:rgba(10,13,16,.9);border:1px solid #232c33;border-radius:16px;padding:10px 20px 10px 12px;max-width:94vw}
 #navbanner.hw{background:rgba(10,30,70,.92);border-color:#1e4a8a}
 #navarrow{min-width:64px;max-width:240px;height:64px;flex:0 0 auto;display:flex;align-items:center;justify-content:center}
-#navarrow svg{width:100%;height:64px;display:block}
+#navarrow svg{height:64px;width:auto;display:block;max-width:none}
 #navd{font:800 26px system-ui,sans-serif;color:#fff}
 #navsub{font:600 13px system-ui,sans-serif;color:#9aa7b2;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #navbanner #btnPararRuta{width:38px;height:38px;border-radius:50%;border:2px solid #5a2020;background:rgba(60,20,20,.85);color:#ff8a8a;font-size:20px;font-weight:900;cursor:pointer;display:none;align-items:center;justify-content:center;margin-left:8px;flex:0 0 auto;padding:0}
@@ -65,9 +65,9 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #minihud.on{display:flex}
 body.modo-navegacion #minihud{display:flex}
 #minihud .vel{color:#fff;font-weight:900;letter-spacing:-1px}
-#minihud .limite{width:72px;height:72px;border-radius:50%;background:#ffffff;border:7px solid #d32f2f;display:flex;align-items:center;justify-content:center;font:800 28px/1 system-ui,sans-serif;color:#000;box-shadow:0 2px 6px rgba(0,0,0,.4)}
+#minihud .limite{width:52px;height:52px;border-radius:50%;background:#ffffff;border:6px solid #d32f2f;display:flex;align-items:center;justify-content:center;font:800 22px/1 system-ui,sans-serif;color:#000;box-shadow:0 2px 6px rgba(0,0,0,.4)}
 #minihud .limite.oculto{display:none}
-.coche-marcador{width:48px!important;height:48px!important;will-change:transform}
+.coche-marcador{width:48px!important;height:48px!important;will-change:transform;display:flex;align-items:center;justify-content:center}
 .coche-marcador svg{width:48px;height:48px;display:block;filter:drop-shadow(0 0 6px rgba(41,182,246,.75))}
 #radarAlerta{position:fixed;inset:0;z-index:18;pointer-events:none;display:none;box-shadow:inset 0 0 80px 20px rgba(255,0,0,.55), inset 0 0 200px 60px rgba(255,0,0,.25);animation:radarPulse 1s ease-in-out infinite}
 #radarAlerta.on{display:block}
@@ -87,6 +87,20 @@ body.modo-navegacion #minihud{display:flex}
 #popupCargador .acciones{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
 #popupCargador .acciones button{flex:1;min-width:120px;background:#1d3a2c;border:1px solid #2e6b4a;color:#e8eef2;border-radius:10px;padding:12px 16px;font-size:14px;font-weight:700;cursor:pointer}
 #popupCargador .acciones button.cerrar{flex:0 0 auto;min-width:auto;background:#2a1a1a;border-color:#5a2020;color:#ff8a8a}
+#listaCargadores{position:fixed;inset:0;z-index:45;background:rgba(10,13,16,.97);display:none;overflow-y:auto;padding:16px 16px 40px}
+#listaCargadores.on{display:block}
+#listaCargadores h2{color:#9ae6b4;margin:0;font-size:18px}
+#listaCargadores .cabecera{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;position:sticky;top:0;background:rgba(10,13,16,.97);padding:6px 0;z-index:2}
+#listaCargadores .cerrarLista{background:#2a1a1a;border:1px solid #5a2020;color:#ff8a8a;border-radius:8px;padding:8px 14px;font-size:16px;font-weight:700;cursor:pointer}
+.cargadorItem{background:#12161c;border-radius:12px;padding:14px;margin-bottom:10px;cursor:pointer;transition:transform .1s}
+.cargadorItem:active{transform:scale(.98)}
+.cargadorItem .fila1{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.cargadorItem .titulo{font-weight:800;color:#e8eef2;font-size:15px}
+.cargadorItem .kw{color:#fff;padding:4px 10px;border-radius:8px;font-weight:800;font-size:13px}
+.cargadorItem .dir{color:#b8c0cc;font-size:13px;margin-bottom:8px}
+.cargadorItem .fila2{display:flex;justify-content:space-between;align-items:center}
+.cargadorItem .operador{font-weight:700;font-size:13px}
+.cargadorItem .dist{color:#ffd166;font-weight:800;font-size:14px}
 body.modo-navegacion #diag,body.modo-navegacion #diag2{display:none}
 body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner,body.modo-solomapa #minihud,body.modo-solomapa #controlesAbajo,body.modo-solomapa #grupoArribaDer,body.modo-solomapa #grupoAbajoDer{display:none}
 
@@ -126,6 +140,13 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
   <div class="lim" id="radarLim">-</div>
 </div>
 <div id="popupCargador"></div>
+<div id="listaCargadores">
+  <div class="cabecera">
+    <h2>⚡ Cargadores cercanos</h2>
+    <button class="cerrarLista" id="btnCerrarListaCargadores">✕</button>
+  </div>
+  <div id="listaCargadoresItems"></div>
+</div>
 <div id="celebracion"></div>
 
 <div id="panelAjustes">
@@ -187,6 +208,7 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
     <button id="btnCerrarBusqueda">✕</button>
   </div>
   <button class="botonMapa" id="btnCasa" title="Ir a casa">🏠</button>
+  <button class="botonMapa" id="btnListaCargadores" title="Cargadores cercanos">⚡</button>
   <button class="botonMapa" id="btnLupa" title="Buscar destino">🔍</button>
 </div>
 <div id="sugerencias"></div>
@@ -284,6 +306,17 @@ function crearIconoSupercharger(){
   return {data:ctx.getImageData(0,0,size,size),width:size,height:size};
 }
 const OPERADORES={23:'Tesla',1:'ChargePoint',3449:'EasyGo',3586:'Repsol',3355:'Iberdrola',3515:'Endesa',3524:'Wenea',3534:'Zunder',3478:'Ionity'};
+const OPERADORES_COLORES={
+  23:{nombre:'Tesla',color:'#d32f2f'},
+  1:{nombre:'ChargePoint',color:'#00b0ff'},
+  3449:{nombre:'EasyGo',color:'#7c4dff'},
+  3586:{nombre:'Repsol',color:'#ff6f00'},
+  3355:{nombre:'Iberdrola',color:'#00c853'},
+  3515:{nombre:'Endesa',color:'#00bfa5'},
+  3524:{nombre:'Wenea',color:'#ff4081'},
+  3534:{nombre:'Zunder',color:'#ffd600'},
+  3478:{nombre:'Ionity',color:'#536dfe'}
+};
 
 let navZoomBase=17.2;
 const ZOOM_MANIOBRA_EXTRA=2.2;
@@ -351,7 +384,7 @@ map.on('load',()=>{
   map.addLayer({id:'giro-pos',type:'symbol',source:'giro-pos',
     layout:{'icon-image':'chevron-giro','icon-size':0.85,'icon-rotate':['get','bearing'],'icon-rotation-alignment':'map','icon-allow-overlap':true,'icon-ignore-placement':true,'icon-pitch-alignment':'map'}});
   map.addSource('ruta',{type:'geojson',data:{type:'FeatureCollection',features:[]},lineMetrics:true});
-  const paintBase={'line-opacity':0.85,'line-width':['interpolate',['linear'],['zoom'],14,8,16,14,18,20,20,26]};
+  const paintBase={'line-opacity':0.55,'line-width':['interpolate',['linear'],['zoom'],14,8,16,14,18,20,20,26]};
   const layoutBase={'line-cap':'round','line-join':'round','line-round-limit':1.0};
   map.addLayer({id:'ruta-0',type:'line',source:'ruta',filter:['==',['get','nivel'],0],paint:{...paintBase,'line-color':'#1e88e5'},layout:layoutBase});
   map.addLayer({id:'ruta-1',type:'line',source:'ruta',filter:['==',['get','nivel'],1],paint:{...paintBase,'line-color':'#f9a825'},layout:layoutBase});
@@ -449,11 +482,7 @@ function activarAlertaRadar(distancia, limite, porEncima){
   document.getElementById('senalRadar').textContent=limite;
   document.getElementById('radarDist').textContent=Math.round(distancia)+' m';
   const halo=document.getElementById('radarAlerta');
-  if(porEncima){
-    halo.classList.add('on');
-  }else{
-    halo.classList.remove('on');
-  }
+  if(porEncima){ halo.classList.add('on'); } else { halo.classList.remove('on'); }
   alertaRadarActiva=true;
 }
 function apagarAlertaRadar(){
@@ -686,6 +715,57 @@ document.getElementById('btnLimpiarFavs').onclick=()=>{
   alert('Favoritos borrados.');
 };
 
+/* ========== LISTA DE CARGADORES CERCANOS ========== */
+document.getElementById('btnListaCargadores').onclick = async ()=>{
+  if(!lastFix){ alert('Activa el GPS primero.'); return; }
+  const panel = document.getElementById('listaCargadores');
+  const cont  = document.getElementById('listaCargadoresItems');
+  panel.classList.add('on');
+  cont.innerHTML = '<div style="color:#8d99a5;padding:20px;text-align:center">Buscando cargadores cercanos…</div>';
+  if(!cargadoresData.length){
+    await cargarCargadores(lastFix.lat, lastFix.lon);
+  }
+  const conDist = cargadoresData.map(cp=>{
+    const d = dist([lastFix.lat,lastFix.lon],[cp.AddressInfo.Latitude,cp.AddressInfo.Longitude]);
+    return {cp,d};
+  }).sort((a,b)=>a.d-b.d).slice(0,10);
+  if(!conDist.length){
+    cont.innerHTML = '<div style="color:#ff8a8a;padding:20px;text-align:center">No hay cargadores en la zona.</div>';
+    return;
+  }
+  cont.innerHTML = conDist.map(({cp,d})=>{
+    const ai = cp.AddressInfo||{};
+    const kw = potenciaMaxima(cp);
+    const op = OPERADORES_COLORES[cp.OperatorID] || {nombre:'Otro',color:'#8d99a5'};
+    const titulo = ai.Title || ai.AddressLine1 || 'Cargador';
+    const dir = [ai.AddressLine1, ai.Town].filter(Boolean).join(', ') || '—';
+    const distTxt = d<1000 ? Math.round(d)+' m' : (d/1000).toFixed(1)+' km';
+    return ''
+      + '<div class="cargadorItem" data-lat="'+ai.Latitude+'" data-lon="'+ai.Longitude+'" style="border:2px solid '+op.color+'">'
+      +   '<div class="fila1">'
+      +     '<div class="titulo">'+escapeHTML(titulo)+'</div>'
+      +     '<div class="kw" style="background:'+op.color+'">'+kw+' kW</div>'
+      +   '</div>'
+      +   '<div class="dir">'+escapeHTML(dir)+'</div>'
+      +   '<div class="fila2">'
+      +     '<div class="operador" style="color:'+op.color+'">'+op.nombre+'</div>'
+      +     '<div class="dist">📍 '+distTxt+'</div>'
+      +   '</div>'
+      + '</div>';
+  }).join('');
+  cont.querySelectorAll('.cargadorItem').forEach(el=>{
+    el.onclick = ()=>{
+      const lat = Number(el.dataset.lat);
+      const lon = Number(el.dataset.lon);
+      panel.classList.remove('on');
+      navegarA(lat,lon);
+    };
+  });
+};
+document.getElementById('btnCerrarListaCargadores').onclick = ()=>{
+  document.getElementById('listaCargadores').classList.remove('on');
+};
+
 const barraB=document.getElementById('barraBusqueda');
 const inputB=document.getElementById('inputBusqueda');
 const sugs=document.getElementById('sugerencias');
@@ -776,7 +856,8 @@ document.getElementById('btnCasa').addEventListener('mousedown',()=>{
 document.getElementById('btnCasa').addEventListener('mouseup',()=>clearTimeout(timerCasa));
 document.getElementById('btnCasa').addEventListener('mouseleave',()=>clearTimeout(timerCasa));
 
-map.on('click',()=>{
+map.on('click',(e)=>{
+  if(e.defaultPrevented) return;
   document.getElementById('popupCargador').classList.remove('on');
 });
 
@@ -916,8 +997,10 @@ function filtrarHeading(h){
 }
 const elCoche=document.createElement('div');
 elCoche.className='coche-marcador';
-elCoche.innerHTML='<svg viewBox="0 0 48 48"><path d="M24 4 L42 42 L24 34 L6 42 Z" fill="#29b6f6" stroke="#ffffff" stroke-width="3" stroke-linejoin="round"/></svg>';
-const marcadorCoche=new maplibregl.Marker({element:elCoche,rotationAlignment:'map',pitchAlignment:'map'});
+elCoche.innerHTML='<svg viewBox="0 0 48 48" width="48" height="48">'
+  + '<path d="M24 6 L42 42 L24 36 L6 42 Z" fill="#29b6f6" stroke="#ffffff" stroke-width="3" stroke-linejoin="round"/>'
+  + '</svg>';
+const marcadorCoche=new maplibregl.Marker({element:elCoche,rotationAlignment:'map',pitchAlignment:'map',anchor:'center'});
 let distanciaFueraRuta=0,fueraDesde=0,recalculando=false,ultimoRecalculo=0;
 const DESVIO_M=45,CONFIRMACION_MS=2500,COOLDOWN_MS=10000;
 function distanciaRutaActual(ll){
@@ -1195,6 +1278,13 @@ setInterval(()=>{
   document.getElementById('g4').textContent=Math.round((contadorRenders-fpsMarchaUltimoConteo)/dt)+' fps';
   fpsMarchaUltimoT=a;fpsMarchaUltimoConteo=contadorRenders;
 },1000);
+
+// Refresco de tráfico cada 2 min
+setInterval(async ()=>{
+  if(!ultimaRutaDestino || !lastFix || recalculando) return;
+  await calcularRuta([lastFix.lat,lastFix.lon], ultimaRutaDestino, 'recalculo');
+}, 120000);
+
 function detenerRuta(){
   steps=[];stepIdx=0;routeCoordsLL=[];routeCumDist=[];routeProgIdx=0;
   ultimaRutaDestino=null;limiteVelocidadVia=0;ultimoStepPintado='';zoomManiobraOn=false;
@@ -1248,36 +1338,26 @@ function dist(a,b){const R=6371000,la1=a[0]*Math.PI/180,la2=b[0]*Math.PI/180;con
 function bearing(a,b){const la1=a[0]*Math.PI/180,la2=b[0]*Math.PI/180,dlo=(b[1]-a[1])*Math.PI/180;const y=Math.sin(dlo)*Math.cos(la2);const x=Math.cos(la1)*Math.sin(la2)-Math.sin(la1)*Math.cos(la2)*Math.cos(dlo);return ((Math.atan2(y,x)*180/Math.PI)+360)%360;}
 function urlRutaTomTom(o,d){return 'https://api.tomtom.com/routing/1/calculateRoute/'+o[0]+','+o[1]+':'+d[0]+','+d[1]+'/json?key='+TT+'&routeType=fastest&traffic=true&travelMode=car&instructionsType=text&language=es-ES&sectionType=traffic';}
 
-function triHead(x,y,t,c,len,hw){
-  len=len||10;hw=hw||7;
-  const tan={x:Math.sin(t),y:-Math.cos(t)},lat={x:Math.cos(t),y:Math.sin(t)};
-  const bx=x-tan.x*len,by=y-tan.y*len;
-  const l={x:bx+lat.x*hw,y:by+lat.y*hw},r={x:bx-lat.x*hw,y:by-lat.y*hw};
-  return '<path d="M'+x.toFixed(1)+' '+y.toFixed(1)+' L'+l.x.toFixed(1)+' '+l.y.toFixed(1)+' L'+r.x.toFixed(1)+' '+r.y.toFixed(1)+' Z" fill="'+c+'"/>';
-}
-
-// ====== ROTONDA — coherente con el cartel + salida elegida en ámbar ======
 function roundaboutSVG(exit, colores){
   const col = colores.flecha;
   const c = 24, r = 12, grosor = 5;
   const exitReal = Math.max(1, parseInt(exit,10) || 1);
-  let s = '<svg viewBox="0 0 48 52">';
-  s += '<circle cx="'+c+'" cy="26" r="'+r+'" fill="none" stroke="'+col+'" stroke-width="'+grosor+'" opacity="0.9"/>';
-  s += '<path d="M'+c+' 50 L'+c+' '+(26+r)+'" stroke="'+col+'" stroke-width="'+grosor+'" stroke-linecap="round"/>';
+  let s = '<svg viewBox="0 0 48 48" width="48" height="48">';
+  s += '<circle cx="'+c+'" cy="24" r="'+r+'" fill="none" stroke="'+col+'" stroke-width="'+grosor+'" opacity="0.9"/>';
+  s += '<path d="M'+c+' 46 L'+c+' '+(24+r)+'" stroke="'+col+'" stroke-width="'+grosor+'" stroke-linecap="round"/>';
   const NEXITS = 3, pasoDeg = 360/NEXITS, a0 = Math.PI/2;
   for(let k=0;k<NEXITS;k++){
     const a = a0 - (k*pasoDeg)*Math.PI/180;
-    const x1 = c + Math.cos(a)*r,     y1 = 26 + Math.sin(a)*r;
-    const x2 = c + Math.cos(a)*(r+7), y2 = 26 + Math.sin(a)*(r+7);
+    const x1 = c + Math.cos(a)*r,     y1 = 24 + Math.sin(a)*r;
+    const x2 = c + Math.cos(a)*(r+7), y2 = 24 + Math.sin(a)*(r+7);
     const esElegida = (k === Math.min(exitReal-1, NEXITS-1));
     const stroke   = esElegida ? '#ffb020' : col;
     const grosorSalida = esElegida ? 5 : 3;
     s += '<path d="M'+x1.toFixed(1)+' '+y1.toFixed(1)+' L'+x2.toFixed(1)+' '+y2.toFixed(1)+'" stroke="'+stroke+'" stroke-width="'+grosorSalida+'" stroke-linecap="round"/>';
   }
-  s += '<text x="'+c+'" y="31" text-anchor="middle" font-size="14" font-weight="800" fill="'+col+'" font-family="system-ui,sans-serif">'+exitReal+'</text>';
+  s += '<text x="'+c+'" y="29" text-anchor="middle" font-size="14" font-weight="800" fill="'+col+'" font-family="system-ui,sans-serif">'+exitReal+'</text>';
   return s + '</svg>';
 }
-
 function ttMan(it){
   const m=(it.maneuver||it.instructionType||'').toString().toUpperCase();
   if(m.includes('ARRIVE')||m.includes('WAYPOINT')) return {type:'arrive'};
@@ -1360,8 +1440,8 @@ function cartelConCarriles(lanes, mod, hw){
   const anchoTotal = padding + n*anchoCarril + padding;
   const alto = 64;
   const radio = 10;
-  let svg = '<svg viewBox="0 0 '+anchoTotal+' '+alto+'">';
-  svg += '<rect x="1" y="1" width="'+(anchoTotal-2)+'" height="'+(alto-2)+'" rx="'+radio+'" ry="'+radio+'" fill="'+colores.fondo+'" stroke="'+colores.borde+'" stroke-width="2"/>';
+  let svg = '<svg viewBox="0 0 '+anchoTotal+' '+alto+'" width="'+anchoTotal+'" height="'+alto+'">';
+  svg += '<rect x="1.5" y="1.5" width="'+(anchoTotal-3)+'" height="'+(alto-3)+'" rx="'+radio+'" ry="'+radio+'" fill="'+colores.fondo+'" stroke="'+colores.borde+'" stroke-width="3"/>';
   for(let i=0;i<n;i++){
     const carril = lanes[i];
     const dirs = (carril.lane && carril.lane.directions) || ['straight'];
@@ -1370,7 +1450,7 @@ function cartelConCarriles(lanes, mod, hw){
     svg += flechaCarrilSVG(dirs, activo, colores, cx, 6);
     if(i < n-1){
       const sx = padding + anchoCarril*(i+1);
-      svg += '<line x1="'+sx+'" y1="10" x2="'+sx+'" y2="'+(alto-10)+'" stroke="'+colores.borde+'" stroke-width="1" opacity="0.25"/>';
+      svg += '<line x1="'+sx+'" y1="10" x2="'+sx+'" y2="'+(alto-10)+'" stroke="'+colores.borde+'" stroke-width="1" opacity="0.3"/>';
     }
   }
   svg += '</svg>';
@@ -1379,8 +1459,8 @@ function cartelConCarriles(lanes, mod, hw){
 function cartelSimple(mod, hw){
   const colores = colorCartel(hw);
   const ancho = 64, alto = 64, radio = 10;
-  let svg = '<svg viewBox="0 0 '+ancho+' '+alto+'">';
-  svg += '<rect x="1" y="1" width="'+(ancho-2)+'" height="'+(alto-2)+'" rx="'+radio+'" ry="'+radio+'" fill="'+colores.fondo+'" stroke="'+colores.borde+'" stroke-width="2"/>';
+  let svg = '<svg viewBox="0 0 '+ancho+' '+alto+'" width="'+ancho+'" height="'+alto+'">';
+  svg += '<rect x="1.5" y="1.5" width="'+(ancho-3)+'" height="'+(alto-3)+'" rx="'+radio+'" ry="'+radio+'" fill="'+colores.fondo+'" stroke="'+colores.borde+'" stroke-width="3"/>';
   svg += '<g transform="translate(8,4) scale(1.0)">'+flechaGiroSVG(mod, colores)+'</g>';
   svg += '</svg>';
   return svg;
@@ -1390,7 +1470,7 @@ function maneuverSVG(s, hw){
   const colores = colorCartel(hw);
   const col = colores.flecha;
   if(m.type === 'arrive'){
-    return '<svg viewBox="0 0 48 52">'
+    return '<svg viewBox="0 0 48 52" width="48" height="52">'
       + '<circle cx="24" cy="26" r="15" fill="'+col+'"/>'
       + '<circle cx="24" cy="26" r="6" fill="'+colores.fondo+'"/>'
       + '</svg>';
