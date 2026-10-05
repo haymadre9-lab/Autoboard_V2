@@ -477,6 +477,7 @@ function simplificarDP(pts, tolM){
    basta un padding SUPERIOR de 2*OFFSET_COCHE: el centro efectivo del mapa baja OFFSET_COCHE px y
    el giro/inclinacion se hacen alrededor del coche. (Un padding inferior haria lo contrario.) */
 const OFFSET_COCHE = 110;
+const PAD_COCHE = { top: 2*OFFSET_COCHE, bottom: 0, left: 0, right: 0 };
 const _qs = new URLSearchParams(location.search);
 const PITCH_NAV = Number.isFinite(+_qs.get('pitch')) && _qs.get('pitch') !== null ? +_qs.get('pitch') : 60;   // ?pitch=0..75 para probar
 const EDIFICIOS_3D = _qs.get('3d') !== '0';                                                                  // ?3d=0 apaga los edificios
@@ -573,7 +574,7 @@ function seguirCamara(ll, dt){   // ll = [lat,lon]
     camZoom = camZoomObj = z;
     camBearing = camBearingObj;
     if (!carPos){ carPos = [ll[1], ll[0]]; marcarCoche(); }
-    map.jumpTo({ center: [ll[1], ll[0]], zoom: z, bearing: camBearing, pitch: PITCH_NAV });
+    map.jumpTo({ center: [ll[1], ll[0]], zoom: z, bearing: camBearing, pitch: PITCH_NAV, padding: PAD_COCHE });
     zoomPendiente = false;
   }
   // con dt>0 y sin salto pendiente, el bucle de abajo hace todo el trabajo
@@ -627,7 +628,9 @@ function _suelta(e){
 }
 addEventListener('pointerup', _suelta, true); addEventListener('pointercancel', _suelta, true);
 _cm.addEventListener('wheel', () => { _rueda = performance.now() + 500; }, { passive:true });
-function mapaTocado(){ const n = performance.now(); return (_punteros.size > 0 && n - _tPtr < 8000) || n < _rueda; }
+/* Pausa de la camara: dedo puesto, rueda, o CUALQUIER movimiento en curso de MapLibre (gesto con inercia, botones +/-,
+   la vista general de una ruta nueva): map.isMoving(). jumpTo() no lo deja activo, asi que no se bloquea a si mismo. */
+function mapaTocado(){ const n = performance.now(); return (_punteros.size > 0 && n - _tPtr < 8000) || n < _rueda || map.isMoving(); }
 
 // Si el usuario hace zoom con los dedos, el bucle no debe pelearse con el: se toma su zoom como nuevo objetivo.
 map.on('zoomend', e => { if (e && e.originalEvent){ camZoom = camZoomObj = map.getZoom(); } });
@@ -895,7 +898,8 @@ if (navigator.geolocation){
   }, e => setStatus('GPS: '+e.message), { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
 }
 
-map.on('dragstart', () => { follow = false; });
+let _dragCont = 0;   // cuenta los arrastres del usuario (para respetar que ha tomado el mapa)
+map.on('dragstart', () => { follow = false; _dragCont++; });
 $('recenter').onclick = () => { follow = true; zoomPendiente = true; if (lastFix) seguirCamara([lastFix.lat, lastFix.lon], 0); };
 
 /* ---- trackRoute(): MISMA estrategia que AutoBoard -- ventana local
@@ -1268,11 +1272,14 @@ async function irA(destino, nombre, opc){
 
     if (!opc.sinEncuadre){
       // Vista general PLANA de la ruta entera (sin el desplazamiento del coche) y, a los 2 s, de vuelta al seguimiento.
-      follow = false;
+      follow = false; const dc0 = _dragCont;
       map.setPadding({ top:0, bottom:0, left:0, right:0 });
       const b = new maplibregl.LngLatBounds(); pts.forEach(p => b.extend([p[1], p[0]]));
       map.fitBounds(b, { padding:{ top:110, bottom:110, left:60, right:60 }, maxZoom:15, pitch:0, bearing:0, duration:800 });
-      setTimeout(() => { map.setPadding({ top:2*OFFSET_COCHE, bottom:0, left:0, right:0 }); follow = true; zoomPendiente = true; if (lastFix) seguirCamara([lastFix.lat, lastFix.lon], 0); }, 2000);
+      setTimeout(() => {
+        if (_dragCont !== dc0) return;   // el usuario esta moviendo el mapa: no se le quita; el boton de centrar lo devuelve al coche
+        follow = true; zoomPendiente = true; if (lastFix) seguirCamara([lastFix.lat, lastFix.lon], 0);   // (el salto trae el padding del coche)
+      }, 2000);
     }
 
     const ms = Math.round(performance.now()-t0);
