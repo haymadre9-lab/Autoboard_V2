@@ -591,23 +591,43 @@ function bucleCamara(ts){
   }
   const dB = diffAngulo(camBearing, camBearingObj);
   if (Math.abs(dB) > 0.05){ camBearing = (((camBearing + dB*(1 - Math.exp(-dtMs/550))) % 360) + 360) % 360; mover = true; }
-  else if (dB !== 0){ camBearing = ((camBearingObj % 360) + 360) % 360; mover = true; }
+  else if (Math.abs(dB) > 1e-6){ camBearing = ((camBearingObj % 360) + 360) % 360; mover = true; }   // ultimo ajuste, UNA vez
   if (camZoom === null){ camZoom = camZoomObj = navZoom; }
   let zoomCambia = false;
   const dz = camZoomObj - camZoom;
   if (Math.abs(dz) > 0.001){ camZoom += dz*(1 - Math.exp(-dtMs/350)); zoomCambia = true; }
-  else if (dz !== 0){ camZoom = camZoomObj; zoomCambia = true; }
+  else if (Math.abs(dz) > 1e-6){ camZoom = camZoomObj; zoomCambia = true; }
   // flecha: con el mapa girando con el rumbo apunta siempre arriba (rotacion = bearing del mapa);
   // con el mapa fijo al norte, apunta al rumbo real
   const rot = girarMapaOn ? camBearing : heading;
   if (rotMostrada === null || Math.abs(diffAngulo(rotMostrada, rot)) > 0.1){ carMk.setRotation(rot); rotMostrada = rot; }
-  if (follow && (mover || zoomCambia)){
-    const o = { center: carPos, bearing: camBearing };
-    if (zoomCambia) o.zoom = camZoom;
-    map.jumpTo(o);
+  if (!follow) camSucia = false;
+  else if (mover || zoomCambia || camSucia){
+    // jumpTo() empieza llamando a stop(), y stop() REINICIA los gestos tactiles de MapLibre: llamarlo en cada
+    // fotograma mientras hay un dedo en el mapa lo deja sin zoom ni arrastre. Mientras dura el gesto la camara
+    // se pausa (camSucia = pendiente de reencuadrar) y al soltar se reencuadra de una vez.
+    if (mapaTocado()) camSucia = true;
+    else {
+      const o = { center: carPos, bearing: camBearing };
+      if (zoomCambia) o.zoom = camZoom;
+      map.jumpTo(o); camSucia = false;
+    }
   }
 }
 requestAnimationFrame(bucleCamara);
+let camSucia = false;
+// Seguimiento de los dedos (o la rueda) sobre el mapa. Un puntero que no avisa de que se ha soltado caduca a los 8 s.
+const _punteros = new Set(); let _tPtr = 0, _rueda = 0;
+const _cm = map.getCanvasContainer();
+_cm.addEventListener('pointerdown', e => { _punteros.add(e.pointerId); _tPtr = performance.now(); }, { passive:true });
+addEventListener('pointermove', () => { if (_punteros.size) _tPtr = performance.now(); }, { passive:true, capture:true });
+function _suelta(e){
+  _punteros.delete(e.pointerId);
+  if (!_punteros.size && camZoom !== null && Math.abs(map.getZoom() - camZoom) > 0.01){ camZoom = camZoomObj = map.getZoom(); }   // el zoom que dejo el usuario es el nuevo
+}
+addEventListener('pointerup', _suelta, true); addEventListener('pointercancel', _suelta, true);
+_cm.addEventListener('wheel', () => { _rueda = performance.now() + 500; }, { passive:true });
+function mapaTocado(){ const n = performance.now(); return (_punteros.size > 0 && n - _tPtr < 8000) || n < _rueda; }
 
 // Si el usuario hace zoom con los dedos, el bucle no debe pelearse con el: se toma su zoom como nuevo objetivo.
 map.on('zoomend', e => { if (e && e.originalEvent){ camZoom = camZoomObj = map.getZoom(); } });
