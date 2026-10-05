@@ -1,14 +1,12 @@
 /* Service worker de AutoBoard.
-   - Reescrito para el conjunto de archivos del motor Leaflet (antes cacheaba
-     index.html/hud2-boot.js/faro/index.html del AutoBoard con MapLibre, que
-     ya no existen). Nombre de cache subido a v8-0 para que el cambio de
-     motor no herede nada de la cache anterior.
+   - Motor de mapa MapLibre GL AUTOALOJADO (maplibre-gl.js/css en esta carpeta, cacheados
+     para funcionar sin conexion). Cache subida a v9-0 para no heredar nada del motor Leaflet.
    - HTML y JS: red primero, cache como respaldo. Asi cada subida llega al
      momento y la app sigue abriendo sin conexion.
    - Teselas de mapa y APIs externas: NO se cachean aqui (las gestiona el
-     navegador y Leaflet; cachearlas llenaba el almacenamiento del Tesla).  */
-const C='autoboard-v8-0';
-const BASE=['./','./index.html','./leaflet-map.js','./leaflet-map.css','./hud2.js','./coche.png','./radares.json','./manifest.webmanifest'];
+     navegador; cachearlas llenaba el almacenamiento del Tesla).  */
+const C='autoboard-v9-0';
+const BASE=['./','./index.html','./maplibre-map.js','./maplibre-map.css','./maplibre-gl.js','./maplibre-gl.css','./hud2.js','./coche.png','./radares.json','./manifest.webmanifest'];
 
 self.addEventListener('install', e=>{
   e.waitUntil(caches.open(C).then(c=>Promise.all(BASE.map(u=>c.add(u).catch(()=>{})))).then(()=>self.skipWaiting()));
