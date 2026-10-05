@@ -1,1 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<script>if(/[?&]debug=1/.test(location.search))document.documentElement.classList.add("debug");</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>AutoBoard · MapLibre (prueba)</title>
+<link rel="stylesheet" href="./maplibre-gl.css">
+<link rel="stylesheet" href="./maplibre-map.css?v=20261005a">
+</head>
+<body>
 
+<span id="spd" hidden>0 km/h</span>
+<span id="acc" hidden></span>
+<div id="fps">— fps</div>
+
+<div id="map"></div>
+<div id="hud2wrap"><canvas id="hud2canvas"></canvas></div>
+<div id="tabs">
+  <button id="tabMapa" class="modo on">🗺️ Mapa</button>
+  <button id="tabHud" class="modo">🚗 HUD</button>
+  <button id="tabAjHud" class="modo" aria-label="Ajustes del HUD">⚙️</button>
+  <button id="tabFaro" class="modo">💡 Faro</button>
+</div>
+<div id="hud2err"></div>
+<div id="faroWrap"><div id="fSpeed"><div class="n" id="fNum">0</div><div class="u">KM/H</div></div></div>
+<div id="cargList"></div>
+<div id="hudset">
+  <div class="shead"><span>Ajustes HUD 2</span><button id="closeHudset" aria-label="Cerrar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg></button></div>
+  <div id="hudsetBody"></div>
+</div>
+<div id="hoja">
+  <div class="hh"><span id="hojaTitulo"></span><button id="hojaCerrar" aria-label="Cerrar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg></button></div>
+  <div id="hojaInfo"></div>
+  <div id="hojaBtns"></div>
+</div>
+<div id="radaredge"></div>
+<div class="radarsign" id="radarsign"><div class="rs-c"><span id="rsmax">80</span></div><div class="rs-d" id="rsdist">500 m</div></div>
+<div id="navbanner">
+  <div class="arrow" id="navarrow"></div>
+  <div class="navtext"><div class="navd" id="navd"></div><div class="navsub" id="navsub"></div></div>
+  <button class="navx" id="cancelRuta" aria-label="Cerrar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg></button>
+</div>
+<div id="status">MapLibre GL (vectorial) + MapTiler — prueba del motor nuevo</div>
+<div id="etaCard"><b id="etaKm"></b><b id="etaMin"></b><span id="etaLlegada"></span></div>
+
+<button id="searchToggle">🔍</button>
+<div id="spdmap"><b id="spd2">0</b><small>KM/H</small></div>
+<div id="bar">
+  <div class="searchrow">
+    <button id="homeBtn" title="Casa (mantén pulsado para fijar)">🏠</button>
+    <input id="q" type="text" placeholder="¿A dónde vamos?" autocomplete="off">
+    <button id="go">Ir</button>
+  </div>
+  <div class="suggest" id="suggest"></div>
+</div>
+
+<!-- Tres iconos abajo a la derecha, mismo sitio y orden que AutoBoard real -->
+<button id="recenter" class="ovl">🎯</button>
+<button id="sat" class="ovl">🛰️</button>
+<button id="gear" class="ovl">⚙️</button>
+
+<div id="settings">
+  <div class="shead"><span>Ajustes <small id="ver">(js antiguo)</small></span><button id="closeSettings" aria-label="Cerrar"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg></button></div>
+  <div class="srow"><span>Zoom de conducción</span>
+    <div class="seg" id="zoomSeg"><button data-z="17">Lejos</button><button data-z="17.4" class="on">Cerca</button><button data-z="18">Muy cerca</button><button data-z="18.4">Máximo</button></div>
+  </div>
+  <button class="setbtn" id="mapnight">🌙 Noche</button>
+  <button class="setbtn" id="trafficBtn">🚦 Tráfico</button>
+  <button class="setbtn on" id="rotateBtn">🧭 Quitar giro de mapa</button>
+  <button class="setbtn" id="cargBtn">⚡ Lista de cargadores</button>
+  <div class="srow" style="margin-top:16px">
+    <span>Radares</span>
+    <label class="hs-c"><input type="checkbox" id="rt_fijo" checked> <i class="chip" style="background:#ff8a8a"></i> Fijos</label>
+    <label class="hs-c"><input type="checkbox" id="rt_movil" checked> <i class="chip" style="background:#a9c8ff;opacity:.7"></i> Móviles</label>
+    <label class="hs-c"><input type="checkbox" id="rt_tramo" checked> <i class="chip" style="background:#ff9a1f"></i> Tramo</label>
+    <label class="hs-c"><input type="checkbox" id="rt_semaforo" checked> <i class="chip" style="background:#f5c518"></i> Semáforo</label>
+  </div>
+  <div class="srow">
+    <span>Cargadores por potencia</span>
+    <label class="hs-c"><input type="checkbox" id="ct_amarillo" checked> <i class="chip" style="background:#f5c518"></i> 11-22 kW</label>
+    <label class="hs-c"><input type="checkbox" id="ct_azul" checked> <i class="chip" style="background:#2f6bff"></i> 50-72 kW</label>
+    <label class="hs-c"><input type="checkbox" id="ct_verde" checked> <i class="chip" style="background:#22c55e"></i> Más de 72 kW</label>
+    <label class="hs-c"><input type="checkbox" id="ct_tesla" checked> <i class="chip" style="background:#7b1e3a"></i> Supercharger Tesla</label>
+  </div>
+  <div class="srow" style="margin-top:16px">
+    <span>Favoritos</span>
+    <div id="favList"></div>
+    <div class="favrow" id="addFavBtn" style="color:#5fd0e0">⭐ Guardar destino actual como favorito</div>
+  </div>
+  <div class="srow">
+    <span>Últimas direcciones</span>
+    <div id="recentList"></div>
+  </div>
+</div>
+
+<script src="./maplibre-gl.js"></script>
+<script src="./maplibre-map.js?v=20261005a"></script>
+<script>if(/[?&]debug=1/.test(location.search)){var e=document.createElement("script");e.src="https://cdn.jsdelivr.net/npm/eruda";e.onload=function(){eruda.init()};document.head.appendChild(e);}</script>
+</body>
+<script>
+/* Service worker de ESTA carpeta (maplibre-test/): cache propia 'autoboard-ml-v1'. No borra ni toca
+   las caches ni los registros de la app de la raiz. Si entra una version nueva, recarga una sola vez. */
+if('serviceWorker' in navigator){
+  addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  let _r = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (_r) return; _r = true; location.reload(); });
+}
+</script>
+</html>
