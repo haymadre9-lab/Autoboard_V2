@@ -613,6 +613,19 @@ requestAnimationFrame(bucleCamara);
 map.on('zoomend', e => { if (e && e.originalEvent){ camZoom = camZoomObj = map.getZoom(); } });
 map.on('render', () => { renders++; });
 
+// Errores del MAPA (estilo que no carga, clave rechazada, teselas, WebGL...) a la franja roja de diagnostico del
+// index.html, sin repetir y con la clave tapada. Cuando todo funcione, no sale nada.
+const _errVistos = new Set();
+map.on('error', e => {
+  const er = e && e.error;
+  let m = (er && (er.message || (er.status && ('HTTP ' + er.status)))) || (e && e.message) || 'desconocido';
+  if (er && er.url) m += ' [' + String(er.url).replace(/key=[^&]+/, 'key=…') + ']';
+  if (_errVistos.has(m) || _errVistos.size >= 6) return;
+  _errVistos.add(m);
+  if (window.__show) window.__show('MAPA: ' + m); else console.warn('[mapa]', m);
+});
+map.on('load', () => { try{ setStatus('Mapa cargado'); }catch(e){} });
+
 /* ==== capas propias: se (re)montan en CADA carga de estilo ================================ */
 function montarCapas(){
   estiloListo = true;
