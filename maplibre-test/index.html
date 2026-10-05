@@ -3,6 +3,28 @@
 <head>
 <script>if(/[?&]debug=1/.test(location.search))document.documentElement.classList.add("debug");</script>
 <meta charset="utf-8">
+<script>
+/* DIAGNOSTICO: si algo falla al cargar (archivo que no llega, WebGL, error de script) sale una franja roja arriba
+   con el motivo, en vez de dejar la pantalla en blanco. Se puede quitar cuando todo funcione. */
+(function(){
+  function show(m){
+    var d = document.getElementById('__err');
+    if (!d){ d = document.createElement('div'); d.id = '__err';
+      d.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99999;background:#7a1010;color:#fff;font:12px/1.4 monospace;padding:8px 10px;white-space:pre-wrap;max-height:50vh;overflow:auto';
+      (document.body || document.documentElement).appendChild(d); }
+    d.textContent += m + '\n';
+  }
+  window.__show = show;
+  addEventListener('error', function(e){
+    var t = e.target;
+    if (t && t !== window && (t.src || t.href)) show('NO CARGA: ' + (t.src || t.href));
+    else show('ERROR: ' + e.message + ' (' + String(e.filename || '').split('/').pop() + ':' + e.lineno + ')');
+  }, true);
+  addEventListener('unhandledrejection', function(e){ show('PROMESA: ' + (e.reason && e.reason.message || e.reason)); });
+  try{ var c = document.createElement('canvas'); if (!(c.getContext('webgl2') || c.getContext('webgl'))) show('WebGL NO disponible en este navegador'); }catch(er){ show('WebGL: ' + er.message); }
+  addEventListener('load', function(){ if (!window.maplibregl) show('maplibre-gl.js no se ha cargado (archivo ausente o vacio en esta carpeta)'); });
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>AutoBoard · MapLibre (prueba)</title>
 <link rel="stylesheet" href="./maplibre-gl.css">
