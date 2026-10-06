@@ -286,22 +286,40 @@ var mountains=(function(){
 /* ---------- señales verticales ---------- */
 var signs=[], signTex={}, signTint=1;
 var poleMat=new THREE.MeshStandardMaterial({color:0x7b838c,roughness:0.6,metalness:0.5});
-function signTexture(kind,val){
-  var key=kind+'_'+val; if(signTex[key]) return signTex[key];
-  var c=document.createElement('canvas'); c.width=c.height=256; var g=c.getContext('2d');
+function signTexture(kind,val,hw){
+  var key=kind+'_'+val+(hw?'_hw':''); if(signTex[key]) return signTex[key];
+  var c=document.createElement('canvas'); c.width=c.height=256; var g=c.getContext('2d'), ink=hw?'#ffffff':'#111111';
   function tri(){ g.lineJoin='round'; g.fillStyle='#d4141c'; g.strokeStyle='#d4141c'; g.lineWidth=14; g.beginPath(); g.moveTo(128,16); g.lineTo(240,214); g.lineTo(16,214); g.closePath(); g.fill(); g.stroke();
     g.fillStyle='#ffffff'; g.beginPath(); g.moveTo(128,62); g.lineTo(206,196); g.lineTo(50,196); g.closePath(); g.fill(); }
+  function frame(){ if(hw){ g.fillStyle='#ffffff'; g.fillRect(6,6,244,244); g.fillStyle='#0a4aa8'; g.fillRect(16,16,224,224); } else tri(); }   // carretera de ciudad: aviso blanco con borde rojo · autopista: placa azul
+  function octo(r,col){ g.fillStyle=col; g.beginPath(); for(var k=0;k<8;k++){ var a=Math.PI/8+k*Math.PI/4, x=128+r*Math.cos(a), y=128+r*Math.sin(a); if(k===0) g.moveTo(x,y); else g.lineTo(x,y); } g.closePath(); g.fill(); }
   if(kind==='speed'){
     g.fillStyle='#d4141c'; g.beginPath(); g.arc(128,128,122,0,6.2832); g.fill(); g.fillStyle='#ffffff'; g.beginPath(); g.arc(128,128,92,0,6.2832); g.fill();
     g.fillStyle='#111111'; g.textAlign='center'; g.textBaseline='middle'; g.font='bold '+(String(val).length>2?'88':'108')+'px Arial, Helvetica, sans-serif'; g.fillText(String(val),128,138);
   } else if(kind==='curve'){
-    tri(); g.save(); if(val==='L'){ g.translate(256,0); g.scale(-1,1); }
-    g.strokeStyle='#111'; g.fillStyle='#111'; g.lineWidth=15; g.lineCap='round'; g.beginPath(); g.moveTo(104,188); g.lineTo(104,140); g.quadraticCurveTo(104,100,146,96); g.stroke();
-    g.beginPath(); g.moveTo(166,96); g.lineTo(138,76); g.lineTo(138,116); g.closePath(); g.fill(); g.restore();
+    frame(); g.save(); if(String(val).charAt(0)==='L'){ g.translate(256,0); g.scale(-1,1); }
+    g.strokeStyle=ink; g.fillStyle=ink; g.lineWidth=15;
+    if(String(val).length>1){   // 'R90' / 'L90': curva en ángulo recto (esquina viva)
+      g.lineCap='butt'; g.lineJoin='miter'; g.beginPath(); g.moveTo(100,192); g.lineTo(100,122); g.lineTo(142,122); g.stroke();
+      g.beginPath(); g.moveTo(176,122); g.lineTo(140,98); g.lineTo(140,146); g.closePath(); g.fill();
+    } else {                    // 'R' / 'L': curva suave
+      g.lineCap='round'; g.beginPath(); g.moveTo(104,188); g.lineTo(104,140); g.quadraticCurveTo(104,100,146,96); g.stroke();
+      g.beginPath(); g.moveTo(166,96); g.lineTo(138,76); g.lineTo(138,116); g.closePath(); g.fill();
+    }
+    g.restore();
   } else if(kind==='round'){
-    tri(); g.strokeStyle='#111'; g.fillStyle='#111'; g.lineWidth=11; g.lineCap='round';
+    frame(); g.strokeStyle=ink; g.fillStyle=ink; g.lineWidth=11; g.lineCap='round';
     for(var a=0;a<3;a++){ var a0=a*2.0944+0.35, a1=a0+1.35; g.beginPath(); g.arc(128,138,36,a0,a1); g.stroke(); var ex=128+36*Math.cos(a1), ey=138+36*Math.sin(a1), tx=-Math.sin(a1), ty=Math.cos(a1);
       g.beginPath(); g.moveTo(ex+tx*16,ey+ty*16); g.lineTo(ex-ty*13-tx*3,ey+tx*13-ty*3); g.lineTo(ex+ty*13-tx*3,ey-tx*13-ty*3); g.closePath(); g.fill(); }
+  } else if(kind==='stop'){
+    octo(124,'#ffffff'); octo(112,'#d4141c'); g.strokeStyle='#ffffff'; g.lineWidth=7; g.beginPath(); for(var k2=0;k2<8;k2++){ var b=Math.PI/8+k2*Math.PI/4, xx=128+96*Math.cos(b), yy=128+96*Math.sin(b); if(k2===0) g.moveTo(xx,yy); else g.lineTo(xx,yy); } g.closePath(); g.stroke();
+    g.fillStyle='#ffffff'; g.textAlign='center'; g.textBaseline='middle'; g.font='bold 62px Arial, Helvetica, sans-serif'; g.fillText('STOP',128,134,150);
+  } else if(kind==='yield'){
+    g.lineJoin='round'; g.fillStyle='#d4141c'; g.strokeStyle='#d4141c'; g.lineWidth=14; g.beginPath(); g.moveTo(16,44); g.lineTo(240,44); g.lineTo(128,240); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle='#ffffff'; g.beginPath(); g.moveTo(52,70); g.lineTo(204,70); g.lineTo(128,204); g.closePath(); g.fill();
+  } else if(kind==='lights'){
+    tri(); g.fillStyle='#16191d'; g.beginPath(); g.moveTo(104,96); g.lineTo(152,96); g.lineTo(152,188); g.lineTo(104,188); g.closePath(); g.fill();
+    g.fillStyle='#ff3b30'; g.beginPath(); g.arc(128,116,14,0,6.2832); g.fill(); g.fillStyle='#ffb300'; g.beginPath(); g.arc(128,142,14,0,6.2832); g.fill(); g.fillStyle='#34c759'; g.beginPath(); g.arc(128,168,14,0,6.2832); g.fill();
   } else if(kind==='blue'){
     g.fillStyle='#ffffff'; g.fillRect(6,6,244,244); g.fillStyle='#0a4aa8'; g.fillRect(16,16,224,224);
     g.strokeStyle='#ffffff'; g.lineWidth=10; g.lineCap='round'; g.beginPath(); g.moveTo(84,176); g.lineTo(116,70); g.moveTo(172,176); g.lineTo(140,70); g.stroke();
@@ -310,15 +328,17 @@ function signTexture(kind,val){
   }
   var t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; t.anisotropy=4; t.needsUpdate=true; signTex[key]=t; return t;
 }
-function spawnSign(kind,val,ahead){
+/* side: 'R' (por defecto) o 'L'. id: si viene, se dibuja UNA vez por id (señales que manda la app según la ruta). */
+function spawnSign(kind,val,ahead,side,id){
   if(state.signsOn===false) return;
-  ahead=ahead||85; var i, sg;
-  for(i=0;i<signs.length;i++){ sg=signs[i]; if(sg.kind===kind&&sg.val===val&&Math.abs((sg.s0-(state.D-sg.D0))-ahead)<45) return; }   // sin duplicados
-  var mw=state.road==='motorway', size=(kind==='blue'?1.55:(mw?1.3:1.0)), h=2.2+size*0.4;
+  ahead=ahead||85; side=side||'R'; var i, sg;
+  if(id===undefined){ for(i=0;i<signs.length;i++){ sg=signs[i]; if(sg.kind===kind&&sg.val===val&&Math.abs((sg.s0-(state.D-sg.D0))-ahead)<45) return; } }   // sin duplicados
+  var mw=state.road==='motorway', hw=mw&&(kind==='curve'||kind==='round'), size=(kind==='blue'?1.55:((kind==='stop'||kind==='yield')?(mw?1.1:0.9):(mw?1.3:1.0))), h=2.2+size*0.4;
   var g=new THREE.Group(), pole=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.045,h,6),poleMat); pole.position.y=h/2;
-  var pm=new THREE.MeshBasicMaterial({map:signTexture(kind,val),transparent:true,alphaTest:0.08,fog:true}); pm.color.setRGB(signTint,signTint,signTint);
+  var pm=new THREE.MeshBasicMaterial({map:signTexture(kind,val,hw),transparent:true,alphaTest:0.08,fog:true}); pm.color.setRGB(signTint,signTint,signTint);
   var plate=new THREE.Mesh(new THREE.PlaneGeometry(size,size),pm); plate.position.set(0,h-size*0.25+0.12,0.06);
-  g.add(pole); g.add(plate); scene.add(g); signs.push({g:g,kind:kind,val:val,D0:state.D,s0:ahead,u:OUTER+0.9,mat:pm,layout:state.road,lc0:laneC});
+  var u=(side==='L')?(mw?1.3:-(OUTER+0.9)):(OUTER+0.9);   // izquierda: en la mediana (autopista) o al otro lado de la carretera
+  g.add(pole); g.add(plate); scene.add(g); signs.push({g:g,kind:kind,val:val,D0:state.D,s0:ahead,u:u,mat:pm,layout:state.road,lc0:laneC});
 }
 function clearSigns(){ for(var i=0;i<signs.length;i++){ scene.remove(signs[i].g); } signs.length=0; }
 function updateSigns(){
@@ -534,7 +554,7 @@ function frame(now){
   demoStep(dt); gpsStep(dt);
   var v=state.speed/3.6; state.D+=v*dt;
   var lc0=laneC; laneC+=(laneT-laneC)*Math.min(1,dt*1.8); laneVel=dt>0?(laneC-lc0)/dt:0;     // cambio de carril suave
-  if(Math.abs(state.kT)>0.009 && curveArm){ spawnSign('curve',state.kT>0?'R':'L',75); curveArm=false; } if(Math.abs(state.kT)<0.004) curveArm=true;
+  if(Math.abs(state.kT)>0.009 && curveArm){ if(performance.now()/1000-lastNextT>25) spawnSign('curve',state.kT>0?'R':'L',75, state.kT>0?'R':'L'); curveArm=false; } if(Math.abs(state.kT)<0.004) curveArm=true;
   state.k+=(state.kT-state.k)*Math.min(1,dt*(mode==='manual'?2.2:1.3));   // la curva entra y sale suave (más aún con GPS)
   var k=state.k;
   state.H+=v*k*dt;                                                         // rumbo acumulado: mueve las montañas
@@ -579,12 +599,29 @@ function autoRoadStep(sp,t,d){
   else { hiT=null; loT=null; }
   if(want && want!==state.road){ setRoadType(want,false,true); if(want==='motorway') spawnSign('blue','AUTOPISTA',55); }
 }
+/* Señales según la ruta: la app manda d.next = [{id,kind,val,side,d,adv}, ...] con lo que viene por delante.
+   kind: 'curve' (val 'R','L','R90','L90') · 'round' · 'stop' · 'yield' · 'lights'. d = metros hasta el punto.
+   Cada id se dibuja UNA sola vez. Avisos (adv): el cartel pasa junto al coche ANTES del giro; stop, ceda y semáforo:
+   llegan al coche justo en su punto. */
+var nextSeen={}, lastNextT=-1e9;
+function handleNext(arr){
+  if(!arr||!arr.length||state.signsOn===false) return;
+  lastNextT=performance.now()/1000;
+  for(var i=0;i<arr.length&&i<4;i++){ var n=arr[i];
+    if(!n||!n.kind||n.id===undefined||nextSeen[n.id]) continue;
+    nextSeen[n.id]=1;
+    var ahead=n.adv?Math.max(25,Math.min(120,(n.d||0)-30)):Math.max(20,n.d||0);
+    spawnSign(n.kind,n.val||'',ahead,n.side||'R',n.id);
+  }
+  var ks=Object.keys(nextSeen); if(ks.length>300){ for(var q=0;q<150;q++) delete nextSeen[ks[q]]; }
+}
 API._hooks=function(ok,fail){ onCarReady=ok; onCarFail=fail; };
 API.update=function(d){
   if(!d) return;
   var t=(d.t!=null?d.t:performance.now()/1000);
   if(d.speed!=null){ setSpeed(d.speed); autoBrakeStep(d.speed,t,d); if(d.road===undefined && state.roadForce==='auto') autoRoadStep(d.speed,t,d); }
   if(d.head!=null) feedHeading(d.head,t);
+  if(d.next) handleNext(d.next);
   if(d.road && d.road!==state.road){ setRoadType(d.road,false,true); if(d.road==='motorway') spawnSign('blue','AUTOPISTA',55); }
   if(d.limit && d.limit!==state.limit) setLimit(d.limit);                                 // sin dato de límite no se inventa ninguno
   if('rain' in d && !!d.rain!==state.rain){ state.rain=!!d.rain; setWet(); }
