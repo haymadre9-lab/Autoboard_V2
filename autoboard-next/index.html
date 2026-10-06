@@ -346,16 +346,12 @@ function crearIconoStop(){
   const mastilX = size/2;
   const mastilTop = size*0.62;
   const mastilBottom = size-4;
-  // Sombra del mástil
   ctx.fillStyle='rgba(0,0,0,0.25)';
   ctx.fillRect(mastilX-1, mastilTop+2, 6, mastilBottom-mastilTop);
-  // Mástil gris
   ctx.fillStyle='#607d8b';
   ctx.fillRect(mastilX-2, mastilTop, 5, mastilBottom-mastilTop);
-  // Brillo del mástil
   ctx.fillStyle='#90a4ae';
   ctx.fillRect(mastilX-2, mastilTop, 2, mastilBottom-mastilTop);
-  // Señal octogonal
   const cx = size/2;
   const cy = size*0.38;
   const r = size*0.30;
@@ -373,7 +369,6 @@ function crearIconoStop(){
   ctx.fillStyle='#d32f2f'; ctx.fill();
   ctx.shadowColor='transparent'; ctx.shadowBlur=0; ctx.shadowOffsetY=0;
   ctx.lineWidth=4; ctx.strokeStyle='#ffffff'; ctx.stroke();
-  // Borde interior
   ctx.beginPath();
   for(let i=0;i<8;i++){
     const a = (Math.PI/8) + (i*Math.PI/4);
@@ -383,7 +378,6 @@ function crearIconoStop(){
   }
   ctx.closePath();
   ctx.lineWidth=1.5; ctx.strokeStyle='rgba(255,255,255,0.55)'; ctx.stroke();
-  // Texto
   ctx.fillStyle='#ffffff';
   ctx.font='bold 22px system-ui,sans-serif';
   ctx.textAlign='center'; ctx.textBaseline='middle';
@@ -402,7 +396,6 @@ function crearIconoCeda(){
   ctx.fillRect(mastilX-2, mastilTop, 5, mastilBottom-mastilTop);
   ctx.fillStyle='#90a4ae';
   ctx.fillRect(mastilX-2, mastilTop, 2, mastilBottom-mastilTop);
-  // Triángulo invertido
   const cx = size/2;
   const cy = size*0.38;
   const ancho = size*0.62;
@@ -538,7 +531,6 @@ map.on('load',()=>{
     if(!map.hasImage('car-72mas')) map.addImage('car-72mas',crearIconoCargador('#d32f2f','72+'));
     if(!map.hasImage('car-supercharger')) map.addImage('car-supercharger',crearIconoSupercharger());
     if(!map.hasImage('car-fav')) map.addImage('car-fav',crearIconoCargador('#ffd700','★'));
-    /* Iconos señales */
     if(!map.hasImage('senal-stop')) map.addImage('senal-stop',crearIconoStop());
     if(!map.hasImage('senal-ceda')) map.addImage('senal-ceda',crearIconoCeda());
     if(!map.hasImage('senal-semaforo')) map.addImage('senal-semaforo',crearIconoSemaforo(''));
@@ -575,6 +567,7 @@ map.on('load',()=>{
   map.addSource('cargadores',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
   map.addLayer({id:'cargadores',type:'symbol',source:'cargadores',minzoom:9,
     layout:{'icon-image':['get','icono'],'icon-size':['interpolate',['linear'],['zoom'],9,0.25,11,0.35,15,0.5,18,0.65],
+      'icon-pitch-alignment':'viewport',
       'icon-allow-overlap':true,'icon-ignore-placement':true}});
   map.on('click','cargadores',(e)=>{
     if(!e.features||!e.features.length) return;
@@ -630,6 +623,7 @@ async function cargarRadares(){
     map.addLayer({id:'radares',type:'symbol',source:'radares',minzoom:14,
       layout:{'icon-image':['concat','radar-',['get','tipo'],'-',['to-string',['get','velocidad']]],
         'icon-size':['interpolate',['linear'],['zoom'],14,0.35,17,0.5,20,0.65],
+        'icon-pitch-alignment':'viewport',
         'icon-allow-overlap':true,'icon-ignore-placement':true}});
     document.getElementById('rRadares').innerHTML='<b>'+datos.length+'</b> cargados';
   }catch(e){
@@ -682,7 +676,7 @@ async function cargarSenales(){
         'icon-anchor': 'bottom',
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
-        'icon-pitch-alignment':'map'
+        'icon-pitch-alignment':'viewport'
       }
     });
     if(!senalesOn) map.setLayoutProperty('senales','visibility','none');
