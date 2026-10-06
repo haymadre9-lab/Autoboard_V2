@@ -243,8 +243,9 @@ async function fetchPois(ll){
       for (const c of conns){ if (c.PowerKW && c.PowerKW>kw) kw=c.PowerKW;
         const tt = c.ConnectionType && c.ConnectionType.Title;
         if (tt){ let n=tt.replace('CCS (Type 2)','CCS').replace('Type 2','Tipo 2'); if (socks.indexOf(n)<0) socks.push(n); } }
-      arr.push({ type:'charge', ll:[ai.Latitude, ai.Longitude], name: ai.Title||'Punto de carga',
-        op: (poi.OperatorInfo && poi.OperatorInfo.Title) || '', kw: kw?Math.round(kw):0, socks });
+      arr.push({ type:'charge', ll:[ai.Latitude, ai.Longitude], name: ai.Title||'Punto de carga', id: poi.ID || 0,
+        op: (poi.OperatorInfo && poi.OperatorInfo.Title) || (poi.OperatorID === 23 ? 'Tesla' : ''), opId: poi.OperatorID || 0,
+        kw: kw?Math.round(kw):0, socks, pts: poi.NumberOfPoints || 0, cost: (poi.UsageCost || '').trim() });
     }
     if (!arr.length && pois.length){ console.warn('[POIs] OCM devolvio 0; se mantienen los anteriores'); return; }
     pois = arr; drawChargers();
@@ -261,7 +262,7 @@ let baseSat = false;
    todo lo nuestro vive en JS (datosFuente, registroImagenes) y montarCapas() lo vuelve a poner cada
    vez que carga un estilo ('style.load'). Las funciones de dibujo solo actualizan datosFuente. */
 const VACIO = { type:'FeatureCollection', features:[] };
-const datosFuente = { 'ruta':VACIO, 'ruta-tramos':VACIO, 'radares':VACIO, 'paradas':VACIO, 'cargadores':VACIO, 'pin':VACIO };
+const datosFuente = { 'ruta':VACIO, 'ruta-tramos':VACIO, 'radares':VACIO, 'paradas':VACIO, 'cargadores':VACIO, 'pin':VACIO, 'senales':VACIO, 'senales-ped':VACIO };
 const registroImagenes = new Map();   // clave -> { data:ImageData, pixelRatio }
 let estiloListo = false;
 let estiloActual = mapNite;           // true = oscuro: el estilo con el que se construye el mapa
@@ -338,89 +339,82 @@ function turnArrowFill(mod, shaftHW, headHW, headLen){
   return 'M'+poly.map(p=>p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' L')+' Z';
 }
 
-function arrowSVG(mod,col,w){col=col||'#0a8a34';
-  return '<svg viewBox="0 0 48 52"><path d="'+turnArrowFill(mod,4.6,9.5,9)+'" fill="'+col+'"/></svg>';}
-
-function laneArrow(dir,valid,hw){ const col=valid?(hw?'#ffffff':'#0a8a34'):(hw?'#000000':'#9aa3b2');
-  return '<div class="lane"><svg viewBox="0 0 48 52"><path d="'+turnArrowFill(dir,4.8,9.5,9)+'" fill="'+col+'"/></svg></div>'; }
-
-function roundaboutSVG(exit,mod,col){
-  // El tramo de rotonda que se recorre (entrada -> tu salida) se pinta como un
-  // arco relleno grueso: se lee la forma de un vistazo, sin depender de un
-  // numero pequeno.
-  // Maximo 4 salidas dibujadas. En la mayoria de rotondas reales, la salida 4
-  // es un cambio de sentido (vuelta casi completa) -- asi que cualquier salida
-  // real 4 o mayor (4, 5, 6, 7...) se trata como esa misma maniobra: dar casi
-  // toda la vuelta y salir por donde se entro, no "una salida mas" en el
-  // reparto. Solo las salidas 1, 2 y 3 son huecos normales.
-  const g='#6b7480', cx=26, cy=26, r=13, grosor=6.5, NEXITS=3, pasoDeg=240/NEXITS;
-  const exitReal=Math.max(1,parseInt(exit,10)||1);
-  const esVuelta=exitReal>=4;
-  const n=esVuelta?4:exitReal;
-  const a0=Math.PI/2;                        // entrada, siempre abajo
-  const aDe=k=>a0-(k*pasoDeg)*Math.PI/180;    // angulo de la salida k (1..NEXITS)
-  let s='<svg viewBox="0 0 52 52">';
-  s+='<circle cx="'+cx+'" cy="'+cy+'" r="'+(r-grosor/2-1)+'" fill="'+g+'" opacity=".18"/>';
-  s+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+g+'" stroke-width="3" opacity=".45"/>';
-  // entrada, en gris: aun no estas circulando por la rotonda
-  s+='<path d="M'+cx+' 52 L'+cx+' '+(cy+r)+'" stroke="'+g+'" stroke-width="'+grosor+'" stroke-linecap="round" opacity=".55"/>';
-  // las demas salidas normales, apenas insinuadas (si esta maniobra es la vuelta, ninguna esta seleccionada: se insinuan las 3)
-  for(let k=1;k<=NEXITS;k++){ if(k===n) continue; const a=aDe(k);
-    const x1=cx+Math.cos(a)*r, y1=cy+Math.sin(a)*r, x2=cx+Math.cos(a)*(r+7), y2=cy+Math.sin(a)*(r+7);
-    s+='<path d="M'+x1.toFixed(1)+' '+y1.toFixed(1)+' L'+x2.toFixed(1)+' '+y2.toFixed(1)+'" stroke="'+g+'" stroke-width="2.4" stroke-linecap="round" opacity=".4"/>'; }
-  // ARCO relleno (blanco, grueso) del tramo real, desde la entrada hasta tu salida.
-  // El cambio de sentido barre CASI toda la circunferencia (350 grados) en vez de
-  // parar en un hueco: se lee de un vistazo como "da la vuelta entera", no como
-  // una salida normal mas.
-  const aSel=esVuelta ? a0-350*Math.PI/180 : aDe(n);
-  // El arco NO se dibuja con el comando "A" de SVG: sus banderas large/sweep
-  // eligen entre dos centros posibles, y si no coinciden EXACTAMENTE con mi
-  // centro real (cx,cy) el arco se hincha hacia fuera en vez de seguir la
-  // circunferencia (era justo el fallo: salidas 5 y 6 desplazadas hacia fuera).
-  // En vez de adivinar las banderas, se muestrean puntos directamente sobre MI
-  // circulo -mismo criterio ya usado y probado en las flechas de giro-, lo que
-  // garantiza que el arco se ciñe siempre al aro real.
-  const xs=cx+Math.cos(aSel)*r, ys=cy+Math.sin(aSel)*r;
-  let dArco='M'+cx+' '+(cy+r);
-  for(let i=1;i<=24;i++){ const a=a0-(a0-aSel)*i/24;
-    dArco+=' L'+(cx+Math.cos(a)*r).toFixed(1)+' '+(cy+Math.sin(a)*r).toFixed(1); }
-  const col2='#ffb020';   // ambar: se diferencia bien tanto del aro gris-azulado como de un panel azul de autopista, cosa que el blanco no hacia
-  s+='<path d="'+dArco+'" fill="none" stroke="'+col2+'" stroke-width="'+grosor+'" stroke-linecap="round" stroke-linejoin="round"/>';
-  // Salida: MISMA TECNICA que las flechas de giro (forma rellena, sin trazo
-  // pegado). Un trazo + un triangulo suelto encima siempre se leia como "un
-  // pegote puesto"; una unica forma que nace del propio grosor del arco,
-  // se ensancha y cierra en punta, se lee como una flecha de verdad.
-  const largo=11;
-  const xo=cx+Math.cos(aSel)*(r+largo), yo=cy+Math.sin(aSel)*(r+largo);
-  const brg=Math.atan2(xo-cx,-(yo-cy));
-  const tan={x:Math.sin(brg),y:-Math.cos(brg)}, lat={x:Math.cos(brg),y:Math.sin(brg)};
-  const shaftHW=grosor/2, headHW=7.5, hombro=0.5;   // 0..1: donde esta el ensanche maximo
-  const hx=xs+(xo-xs)*hombro, hy=ys+(yo-ys)*hombro;
-  const poly=[
-    {x:xs+lat.x*shaftHW, y:ys+lat.y*shaftHW},
-    {x:hx+lat.x*headHW,  y:hy+lat.y*headHW},
-    {x:xo, y:yo},
-    {x:hx-lat.x*headHW,  y:hy-lat.y*headHW},
-    {x:xs-lat.x*shaftHW, y:ys-lat.y*shaftHW},
-  ];
-  s+='<path d="M'+poly.map(p=>p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' L')+' Z" fill="'+col2+'"/>';
-  s+='<text x="'+cx+'" y="'+(cy+1)+'" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="800" font-family="system-ui,sans-serif" fill="'+col+'">'+exitReal+'</text>';
-  return s+'</svg>';
-}
-
-function maneuverSVG(st,hw){const m=st.maneuver||{};const col=hw?'#ffffff':'#0a8a34';
-  if(m.type==='roundabout'||m.type==='rotary')return roundaboutSVG(m.exit,m.modifier,col);
-  if(m.type==='arrive')return '<svg viewBox="0 0 48 52"><path d="M24 6c-7 0-12 5-12 12 0 9 12 26 12 26s12-17 12-26c0-7-5-12-12-12z" fill="'+col+'"/><circle cx="24" cy="18" r="4.5" fill="#fff"/></svg>';
-  if(m.type==='fork'||m.type==='off ramp'){ // bifurcacion / salida: tronco + dos ramas, la tuya marcada
-    const izq=(m.modifier||'').indexOf('left')>=0, g='#9aa3b2';
-    return '<svg viewBox="0 0 48 52"><path d="M24 48 L24 28" stroke="'+col+'" stroke-width="7" stroke-linecap="round"/>'
-      +'<path d="M24 28 L'+(izq?36:12)+' 10" stroke="'+g+'" stroke-width="5" stroke-linecap="round"/>'
-      +'<path d="M24 28 L'+(izq?12:36)+' 10" stroke="'+col+'" stroke-width="7" stroke-linecap="round"/>'
-      +arrowHead(izq?12:36,10,izq?-0.6:0.6,col)+'</svg>'; }
-  if(m.type==='merge'||m.type==='on ramp'){ const izq=(m.modifier||'').indexOf('left')>=0;
-    return '<svg viewBox="0 0 48 52"><path d="M'+(izq?34:14)+' 48 L'+(izq?34:14)+' 6" stroke="#9aa3b2" stroke-width="5" stroke-linecap="round"/>'
-      +'<path d="M'+(izq?12:36)+' 48 Q'+(izq?14:34)+' 26 '+(izq?30:18)+' 14" fill="none" stroke="'+col+'" stroke-width="7" stroke-linecap="round"/></svg>'; }
-  return arrowSVG(m.modifier,col,7.5);}
+/* ==== FLECHAS DEL CARTEL: estilo "cruce con contexto" ===========================================
+   La maniobra va resaltada (verde sobre el cartel blanco, blanca sobre el azul de autopista) y las otras
+   calles del cruce, en gris: se ve de un vistazo cuantas opciones hay y cual es la tuya. Todo son lineas con
+   esquinas redondeadas y una punta triangular separada. Las de izquierda son el espejo de las de derecha.
+   Sustituye a arrowSVG / laneArrow / roundaboutSVG / maneuverSVG de AutoBoard (y al arrowHead que nunca
+   existio: fallaba en salidas y bifurcaciones). */
+const FL = { w:6, r:7, hl:10, hw:8.5 };
+function flColores(hw){ return { col: hw?'#ffffff':'#000000', g: hw?'#7fa2ee':'#c4cad2', off: hw?'#000000':'#9aa3b2' }; }
+const flMir = ps => ps.map(p => p.map(q => [48-q[0], q[1]]));
+function flRecorta(p,len){ const n=p.length,a=p[n-2],b=p[n-1],d=Math.hypot(b[0]-a[0],b[1]-a[1]),k=Math.max(0,d-len)/(d||1);
+  return p.slice(0,n-1).concat([[a[0]+(b[0]-a[0])*k, a[1]+(b[1]-a[1])*k]]); }
+function flPunta(p,len,w,col){ const n=p.length,a=p[n-2],b=p[n-1],th=Math.atan2(b[1]-a[1],b[0]-a[0]),ux=Math.cos(th),uy=Math.sin(th),nx=-uy,ny=ux,bx=b[0]-ux*len,by=b[1]-uy*len;
+  return '<path d="M'+b[0].toFixed(1)+' '+b[1].toFixed(1)+' L'+(bx+nx*w).toFixed(1)+' '+(by+ny*w).toFixed(1)+' L'+(bx-nx*w).toFixed(1)+' '+(by-ny*w).toFixed(1)+' Z" fill="'+col+'"/>'; }
+function flLinea(p,r){ let d='M'+p[0][0]+' '+p[0][1];
+  for(let i=1;i<p.length-1;i++){ const a=p[i-1],b=p[i],c=p[i+1],l1=Math.hypot(b[0]-a[0],b[1]-a[1]),l2=Math.hypot(c[0]-b[0],c[1]-b[1]),rr=Math.min(r,l1/2,l2/2);
+    if(rr<=0){ d+=' L'+b[0]+' '+b[1]; continue; }
+    const p1=[b[0]+(a[0]-b[0])*rr/l1,b[1]+(a[1]-b[1])*rr/l1],p2=[b[0]+(c[0]-b[0])*rr/l2,b[1]+(c[1]-b[1])*rr/l2];
+    d+=' L'+p1[0].toFixed(1)+' '+p1[1].toFixed(1)+' Q'+b[0]+' '+b[1]+' '+p2[0].toFixed(1)+' '+p2[1].toFixed(1); }
+  const e=p[p.length-1]; return d+' L'+e[0].toFixed(1)+' '+e[1].toFixed(1); }
+function flTrazos(bs,cs,col,g,k){ k=k||1; let s='';
+  (cs||[]).forEach(c => { s+='<path d="'+flLinea(c,0)+'" stroke="'+g+'" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'; });
+  bs.forEach(p => { s+='<path d="'+flLinea(flRecorta(p,FL.hl*0.55*k),FL.r*k)+'" stroke="'+col+'" stroke-width="'+(FL.w*k).toFixed(1)+'" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'+flPunta(p,FL.hl*k,FL.hw*k,col); });
+  return s; }
+const FL_R = {   // variantes de DERECHA; la izquierda es el espejo (x -> 48-x). La vuelta es siempre por la izquierda.
+  'straight':     { b:[[[24,50],[24,8]]],                        c:[[[6,24],[42,24]]] },
+  'slight right': { b:[[[24,50],[24,32],[38,10]]],               c:[[[24,32],[24,8]]] },
+  'right':        { b:[[[24,50],[24,24],[42,24]]],               c:[[[24,24],[24,8]],[[24,24],[6,24]]] },
+  'sharp right':  { b:[[[22,50],[22,14],[42,36]]],               c:[] },
+  'uturn':        { b:[[[33,50],[33,20],[15,20],[15,38]]],       c:[] },
+  'fork right':   { b:[[[24,50],[24,32],[38,10]]],               c:[[[24,32],[10,10]]] },
+  'merge right':  { b:[[[34,50],[34,34],[18,20],[18,8]]],        c:[[[18,50],[18,8]]] }
+};
+function flGeom(mod){ mod = mod || 'straight';
+  if (mod === 'straight' || mod === 'uturn') return FL_R[mod];
+  const base = FL_R[mod.replace('left','right')] || FL_R.straight;
+  return mod.indexOf('left') >= 0 ? { b:flMir(base.b), c:flMir(base.c) } : base; }
+function flRotonda(exit,c){
+  const exitReal = Math.max(1, parseInt(exit,10) || 1), ex = Math.min(exitReal, 4);
+  const cx=28, cy=26, r=10, ang={1:0,2:-90,3:-180,4:-235}, deg=ang[ex];   // 1.a a la derecha, 2.a de frente, 3.a a la izquierda, 4 o mas = vuelta
+  const rad=a=>a*Math.PI/180, pt=(a,d)=>[cx+Math.cos(rad(a))*d, cy+Math.sin(rad(a))*d];
+  let s='<svg viewBox="0 0 56 56"><circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+c.g+'" stroke-width="5"/>';
+  [0,-90,-180].forEach(a => { if (ex < 4 && a === deg) return; const p0=pt(a,r), p1=pt(a,r+16);
+    s+='<path d="M'+p0[0].toFixed(1)+' '+p0[1].toFixed(1)+' L'+p1[0].toFixed(1)+' '+p1[1].toFixed(1)+'" stroke="'+c.g+'" stroke-width="5" stroke-linecap="round" fill="none"/>'; });
+  let d='M'+cx+' 54 L'+cx+' '+(cy+r);
+  for(let a=84; a>=deg; a-=6){ const p=pt(a,r); d+=' L'+p[0].toFixed(1)+' '+p[1].toFixed(1); }
+  const pe=pt(deg,r), tip=pt(deg,r+17), stub=pt(deg,r+17-FL.hl*0.55);
+  d+=' L'+pe[0].toFixed(1)+' '+pe[1].toFixed(1)+' L'+stub[0].toFixed(1)+' '+stub[1].toFixed(1);
+  s+='<path d="'+d+'" stroke="'+c.col+'" stroke-width="'+(FL.w*0.85).toFixed(1)+'" fill="none" stroke-linecap="round" stroke-linejoin="round"/>';
+  s+=flPunta([pt(deg,r+3),tip],FL.hl,FL.hw*0.85,c.col);
+  s+='<text x="'+cx+'" y="'+(cy+5)+'" text-anchor="middle" font-size="14" font-weight="700" fill="'+c.col+'" style="font-family:system-ui,sans-serif">'+exitReal+'</text>';
+  return s+'</svg>'; }
+function maneuverSVG(st,hw){ const m=st.maneuver||{}, c=flColores(hw), svg=inner=>'<svg viewBox="0 0 48 52">'+inner+'</svg>';
+  if (m.type==='roundabout' || m.type==='rotary') return flRotonda(m.exit, c);
+  if (m.type==='arrive') return svg('<circle cx="24" cy="26" r="17" fill="none" stroke="'+c.col+'" stroke-width="5"/><circle cx="24" cy="26" r="7" fill="'+c.col+'"/>');
+  let g;
+  if (m.type==='fork' || m.type==='off ramp'){ const base=FL_R['fork right']; g = (m.modifier||'').indexOf('left')>=0 ? { b:flMir(base.b), c:flMir(base.c) } : base; }   // bifurcacion / salida
+  else if (m.type==='merge' || m.type==='on ramp'){ const base=FL_R['merge right']; g = (m.modifier||'').indexOf('left')>=0 ? { b:flMir(base.b), c:flMir(base.c) } : base; }   // incorporacion
+  else g = flGeom(m.modifier);
+  return svg(flTrazos(g.b, g.c, c.col, c.g)); }
+/* Carriles: una flecha por indicacion del carril (recto + derecha = dos puntas sobre un mismo tronco). */
+function flCarrilPath(d,sx){
+  switch(d){
+    case 'right':        return [[sx,44],[sx,23],[sx+16,23]];
+    case 'left':         return [[sx,44],[sx,23],[sx-16,23]];
+    case 'slight right': return [[sx,44],[sx,28],[sx+12,10]];
+    case 'slight left':  return [[sx,44],[sx,28],[sx-12,10]];
+    case 'sharp right':  return [[sx,44],[sx,14],[sx+11,30]];
+    case 'sharp left':   return [[sx,44],[sx,14],[sx-11,30]];
+    case 'uturn':        return [[sx+5,44],[sx+5,16],[sx-9,16],[sx-9,32]];
+    default:             return [[sx,44],[sx,6]];
+  } }
+function flCarril(dirs,valid,hw){ const c=flColores(hw), col=valid?c.col:c.off;
+  const lista=(dirs||[]).filter(d=>typeof d==='string' && d!=='none').slice(0,3); if(!lista.length) lista.push('straight');
+  const izq=lista.some(d=>d.indexOf('left')>=0), der=lista.some(d=>d.indexOf('right')>=0);
+  const sx=(der&&!izq)?11:((izq&&!der)?21:16);
+  return '<div class="lane"><svg viewBox="0 0 32 46">'+flTrazos(lista.map(d=>flCarrilPath(d,sx)),[],col,c.g,0.8)+'</svg></div>'; }
 
 function ttMan(it){ const m=(it.maneuver||it.instructionType||'').toString().toUpperCase(); const rb=it.roundaboutExitNumber;
   if(m.indexOf('ROUNDABOUT')>=0||m.indexOf('ROTARY')>=0) return {type:'roundabout',exit:rb,modifier:(m.indexOf('LEFT')>=0?'left':(m.indexOf('RIGHT')>=0?'right':'straight'))};
@@ -702,6 +696,14 @@ function montarCapas(){
     src('cargadores', { type:'geojson', data: datosFuente['cargadores'] });
     add({ id:'cargadores', type:'symbol', source:'cargadores',
       layout:{ 'icon-image':['get','icono'], 'icon-allow-overlap':true, 'icon-ignore-placement':true } });
+    // stop / ceda / semaforos (fichero senales.json, de OpenStreetMap): solo se ven de cerca; los de peatones, aun mas de cerca
+    const tam = ['interpolate',['linear'],['zoom'],16,0.55,18,0.8,20,1];
+    src('senales', { type:'geojson', data: datosFuente['senales'] });
+    if (!map.getLayer('senales')) map.addLayer({ id:'senales', type:'symbol', source:'senales', minzoom:16,
+      layout:{ 'icon-image':['get','ic'], 'icon-size':tam, 'icon-allow-overlap':false, 'symbol-sort-key':['get','pr'] } }, 'cargadores');
+    src('senales-ped', { type:'geojson', data: datosFuente['senales-ped'] });
+    if (!map.getLayer('senales-ped')) map.addLayer({ id:'senales-ped', type:'symbol', source:'senales-ped', minzoom:17.5,
+      layout:{ 'icon-image':['get','ic'], 'icon-size':tam, 'icon-allow-overlap':false } }, 'cargadores');
     src('pin', { type:'geojson', data: datosFuente['pin'] });
     add({ id:'pin', type:'circle', source:'pin', paint:{ 'circle-radius':9, 'circle-color':'#2f6bff', 'circle-stroke-color':'#ffffff', 'circle-stroke-width':3 } });
   }catch(e){ console.warn('[capas] ', e.message); try{ setStatus('Capas: ' + e.message); }catch(er){} }
@@ -776,7 +778,7 @@ function actualizarZoomManiobra(distSiguiente, tipoSiguiente){
   camZoomObj = cerca ? Math.min(19.5, navZoom + 1.4) : navZoom;   // el bucle de camara lo suaviza
 }
 
-const VERSION = '2026.10.05-ml-a';
+const VERSION = '2026.10.06-ml-c';
 // X dibujada: el caracter U+2715 no esta en la fuente del navegador y salia como un rectangulo
 const X_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>';
 try{ $('ver').textContent = 'v'+VERSION; }catch(e){}
@@ -830,6 +832,145 @@ function ajustarARuta(lat, lon){
   return (mejor && md <= SNAP_M) ? mejor : [lat, lon];
 }
 
+/* ==== Limite de velocidad de la via: senal pequena abajo a la izquierda ===========================
+   Se pregunta a TomTom (Reverse Geocode con returnSpeedLimit, con el rumbo para coger el sentido de la via)
+   cada vez que has avanzado unos 120 m, con un minimo de 5 s entre consultas y un maximo de 30 s parado.
+   Funciona con o sin ruta. Si TomTom no da limite 3 veces seguidas, la senal se oculta. Si responde 403/429
+   (cuota), se pausa 2 minutos. Se pone a la DERECHA de la tarjeta de llegada (distancia y hora) sin taparla;
+   sin ruta ocupa su sitio. No recibe toques (pointer-events:none) y se oculta con el HUD o Faro abiertos. */
+const LIM = { cadaM:120, minMs:5000, maxMs:30000, ll:null, t:-1e9, ocupado:false, sinDato:0, valor:0, bloqueoHasta:0, avisado:false };
+const elLimite = document.createElement('div');
+elLimite.id = 'limitSign'; elLimite.setAttribute('aria-label', 'Limite de velocidad de la via');
+document.body.appendChild(elLimite);
+function colocarLimite(){
+  const eta = $('etaCard');
+  if (eta && eta.classList.contains('on')){
+    const r = eta.getBoundingClientRect();
+    elLimite.style.left = (r.right + 10) + 'px';
+    elLimite.style.bottom = Math.max(0, window.innerHeight - r.bottom) + 'px';
+  } else { elLimite.style.left = '10px'; elLimite.style.bottom = '92px'; }
+}
+function pintarLimite(){
+  const ver = LIM.valor > 0 && !hudAbierto && !faroOn;
+  elLimite.style.display = ver ? 'flex' : 'none';
+  if (!ver) return;
+  const t = String(LIM.valor);
+  if (elLimite.dataset.v !== t){ elLimite.dataset.v = t; elLimite.textContent = t; elLimite.classList.toggle('largo', t.length > 2); }
+  colocarLimite();
+}
+if (typeof ResizeObserver !== 'undefined' && $('etaCard')) new ResizeObserver(() => { if (elLimite.style.display === 'flex') colocarLimite(); }).observe($('etaCard'));
+addEventListener('resize', () => { if (elLimite.style.display === 'flex') colocarLimite(); });
+function parseLimite(txt){
+  if (!txt) return 0;
+  const m = String(txt).match(/([\d.]+)\s*(KPH|MPH)?/i); if (!m) return 0;
+  let v = parseFloat(m[1]); if (/MPH/i.test(m[2] || '')) v *= 1.609;
+  v = Math.round(v); return (v >= 5 && v <= 140) ? v : 0;
+}
+async function consultarLimite(lat, lon, rumbo){
+  const ahora = performance.now();
+  if (LIM.ocupado || document.hidden || ahora < LIM.bloqueoHasta) return;
+  const avanzo = !LIM.ll || dist(LIM.ll, [lat, lon]) >= LIM.cadaM;
+  if (ahora - LIM.t < LIM.minMs || (!avanzo && ahora - LIM.t < LIM.maxMs)) return;
+  LIM.ocupado = true; LIM.t = ahora; LIM.ll = [lat, lon];
+  try{
+    const r = await fetch('https://api.tomtom.com/search/2/reverseGeocode/'+lat.toFixed(6)+','+lon.toFixed(6)+'.json?key='+TT
+      +'&returnSpeedLimit=true&radius=30'+(rumbo != null ? '&heading='+Math.round(rumbo) : ''));
+    if (r.status === 403 || r.status === 429){
+      LIM.bloqueoHasta = performance.now() + 120000;
+      if (!LIM.avisado){ LIM.avisado = true; console.warn('[limite] TomTom respondio ' + r.status + ': se pausa 2 min'); }
+      return;
+    }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json(), a = j.addresses && j.addresses[0] && j.addresses[0].address;
+    const kmh = parseLimite(a && a.speedLimit);
+    if (kmh){ LIM.valor = kmh; LIM.sinDato = 0; } else if (++LIM.sinDato >= 3) LIM.valor = 0;
+    pintarLimite();
+  }catch(e){ console.warn('[limite]', e.message); }
+  finally{ LIM.ocupado = false; }
+}
+
+/* ==== Señales de trafico: stop, ceda el paso y semaforos ========================================
+   Datos de OpenStreetMap en senales.json (lo genera descargar-senales.html): [lat, lon, tipo, direccion] con
+   tipo s=stop, c=ceda, t=semaforo, p=semaforo de peatones. Se dibujan como iconos en el mapa (solo de cerca) y,
+   con ruta activa, se calculan las que caen SOBRE tu ruta para avisar en el HUD 3D. Limitacion conocida: OSM no
+   dice hacia donde mira cada stop/ceda sin la geometria de la via; solo se cuentan los que estan a menos de 5,5 m
+   de tu ruta (semaforos, 9 m), asi que alguno de una calle lateral por la que giras puede salir de mas. */
+const SEN = { listo:false, grid:new Map(), pts:[], ruta:[] };
+function imagenSenal(tp){
+  const clave = { s:'sen-stop', c:'sen-ceda', t:'sen-sem', p:'sen-ped' }[tp];
+  if (!registroImagenes.has(clave)){
+    const R = 2, W = tp === 'p' ? 16 : 24, H = tp === 'p' ? 22 : 26, c = document.createElement('canvas'); c.width = W*R; c.height = H*R;
+    const g = c.getContext('2d'); g.scale(R, R);
+    if (tp === 's'){ g.beginPath(); for (let k = 0; k < 8; k++){ const a = Math.PI/8 + k*Math.PI/4, x = 12 + 11*Math.cos(a), y = 13 + 11*Math.sin(a); k ? g.lineTo(x, y) : g.moveTo(x, y); } g.closePath();
+      g.fillStyle = '#d4141c'; g.fill(); g.lineWidth = 2; g.strokeStyle = '#ffffff'; g.stroke();
+      g.fillStyle = '#ffffff'; g.font = '800 6.2px system-ui,sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('STOP', 12, 13.5); }
+    else if (tp === 'c'){ g.beginPath(); g.moveTo(2, 4); g.lineTo(22, 4); g.lineTo(12, 23); g.closePath(); g.fillStyle = '#ffffff'; g.fill(); g.lineWidth = 3; g.lineJoin = 'round'; g.strokeStyle = '#d4141c'; g.stroke(); }
+    else { const w = tp === 'p' ? 12 : 14, h = tp === 'p' ? 19 : 24, x = (W - w)/2, y = (H - h)/2, rr = 3;
+      g.beginPath(); g.moveTo(x+rr, y); g.arcTo(x+w, y, x+w, y+h, rr); g.arcTo(x+w, y+h, x, y+h, rr); g.arcTo(x, y+h, x, y, rr); g.arcTo(x, y, x+w, y, rr); g.closePath();
+      g.fillStyle = '#16191d'; g.fill(); g.lineWidth = 1.5; g.strokeStyle = '#ffffff'; g.stroke();
+      const cols = ['#ff3b30', '#ffb300', '#34c759'], r = tp === 'p' ? 2.4 : 3.2, paso = (h - 6)/3;
+      cols.forEach((cl, i) => { g.beginPath(); g.arc(W/2, y + 3 + paso*(i + 0.5), r, 0, 6.2832); g.fillStyle = cl; g.fill(); }); }
+    registroImagenes.set(clave, { data: g.getImageData(0, 0, W*R, H*R), pixelRatio: R });
+  }
+  if (estiloListo && !map.hasImage(clave)){ const im = registroImagenes.get(clave); map.addImage(clave, im.data, { pixelRatio: im.pixelRatio }); }
+  return clave;
+}
+async function cargarSenales(){
+  if (_qs.get('senales') === '0') return;
+  try{
+    const r = await fetch(RAIZ + 'senales.json?v=' + VERSION); if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json(); SEN.pts = j.p || [];
+    SEN.pts.forEach((q, i) => { const k = Math.floor(q[0]*100) + ',' + Math.floor(q[1]*100); let a = SEN.grid.get(k); if (!a){ a = []; SEN.grid.set(k, a); } a.push(i); });
+    const prio = { t:0, s:1, c:2, p:3 }, feats = [], ped = [];
+    SEN.pts.forEach(q => { const f = { type:'Feature', properties:{ ic:imagenSenal(q[2]), pr:prio[q[2]] }, geometry:{ type:'Point', coordinates:[q[1], q[0]] } }; (q[2] === 'p' ? ped : feats).push(f); });
+    fuenteSet('senales', { type:'FeatureCollection', features:feats }); fuenteSet('senales-ped', { type:'FeatureCollection', features:ped });
+    SEN.listo = true;
+    if (routeOn) calcularSenalesRuta();
+    console.log('[senales]', SEN.pts.length, 'puntos cargados');
+  }catch(e){ console.warn('[senales] no disponible:', e.message); }
+}
+// Señales que caen SOBRE la ruta, ordenadas por distancia recorrida a lo largo de ella.
+function calcularSenalesRuta(){
+  SEN.ruta = [];
+  if (!SEN.listo || !routeOn || routeCoordsLL.length < 2) return;
+  const mejor = new Map();
+  for (let i = 1; i < routeCoordsLL.length; i++){
+    const a = routeCoordsLL[i-1], b = routeCoordsLL[i];
+    const la0 = Math.min(a[0], b[0]) - 0.0002, la1 = Math.max(a[0], b[0]) + 0.0002, lo0 = Math.min(a[1], b[1]) - 0.0003, lo1 = Math.max(a[1], b[1]) + 0.0003;
+    for (let gy = Math.floor(la0*100); gy <= Math.floor(la1*100); gy++) for (let gx = Math.floor(lo0*100); gx <= Math.floor(lo1*100); gx++){
+      const celda = SEN.grid.get(gy + ',' + gx); if (!celda) continue;
+      for (const idx of celda){
+        const q = SEN.pts[idx]; if (q[0] < la0 || q[0] > la1 || q[1] < lo0 || q[1] > lo1) continue;
+        const kx = 111320*Math.cos(q[0]*Math.PI/180), ky = 110540;
+        const ax = (a[1]-q[1])*kx, ay = (a[0]-q[0])*ky, bx = (b[1]-q[1])*kx, by = (b[0]-q[0])*ky, dx = bx-ax, dy = by-ay, L2 = dx*dx + dy*dy;
+        const t = L2 ? Math.max(0, Math.min(1, -(ax*dx + ay*dy)/L2)) : 0, dm = Math.hypot(ax + t*dx, ay + t*dy);
+        if (dm > (q[2] === 't' ? 9 : 5.5)) continue;
+        const prev = mejor.get(idx); if (prev && prev.dm <= dm) continue;
+        mejor.set(idx, { dm, d: (routeCumDist[i-1] || 0) + t*((routeCumDist[i] || 0) - (routeCumDist[i-1] || 0)), tp:q[2] });
+      }
+    }
+  }
+  const ev = Array.from(mejor.values()).sort((x, y) => x.d - y.d), out = [];
+  for (const e of ev){ const u = out[out.length-1]; if (u && u.tp === e.tp && e.d - u.d < 25){ if (e.dm < u.dm) out[out.length-1] = e; continue; } out.push(e); }   // dos nodos del mismo cruce = una señal
+  SEN.ruta = out;
+}
+/* Lo que viene por delante, para el HUD 3D (HUD3D.update({next:[...]})): señales de tu ruta a menos de 150 m y los
+   proximos giros (curva a derecha o izquierda, o en angulo recto) y rotondas a menos de 230 m. */
+function eventosParaHud(){
+  if (!routeOn || !routeCoordsLL.length) return undefined;
+  const rec = recorridoAhora(lastFix ? [lastFix.lat, lastFix.lon] : routeCoordsLL[routeProgIdx]), out = [], kind = { s:'stop', c:'yield', t:'lights', p:'lights' };
+  for (const e of SEN.ruta){ const d = e.d - rec; if (d < 25) continue; if (d > 150) break;
+    out.push({ id:'s' + rutaVersion + '_' + Math.round(e.d), kind:kind[e.tp], val:'', side:'R', d:Math.round(d) }); if (out.length >= 3) break; }
+  for (let i = stepIdx; i < Math.min(steps.length, stepIdx + 3); i++){
+    const st = steps[i], m = st.maneuver || {}, d = (st.metro || 0) - rec; if (d < 40 || d > 230) continue;
+    if (m.type === 'roundabout' || m.type === 'rotary') out.push({ id:'m' + rutaVersion + '_' + i, kind:'round', val:'', side:'R', d:Math.round(d), adv:true });
+    else if (m.type === 'turn'){ const mod = m.modifier || '', izq = mod.indexOf('left') >= 0, der = mod.indexOf('right') >= 0; if (!izq && !der) continue;
+      out.push({ id:'m' + rutaVersion + '_' + i, kind:'curve', val:(der ? 'R' : 'L') + (mod.indexOf('slight') >= 0 ? '' : '90'), side:der ? 'R' : 'L', d:Math.round(d), adv:true }); }
+  }
+  return out.length ? out : undefined;
+}
+cargarSenales();
+
 /* ---- GPS: mismo patron que index.html --------------------------------- */
 if (navigator.geolocation){
   navigator.geolocation.watchPosition(p => {
@@ -853,6 +994,8 @@ if (navigator.geolocation){
     // es lo primero que hay que descartar: se deja el mapa quieto del todo mientras
     // cualquiera de los dos este abierto, no solo con el HUD como hasta ahora.
     mapaOculto = hudAbierto || faroOn;
+    pintarLimite();
+    if (!mapaOculto && speedKmh >= 5) consultarLimite(now.lat, now.lon, heading);
     const vis = ajustarARuta(now.lat, now.lon);   // posicion para DIBUJAR (ajustada a la ruta si la hay)
     nuevoTramoCoche([vis[1], vis[0]], mapaOculto ? 0 : dt);
     if (!mapaOculto){
@@ -1032,6 +1175,7 @@ function avanzarPaso(recorrido){
    ruta -sigue siendo TomTom quien decide por donde ir-, solo la geometria de carriles
    en los cruces. Sin clave, gratuito, mismo servicio que ya usaba AutoBoard. */
 let osrmLanes = [];
+function pickDirs(inds){ if(!inds||!inds.length) return ['straight']; const out=[]; inds.forEach(d=>{ if(!d||d==='none') return; d=d.replace('merge to left','slight left').replace('merge to right','slight right'); if(out.indexOf(d)<0) out.push(d); }); return out.length?out:['straight']; }
 function pickDir(inds){ if(!inds||!inds.length)return 'straight'; let d=inds[inds.length-1]; if(d==='none')d=inds[0]; if(!d||d==='none')return 'straight'; d=d.replace('merge to left','slight left').replace('merge to right','slight right'); return d; }
 async function fetchLanes(pts){
   osrmLanes = [];
@@ -1044,7 +1188,7 @@ async function fetchLanes(pts){
     const avisos = [];   // fork / end of road / continue: cruces reales donde OSRM SI marca una decision, aunque sea "seguir recto"
     j.routes[0].legs.forEach(l => l.steps.forEach(st => {
       (st.intersections||[]).forEach(it => {
-        if (it.lanes && it.lanes.length) out.push({ ll:[it.location[1],it.location[0]], lanes: it.lanes.map(la=>({valid:!!la.valid, dir:pickDir(la.indications)})) });
+        if (it.lanes && it.lanes.length) out.push({ ll:[it.location[1],it.location[0]], lanes: it.lanes.map(la=>({valid:!!la.valid, dir:pickDir(la.indications), dirs:pickDirs(la.indications)})) });
       });
       const m = st.maneuver||{}, mod = m.modifier||'';
       if (['fork','end of road','continue'].indexOf(m.type)>=0 && ['straight','slight left','slight right'].indexOf(mod)>=0 && m.location){
@@ -1081,7 +1225,7 @@ function fusionarAvisosOSRM(avisos){
   }
 }
 function laneFor(ll){ if (!ll) return null; let best=null, bd=170; for (const e of osrmLanes){ const dd=dist(ll,e.ll); if(dd<bd){bd=dd;best=e;} } return best?best.lanes:null; }
-function lanesHTML(lanes,hw){ return '<div class="lanerow">'+lanes.map(l=>laneArrow(l.dir,l.valid,hw)).join('')+'</div>'; }
+function lanesHTML(lanes,hw){ return '<div class="lanerow">'+lanes.map(l=>flCarril(l.dirs||[l.dir],l.valid,hw)).join('')+'</div>'; }
 
 let ultimoStepPintado = '';   // cadena vacia fuerza el primer dibujo; se resetea al calcular ruta nueva
 function renderStep(){
@@ -1232,6 +1376,7 @@ async function irA(destino, nombre, opc){
 
     routeCumDist = [0];
     for (let i=1;i<pts.length;i++) routeCumDist.push(routeCumDist[i-1] + dist(pts[i-1], pts[i]));
+    calcularSenalesRuta();
 
     const sim = simplificarDP(pts, 3);
     routeDraw = sim.p; routeDrawIdx = sim.i;
@@ -1451,7 +1596,7 @@ function alimentarHud3D(){
   if (!hud3dActivo || !window.HUD3D) return;
   let hw = false; try{ const st = routeOn ? steps[stepIdx] : null; hw = !!(st && (st.hw || isHighway(st))); }catch(e){}
   // road: no se manda; el modulo decide solo (autovia de la ruta, o >=100 km/h sostenidos). brake: tampoco, lo deduce de la deceleracion y de estar parado.
-  try{ HUD3D.update({ speed: speedKmh, head: heading, t: performance.now()/1000, hw: (routeOn && hw) ? true : undefined, rain: !!h3dCfg.rain, night: noche3D() }); }catch(e){}
+  try{ HUD3D.update({ speed: speedKmh, head: heading, t: performance.now()/1000, hw: (routeOn && hw) ? true : undefined, rain: !!h3dCfg.rain, night: noche3D(), next: eventosParaHud() }); }catch(e){}
 }
 async function intentar3D(){
   if (hud3dFallo || !h3dPreferido()) return false;
@@ -1485,7 +1630,7 @@ async function abrirHud(){
     }
     $('hud2wrap').classList.add('on');
     if (hud3dActivo){ try{ HUD3D.show(); alimentarHud3D(); }catch(e){ console.warn('[hud3d] show:', e.message); } }
-    hudAbierto = true;
+    hudAbierto = true; pintarLimite();
     $('map').style.visibility = 'hidden';                        // mapa fuera de juego mientras el HUD esta abierto
     // Si al cerrar la ultima vez se encogio el lienzo a 1x1 para liberar memoria de
     // video (ver cerrarHud), hay que devolverle su tamano real ANTES de resize(), o
@@ -1608,14 +1753,73 @@ function cargadorCerca(ll, px){
     if (d < bd){ bd = d; best = p; } }
   return best;
 }
+/* ---- Hoja del cargador: datos de Open Charge Map -------------------------------------------------
+   Al instante se muestra lo que ya se sabe (compania, potencia, conectores, puntos y precio si vinieron en la lista).
+   Despues se pide la ficha completa de ESE cargador (compact=false: trae los nombres de operador, conectores, estado
+   y acceso) y se amplia la hoja con direccion, precio, conectores con su potencia y cantidad, estado y verificacion.
+   OJO: el precio (UsageCost) es texto libre que escriben voluntarios: muchos puntos no lo tienen o esta desactualizado.
+   OCM tampoco sabe si el cargador esta libre u ocupado en este momento. */
+const OCM_ES = {
+  estado: { 'Operational':'Operativo', 'Temporarily Unavailable':'No disponible temporalmente', 'Partly Operational (Mixed)':'Parcialmente operativo', 'Not Operational':'Fuera de servicio', 'Planned For Future Date':'Planificado', 'Removed (Duplicate Listing)':'Eliminado', 'Removed (Decommissioned)':'Retirado', 'Unknown':'' },
+  acceso: { 'Public':'Público', 'Public - Membership Required':'Público con tarjeta o app', 'Public - Pay At Location':'Público, pago en el sitio', 'Public - Notice Required':'Público con aviso previo', 'Private - For Staff, Visitors or Customers':'Privado (clientes o visitantes)', 'Private - Restricted Access':'Privado', 'Privately Owned - Notice Required':'Privado con aviso', 'Unknown':'' }
+};
+const detCarg = new Map();   // id -> ficha completa ya pedida
+function hace(fecha){
+  const d = new Date(fecha); if (isNaN(d)) return '';
+  const dias = Math.floor((Date.now() - d.getTime()) / 86400000);
+  if (dias < 0) return '';
+  if (dias < 45) return 'hace ' + Math.max(1, dias) + ' días';
+  if (dias < 700) return 'hace ' + Math.round(dias / 30) + ' meses';
+  return 'hace ' + Math.round(dias / 365) + ' años';
+}
+function fichaCargador(p, d){
+  const L = [];
+  const ai = (d && d.AddressInfo) || {};
+  const op = (d && d.OperatorInfo && d.OperatorInfo.Title) || p.op;
+  const conns = (d && d.Connections) || [], grupos = new Map();
+  conns.forEach(c => {
+    const t = ((c.ConnectionType && c.ConnectionType.Title) || '').replace('CCS (Type 2)','CCS').replace(/Type 2.*$/,'Tipo 2').replace(/^Tesla.*$/,'Tesla');
+    if (!t && !c.PowerKW) return;
+    const k = (t || 'Conector') + '|' + (c.PowerKW ? Math.round(c.PowerKW) : 0);
+    grupos.set(k, (grupos.get(k) || 0) + (c.Quantity || 1));
+  });
+  const cx = Array.from(grupos.entries()).slice(0, 4).map(([k, n]) => { const [t, kw] = k.split('|'); return t + (+kw ? ' ' + kw + ' kW' : '') + (n > 1 ? ' ×' + n : ''); });
+  const l1 = [op, !cx.length && p.kw ? p.kw + ' kW' : '', !cx.length && p.socks && p.socks.length ? p.socks.slice(0,3).join(', ') : ''].filter(Boolean).join(' · ');
+  if (l1) L.push(l1);
+  const dir = [ai.AddressLine1, ai.Town].filter(Boolean).join(', ');
+  if (dir) L.push('📍 ' + dir);
+  const cost = ((d && d.UsageCost) || p.cost || '').trim();
+  L.push('💶 ' + (cost ? cost.slice(0, 140) : 'Precio no indicado en Open Charge Map'));
+  const npts = (d && d.NumberOfPoints) || p.pts;
+  const lc = [npts ? npts + (npts === 1 ? ' punto' : ' puntos') : '', cx.join(' · ')].filter(Boolean).join(' · ');
+  if (lc) L.push('🔌 ' + lc);
+  if (d){
+    const est = d.StatusType && d.StatusType.Title ? (OCM_ES.estado[d.StatusType.Title] !== undefined ? OCM_ES.estado[d.StatusType.Title] : d.StatusType.Title) : '';
+    const acc = d.UsageType && d.UsageType.Title ? (OCM_ES.acceso[d.UsageType.Title] !== undefined ? OCM_ES.acceso[d.UsageType.Title] : d.UsageType.Title) : '';
+    const ver = d.DateLastVerified ? 'verificado ' + hace(d.DateLastVerified) : (d.DateLastStatusUpdate ? 'actualizado ' + hace(d.DateLastStatusUpdate) : '');
+    const l5 = [est, acc, ver].filter(Boolean).join(' · ');
+    if (l5) L.push((/Operativo/.test(est) ? '✔ ' : (est ? '⚠ ' : '')) + l5);
+  }
+  return L.join('\n');
+}
 function hojaCargador(p){
-  const partes = []; if (p.op) partes.push(p.op); if (p.kw) partes.push(p.kw+' kW'); if (p.socks && p.socks.length) partes.push(p.socks.slice(0,3).join(', '));
-  const nombre = p.name || 'Punto de carga';
-  abrirHoja(nombre, partes.join(' · ') || 'Sin datos de potencia ni compañía', [
+  const nombre = p.name || 'Punto de carga', tk = ++tokenHoja;
+  abrirHoja(nombre, fichaCargador(p, detCarg.get(p.id) || null) || 'Sin datos de potencia ni compañía', [
     { txt:'Ir', fn:() => irA(p.ll, nombre) },
     ...(routeOn ? [{ txt:'+ Parada', clase:'sec', fn:() => anadirParada(p.ll, nombre) }] : []),
     { txt:'⭐ Guardar', clase:'sec', fn:() => guardarFavDirecto(nombre, p.ll) }
   ], p.ll);
+  tokenHoja = tk;   // abrirHoja no debe invalidar la ficha que acabamos de pedir
+  if (!p.id || detCarg.has(p.id)) return;
+  fetch('https://api.openchargemap.io/v3/poi/?output=json&chargepointid=' + p.id + '&compact=false&verbose=false&key=' + OCM_KEY)
+    .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+    .then(j => {
+      const d = j && j[0]; if (!d) return;
+      detCarg.set(p.id, d);
+      if (tk !== tokenHoja) return;   // ya se abrio otra hoja
+      const info = fichaCargador(p, d); $('hojaInfo').textContent = info; $('hojaInfo').style.display = info ? 'block' : 'none';
+    })
+    .catch(e => console.warn('[cargador] ficha:', e.message));
 }
 function hojaPunto(lat, lon){
   let nombre = 'Punto del mapa'; const tk = ++tokenHoja;
