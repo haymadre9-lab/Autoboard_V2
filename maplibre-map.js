@@ -778,7 +778,7 @@ function actualizarZoomManiobra(distSiguiente, tipoSiguiente){
   camZoomObj = cerca ? Math.min(19.5, navZoom + 1.4) : navZoom;   // el bucle de camara lo suaviza
 }
 
-const VERSION = '2026.10.06-ml-b';
+const VERSION = '2026.10.06-ml-c';
 // X dibujada: el caracter U+2715 no esta en la fuente del navegador y salia como un rectangulo
 const X_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>';
 try{ $('ver').textContent = 'v'+VERSION; }catch(e){}
