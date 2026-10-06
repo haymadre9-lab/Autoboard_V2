@@ -287,7 +287,7 @@ map.on('error',e=>{
   registrarError('map',msg);
 });
 
-/* ========== FUNCIONES DE ICONOS (TODAS CORREGIDAS: data = img.data) ========== */
+/* ========== FUNCIONES DE ICONOS (data = img.data) ========== */
 function crearFlechaRuta(){
   const size=60,c=document.createElement('canvas');c.width=size;c.height=size;
   const ctx=c.getContext('2d');ctx.clearRect(0,0,size,size);
@@ -676,7 +676,8 @@ async function cargarSenales(){
         ],
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
-        'icon-pitch-alignment':'map'
+        'icon-pitch-alignment':'viewport',
+        'icon-rotation-alignment':'viewport'
       }
     });
     if(!senalesOn) map.setLayoutProperty('senales','visibility','none');
