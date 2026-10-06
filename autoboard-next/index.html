@@ -186,6 +186,7 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
   <button class="ajuste on" id="btnEdificios">🏢 Edificios: ON</button>
   <button class="ajuste" id="btnTerreno">🏔 Terreno: OFF</button>
   <button class="ajuste on" id="btnRadares">📸 Radares: ON</button>
+  <button class="ajuste on" id="btnSenales">🚦 Señales: ON</button>
   <button class="ajuste on" id="btnCargadores">🔌 Cargadores: ON</button>
   <button class="ajuste on" id="btnPitch">📐 Pitch: ON</button>
   <button class="ajuste on" id="btnTrafico">🚦 Tráfico: ON</button>
@@ -210,6 +211,7 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
   <div>TERRENO: <span id="rTerreno">OFF</span></div>
   <div>TRIM RUTA: <span id="rTrim">-</span></div>
   <div>RADARES: <span id="rRadares">cargando…</span></div>
+  <div>SEÑALES: <span id="rSenales">cargando…</span></div>
   <div>CARGADORES: <span id="rCargadores">-</span></div>
   <hr>
   <div>ROTACION (10s): <span id="rRot">sin probar</span></div>
@@ -336,6 +338,88 @@ function crearIconoSupercharger(){
   ctx.fillText('SC',size/2,size/2+20);
   return {data:ctx.getImageData(0,0,size,size),width:size,height:size};
 }
+
+/* ===== ICONOS DE SEÑALES DE TRÁFICO ===== */
+function crearIconoStop(){
+  const size=64,c=document.createElement('canvas');c.width=size;c.height=size;
+  const ctx=c.getContext('2d');ctx.clearRect(0,0,size,size);
+  const cx=size/2, cy=size/2, r=size/2-3;
+  ctx.beginPath();
+  for(let i=0;i<8;i++){
+    const a = (Math.PI/8) + (i*Math.PI/4);
+    const x = cx + Math.cos(a)*r;
+    const y = cy + Math.sin(a)*r;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.closePath();
+  ctx.fillStyle='#d32f2f';ctx.fill();
+  ctx.lineWidth=4;ctx.strokeStyle='#ffffff';ctx.stroke();
+  ctx.fillStyle='#ffffff';
+  ctx.font='bold 16px system-ui,sans-serif';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('STOP',cx,cy+1);
+  return {data:ctx.getImageData(0,0,size,size),width:size,height:size};
+}
+function crearIconoCeda(){
+  const size=64,c=document.createElement('canvas');c.width=size;c.height=size;
+  const ctx=c.getContext('2d');ctx.clearRect(0,0,size,size);
+  const cx=size/2, cy=size/2;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy+size/2-4);
+  ctx.lineTo(cx-size/2+4, cy-size/2+8);
+  ctx.lineTo(cx+size/2-4, cy-size/2+8);
+  ctx.closePath();
+  ctx.fillStyle='#ffffff';ctx.fill();
+  ctx.lineWidth=5;ctx.strokeStyle='#d32f2f';ctx.stroke();
+  return {data:ctx.getImageData(0,0,size,size),width:size,height:size};
+}
+function crearIconoSemaforo(subtipo){
+  const size=64,c=document.createElement('canvas');c.width=size;c.height=size;
+  const ctx=c.getContext('2d');ctx.clearRect(0,0,size,size);
+  const cx=size/2, cy=size/2;
+  const w=26, h=44;
+  ctx.fillStyle='#1a1a1a';
+  if(ctx.roundRect){ ctx.beginPath(); ctx.roundRect(cx-w/2, cy-h/2, w, h, 5); ctx.fill(); }
+  else { ctx.fillRect(cx-w/2, cy-h/2, w, h); }
+  ctx.lineWidth=3;ctx.strokeStyle='#000000';ctx.stroke();
+  const radio=6;
+  const colores=['#d32f2f','#f9a825','#00c853'];
+  for(let i=0;i<3;i++){
+    ctx.beginPath();
+    ctx.arc(cx, cy-h/2+10+i*13, radio, 0, Math.PI*2);
+    ctx.fillStyle = colores[i];
+    ctx.fill();
+    ctx.strokeStyle='#000000';ctx.lineWidth=1.5;ctx.stroke();
+  }
+  if(subtipo === 'b'){
+    ctx.beginPath();
+    ctx.arc(cx+w/2-2, cy-h/2+4, 4, 0, Math.PI*2);
+    ctx.fillStyle='#2196f3';ctx.fill();
+    ctx.strokeStyle='#ffffff';ctx.lineWidth=1.5;ctx.stroke();
+  }
+  return {data:ctx.getImageData(0,0,size,size),width:size,height:size};
+}
+function crearIconoSemaforoPeatonal(){
+  const size=64,c=document.createElement('canvas');c.width=size;c.height=size;
+  const ctx=c.getContext('2d');ctx.clearRect(0,0,size,size);
+  const cx=size/2, cy=size/2;
+  const w=44, h=26;
+  ctx.fillStyle='#1a1a1a';
+  if(ctx.roundRect){ ctx.beginPath(); ctx.roundRect(cx-w/2, cy-h/2, w, h, 5); ctx.fill(); }
+  else { ctx.fillRect(cx-w/2, cy-h/2, w, h); }
+  ctx.lineWidth=3;ctx.strokeStyle='#000000';ctx.stroke();
+  const radio=6;
+  ctx.beginPath();
+  ctx.arc(cx-11, cy, radio, 0, Math.PI*2);
+  ctx.fillStyle='#d32f2f';ctx.fill();
+  ctx.strokeStyle='#000000';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(cx+11, cy, radio, 0, Math.PI*2);
+  ctx.fillStyle='#00c853';ctx.fill();
+  ctx.strokeStyle='#000000';ctx.lineWidth=1.5;ctx.stroke();
+  return {data:ctx.getImageData(0,0,size,size),width:size,height:size};
+}
+
 const OPERADORES={23:'Tesla',1:'ChargePoint',3449:'EasyGo',3586:'Repsol',3355:'Iberdrola',3515:'Endesa',3524:'Wenea',3534:'Zunder',3478:'Ionity'};
 const OPERADORES_COLORES={
   23:{nombre:'Tesla',color:'#ff1744'},
@@ -363,6 +447,7 @@ let idFuenteBuildings=null,sourceLayerBuildings=null,edificiosOn=true;
 let limiteVelocidadVia=0;
 let radaresCargados=[];
 let radaresOn=true;
+let senalesOn=true;
 let alertaRadarActiva=false;
 const RADAR_DIST_AVISO=500,RADAR_DIST_APAGADO=550;
 let cargadoresOn=true;
@@ -400,6 +485,12 @@ map.on('load',()=>{
     if(!map.hasImage('car-72mas')) map.addImage('car-72mas',crearIconoCargador('#d32f2f','72+'),{sdf:false});
     if(!map.hasImage('car-supercharger')) map.addImage('car-supercharger',crearIconoSupercharger(),{sdf:false});
     if(!map.hasImage('car-fav')) map.addImage('car-fav',crearIconoCargador('#ffd700','★'),{sdf:false});
+    /* Iconos señales */
+    if(!map.hasImage('senal-stop')) map.addImage('senal-stop',crearIconoStop(),{sdf:false});
+    if(!map.hasImage('senal-ceda')) map.addImage('senal-ceda',crearIconoCeda(),{sdf:false});
+    if(!map.hasImage('senal-semaforo')) map.addImage('senal-semaforo',crearIconoSemaforo(''),{sdf:false});
+    if(!map.hasImage('senal-semaforo-b')) map.addImage('senal-semaforo-b',crearIconoSemaforo('b'),{sdf:false});
+    if(!map.hasImage('senal-semaforo-peatonal')) map.addImage('senal-semaforo-peatonal',crearIconoSemaforoPeatonal(),{sdf:false});
   }catch(e){console.warn('No se pudieron anadir iconos',e);}
   try{
     map.addSource('terreno',{type:'raster-dem',url:'https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key='+MAPTILER_KEY,tileSize:256,maxzoom:12});
@@ -427,6 +518,7 @@ map.on('load',()=>{
   map.addLayer({id:'ruta-2',type:'line',source:'ruta',filter:['==',['get','nivel'],2],paint:{...paintBase,'line-color':'#ff6f00'},layout:layoutBase});
   map.addLayer({id:'ruta-3',type:'line',source:'ruta',filter:['==',['get','nivel'],3],paint:{...paintBase,'line-color':'#d32f2f'},layout:layoutBase});
   cargarRadares();
+  cargarSenales();
   map.addSource('cargadores',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
   map.addLayer({id:'cargadores',type:'symbol',source:'cargadores',minzoom:9,
     layout:{'icon-image':['get','icono'],'icon-size':['interpolate',['linear'],['zoom'],9,0.25,11,0.35,15,0.5,18,0.65],
@@ -492,6 +584,65 @@ async function cargarRadares(){
     registrarError('radares',e.message);
   }
 }
+
+/* ===== CARGAR SEÑALES DE TRÁFICO ===== */
+async function cargarSenales(){
+  try{
+    const r = await fetch('./assets/senales.json');
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const datos = await r.json();
+    const puntos = datos.p || [];
+
+    const features = puntos.map((p, i) => {
+      const lat = p[0], lon = p[1], tipo = p[2], sub = p[3] || '';
+      let icono = 'senal-stop';
+      let categoria = 'stop';
+      if(tipo === 'p'){ icono = 'senal-stop'; categoria = 'stop'; }
+      else if(tipo === 'c'){ icono = 'senal-ceda'; categoria = 'ceda'; }
+      else if(tipo === 's'){
+        icono = (sub === 'b') ? 'senal-semaforo-b' : 'senal-semaforo';
+        categoria = 'semaforo';
+      }
+      else if(tipo === 't'){ icono = 'senal-semaforo-peatonal'; categoria = 'semaforo_peatonal'; }
+      return {
+        type:'Feature',
+        geometry:{type:'Point',coordinates:[lon,lat]},
+        properties:{ idx:i, icono:icono, categoria:categoria, subtipo:sub }
+      };
+    });
+
+    map.addSource('senales',{type:'geojson',data:{type:'FeatureCollection',features:features}});
+    map.addLayer({
+      id:'senales',
+      type:'symbol',
+      source:'senales',
+      minzoom: 15,
+      layout:{
+        'icon-image':['get','icono'],
+        'icon-size':['interpolate',['linear'],['zoom'],
+          15, 0.20,
+          16, 0.30,
+          17, 0.42,
+          18, 0.55,
+          20, 0.75
+        ],
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'icon-pitch-alignment':'map'
+      }
+    });
+    // Toggle inicial
+    if(!senalesOn) map.setLayoutProperty('senales','visibility','none');
+    const nStop = datos.n ? datos.n.stop : 0;
+    const nCeda = datos.n ? datos.n.ceda : 0;
+    const nSem = (datos.n ? datos.n.semaforo : 0) + (datos.n ? datos.n.semaforo_peatonal : 0);
+    document.getElementById('rSenales').innerHTML='<b>'+puntos.length+'</b> ('+nStop+' stop · '+nCeda+' ceda · '+nSem+' sem)';
+  }catch(e){
+    document.getElementById('rSenales').innerHTML='<span class="mal">error: '+e.message+'</span>';
+    registrarError('senales',e.message);
+  }
+}
+
 function comprobarRadaresCercanos(lat,lon,velocidadActualKmh){
   if(!gpsOn){apagarAlertaRadar();return;}
   if(!radaresCargados.length || !radaresOn){apagarAlertaRadar();return;}
@@ -674,6 +825,12 @@ document.getElementById('btnRadares').onclick=function(){
   this.textContent='📸 Radares: '+(radaresOn?'ON':'OFF');
   this.classList.toggle('on',radaresOn);
   if(!radaresOn) apagarAlertaRadar();
+};
+document.getElementById('btnSenales').onclick=function(){
+  senalesOn=!senalesOn;
+  if(map.getLayer('senales')) map.setLayoutProperty('senales','visibility',senalesOn?'visible':'none');
+  this.textContent='🚦 Señales: '+(senalesOn?'ON':'OFF');
+  this.classList.toggle('on',senalesOn);
 };
 document.getElementById('btnCargadores').onclick=function(){
   cargadoresOn=!cargadoresOn;
