@@ -341,9 +341,24 @@ function crearIconoSupercharger(){
 
 /* ===== ICONOS DE SEÑALES DE TRÁFICO ===== */
 function crearIconoStop(){
-  const size=64,c=document.createElement('canvas');c.width=size;c.height=size;
-  const ctx=c.getContext('2d');ctx.clearRect(0,0,size,size);
-  const cx=size/2, cy=size/2, r=size/2-3;
+  const size=96, c=document.createElement('canvas'); c.width=size; c.height=size;
+  const ctx=c.getContext('2d'); ctx.clearRect(0,0,size,size);
+  const mastilX = size/2;
+  const mastilTop = size*0.62;
+  const mastilBottom = size-4;
+  // Sombra del mástil
+  ctx.fillStyle='rgba(0,0,0,0.25)';
+  ctx.fillRect(mastilX-1, mastilTop+2, 6, mastilBottom-mastilTop);
+  // Mástil gris
+  ctx.fillStyle='#607d8b';
+  ctx.fillRect(mastilX-2, mastilTop, 5, mastilBottom-mastilTop);
+  // Brillo del mástil
+  ctx.fillStyle='#90a4ae';
+  ctx.fillRect(mastilX-2, mastilTop, 2, mastilBottom-mastilTop);
+  // Señal octogonal
+  const cx = size/2;
+  const cy = size*0.38;
+  const r = size*0.30;
   ctx.beginPath();
   for(let i=0;i<8;i++){
     const a = (Math.PI/8) + (i*Math.PI/4);
@@ -352,25 +367,63 @@ function crearIconoStop(){
     if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
   }
   ctx.closePath();
-  ctx.fillStyle='#d32f2f';ctx.fill();
-  ctx.lineWidth=4;ctx.strokeStyle='#ffffff';ctx.stroke();
+  ctx.shadowColor='rgba(0,0,0,0.35)';
+  ctx.shadowBlur=4;
+  ctx.shadowOffsetY=2;
+  ctx.fillStyle='#d32f2f'; ctx.fill();
+  ctx.shadowColor='transparent'; ctx.shadowBlur=0; ctx.shadowOffsetY=0;
+  ctx.lineWidth=4; ctx.strokeStyle='#ffffff'; ctx.stroke();
+  // Borde interior
+  ctx.beginPath();
+  for(let i=0;i<8;i++){
+    const a = (Math.PI/8) + (i*Math.PI/4);
+    const x = cx + Math.cos(a)*(r-4);
+    const y = cy + Math.sin(a)*(r-4);
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.closePath();
+  ctx.lineWidth=1.5; ctx.strokeStyle='rgba(255,255,255,0.55)'; ctx.stroke();
+  // Texto
   ctx.fillStyle='#ffffff';
-  ctx.font='bold 16px system-ui,sans-serif';
-  ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText('STOP',cx,cy+1);
+  ctx.font='bold 22px system-ui,sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('STOP', cx, cy+1);
   return ctx.getImageData(0,0,size,size);
 }
 function crearIconoCeda(){
-  const size=64,c=document.createElement('canvas');c.width=size;c.height=size;
-  const ctx=c.getContext('2d');ctx.clearRect(0,0,size,size);
-  const cx=size/2, cy=size/2;
+  const size=96, c=document.createElement('canvas'); c.width=size; c.height=size;
+  const ctx=c.getContext('2d'); ctx.clearRect(0,0,size,size);
+  const mastilX = size/2;
+  const mastilTop = size*0.62;
+  const mastilBottom = size-4;
+  ctx.fillStyle='rgba(0,0,0,0.25)';
+  ctx.fillRect(mastilX-1, mastilTop+2, 6, mastilBottom-mastilTop);
+  ctx.fillStyle='#607d8b';
+  ctx.fillRect(mastilX-2, mastilTop, 5, mastilBottom-mastilTop);
+  ctx.fillStyle='#90a4ae';
+  ctx.fillRect(mastilX-2, mastilTop, 2, mastilBottom-mastilTop);
+  // Triángulo invertido
+  const cx = size/2;
+  const cy = size*0.38;
+  const ancho = size*0.62;
+  const alto  = size*0.52;
+  const apexX = cx;
+  const apexY = cy + alto/2;
+  const topLx = cx - ancho/2;
+  const topLy = cy - alto/2;
+  const topRx = cx + ancho/2;
+  const topRy = cy - alto/2;
   ctx.beginPath();
-  ctx.moveTo(cx, cy+size/2-4);
-  ctx.lineTo(cx-size/2+4, cy-size/2+8);
-  ctx.lineTo(cx+size/2-4, cy-size/2+8);
+  ctx.moveTo(apexX, apexY);
+  ctx.lineTo(topLx, topLy);
+  ctx.lineTo(topRx, topRy);
   ctx.closePath();
-  ctx.fillStyle='#ffffff';ctx.fill();
-  ctx.lineWidth=5;ctx.strokeStyle='#d32f2f';ctx.stroke();
+  ctx.shadowColor='rgba(0,0,0,0.35)';
+  ctx.shadowBlur=4;
+  ctx.shadowOffsetY=2;
+  ctx.fillStyle='#ffffff'; ctx.fill();
+  ctx.shadowColor='transparent'; ctx.shadowBlur=0; ctx.shadowOffsetY=0;
+  ctx.lineWidth=7; ctx.strokeStyle='#d32f2f'; ctx.stroke();
   return ctx.getImageData(0,0,size,size);
 }
 function crearIconoSemaforo(subtipo){
@@ -626,6 +679,7 @@ async function cargarSenales(){
           18, 0.55,
           20, 0.75
         ],
+        'icon-anchor': 'bottom',
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
         'icon-pitch-alignment':'map'
