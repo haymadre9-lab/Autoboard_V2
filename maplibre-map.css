@@ -168,7 +168,7 @@ html,body{margin:0;height:100%;background:#0b0e12;color:#e8eef2;
 #hoja.on{opacity:1;pointer-events:auto;transform:translate(-50%,0)}
 #hoja .hh{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
 #hojaTitulo{font-weight:800;font-size:15px;color:#f2f6f9;line-height:1.25}
-#hojaInfo{color:#9aa7b2;font-size:12px;margin-top:3px}
+#hojaInfo{color:#9aa7b2;font-size:12px;margin-top:3px;white-space:pre-line;line-height:1.45;max-height:9em;overflow-y:auto}
 #hojaBtns{display:flex;gap:8px;margin-top:10px}
 .hb{flex:1;border:0;border-radius:10px;padding:14px 10px;font:800 14px system-ui,sans-serif;cursor:pointer;background:#39d98a;color:#04130c}
 .hb.sec{background:#1b2130;color:#e8eef2;border:1px solid #2c3942}

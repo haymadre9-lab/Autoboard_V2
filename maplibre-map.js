@@ -243,8 +243,9 @@ async function fetchPois(ll){
       for (const c of conns){ if (c.PowerKW && c.PowerKW>kw) kw=c.PowerKW;
         const tt = c.ConnectionType && c.ConnectionType.Title;
         if (tt){ let n=tt.replace('CCS (Type 2)','CCS').replace('Type 2','Tipo 2'); if (socks.indexOf(n)<0) socks.push(n); } }
-      arr.push({ type:'charge', ll:[ai.Latitude, ai.Longitude], name: ai.Title||'Punto de carga',
-        op: (poi.OperatorInfo && poi.OperatorInfo.Title) || '', kw: kw?Math.round(kw):0, socks });
+      arr.push({ type:'charge', ll:[ai.Latitude, ai.Longitude], name: ai.Title||'Punto de carga', id: poi.ID || 0,
+        op: (poi.OperatorInfo && poi.OperatorInfo.Title) || (poi.OperatorID === 23 ? 'Tesla' : ''), opId: poi.OperatorID || 0,
+        kw: kw?Math.round(kw):0, socks, pts: poi.NumberOfPoints || 0, cost: (poi.UsageCost || '').trim() });
     }
     if (!arr.length && pois.length){ console.warn('[POIs] OCM devolvio 0; se mantienen los anteriores'); return; }
     pois = arr; drawChargers();
@@ -1752,14 +1753,73 @@ function cargadorCerca(ll, px){
     if (d < bd){ bd = d; best = p; } }
   return best;
 }
+/* ---- Hoja del cargador: datos de Open Charge Map -------------------------------------------------
+   Al instante se muestra lo que ya se sabe (compania, potencia, conectores, puntos y precio si vinieron en la lista).
+   Despues se pide la ficha completa de ESE cargador (compact=false: trae los nombres de operador, conectores, estado
+   y acceso) y se amplia la hoja con direccion, precio, conectores con su potencia y cantidad, estado y verificacion.
+   OJO: el precio (UsageCost) es texto libre que escriben voluntarios: muchos puntos no lo tienen o esta desactualizado.
+   OCM tampoco sabe si el cargador esta libre u ocupado en este momento. */
+const OCM_ES = {
+  estado: { 'Operational':'Operativo', 'Temporarily Unavailable':'No disponible temporalmente', 'Partly Operational (Mixed)':'Parcialmente operativo', 'Not Operational':'Fuera de servicio', 'Planned For Future Date':'Planificado', 'Removed (Duplicate Listing)':'Eliminado', 'Removed (Decommissioned)':'Retirado', 'Unknown':'' },
+  acceso: { 'Public':'Público', 'Public - Membership Required':'Público con tarjeta o app', 'Public - Pay At Location':'Público, pago en el sitio', 'Public - Notice Required':'Público con aviso previo', 'Private - For Staff, Visitors or Customers':'Privado (clientes o visitantes)', 'Private - Restricted Access':'Privado', 'Privately Owned - Notice Required':'Privado con aviso', 'Unknown':'' }
+};
+const detCarg = new Map();   // id -> ficha completa ya pedida
+function hace(fecha){
+  const d = new Date(fecha); if (isNaN(d)) return '';
+  const dias = Math.floor((Date.now() - d.getTime()) / 86400000);
+  if (dias < 0) return '';
+  if (dias < 45) return 'hace ' + Math.max(1, dias) + ' días';
+  if (dias < 700) return 'hace ' + Math.round(dias / 30) + ' meses';
+  return 'hace ' + Math.round(dias / 365) + ' años';
+}
+function fichaCargador(p, d){
+  const L = [];
+  const ai = (d && d.AddressInfo) || {};
+  const op = (d && d.OperatorInfo && d.OperatorInfo.Title) || p.op;
+  const conns = (d && d.Connections) || [], grupos = new Map();
+  conns.forEach(c => {
+    const t = ((c.ConnectionType && c.ConnectionType.Title) || '').replace('CCS (Type 2)','CCS').replace(/Type 2.*$/,'Tipo 2').replace(/^Tesla.*$/,'Tesla');
+    if (!t && !c.PowerKW) return;
+    const k = (t || 'Conector') + '|' + (c.PowerKW ? Math.round(c.PowerKW) : 0);
+    grupos.set(k, (grupos.get(k) || 0) + (c.Quantity || 1));
+  });
+  const cx = Array.from(grupos.entries()).slice(0, 4).map(([k, n]) => { const [t, kw] = k.split('|'); return t + (+kw ? ' ' + kw + ' kW' : '') + (n > 1 ? ' ×' + n : ''); });
+  const l1 = [op, !cx.length && p.kw ? p.kw + ' kW' : '', !cx.length && p.socks && p.socks.length ? p.socks.slice(0,3).join(', ') : ''].filter(Boolean).join(' · ');
+  if (l1) L.push(l1);
+  const dir = [ai.AddressLine1, ai.Town].filter(Boolean).join(', ');
+  if (dir) L.push('📍 ' + dir);
+  const cost = ((d && d.UsageCost) || p.cost || '').trim();
+  L.push('💶 ' + (cost ? cost.slice(0, 140) : 'Precio no indicado en Open Charge Map'));
+  const npts = (d && d.NumberOfPoints) || p.pts;
+  const lc = [npts ? npts + (npts === 1 ? ' punto' : ' puntos') : '', cx.join(' · ')].filter(Boolean).join(' · ');
+  if (lc) L.push('🔌 ' + lc);
+  if (d){
+    const est = d.StatusType && d.StatusType.Title ? (OCM_ES.estado[d.StatusType.Title] !== undefined ? OCM_ES.estado[d.StatusType.Title] : d.StatusType.Title) : '';
+    const acc = d.UsageType && d.UsageType.Title ? (OCM_ES.acceso[d.UsageType.Title] !== undefined ? OCM_ES.acceso[d.UsageType.Title] : d.UsageType.Title) : '';
+    const ver = d.DateLastVerified ? 'verificado ' + hace(d.DateLastVerified) : (d.DateLastStatusUpdate ? 'actualizado ' + hace(d.DateLastStatusUpdate) : '');
+    const l5 = [est, acc, ver].filter(Boolean).join(' · ');
+    if (l5) L.push((/Operativo/.test(est) ? '✔ ' : (est ? '⚠ ' : '')) + l5);
+  }
+  return L.join('\n');
+}
 function hojaCargador(p){
-  const partes = []; if (p.op) partes.push(p.op); if (p.kw) partes.push(p.kw+' kW'); if (p.socks && p.socks.length) partes.push(p.socks.slice(0,3).join(', '));
-  const nombre = p.name || 'Punto de carga';
-  abrirHoja(nombre, partes.join(' · ') || 'Sin datos de potencia ni compañía', [
+  const nombre = p.name || 'Punto de carga', tk = ++tokenHoja;
+  abrirHoja(nombre, fichaCargador(p, detCarg.get(p.id) || null) || 'Sin datos de potencia ni compañía', [
     { txt:'Ir', fn:() => irA(p.ll, nombre) },
     ...(routeOn ? [{ txt:'+ Parada', clase:'sec', fn:() => anadirParada(p.ll, nombre) }] : []),
     { txt:'⭐ Guardar', clase:'sec', fn:() => guardarFavDirecto(nombre, p.ll) }
   ], p.ll);
+  tokenHoja = tk;   // abrirHoja no debe invalidar la ficha que acabamos de pedir
+  if (!p.id || detCarg.has(p.id)) return;
+  fetch('https://api.openchargemap.io/v3/poi/?output=json&chargepointid=' + p.id + '&compact=false&verbose=false&key=' + OCM_KEY)
+    .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+    .then(j => {
+      const d = j && j[0]; if (!d) return;
+      detCarg.set(p.id, d);
+      if (tk !== tokenHoja) return;   // ya se abrio otra hoja
+      const info = fichaCargador(p, d); $('hojaInfo').textContent = info; $('hojaInfo').style.display = info ? 'block' : 'none';
+    })
+    .catch(e => console.warn('[cargador] ficha:', e.message));
 }
 function hojaPunto(lat, lon){
   let nombre = 'Punto del mapa'; const tk = ++tokenHoja;
