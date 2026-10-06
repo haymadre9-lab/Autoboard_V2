@@ -1,15 +1,18 @@
 {
   "name": "AutoBoard",
   "short_name": "AutoBoard",
-  "description": "Navegador fluido para Tesla: mapa que sigue al coche, avisos de radar, velocidad y cargadores.",
-  "start_url": "./",
+  "description": "Navegador con mapa 3D, HUD y radares para conducir",
+  "start_url": "./index.html",
   "scope": "./",
-  "display": "fullscreen",
-  "orientation": "landscape",
-  "background_color": "#05070d",
-  "theme_color": "#05070d",
+  "display": "standalone",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "lang": "es",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    {"src": "autoboard-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "autoboard-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "autoboard-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
   ]
 }

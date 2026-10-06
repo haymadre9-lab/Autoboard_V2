@@ -5,8 +5,8 @@
      momento y la app sigue abriendo sin conexion.
    - Teselas de mapa y APIs externas: NO se cachean aqui (las gestiona el
      navegador; cachearlas llenaba el almacenamiento del Tesla).  */
-const C='autoboard-v9-2';
-const BASE=['./','./index.html','./maplibre-map.js','./maplibre-map.css','./maplibre-gl.js','./maplibre-gl.css','./hud2.js','./coche.png','./radares.json','./senales.json','./manifest.webmanifest'];
+const C='autoboard-v9-3';
+const BASE=['./','./index.html','./maplibre-map.js','./maplibre-map.css','./maplibre-gl.js','./maplibre-gl.css','./hud2.js','./coche.png','./radares.json','./senales.json','./manifest.webmanifest','./autoboard-192.png','./autoboard-512.png'];
 
 self.addEventListener('install', e=>{
   e.waitUntil(caches.open(C).then(c=>Promise.all(BASE.map(u=>c.add(u).catch(()=>{})))).then(()=>self.skipWaiting()));
