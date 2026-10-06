@@ -261,7 +261,7 @@ let baseSat = false;
    todo lo nuestro vive en JS (datosFuente, registroImagenes) y montarCapas() lo vuelve a poner cada
    vez que carga un estilo ('style.load'). Las funciones de dibujo solo actualizan datosFuente. */
 const VACIO = { type:'FeatureCollection', features:[] };
-const datosFuente = { 'ruta':VACIO, 'ruta-tramos':VACIO, 'radares':VACIO, 'paradas':VACIO, 'cargadores':VACIO, 'pin':VACIO };
+const datosFuente = { 'ruta':VACIO, 'ruta-tramos':VACIO, 'radares':VACIO, 'paradas':VACIO, 'cargadores':VACIO, 'pin':VACIO, 'senales':VACIO, 'senales-ped':VACIO };
 const registroImagenes = new Map();   // clave -> { data:ImageData, pixelRatio }
 let estiloListo = false;
 let estiloActual = mapNite;           // true = oscuro: el estilo con el que se construye el mapa
@@ -695,6 +695,14 @@ function montarCapas(){
     src('cargadores', { type:'geojson', data: datosFuente['cargadores'] });
     add({ id:'cargadores', type:'symbol', source:'cargadores',
       layout:{ 'icon-image':['get','icono'], 'icon-allow-overlap':true, 'icon-ignore-placement':true } });
+    // stop / ceda / semaforos (fichero senales.json, de OpenStreetMap): solo se ven de cerca; los de peatones, aun mas de cerca
+    const tam = ['interpolate',['linear'],['zoom'],16,0.55,18,0.8,20,1];
+    src('senales', { type:'geojson', data: datosFuente['senales'] });
+    if (!map.getLayer('senales')) map.addLayer({ id:'senales', type:'symbol', source:'senales', minzoom:16,
+      layout:{ 'icon-image':['get','ic'], 'icon-size':tam, 'icon-allow-overlap':false, 'symbol-sort-key':['get','pr'] } }, 'cargadores');
+    src('senales-ped', { type:'geojson', data: datosFuente['senales-ped'] });
+    if (!map.getLayer('senales-ped')) map.addLayer({ id:'senales-ped', type:'symbol', source:'senales-ped', minzoom:17.5,
+      layout:{ 'icon-image':['get','ic'], 'icon-size':tam, 'icon-allow-overlap':false } }, 'cargadores');
     src('pin', { type:'geojson', data: datosFuente['pin'] });
     add({ id:'pin', type:'circle', source:'pin', paint:{ 'circle-radius':9, 'circle-color':'#2f6bff', 'circle-stroke-color':'#ffffff', 'circle-stroke-width':3 } });
   }catch(e){ console.warn('[capas] ', e.message); try{ setStatus('Capas: ' + e.message); }catch(er){} }
@@ -769,7 +777,7 @@ function actualizarZoomManiobra(distSiguiente, tipoSiguiente){
   camZoomObj = cerca ? Math.min(19.5, navZoom + 1.4) : navZoom;   // el bucle de camara lo suaviza
 }
 
-const VERSION = '2026.10.05-ml-a';
+const VERSION = '2026.10.06-ml-b';
 // X dibujada: el caracter U+2715 no esta en la fuente del navegador y salia como un rectangulo
 const X_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>';
 try{ $('ver').textContent = 'v'+VERSION; }catch(e){}
@@ -879,6 +887,88 @@ async function consultarLimite(lat, lon, rumbo){
   }catch(e){ console.warn('[limite]', e.message); }
   finally{ LIM.ocupado = false; }
 }
+
+/* ==== Señales de trafico: stop, ceda el paso y semaforos ========================================
+   Datos de OpenStreetMap en senales.json (lo genera descargar-senales.html): [lat, lon, tipo, direccion] con
+   tipo s=stop, c=ceda, t=semaforo, p=semaforo de peatones. Se dibujan como iconos en el mapa (solo de cerca) y,
+   con ruta activa, se calculan las que caen SOBRE tu ruta para avisar en el HUD 3D. Limitacion conocida: OSM no
+   dice hacia donde mira cada stop/ceda sin la geometria de la via; solo se cuentan los que estan a menos de 5,5 m
+   de tu ruta (semaforos, 9 m), asi que alguno de una calle lateral por la que giras puede salir de mas. */
+const SEN = { listo:false, grid:new Map(), pts:[], ruta:[] };
+function imagenSenal(tp){
+  const clave = { s:'sen-stop', c:'sen-ceda', t:'sen-sem', p:'sen-ped' }[tp];
+  if (!registroImagenes.has(clave)){
+    const R = 2, W = tp === 'p' ? 16 : 24, H = tp === 'p' ? 22 : 26, c = document.createElement('canvas'); c.width = W*R; c.height = H*R;
+    const g = c.getContext('2d'); g.scale(R, R);
+    if (tp === 's'){ g.beginPath(); for (let k = 0; k < 8; k++){ const a = Math.PI/8 + k*Math.PI/4, x = 12 + 11*Math.cos(a), y = 13 + 11*Math.sin(a); k ? g.lineTo(x, y) : g.moveTo(x, y); } g.closePath();
+      g.fillStyle = '#d4141c'; g.fill(); g.lineWidth = 2; g.strokeStyle = '#ffffff'; g.stroke();
+      g.fillStyle = '#ffffff'; g.font = '800 6.2px system-ui,sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('STOP', 12, 13.5); }
+    else if (tp === 'c'){ g.beginPath(); g.moveTo(2, 4); g.lineTo(22, 4); g.lineTo(12, 23); g.closePath(); g.fillStyle = '#ffffff'; g.fill(); g.lineWidth = 3; g.lineJoin = 'round'; g.strokeStyle = '#d4141c'; g.stroke(); }
+    else { const w = tp === 'p' ? 12 : 14, h = tp === 'p' ? 19 : 24, x = (W - w)/2, y = (H - h)/2, rr = 3;
+      g.beginPath(); g.moveTo(x+rr, y); g.arcTo(x+w, y, x+w, y+h, rr); g.arcTo(x+w, y+h, x, y+h, rr); g.arcTo(x, y+h, x, y, rr); g.arcTo(x, y, x+w, y, rr); g.closePath();
+      g.fillStyle = '#16191d'; g.fill(); g.lineWidth = 1.5; g.strokeStyle = '#ffffff'; g.stroke();
+      const cols = ['#ff3b30', '#ffb300', '#34c759'], r = tp === 'p' ? 2.4 : 3.2, paso = (h - 6)/3;
+      cols.forEach((cl, i) => { g.beginPath(); g.arc(W/2, y + 3 + paso*(i + 0.5), r, 0, 6.2832); g.fillStyle = cl; g.fill(); }); }
+    registroImagenes.set(clave, { data: g.getImageData(0, 0, W*R, H*R), pixelRatio: R });
+  }
+  if (estiloListo && !map.hasImage(clave)){ const im = registroImagenes.get(clave); map.addImage(clave, im.data, { pixelRatio: im.pixelRatio }); }
+  return clave;
+}
+async function cargarSenales(){
+  if (_qs.get('senales') === '0') return;
+  try{
+    const r = await fetch(RAIZ + 'senales.json?v=' + VERSION); if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json(); SEN.pts = j.p || [];
+    SEN.pts.forEach((q, i) => { const k = Math.floor(q[0]*100) + ',' + Math.floor(q[1]*100); let a = SEN.grid.get(k); if (!a){ a = []; SEN.grid.set(k, a); } a.push(i); });
+    const prio = { t:0, s:1, c:2, p:3 }, feats = [], ped = [];
+    SEN.pts.forEach(q => { const f = { type:'Feature', properties:{ ic:imagenSenal(q[2]), pr:prio[q[2]] }, geometry:{ type:'Point', coordinates:[q[1], q[0]] } }; (q[2] === 'p' ? ped : feats).push(f); });
+    fuenteSet('senales', { type:'FeatureCollection', features:feats }); fuenteSet('senales-ped', { type:'FeatureCollection', features:ped });
+    SEN.listo = true;
+    if (routeOn) calcularSenalesRuta();
+    console.log('[senales]', SEN.pts.length, 'puntos cargados');
+  }catch(e){ console.warn('[senales] no disponible:', e.message); }
+}
+// Señales que caen SOBRE la ruta, ordenadas por distancia recorrida a lo largo de ella.
+function calcularSenalesRuta(){
+  SEN.ruta = [];
+  if (!SEN.listo || !routeOn || routeCoordsLL.length < 2) return;
+  const mejor = new Map();
+  for (let i = 1; i < routeCoordsLL.length; i++){
+    const a = routeCoordsLL[i-1], b = routeCoordsLL[i];
+    const la0 = Math.min(a[0], b[0]) - 0.0002, la1 = Math.max(a[0], b[0]) + 0.0002, lo0 = Math.min(a[1], b[1]) - 0.0003, lo1 = Math.max(a[1], b[1]) + 0.0003;
+    for (let gy = Math.floor(la0*100); gy <= Math.floor(la1*100); gy++) for (let gx = Math.floor(lo0*100); gx <= Math.floor(lo1*100); gx++){
+      const celda = SEN.grid.get(gy + ',' + gx); if (!celda) continue;
+      for (const idx of celda){
+        const q = SEN.pts[idx]; if (q[0] < la0 || q[0] > la1 || q[1] < lo0 || q[1] > lo1) continue;
+        const kx = 111320*Math.cos(q[0]*Math.PI/180), ky = 110540;
+        const ax = (a[1]-q[1])*kx, ay = (a[0]-q[0])*ky, bx = (b[1]-q[1])*kx, by = (b[0]-q[0])*ky, dx = bx-ax, dy = by-ay, L2 = dx*dx + dy*dy;
+        const t = L2 ? Math.max(0, Math.min(1, -(ax*dx + ay*dy)/L2)) : 0, dm = Math.hypot(ax + t*dx, ay + t*dy);
+        if (dm > (q[2] === 't' ? 9 : 5.5)) continue;
+        const prev = mejor.get(idx); if (prev && prev.dm <= dm) continue;
+        mejor.set(idx, { dm, d: (routeCumDist[i-1] || 0) + t*((routeCumDist[i] || 0) - (routeCumDist[i-1] || 0)), tp:q[2] });
+      }
+    }
+  }
+  const ev = Array.from(mejor.values()).sort((x, y) => x.d - y.d), out = [];
+  for (const e of ev){ const u = out[out.length-1]; if (u && u.tp === e.tp && e.d - u.d < 25){ if (e.dm < u.dm) out[out.length-1] = e; continue; } out.push(e); }   // dos nodos del mismo cruce = una señal
+  SEN.ruta = out;
+}
+/* Lo que viene por delante, para el HUD 3D (HUD3D.update({next:[...]})): señales de tu ruta a menos de 150 m y los
+   proximos giros (curva a derecha o izquierda, o en angulo recto) y rotondas a menos de 230 m. */
+function eventosParaHud(){
+  if (!routeOn || !routeCoordsLL.length) return undefined;
+  const rec = recorridoAhora(lastFix ? [lastFix.lat, lastFix.lon] : routeCoordsLL[routeProgIdx]), out = [], kind = { s:'stop', c:'yield', t:'lights', p:'lights' };
+  for (const e of SEN.ruta){ const d = e.d - rec; if (d < 25) continue; if (d > 150) break;
+    out.push({ id:'s' + rutaVersion + '_' + Math.round(e.d), kind:kind[e.tp], val:'', side:'R', d:Math.round(d) }); if (out.length >= 3) break; }
+  for (let i = stepIdx; i < Math.min(steps.length, stepIdx + 3); i++){
+    const st = steps[i], m = st.maneuver || {}, d = (st.metro || 0) - rec; if (d < 40 || d > 230) continue;
+    if (m.type === 'roundabout' || m.type === 'rotary') out.push({ id:'m' + rutaVersion + '_' + i, kind:'round', val:'', side:'R', d:Math.round(d), adv:true });
+    else if (m.type === 'turn'){ const mod = m.modifier || '', izq = mod.indexOf('left') >= 0, der = mod.indexOf('right') >= 0; if (!izq && !der) continue;
+      out.push({ id:'m' + rutaVersion + '_' + i, kind:'curve', val:(der ? 'R' : 'L') + (mod.indexOf('slight') >= 0 ? '' : '90'), side:der ? 'R' : 'L', d:Math.round(d), adv:true }); }
+  }
+  return out.length ? out : undefined;
+}
+cargarSenales();
 
 /* ---- GPS: mismo patron que index.html --------------------------------- */
 if (navigator.geolocation){
@@ -1285,6 +1375,7 @@ async function irA(destino, nombre, opc){
 
     routeCumDist = [0];
     for (let i=1;i<pts.length;i++) routeCumDist.push(routeCumDist[i-1] + dist(pts[i-1], pts[i]));
+    calcularSenalesRuta();
 
     const sim = simplificarDP(pts, 3);
     routeDraw = sim.p; routeDrawIdx = sim.i;
@@ -1504,7 +1595,7 @@ function alimentarHud3D(){
   if (!hud3dActivo || !window.HUD3D) return;
   let hw = false; try{ const st = routeOn ? steps[stepIdx] : null; hw = !!(st && (st.hw || isHighway(st))); }catch(e){}
   // road: no se manda; el modulo decide solo (autovia de la ruta, o >=100 km/h sostenidos). brake: tampoco, lo deduce de la deceleracion y de estar parado.
-  try{ HUD3D.update({ speed: speedKmh, head: heading, t: performance.now()/1000, hw: (routeOn && hw) ? true : undefined, rain: !!h3dCfg.rain, night: noche3D() }); }catch(e){}
+  try{ HUD3D.update({ speed: speedKmh, head: heading, t: performance.now()/1000, hw: (routeOn && hw) ? true : undefined, rain: !!h3dCfg.rain, night: noche3D(), next: eventosParaHud() }); }catch(e){}
 }
 async function intentar3D(){
   if (hud3dFallo || !h3dPreferido()) return false;
