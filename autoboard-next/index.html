@@ -471,7 +471,7 @@ function colorPotencia(kw){
   return '#f9a825';
 }
 
-let navZoomBase=17.2;
+let navZoomBase=16.8;
 const ZOOM_MANIOBRA_EXTRA=2.2;
 let terrenoActivo=false;
 const TERRENO_EXAG=1.5;
@@ -501,7 +501,8 @@ function actualizarBotonCasa(){
 }
 
 map.on('load',()=>{
-  map.setPadding({top:0,bottom:80,left:0,right:0});
+  /* ===== COCHE DESPLAZADO HACIA ABAJO (top padding grande) ===== */
+  map.setPadding({top:220,bottom:0,left:0,right:0});
   document.getElementById('rArranque').innerHTML='<b>OK</b>';
   document.getElementById('rWebgl').innerHTML=webglOk?'<b>OK</b>':'<span class="mal">FALLO</span>';
 
@@ -1313,7 +1314,7 @@ let lastFix=null,heading=0,speedKmh=0;
 let histFixes=[],headingHist=[];
 let camPosActual=null,camPosObjetivo=null;
 let camBearingActual=0,camBearingObjetivo=0;
-let camZoomActual=17.2,camZoomObjetivo=17.2;
+let camZoomActual=16.8,camZoomObjetivo=16.8;
 let camaraLibre=false;
 let seguirBloqueado=false;
 function rumboDelGPS(c,now,v){
