@@ -291,7 +291,7 @@ function crearFlechaRuta(){
   const ctx=c.getContext('2d');ctx.clearRect(0,0,size,size);
   ctx.fillStyle='#ffffff';ctx.strokeStyle='rgba(0,0,0,0.55)';ctx.lineWidth=2.5;
   ctx.beginPath();ctx.moveTo(size/2,8);ctx.lineTo(size-10,size-12);ctx.lineTo(size/2,size-20);ctx.lineTo(10,size-12);ctx.closePath();ctx.fill();ctx.stroke();
-  return ctx.getImageData(0,0,size,size);
+  return {data:ctx.getImageData(0,0,size,size),width:size,height:size};
 }
 function crearChevronGiro(){
   const size=100,c=document.createElement('canvas');c.width=size;c.height=size;
@@ -301,7 +301,7 @@ function crearChevronGiro(){
   ctx.beginPath();ctx.moveTo(size/2,size-16);ctx.lineTo(size/2,32);ctx.stroke();
   ctx.beginPath();ctx.moveTo(size/2,10);ctx.lineTo(size/2+22,46);ctx.lineTo(size/2-22,46);ctx.closePath();
   ctx.fillStyle='#ffffff';ctx.fill();
-  return ctx.getImageData(0,0,size,size);
+  return {data:ctx.getImageData(0,0,size,size),width:size,height:size};
 }
 function crearIconoRadar(tipo,velocidad){
   const size=64,c=document.createElement('canvas');c.width=size;c.height=size;
@@ -314,7 +314,7 @@ function crearIconoRadar(tipo,velocidad){
   if(tipo==='semaforo'){ctx.fillRect(size/2-8,10,16,34);ctx.fillStyle=color;ctx.beginPath();ctx.arc(size/2,18,4,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(size/2,28,4,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(size/2,38,4,0,Math.PI*2);ctx.fill();}
   else if(tipo==='movil'){ctx.fillRect(14,26,36,12);ctx.fillRect(20,18,24,10);ctx.beginPath();ctx.arc(20,42,5,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(44,42,5,0,Math.PI*2);ctx.fill();}
   else{ctx.fillRect(18,24,28,16);ctx.beginPath();ctx.arc(46,32,6,0,Math.PI*2);ctx.fill();ctx.fillRect(26,40,12,6);}
-  return ctx.getImageData(0,0,size,size);
+  return {data:ctx.getImageData(0,0,size,size),width:size,height:size};
 }
 function crearIconoCargador(color,texto){
   const size=64,c=document.createElement('canvas');c.width=size;c.height=size;
@@ -324,7 +324,7 @@ function crearIconoCargador(color,texto){
   ctx.fillStyle='#ffffff';ctx.font='bold 20px system-ui,sans-serif';
   ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillText(texto,size/2,size/2+1);
-  return ctx.getImageData(0,0,size,size);
+  return {data:ctx.getImageData(0,0,size,size),width:size,height:size};
 }
 function crearIconoSupercharger(){
   const size=72,c=document.createElement('canvas');c.width=size;c.height=size;
@@ -336,25 +336,14 @@ function crearIconoSupercharger(){
   ctx.fillText('T',size/2,size/2-6);
   ctx.font='bold 11px system-ui,sans-serif';
   ctx.fillText('SC',size/2,size/2+20);
-  return ctx.getImageData(0,0,size,size);
+  return {data:ctx.getImageData(0,0,size,size),width:size,height:size};
 }
 
-/* ===== ICONOS DE SEÑALES DE TRÁFICO ===== */
+/* ===== ICONOS DE SEÑALES DE TRÁFICO (compactos, sin mástil) ===== */
 function crearIconoStop(){
-  const size=96, c=document.createElement('canvas'); c.width=size; c.height=size;
-  const ctx=c.getContext('2d'); ctx.clearRect(0,0,size,size);
-  const mastilX = size/2;
-  const mastilTop = size*0.62;
-  const mastilBottom = size-4;
-  ctx.fillStyle='rgba(0,0,0,0.25)';
-  ctx.fillRect(mastilX-1, mastilTop+2, 6, mastilBottom-mastilTop);
-  ctx.fillStyle='#607d8b';
-  ctx.fillRect(mastilX-2, mastilTop, 5, mastilBottom-mastilTop);
-  ctx.fillStyle='#90a4ae';
-  ctx.fillRect(mastilX-2, mastilTop, 2, mastilBottom-mastilTop);
-  const cx = size/2;
-  const cy = size*0.38;
-  const r = size*0.30;
+  const size=48,c=document.createElement('canvas');c.width=size;c.height=size;
+  const ctx=c.getContext('2d');ctx.clearRect(0,0,size,size);
+  const cx=size/2, cy=size/2, r=size/2-2;
   ctx.beginPath();
   for(let i=0;i<8;i++){
     const a = (Math.PI/8) + (i*Math.PI/4);
@@ -363,107 +352,76 @@ function crearIconoStop(){
     if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
   }
   ctx.closePath();
-  ctx.shadowColor='rgba(0,0,0,0.35)';
-  ctx.shadowBlur=4;
-  ctx.shadowOffsetY=2;
-  ctx.fillStyle='#d32f2f'; ctx.fill();
-  ctx.shadowColor='transparent'; ctx.shadowBlur=0; ctx.shadowOffsetY=0;
-  ctx.lineWidth=4; ctx.strokeStyle='#ffffff'; ctx.stroke();
-  ctx.beginPath();
-  for(let i=0;i<8;i++){
-    const a = (Math.PI/8) + (i*Math.PI/4);
-    const x = cx + Math.cos(a)*(r-4);
-    const y = cy + Math.sin(a)*(r-4);
-    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-  }
-  ctx.closePath();
-  ctx.lineWidth=1.5; ctx.strokeStyle='rgba(255,255,255,0.55)'; ctx.stroke();
+  ctx.fillStyle='#d32f2f';ctx.fill();
+  ctx.lineWidth=3;ctx.strokeStyle='#ffffff';ctx.stroke();
   ctx.fillStyle='#ffffff';
-  ctx.font='bold 22px system-ui,sans-serif';
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText('STOP', cx, cy+1);
-  return ctx.getImageData(0,0,size,size);
+  ctx.font='bold 13px system-ui,sans-serif';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('STOP',cx,cy+1);
+  return {data:ctx.getImageData(0,0,size,size),width:size,height:size};
 }
 function crearIconoCeda(){
-  const size=96, c=document.createElement('canvas'); c.width=size; c.height=size;
-  const ctx=c.getContext('2d'); ctx.clearRect(0,0,size,size);
-  const mastilX = size/2;
-  const mastilTop = size*0.62;
-  const mastilBottom = size-4;
-  ctx.fillStyle='rgba(0,0,0,0.25)';
-  ctx.fillRect(mastilX-1, mastilTop+2, 6, mastilBottom-mastilTop);
-  ctx.fillStyle='#607d8b';
-  ctx.fillRect(mastilX-2, mastilTop, 5, mastilBottom-mastilTop);
-  ctx.fillStyle='#90a4ae';
-  ctx.fillRect(mastilX-2, mastilTop, 2, mastilBottom-mastilTop);
-  const cx = size/2;
-  const cy = size*0.38;
-  const ancho = size*0.62;
-  const alto  = size*0.52;
-  const apexX = cx;
-  const apexY = cy + alto/2;
-  const topLx = cx - ancho/2;
-  const topLy = cy - alto/2;
-  const topRx = cx + ancho/2;
-  const topRy = cy - alto/2;
-  ctx.beginPath();
-  ctx.moveTo(apexX, apexY);
-  ctx.lineTo(topLx, topLy);
-  ctx.lineTo(topRx, topRy);
-  ctx.closePath();
-  ctx.shadowColor='rgba(0,0,0,0.35)';
-  ctx.shadowBlur=4;
-  ctx.shadowOffsetY=2;
-  ctx.fillStyle='#ffffff'; ctx.fill();
-  ctx.shadowColor='transparent'; ctx.shadowBlur=0; ctx.shadowOffsetY=0;
-  ctx.lineWidth=7; ctx.strokeStyle='#d32f2f'; ctx.stroke();
-  return ctx.getImageData(0,0,size,size);
-}
-function crearIconoSemaforo(subtipo){
-  const size=64,c=document.createElement('canvas');c.width=size;c.height=size;
+  const size=48,c=document.createElement('canvas');c.width=size;c.height=size;
   const ctx=c.getContext('2d');ctx.clearRect(0,0,size,size);
   const cx=size/2, cy=size/2;
-  const w=26, h=44;
-  ctx.fillStyle='#1a1a1a';
-  if(ctx.roundRect){ ctx.beginPath(); ctx.roundRect(cx-w/2, cy-h/2, w, h, 5); ctx.fill(); }
-  else { ctx.fillRect(cx-w/2, cy-h/2, w, h); }
-  ctx.lineWidth=3;ctx.strokeStyle='#000000';ctx.stroke();
-  const radio=6;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy+size/2-3);
+  ctx.lineTo(cx-size/2+3, cy-size/2+6);
+  ctx.lineTo(cx+size/2-3, cy-size/2+6);
+  ctx.closePath();
+  ctx.fillStyle='#ffffff';ctx.fill();
+  ctx.lineWidth=4;ctx.strokeStyle='#d32f2f';ctx.stroke();
+  return {data:ctx.getImageData(0,0,size,size),width:size,height:size};
+}
+function crearIconoSemaforo(subtipo){
+  const size=48,c=document.createElement('canvas');c.width=size;c.height=size;
+  const ctx=c.getContext('2d');ctx.clearRect(0,0,size,size);
+  const cx=size/2, cy=size/2;
+  const r=6.5;
+  const paso=13;
   const colores=['#d32f2f','#f9a825','#00c853'];
+  const w = 20, h = r*2 + paso*2 + 4;
+  ctx.beginPath();
+  if(ctx.roundRect){ ctx.roundRect(cx-w/2, cy-h/2, w, h, 6); }
+  else { ctx.rect(cx-w/2, cy-h/2, w, h); }
+  ctx.fillStyle='#1a1a1a';ctx.fill();
+  ctx.lineWidth=2.5;ctx.strokeStyle='#000000';ctx.stroke();
   for(let i=0;i<3;i++){
     ctx.beginPath();
-    ctx.arc(cx, cy-h/2+10+i*13, radio, 0, Math.PI*2);
+    ctx.arc(cx, cy-paso+i*paso, r, 0, Math.PI*2);
     ctx.fillStyle = colores[i];
     ctx.fill();
-    ctx.strokeStyle='#000000';ctx.lineWidth=1.5;ctx.stroke();
+    ctx.strokeStyle='#000000';ctx.lineWidth=1.2;ctx.stroke();
   }
   if(subtipo === 'b'){
     ctx.beginPath();
-    ctx.arc(cx+w/2-2, cy-h/2+4, 4, 0, Math.PI*2);
+    ctx.arc(cx+w/2-1, cy-h/2+2, 3, 0, Math.PI*2);
     ctx.fillStyle='#2196f3';ctx.fill();
-    ctx.strokeStyle='#ffffff';ctx.lineWidth=1.5;ctx.stroke();
+    ctx.strokeStyle='#ffffff';ctx.lineWidth=1.2;ctx.stroke();
   }
-  return ctx.getImageData(0,0,size,size);
+  return {data:ctx.getImageData(0,0,size,size),width:size,height:size};
 }
 function crearIconoSemaforoPeatonal(){
-  const size=64,c=document.createElement('canvas');c.width=size;c.height=size;
+  const size=48,c=document.createElement('canvas');c.width=size;c.height=size;
   const ctx=c.getContext('2d');ctx.clearRect(0,0,size,size);
   const cx=size/2, cy=size/2;
-  const w=44, h=26;
-  ctx.fillStyle='#1a1a1a';
-  if(ctx.roundRect){ ctx.beginPath(); ctx.roundRect(cx-w/2, cy-h/2, w, h, 5); ctx.fill(); }
-  else { ctx.fillRect(cx-w/2, cy-h/2, w, h); }
-  ctx.lineWidth=3;ctx.strokeStyle='#000000';ctx.stroke();
-  const radio=6;
+  const r=6.5;
+  const paso=15;
+  const w = r*2*2 + 6, h = r*2 + 4;
   ctx.beginPath();
-  ctx.arc(cx-11, cy, radio, 0, Math.PI*2);
+  if(ctx.roundRect){ ctx.roundRect(cx-w/2, cy-h/2, w, h, 6); }
+  else { ctx.rect(cx-w/2, cy-h/2, w, h); }
+  ctx.fillStyle='#1a1a1a';ctx.fill();
+  ctx.lineWidth=2.5;ctx.strokeStyle='#000000';ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(cx-paso/2, cy, r, 0, Math.PI*2);
   ctx.fillStyle='#d32f2f';ctx.fill();
-  ctx.strokeStyle='#000000';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.strokeStyle='#000000';ctx.lineWidth=1.2;ctx.stroke();
   ctx.beginPath();
-  ctx.arc(cx+11, cy, radio, 0, Math.PI*2);
+  ctx.arc(cx+paso/2, cy, r, 0, Math.PI*2);
   ctx.fillStyle='#00c853';ctx.fill();
-  ctx.strokeStyle='#000000';ctx.lineWidth=1.5;ctx.stroke();
-  return ctx.getImageData(0,0,size,size);
+  ctx.strokeStyle='#000000';ctx.lineWidth=1.2;ctx.stroke();
+  return {data:ctx.getImageData(0,0,size,size),width:size,height:size};
 }
 
 const OPERADORES={23:'Tesla',1:'ChargePoint',3449:'EasyGo',3586:'Repsol',3355:'Iberdrola',3515:'Endesa',3524:'Wenea',3534:'Zunder',3478:'Ionity'};
@@ -518,24 +476,25 @@ map.on('load',()=>{
   document.getElementById('rArranque').innerHTML='<b>OK</b>';
   document.getElementById('rWebgl').innerHTML=webglOk?'<b>OK</b>':'<span class="mal">FALLO</span>';
   try{
-    if(!map.hasImage('ruta-flecha')) map.addImage('ruta-flecha',crearFlechaRuta());
-    if(!map.hasImage('chevron-giro')) map.addImage('chevron-giro',crearChevronGiro());
+    if(!map.hasImage('ruta-flecha')) map.addImage('ruta-flecha',crearFlechaRuta(),{sdf:false});
+    if(!map.hasImage('chevron-giro')) map.addImage('chevron-giro',crearChevronGiro(),{sdf:false});
     const tipos=['fijo','tramo','movil','semaforo'];
     const velocidades=[40,50,60,70,80,90,100,110,120];
     for(const t of tipos) for(const v of velocidades){
       const key='radar-'+t+'-'+v;
-      if(!map.hasImage(key)) map.addImage(key,crearIconoRadar(t,v));
+      if(!map.hasImage(key)) map.addImage(key,crearIconoRadar(t,v),{sdf:false});
     }
-    if(!map.hasImage('car-11-22')) map.addImage('car-11-22',crearIconoCargador('#f9a825','11-22'));
-    if(!map.hasImage('car-50-72')) map.addImage('car-50-72',crearIconoCargador('#ff6f00','50-72'));
-    if(!map.hasImage('car-72mas')) map.addImage('car-72mas',crearIconoCargador('#d32f2f','72+'));
-    if(!map.hasImage('car-supercharger')) map.addImage('car-supercharger',crearIconoSupercharger());
-    if(!map.hasImage('car-fav')) map.addImage('car-fav',crearIconoCargador('#ffd700','★'));
-    if(!map.hasImage('senal-stop')) map.addImage('senal-stop',crearIconoStop());
-    if(!map.hasImage('senal-ceda')) map.addImage('senal-ceda',crearIconoCeda());
-    if(!map.hasImage('senal-semaforo')) map.addImage('senal-semaforo',crearIconoSemaforo(''));
-    if(!map.hasImage('senal-semaforo-b')) map.addImage('senal-semaforo-b',crearIconoSemaforo('b'));
-    if(!map.hasImage('senal-semaforo-peatonal')) map.addImage('senal-semaforo-peatonal',crearIconoSemaforoPeatonal());
+    if(!map.hasImage('car-11-22')) map.addImage('car-11-22',crearIconoCargador('#f9a825','11-22'),{sdf:false});
+    if(!map.hasImage('car-50-72')) map.addImage('car-50-72',crearIconoCargador('#ff6f00','50-72'),{sdf:false});
+    if(!map.hasImage('car-72mas')) map.addImage('car-72mas',crearIconoCargador('#d32f2f','72+'),{sdf:false});
+    if(!map.hasImage('car-supercharger')) map.addImage('car-supercharger',crearIconoSupercharger(),{sdf:false});
+    if(!map.hasImage('car-fav')) map.addImage('car-fav',crearIconoCargador('#ffd700','★'),{sdf:false});
+    /* Iconos señales */
+    if(!map.hasImage('senal-stop')) map.addImage('senal-stop',crearIconoStop(),{sdf:false});
+    if(!map.hasImage('senal-ceda')) map.addImage('senal-ceda',crearIconoCeda(),{sdf:false});
+    if(!map.hasImage('senal-semaforo')) map.addImage('senal-semaforo',crearIconoSemaforo(''),{sdf:false});
+    if(!map.hasImage('senal-semaforo-b')) map.addImage('senal-semaforo-b',crearIconoSemaforo('b'),{sdf:false});
+    if(!map.hasImage('senal-semaforo-peatonal')) map.addImage('senal-semaforo-peatonal',crearIconoSemaforoPeatonal(),{sdf:false});
   }catch(e){console.warn('No se pudieron anadir iconos',e);}
   try{
     map.addSource('terreno',{type:'raster-dem',url:'https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key='+MAPTILER_KEY,tileSize:256,maxzoom:12});
@@ -567,7 +526,6 @@ map.on('load',()=>{
   map.addSource('cargadores',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
   map.addLayer({id:'cargadores',type:'symbol',source:'cargadores',minzoom:9,
     layout:{'icon-image':['get','icono'],'icon-size':['interpolate',['linear'],['zoom'],9,0.25,11,0.35,15,0.5,18,0.65],
-      'icon-pitch-alignment':'viewport',
       'icon-allow-overlap':true,'icon-ignore-placement':true}});
   map.on('click','cargadores',(e)=>{
     if(!e.features||!e.features.length) return;
@@ -623,7 +581,6 @@ async function cargarRadares(){
     map.addLayer({id:'radares',type:'symbol',source:'radares',minzoom:14,
       layout:{'icon-image':['concat','radar-',['get','tipo'],'-',['to-string',['get','velocidad']]],
         'icon-size':['interpolate',['linear'],['zoom'],14,0.35,17,0.5,20,0.65],
-        'icon-pitch-alignment':'viewport',
         'icon-allow-overlap':true,'icon-ignore-placement':true}});
     document.getElementById('rRadares').innerHTML='<b>'+datos.length+'</b> cargados';
   }catch(e){
@@ -667,18 +624,18 @@ async function cargarSenales(){
       layout:{
         'icon-image':['get','icono'],
         'icon-size':['interpolate',['linear'],['zoom'],
-          15, 0.20,
-          16, 0.30,
-          17, 0.42,
-          18, 0.55,
-          20, 0.75
+          15, 0.16,
+          16, 0.24,
+          17, 0.34,
+          18, 0.44,
+          20, 0.60
         ],
-        'icon-anchor': 'bottom',
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
-        'icon-pitch-alignment':'viewport'
+        'icon-pitch-alignment':'map'
       }
     });
+    // Toggle inicial
     if(!senalesOn) map.setLayoutProperty('senales','visibility','none');
     const nStop = datos.n ? datos.n.stop : 0;
     const nCeda = datos.n ? datos.n.ceda : 0;
