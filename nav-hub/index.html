@@ -2,468 +2,187 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Nav Hub</title>
+<meta name="theme-color" content="#0b1220">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
 <style>
-  :root{ --bd:#232c33; --dim:#9aa7b2; }
-  /* Antes "html" tenia overflow:hidden y el cuerpo se centraba verticalmente: con 9
-     pestañas el contenido no cabe entero, y al centrarlo la mitad de arriba quedaba
-     por encima del borde visible -- "html" lo cortaba antes de que el scroll de body
-     pudiera llegar hasta ahi. Ahora el contenido empieza arriba (no centrado) y la
-     pagina entera puede desplazarse: no puede sobrar nada fuera de la vista. */
-  html{margin:0;height:100%;overflow-y:auto}
-  body{margin:0;min-height:100%;background:#0b0e12;color:#e8eef2;
-    font-family:-apple-system,"Segoe UI",Roboto,sans-serif;
-    display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:16px;
-    padding:16px;box-sizing:border-box}
-  h1{font-size:15px;font-weight:600;color:var(--dim);letter-spacing:.04em;text-transform:uppercase;
-    margin:0 0 4px 0}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;width:100%;max-width:640px}
-  .tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
-    border:2px solid var(--bd);border-radius:18px;padding:22px 10px;cursor:pointer;
-    background:#12161c;text-decoration:none;color:inherit;transition:transform .1s}
-  .tab:active{transform:scale(.96)}
-  .tab .ico{font-size:34px;line-height:1}
-  .tab .nombre{font-size:16px;font-weight:700}
-  .tab .sub{font-size:11px;color:var(--dim)}
-  /* Cada tarjeta usa el MISMO color en el fondo y en el aro que en el propio icono --
-     antes habia mezclas (icono verde sobre fondo azul, icono azul sobre fondo verde)
-     que hacian dificil distinguir una tarjeta de otra de un vistazo rapido. */
-  .tab.autoboard{background:linear-gradient(160deg,#0e3a2e,#12161c);border-color:#22c58f}
-  .tab.waze{background:linear-gradient(160deg,#0a3550,#12161c);border-color:#29b6f6}
-  .tab.tesla{background:linear-gradient(160deg,#4a0e18,#12161c);border-color:#e31937}
-  .tab.precision{background:linear-gradient(160deg,#1a2438,#12161c);border-color:#5b7fd6}
-  .tab.codriver{background:linear-gradient(160deg,#123030,#12161c);border-color:#2dd4bf}
-  .tab.next{background:linear-gradient(160deg,#2a1a3a,#12161c);border-color:#b57bff}
-  .tab.samsung{background:linear-gradient(160deg,#2e1a4a,#12161c);border-color:#a970ff}
-  .tab.realme{background:linear-gradient(160deg,#4a1a2e,#12161c);border-color:#ff5c8a}
-  h1.seg{margin-top:6px}
-  .nota{max-width:640px;font-size:12px;color:var(--dim);text-align:center;line-height:1.5;padding:0 12px}
-  .nota b{color:#c7cdd3}
-
-  /* ==== laboratorio de lanzamiento: nuevo, aparte, no toca las pestañas de arriba ==== */
-  .tab.debug{background:linear-gradient(160deg,#3a1a4a,#12161c);border-color:#c084fc}
-
-  #appWindow{position:fixed;inset:0;z-index:2000;background:#05070a;display:none;flex-direction:column}
-  #appWindow.on{display:flex}
-  #awTop{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#12161c;border-bottom:1px solid var(--bd)}
-  #awTitle{flex:1;font-weight:700;font-size:14px}
-  #awClose{background:#232c33;border:0;color:#e8eef2;font-size:18px;border-radius:10px;padding:8px 14px;cursor:pointer}
-  #awBody{flex:1;position:relative;overflow:hidden}
-  #awBody iframe{width:100%;height:100%;border:0}
-  #awHint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-    color:var(--dim);font-size:13px;text-align:center;padding:20px;flex-direction:column;gap:10px}
-
-  #debugPanel{position:fixed;inset:0;z-index:1900;background:#0b0e12;display:none;flex-direction:column;
-    padding:16px;box-sizing:border-box;overflow-y:auto;gap:14px}
-  #debugPanel.on{display:flex}
-  .dbg-row{display:flex;flex-direction:column;gap:4px;max-width:520px;width:100%;align-self:center}
-  .dbg-row label{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.04em}
-  .dbg-row input{background:#12161c;border:1px solid var(--bd);border-radius:10px;color:#e8eef2;
-    font-size:16px;padding:12px 14px;box-sizing:border-box}
-  .dbg-apps{display:flex;flex-direction:column;gap:10px;max-width:520px;width:100%;align-self:center}
-  .dbg-app{background:#12161c;border:1px solid var(--bd);border-radius:14px;padding:12px}
-  .dbg-app h3{margin:0 0 8px 0;font-size:14px}
-  .dbg-methods{display:flex;gap:8px;flex-wrap:wrap}
-  .dbg-methods button{background:#1e293b;border:1px solid #2c3942;color:#e8eef2;border-radius:9px;
-    padding:10px 12px;font-size:12px;font-weight:700;cursor:pointer}
-  .dbg-methods button:active{background:#2a3a52}
-  #debugLogWrap{max-width:520px;width:100%;align-self:center;background:#0d1117;border:1px solid var(--bd);
-    border-radius:12px;padding:10px}
-  #debugLogWrap h3{margin:0 0 6px 0;font-size:12px;color:var(--dim);text-transform:uppercase}
-  #debugLog{font:11px/1.5 ui-monospace,monospace;color:#9ae6b4;white-space:pre-wrap;max-height:220px;overflow-y:auto}
-  #debugClose{max-width:520px;width:100%;align-self:center;background:#232c33;border:0;color:#e8eef2;
-    border-radius:10px;padding:12px;font-weight:700;cursor:pointer}
-
-  /* ==== panel de diagnostico temporal, visible mientras APP_OPEN ==== */
-  #diagPanel{display:none;background:#1a0f0f;border:1px solid #7a2020;border-radius:12px;
-    padding:10px 12px;margin:10px;font:12px/1.7 ui-monospace,monospace;color:#ffb4b4}
-  #diagPanel.on{display:block}
-  #diagPanel b{color:#ff8a8a}
-  #diagBtns{display:flex;gap:8px;margin-top:8px}
-  #diagBtns button{flex:1;background:#7a2020;border:0;color:#fff;border-radius:8px;padding:10px;font-weight:700;cursor:pointer}
-  #diagBtns button.limpiar{background:#3a3a1a}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:#0b1220;color:#e8eefc;font-family:system-ui,sans-serif}
+#tabs{display:flex;gap:6px;padding:8px;overflow-x:auto;background:#111a2e;position:fixed;top:0;left:0;right:0;z-index:5;align-items:center;scrollbar-width:none}
+#tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:10px 14px;border:0;border-radius:12px;background:#1b2740;color:#e8eefc;font-size:15px;border-bottom:4px solid var(--c,#1f6feb);opacity:.78;user-select:none;-webkit-user-select:none}
+.tab.on{opacity:1;background:var(--c,#1f6feb);color:#fff;border-bottom-color:rgba(255,255,255,.55)}
+.tab .ic{font-size:20px;line-height:1;width:24px;height:24px;display:flex;align-items:center;justify-content:center}
+.tab .ic img{width:24px;height:24px;object-fit:contain;border-radius:5px}
+.ctl{flex:0 0 auto;width:44px;height:44px;border:0;border-radius:12px;background:#243252;color:#fff;font-size:22px}
+#sp{flex:1 0 8px}
+#inst{display:none;background:#22c55e;color:#04210f;font-weight:700;width:auto;padding:0 14px;font-size:14px}
+#view{position:fixed;top:64px;left:0;right:0;bottom:0}
+iframe{width:100%;height:100%;border:0;background:#fff}
+#fb{position:absolute;right:12px;bottom:12px;padding:12px 16px;border-radius:10px;background:#1f6feb;color:#fff;text-decoration:none;font-size:14px;z-index:6}
+#empty{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;color:#8fa3c9}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;z-index:20;padding:12px}
+#box{background:#16213a;border-radius:16px;padding:18px;width:min(520px,100%);max-height:94vh;overflow:auto}
+#box h3{margin:0 0 12px}
+#box label{display:block;font-size:13px;color:#9fb2d8;margin:12px 0 4px}
+#box input[type=text],#box input[type=url]{width:100%;padding:12px;border-radius:10px;border:1px solid #2c3d63;background:#0e1730;color:#fff;font-size:16px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sw{width:36px;height:36px;border-radius:50%;border:3px solid transparent}
+.sw.on{border-color:#fff}
+#box input[type=color]{width:44px;height:36px;border:0;padding:0;background:none}
+.btn{padding:12px 16px;border:0;border-radius:10px;background:#243252;color:#fff;font-size:15px}
+.btn.p{background:#1f6feb}.btn.d{background:#b3261e}
+.emo{font-size:22px;padding:6px 8px;border-radius:8px;border:0;background:#0e1730}
+#prev{display:inline-flex;align-items:center;gap:8px;margin-top:10px;padding:8px 12px;border-radius:12px;border-bottom:4px solid var(--c);background:var(--c);color:#fff}
+#prev .ic img{width:24px;height:24px;object-fit:contain}
+.hint{font-size:12px;color:#7f93bb;margin-top:6px}
 </style>
 </head>
 <body>
+<div id="tabs"></div>
+<div id="view"><iframe id="fr" allow="geolocation; microphone; fullscreen"></iframe><a id="fb" target="_blank" rel="noopener">Abrir en pestaña nueva ↗</a>
+<div id="empty"><div style="font-size:48px">🧭</div><div>No hay pestañas</div><button class="btn p" onclick="editar(-1)">+ Añadir pestaña</button></div></div>
 
-  <h1>Elige navegador</h1>
-  <div class="grid">
-    <a class="tab autoboard" data-id="autoboard" href="../">
-      <div class="ico">🗺️</div>
-      <div class="nombre">AutoBoard</div>
-      <div class="sub">Nuestro navegador</div>
-    </a>
-    <a class="tab waze" data-id="waze" href="https://teslanav.com/">
-      <div class="ico">🔵</div>
-      <div class="nombre">TeslaNav</div>
-      <div class="sub">Tu proyecto</div>
-    </a>
-    <a class="tab next" data-id="next" href="https://haymadre9-lab.github.io/Autoboard_V2/autoboard-next/index.html?v=47">
-      <div class="ico">🧪</div>
-      <div class="nombre">AutoBoard Next</div>
-      <div class="sub">Laboratorio del mapa 3D</div>
-    </a>
-    <a class="tab tesla" data-id="tesla" href="https://www.viajandoentesla.es/navegador">
-      <div class="ico">🚨</div>
-      <div class="nombre">Viajando en Tesla</div>
-      <div class="sub">Navegador con radares</div>
-    </a>
-    <a class="tab precision" data-id="precision" href="https://drive.precisionautotechnik.com">
-      <div class="ico">🧩</div>
-      <div class="nombre">Precision Drive</div>
-      <div class="sub">Tus apps, con PIN</div>
-    </a>
-    <a class="tab codriver" data-id="codriver" href="https://codriver.io">
-      <div class="ico">🛰️</div>
-      <div class="nombre">codriver</div>
-      <div class="sub">A prueba · pide cuenta</div>
-    </a>
-    <button class="tab debug" id="abrirDebug" type="button">
-      <div class="ico">🐞</div>
-      <div class="nombre">Laboratorio</div>
-      <div class="sub">Probar métodos de lanzamiento</div>
-    </button>
-  </div>
+<div id="modal"><div id="box">
+ <h3 id="mt">Editar pestaña</h3>
+ <label>Nombre</label><input type="text" id="fn" maxlength="24">
+ <label>Dirección (URL)</label><input type="url" id="fu" placeholder="https://..." autocapitalize="off" autocorrect="off">
+ <label>Icono</label>
+ <div class="row"><input type="text" id="fi" maxlength="4" style="width:80px;text-align:center;font-size:22px" placeholder="🧭">
+  <button class="btn" id="fup">📁 Imagen…</button><button class="btn" id="fauto">🌐 Icono de la web</button><button class="btn" id="fclr">✖ Quitar</button></div>
+ <input type="file" id="ffile" accept="image/*" hidden>
+ <div class="row" style="margin-top:8px" id="emos"></div>
+ <label>Color</label>
+ <div class="row" id="sws"></div>
+ <div class="row" style="margin-top:8px"><input type="color" id="fc"><span class="hint">o elige cualquier color</span></div>
+ <div id="prev"><span class="ic" id="pi"></span><span id="pn"></span></div>
+ <div class="row" style="margin-top:18px;justify-content:space-between">
+  <div class="row"><button class="btn" id="fl">◀</button><button class="btn" id="fr2">▶</button></div>
+  <div class="row"><button class="btn d" id="fdel">🗑 Eliminar</button><button class="btn" id="fcan">Cancelar</button><button class="btn p" id="fok">Guardar</button></div>
+ </div>
+ <div class="hint">◀ ▶ mueven la pestaña de posición.</div>
+</div></div>
 
-  <h1 class="seg">Espejo del móvil</h1>
-  <div class="grid">
-    <a class="tab samsung" data-id="samsung" href="https://64-226-76-114.nip.io/ver/samsung">
-      <div class="ico">📱</div>
-      <div class="nombre">Samsung</div>
-      <div class="sub">AATesla</div>
-    </a>
-    <a class="tab realme" data-id="realme" href="https://64-226-76-114.nip.io/ver/realme">
-      <div class="ico">📴</div>
-      <div class="nombre">Realme</div>
-      <div class="sub">AATeslaLibre</div>
-    </a>
-  </div>
-
-  <div class="nota">
-    Para volver aquí, usa <b>atrás</b> en el navegador del Tesla, o guarda esta
-    página en <b>favoritos</b> para tenerla siempre a mano.<br>
-    TomTom no tiene navegador web público, solo app móvil — por eso no está aquí.
-  </div>
-
-<!-- ==== Laboratorio de lanzamiento (sección 7 del encargo): destino de prueba +
-     un botón por metodo, que ensena APP/METODO/URL antes de disparar nada. ==== -->
-<div id="debugPanel">
-  <h1 style="align-self:center">Laboratorio de lanzamiento</h1>
-  <div class="dbg-row">
-    <label>Latitud</label><input id="dbgLat" type="text" inputmode="decimal" placeholder="43.2785784" value="43.2785784">
-  </div>
-  <div class="dbg-row">
-    <label>Longitud</label><input id="dbgLon" type="text" inputmode="decimal" placeholder="-2.9873281" value="-2.9873281">
-  </div>
-  <div class="dbg-row">
-    <label>Nombre</label><input id="dbgNombre" type="text" placeholder="Destino de prueba" value="Destino de prueba">
-  </div>
-  <button id="dbgFijar" class="dbg-methods" style="max-width:520px;width:100%;align-self:center;background:#1e293b;border:1px solid #2c3942;color:#e8eef2;border-radius:10px;padding:12px;font-weight:700;cursor:pointer">
-    Fijar destino
-  </button>
-
-  <div class="dbg-apps">
-    <div class="dbg-app">
-      <h3>🗺 Google Maps</h3>
-      <div class="dbg-methods">
-        <button data-app="gmaps" data-method="https">HTTPS</button>
-        <button data-app="gmaps" data-method="custom-scheme">CUSTOM SCHEME</button>
-        <button data-app="gmaps" data-method="intent">INTENT</button>
-        <button data-app="gmaps" data-method="iframe">IFRAME</button>
-        <button data-app="gmaps" data-method="external">EXTERNAL</button>
-      </div>
-    </div>
-    <div class="dbg-app">
-      <h3>🟦 Waze</h3>
-      <div class="dbg-methods">
-        <button data-app="waze" data-method="https">HTTPS</button>
-        <button data-app="waze" data-method="custom-scheme">CUSTOM SCHEME</button>
-        <button data-app="waze" data-method="intent">INTENT</button>
-        <button data-app="waze" data-method="iframe">IFRAME</button>
-        <button data-app="waze" data-method="external">EXTERNAL</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="debugLogWrap">
-    <h3>Registro de eventos</h3>
-    <div id="debugLog">(sin eventos todavía)</div>
-  </div>
-
-  <button id="debugClose" type="button">Cerrar laboratorio</button>
-</div>
-
-<!-- ==== Ventana de "app abierta" (seccion 2). Solo IFRAME se queda dentro de esta
-     ventana; los demas metodos navegan de verdad (no hay forma de evitarlo sin
-     iframe: son URLs que el propio navegador decide donde abrir). ==== -->
-<div id="appWindow">
-  <div id="awTop">
-    <div id="awTitle">App</div>
-    <button id="awClose" type="button">✕ Cerrar</button>
-  </div>
-  <div id="diagPanel">
-    STATE: <b id="diagState">-</b><br>
-    VISIBILITY: <b id="diagVis">-</b><br>
-    HIDDEN: <b id="diagHidden">-</b><br>
-    FOCUS: <b id="diagFocus">-</b><br>
-    URL: <b id="diagUrl">-</b><br>
-    METHOD: <b id="diagMethod">-</b><br>
-    APP: <b id="diagApp">-</b>
-    <div id="diagBtns">
-      <button id="diagCerrar" type="button">CERRAR APP</button>
-      <button id="diagLimpiar" class="limpiar" type="button">LIMPIAR LOG</button>
-    </div>
-  </div>
-  <div id="awBody">
-    <div id="awHint"></div>
-  </div>
-</div>
-
+<div id="modal2" style="position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;z-index:21;padding:12px"><div id="box" style="width:min(420px,100%)">
+ <h3>Ajustes del Hub</h3>
+ <div class="row" style="flex-direction:column;align-items:stretch;gap:10px">
+  <button class="btn" id="bexp">⬆ Exportar pestañas (copia de seguridad)</button>
+  <button class="btn" id="bimp">⬇ Importar pestañas</button>
+  <button class="btn d" id="brst">↺ Restaurar pestañas originales</button>
+  <button class="btn" id="bcl">Cerrar</button>
+ </div>
+ <input type="file" id="fimp" accept="application/json" hidden>
+ <div class="hint">Las pestañas se guardan en este navegador. Exporta una copia antes de borrar datos del navegador o reinstalar.</div>
+</div></div>
 
 <script>
-/* Pulsación larga sobre cualquier pestaña -> editar y guardar su dirección, por si
-   alguna cambia (como ya nos ha pasado con viajandoentesla.es). Mismo umbral de 550 ms
-   que usa AutoBoard para no confundirlo con un toque normal, y se cancela si el dedo
-   se mueve (para no disparar al hacer scroll). Guardado en localStorage: sobrevive a
-   cerrar el navegador, y solo afecta a este aparato -- si cambias la URL en el móvil,
-   no se entera el Tesla, cada uno guarda la suya. */
-const CLAVE = id => 'navhubUrl:' + id;
-document.querySelectorAll('.tab[data-id]').forEach(a => {
-  a.dataset.default = a.getAttribute('href');
-  const guardada = localStorage.getItem(CLAVE(a.dataset.id));
-  if (guardada) a.setAttribute('href', guardada);
-
-  let tmr = null, largo = false, sx = 0, sy = 0;
-  const cancelar = () => { if (tmr) { clearTimeout(tmr); tmr = null; } };
-  const editar = () => {
-    const actual = a.getAttribute('href');
-    const nueva = prompt('Dirección para "' + a.querySelector('.nombre').textContent + '":', actual);
-    if (nueva === null) return;
-    const limpia = nueva.trim();
-    if (!limpia) return;
-    if (limpia === a.dataset.default) localStorage.removeItem(CLAVE(a.dataset.id));
-    else localStorage.setItem(CLAVE(a.dataset.id), limpia);
-    a.setAttribute('href', limpia);
-  };
-  const empezar = (x, y) => {
-    largo = false; sx = x; sy = y; cancelar();
-    tmr = setTimeout(() => { largo = true; editar(); }, 550);
-  };
-  a.addEventListener('touchstart', e => empezar(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
-  a.addEventListener('touchmove', e => { const t = e.touches[0]; if (Math.abs(t.clientX - sx) > 10 || Math.abs(t.clientY - sy) > 10) cancelar(); }, { passive: true });
-  a.addEventListener('touchend', cancelar);
-  a.addEventListener('mousedown', e => empezar(e.clientX, e.clientY));
-  a.addEventListener('mouseup', cancelar);
-  a.addEventListener('mouseleave', cancelar);
-  a.addEventListener('contextmenu', e => e.preventDefault());   // el menu de "abrir enlace" del navegador estorbaria a la pulsacion larga
-  a.addEventListener('click', e => { if (largo) e.preventDefault(); });   // no navegar justo despues de editar
-});
-
-/* ============================================================================
-   LABORATORIO DE LANZAMIENTO -- nuevo, aparte de todo lo de arriba. No toca
-   ninguna pestaña existente. Objetivo: poder probar, uno a uno, distintos
-   metodos de abrir Google Maps/Waze desde el navegador del Tesla, sin dar
-   por sentado que ninguno funciona hasta comprobarlo de verdad.
-   ============================================================================ */
-
-/* ---- 8) Registro de eventos ---- */
-const DebugConsole = {
-  lineas: [],
-  log(msg){
-    const t = new Date().toTimeString().slice(0,8);
-    this.lineas.push('['+t+'] '+msg);
-    if (this.lineas.length > 200) this.lineas.shift();
-    this.pintar();
-  },
-  pintar(){
-    const el = document.getElementById('debugLog');
-    if (el) el.textContent = this.lineas.slice(-60).join('\n') || '(sin eventos todavía)';
-  }
-};
-/* ============================================================================
-   DIAGNOSTICO TEMPORAL (a peticion explicita) -- el cierre automatico que habia
-   aqui queda DESACTIVADO mientras dure esta prueba. Ya no se llama a
-   AppWindow.close() desde ningun evento de foco/visibilidad: la unica forma de
-   volver a HOME es el boton CERRAR APP (o el de la barra superior, que hace lo
-   mismo). Esto es deliberado, para poder ver la secuencia completa de eventos
-   sin que nada la borre antes de que le de tiempo a leerla. */
-function alVolverVisible(ev){
-  const t = new Date();
-  const ts = t.toTimeString().slice(0,8) + '.' + String(t.getMilliseconds()).padStart(3,'0');
-  const hidden = document.hidden;
-  const vis = document.visibilityState;
-  const foco = document.hasFocus();
-  DebugConsole.lineas.push(
-    ts + '\n' + ev +
-    '\nhidden=' + hidden +
-    '\nvisibilityState=' + vis +
-    '\nhasFocus=' + foco +
-    '\nstate=' + NavHubState
-  );
-  DebugConsole.pintar();
-  pintarDiagPanel();
-  // NO se llama a AppWindow.close() aqui -- desactivado a proposito para esta prueba.
+const DEF=[
+ {n:'Waze',u:'https://www.waze.com/live-map',c:'#33ccff',i:'🚙'},
+ {n:'Google Maps',u:'https://www.google.com/maps',c:'#34a853',i:'📍'},
+ {n:'HERE WeGo',u:'https://wego.here.com',c:'#00afaa',i:'🧭'},
+ {n:'AutoBoard',u:'https://haymadre9-lab.github.io/Autoboard_V2/',c:'#1f6feb',i:'🚗'},
+ {n:'Viajando en Tesla',u:'https://www.viajandoentesla.es/navegador',c:'#e31937',i:'⚡'},
+ {n:'Precision Drive',u:'https://drive.precisionautotechnik.com',c:'#8957e5',i:'🎯'},
+ {n:'codriver.io',u:'https://codriver.io',c:'#f59e0b',i:'🗺️'},
+ {n:'Espejo móvil',u:'',c:'#64748b',i:'📱'}
+];
+const COLORS=['#1f6feb','#33ccff','#00afaa','#34a853','#f59e0b','#e31937','#d946ef','#8957e5','#64748b','#111827'];
+const EMOJIS=['🚗','🚙','⚡','🔋','📍','🧭','🗺️','🎯','📱','🎵','🎬','📺','🅿️','⛽','🌦️','🚦','📡','⭐','🏠','🔧'];
+const K='navhub.tabs2';
+let T=[],cur=0,editing=-1,draft=null;
+const $=id=>document.getElementById(id);
+function load(){
+  try{const s=JSON.parse(localStorage.getItem(K)||'null');if(Array.isArray(s)){T=s;return}}catch(e){}
+  T=DEF.map(t=>({...t}));
+  try{const o=JSON.parse(localStorage.getItem('navhub.tabs')||'null'); // migra URLs editadas antes
+    if(Array.isArray(o)&&o.length===DEF.length)o.forEach((x,i)=>{if(x&&typeof x.u==='string')T[i].u=x.u});}catch(e){}
 }
-document.addEventListener('visibilitychange', () => alVolverVisible('visibilitychange'));
-['pageshow','pagehide','focus','blur','beforeunload'].forEach(ev => window.addEventListener(ev, () => alVolverVisible(ev)));
-
-function pintarDiagPanel(){
-  const panel = document.getElementById('diagPanel');
-  if (!panel) return;
-  const activo = (NavHubState === 'APP_OPEN' || NavHubState === 'APP_OPENING');
-  panel.classList.toggle('on', activo);
-  if (!activo) return;
-  document.getElementById('diagState').textContent = NavHubState;
-  document.getElementById('diagVis').textContent = document.visibilityState;
-  document.getElementById('diagHidden').textContent = document.hidden;
-  document.getElementById('diagFocus').textContent = document.hasFocus();
-  document.getElementById('diagUrl').textContent = ultimoLanzamiento.url || '-';
-  document.getElementById('diagMethod').textContent = ultimoLanzamiento.method || '-';
-  document.getElementById('diagApp').textContent = ultimoLanzamiento.app || '-';
-}
-document.getElementById('diagCerrar').onclick = () => AppWindow.close();
-document.getElementById('diagLimpiar').onclick = () => { DebugConsole.lineas = []; DebugConsole.pintar(); };
-
-/* ---- 6) Destino compartido ---- */
-const DestinationManager = {
-  currentDestination: { lat:null, lon:null, name:'', address:'' },
-  setDestination(d){
-    Object.assign(this.currentDestination, d);
-    DebugConsole.log('Destination set: ' + JSON.stringify(this.currentDestination));
-  }
-};
-
-/* ---- 4/5) Google Maps y Waze: construccion de URL, un metodo por estrategia.
-   NINGUNO de estos se da por bueno todavia -- son solo las formas mas conocidas
-   de cada esquema, para poder probarlas. custom-scheme/intent son los que MAS
-   dudas ofrecen dentro de un navegador (no una app nativa): puede que el
-   navegador del Tesla simplemente no sepa que hacer con ellos. */
-function launchGoogleMaps(lat, lon, method){
-  const ll = lat + ',' + lon;
-  if (method === 'https') return 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(ll) + '&dir_action=navigate';
-  if (method === 'custom-scheme') return 'comgooglemaps://?daddr=' + encodeURIComponent(ll) + '&directionsmode=driving';
-  if (method === 'intent') return 'intent://maps.google.com/maps?daddr=' + encodeURIComponent(ll) + '#Intent;scheme=https;package=com.google.android.apps.maps;end';
-  if (method === 'iframe' || method === 'external') return 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(ll) + '&dir_action=navigate';
-  return null;
-}
-function launchWaze(lat, lon, method){
-  const ll = lat + ',' + lon;
-  if (method === 'https') return 'https://waze.com/ul?ll=' + encodeURIComponent(ll) + '&navigate=yes';
-  if (method === 'custom-scheme') return 'waze://?ll=' + encodeURIComponent(ll) + '&navigate=yes';
-  if (method === 'intent') return 'intent://waze.com/ul?ll=' + encodeURIComponent(ll) + '&navigate=yes#Intent;scheme=https;package=com.waze;end';
-  if (method === 'iframe' || method === 'external') return 'https://waze.com/ul?ll=' + encodeURIComponent(ll) + '&navigate=yes';
-  return null;
-}
-
-/* ---- 10) Estados ---- */
-let NavHubState = 'HOME';
-let ultimoLanzamiento = { app:null, method:null, url:null };
-function fijarEstado(s){ NavHubState = s; DebugConsole.log('app state: ' + s); pintarDiagPanel(); }
-
-/* ---- 2) Ventana de "app abierta". Solo IFRAME se queda dentro, de verdad, en
-   esta ventana -- los demas metodos son URLs normales: el navegador decide a
-   donde ir, Nav-Hub no puede "retenerlas" dentro de un panel. Para esos casos
-   la ventana solo sirve de aviso visual momentaneo antes de navegar. */
-const AppWindow = {
-  esIframeAbierto: false,
-  open(app, url, esIframe){
-    fijarEstado('APP_OPENING');
-    document.getElementById('awTitle').textContent = app;
-    const body = document.getElementById('awBody');
-    body.innerHTML = '';
-    this.esIframeAbierto = !!esIframe;
-    if (esIframe){
-      const ifr = document.createElement('iframe');
-      ifr.src = url;
-      ifr.addEventListener('load', () => DebugConsole.log('iframe: load (esto NO garantiza que el contenido real se vea -- muchos sitios bloquean en silencio con X-Frame-Options/CSP)'));
-      ifr.addEventListener('error', () => DebugConsole.log('iframe: error'));
-      body.appendChild(ifr);
-    } else {
-      const aviso = document.createElement('div');
-      aviso.id = 'awHint';
-      aviso.innerHTML = '<div>Abriendo fuera de Nav-Hub…</div>' +
-        '<div style="font-size:11px;opacity:.7">Si el navegador del Tesla vuelve aquí, esta ventana se cerrará sola.</div>';
-      body.appendChild(aviso);
-    }
-    document.getElementById('appWindow').classList.add('on');
-    fijarEstado('APP_OPEN');
-  },
-  close(){
-    if (NavHubState === 'HOME') return;
-    fijarEstado('APP_CLOSING');
-    document.getElementById('appWindow').classList.remove('on');
-    document.getElementById('awBody').innerHTML = '';
-    this.esIframeAbierto = false;
-    fijarEstado('HOME');
-  }
-};
-document.getElementById('awClose').onclick = () => AppWindow.close();
-
-/* 9) Gesto: deslizar hacia arriba sobre la ventana de app para cerrarla.
-   Deteccion sencilla, sin librerias: solo mide cuanto se ha movido el dedo en
-   vertical desde el toque inicial. */
-(function(){
-  const el = document.getElementById('appWindow');
-  let y0 = null;
-  el.addEventListener('touchstart', e => { y0 = e.touches[0].clientY; }, { passive:true });
-  el.addEventListener('touchend', e => {
-    if (y0 === null) return;
-    const dy = (e.changedTouches[0].clientY) - y0;
-    y0 = null;
-    // Desactivado para esta prueba de diagnostico: CERRAR APP debe ser la unica via.
-    if (dy < -70) { DebugConsole.log('gesture: swipe up -> close (DESACTIVADO para esta prueba, no se ha cerrado)'); }
-  }, { passive:true });
-})();
-
-/* ---- 3) AppLauncher: un solo punto de entrada para lanzar cualquier app con
-   cualquier metodo. No asume que ninguno funciona -- solo registra lo que
-   intenta y lo intenta. */
-const AppLauncher = {
-  launch({ app, method, url }){
-    ultimoLanzamiento = { app, method, url };
-    DebugConsole.log('Launch ' + app);
-    DebugConsole.log('Method: ' + method);
-    DebugConsole.log('URL: ' + url);
-    if (method === 'iframe'){ AppWindow.open(app, url, true); return; }
-    AppWindow.open(app, url, false);
-    try{
-      if (method === 'external') window.open(url, '_blank');
-      else location.href = url;   // https, custom-scheme, intent: es el navegador quien decide que hacer con cada una
-    }catch(e){ DebugConsole.log('Error: ' + e.message); }
-  }
-};
-
-/* ---- 7) Pantalla DEBUG: fijar destino, y un boton por metodo que ensena
-   APP/METODO/URL antes de disparar nada (confirm(), sencillo y fiable). ---- */
-document.getElementById('abrirDebug').onclick = () => document.getElementById('debugPanel').classList.add('on');
-document.getElementById('debugClose').onclick = () => document.getElementById('debugPanel').classList.remove('on');
-
-document.getElementById('dbgFijar').onclick = () => {
-  DestinationManager.setDestination({
-    lat: document.getElementById('dbgLat').value.trim(),
-    lon: document.getElementById('dbgLon').value.trim(),
-    name: document.getElementById('dbgNombre').value.trim(),
-    address: ''
+function save(){try{localStorage.setItem(K,JSON.stringify(T))}catch(e){alert('No se pudo guardar (almacenamiento lleno o bloqueado)')}}
+function iconHTML(i){if(!i)return '';if(/^(data:image|https?:)/.test(i)){const im=document.createElement('img');im.src=i;im.alt='';return im}return i}
+function setIcon(el,i){el.textContent='';const v=iconHTML(i);if(typeof v==='string')el.textContent=v;else el.appendChild(v)}
+const bar=$('tabs'),fr=$('fr'),fb=$('fb');
+function render(){
+  bar.textContent='';
+  T.forEach((t,i)=>{
+    const b=document.createElement('button');b.className='tab'+(i===cur?' on':'');b.style.setProperty('--c',t.c||'#1f6feb');
+    const ic=document.createElement('span');ic.className='ic';setIcon(ic,t.i);if(t.i)b.appendChild(ic);
+    const n=document.createElement('span');n.textContent=t.n||'(sin nombre)';b.appendChild(n);
+    let tm,long=false;
+    b.onclick=()=>{if(long){long=false;return}abrir(i)};
+    b.addEventListener('touchstart',()=>{long=false;tm=setTimeout(()=>{long=true;editar(i)},650)},{passive:true});
+    ['touchend','touchmove','touchcancel'].forEach(ev=>b.addEventListener(ev,()=>clearTimeout(tm),{passive:true}));
+    b.addEventListener('contextmenu',e=>{e.preventDefault();editar(i)});
+    bar.appendChild(b);
   });
+  const add=document.createElement('button');add.className='ctl';add.textContent='＋';add.title='Añadir pestaña';add.onclick=()=>editar(-1);bar.appendChild(add);
+  const ed=document.createElement('button');ed.className='ctl';ed.textContent='✎';ed.title='Editar la pestaña actual';ed.onclick=()=>T.length&&editar(cur);bar.appendChild(ed);
+  const sp=document.createElement('span');sp.id='sp';bar.appendChild(sp);
+  const ins=document.createElement('button');ins.className='ctl';ins.id='inst';ins.textContent='⬇ Instalar';ins.style.display=dp?'block':'none';ins.onclick=instalar;bar.appendChild(ins);
+  const st=document.createElement('button');st.className='ctl';st.textContent='⚙';st.onclick=()=>$('modal2').style.display='flex';bar.appendChild(st);
+}
+let lastSrc='';
+function abrir(i){
+  if(!T.length){$('empty').style.display='flex';fr.style.display='none';fb.style.display='none';render();return}
+  $('empty').style.display='none';fr.style.display='';
+  cur=Math.max(0,Math.min(i,T.length-1));
+  const u=T[cur].u;
+  if(u!==lastSrc){fr.src=u||'about:blank';lastSrc=u}
+  fb.href=u||'#';fb.style.display=u?'':'none';
+  try{localStorage.setItem('navhub.cur',cur)}catch(e){}
+  render();
+}
+// ---- editor
+function normURL(u){u=u.trim();if(u&&!/^[a-z][a-z0-9+.-]*:/i.test(u))u='https://'+u;return u}
+function pintaPrev(){
+  $('prev').style.setProperty('--c',draft.c);setIcon($('pi'),draft.i);$('pn').textContent=draft.n||'Nombre';
+  [...$('sws').children].forEach(s=>s.classList.toggle('on',s.dataset.c===draft.c));$('fc').value=/^#[0-9a-f]{6}$/i.test(draft.c)?draft.c:'#1f6feb';
+  $('fi').value=/^(data:|https?:)/.test(draft.i||'')?'':(draft.i||'');
+}
+function editar(i){
+  editing=i;draft=i>=0?{...T[i]}:{n:'',u:'',c:COLORS[T.length%COLORS.length],i:'⭐'};
+  $('mt').textContent=i>=0?'Editar pestaña':'Nueva pestaña';
+  $('fn').value=draft.n;$('fu').value=draft.u;
+  $('fdel').style.display=i>=0?'':'none';$('fl').style.display=$('fr2').style.display=i>=0?'':'none';
+  pintaPrev();$('modal').style.display='flex';
+}
+function cerrar(){$('modal').style.display='none'}
+$('sws').append(...COLORS.map(c=>{const s=document.createElement('button');s.className='sw';s.dataset.c=c;s.style.background=c;s.onclick=()=>{draft.c=c;pintaPrev()};return s}));
+$('emos').append(...EMOJIS.map(e=>{const s=document.createElement('button');s.className='emo';s.textContent=e;s.onclick=()=>{draft.i=e;pintaPrev()};return s}));
+$('fc').oninput=e=>{draft.c=e.target.value;pintaPrev()};
+$('fn').oninput=e=>{draft.n=e.target.value;pintaPrev()};
+$('fi').oninput=e=>{draft.i=e.target.value;pintaPrev()};
+$('fclr').onclick=()=>{draft.i='';pintaPrev()};
+$('fauto').onclick=()=>{try{const h=new URL(normURL($('fu').value)).hostname;if(!h)throw 0;draft.i='https://www.google.com/s2/favicons?domain='+h+'&sz=64';pintaPrev()}catch(e){alert('Escribe primero una URL válida')}};
+$('fup').onclick=()=>$('ffile').click();
+$('ffile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{
+  const s=96,cv=document.createElement('canvas');cv.width=cv.height=s;const x=cv.getContext('2d');const k=Math.min(s/im.width,s/im.height);
+  x.drawImage(im,(s-im.width*k)/2,(s-im.height*k)/2,im.width*k,im.height*k);draft.i=cv.toDataURL('image/png');pintaPrev()};im.src=r.result};r.readAsDataURL(f);e.target.value=''};
+$('fcan').onclick=cerrar;
+$('fok').onclick=()=>{
+  draft.n=$('fn').value.trim()||'Pestaña';draft.u=normURL($('fu').value);
+  if(editing>=0){T[editing]=draft;cur=editing}else{T.push(draft);cur=T.length-1}
+  save();lastSrc='\u0000';cerrar();abrir(cur);
 };
-
-document.querySelectorAll('.dbg-methods button[data-app]').forEach(btn => {
-  btn.onclick = () => {
-    const lat = document.getElementById('dbgLat').value.trim();
-    const lon = document.getElementById('dbgLon').value.trim();
-    const nombre = document.getElementById('dbgNombre').value.trim();
-    if (!lat || !lon){ alert('Pon latitud y longitud primero.'); return; }
-    DestinationManager.setDestination({ lat, lon, name: nombre, address:'' });
-    const app = btn.dataset.app, method = btn.dataset.method;
-    const url = app === 'gmaps' ? launchGoogleMaps(lat, lon, method) : launchWaze(lat, lon, method);
-    if (!url){ DebugConsole.log('Error: metodo desconocido ' + method); return; }
-    const ok = confirm('APP: ' + app + '\nMETHOD: ' + method + '\nURL: ' + url + '\n\n¿Lanzar?');
-    if (!ok){ DebugConsole.log('Cancelado por el usuario (' + app + ' / ' + method + ')'); return; }
-    AppLauncher.launch({ app, method, url });
-  };
-});
-
+$('fdel').onclick=()=>{if(!confirm('¿Eliminar "'+T[editing].n+'"?'))return;T.splice(editing,1);save();lastSrc='\u0000';cerrar();abrir(Math.min(cur,T.length-1))};
+function mover(d){const j=editing+d;if(j<0||j>=T.length)return;[T[editing],T[j]]=[T[j],T[editing]];editing=j;if(cur===editing-d)cur=j;else if(cur===j)cur=editing-d;save();render()}
+$('fl').onclick=()=>mover(-1);$('fr2').onclick=()=>mover(1);
+// ---- ajustes
+$('bcl').onclick=()=>$('modal2').style.display='none';
+$('bexp').onclick=()=>{const b=new Blob([JSON.stringify(T,null,1)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='navhub-pestanas.json';a.click()};
+$('bimp').onclick=()=>$('fimp').click();
+$('fimp').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const a=JSON.parse(r.result);if(!Array.isArray(a))throw 0;
+  T=a.filter(x=>x&&typeof x==='object').map(x=>({n:String(x.n||''),u:String(x.u||''),c:String(x.c||'#1f6feb'),i:String(x.i||'')}));save();lastSrc='\u0000';$('modal2').style.display='none';abrir(0)}catch(er){alert('Archivo no válido')}};r.readAsText(f);e.target.value=''};
+$('brst').onclick=()=>{if(!confirm('Se perderán tus cambios. ¿Restaurar?'))return;T=DEF.map(t=>({...t}));save();lastSrc='\u0000';$('modal2').style.display='none';abrir(0)};
+// ---- instalar PWA
+let dp=null;
+function instalar(){if(!dp)return;dp.prompt();dp.userChoice.finally(()=>{dp=null;render()})}
+addEventListener('beforeinstallprompt',e=>{e.preventDefault();dp=e;render()});
+addEventListener('appinstalled',()=>{dp=null;render()});
+load();abrir(+(localStorage.getItem('navhub.cur')||0)||0);
+if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 </script>
 </body>
 </html>
