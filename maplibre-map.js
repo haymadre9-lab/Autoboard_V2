@@ -338,89 +338,82 @@ function turnArrowFill(mod, shaftHW, headHW, headLen){
   return 'M'+poly.map(p=>p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' L')+' Z';
 }
 
-function arrowSVG(mod,col,w){col=col||'#0a8a34';
-  return '<svg viewBox="0 0 48 52"><path d="'+turnArrowFill(mod,4.6,9.5,9)+'" fill="'+col+'"/></svg>';}
-
-function laneArrow(dir,valid,hw){ const col=valid?(hw?'#ffffff':'#0a8a34'):(hw?'#000000':'#9aa3b2');
-  return '<div class="lane"><svg viewBox="0 0 48 52"><path d="'+turnArrowFill(dir,4.8,9.5,9)+'" fill="'+col+'"/></svg></div>'; }
-
-function roundaboutSVG(exit,mod,col){
-  // El tramo de rotonda que se recorre (entrada -> tu salida) se pinta como un
-  // arco relleno grueso: se lee la forma de un vistazo, sin depender de un
-  // numero pequeno.
-  // Maximo 4 salidas dibujadas. En la mayoria de rotondas reales, la salida 4
-  // es un cambio de sentido (vuelta casi completa) -- asi que cualquier salida
-  // real 4 o mayor (4, 5, 6, 7...) se trata como esa misma maniobra: dar casi
-  // toda la vuelta y salir por donde se entro, no "una salida mas" en el
-  // reparto. Solo las salidas 1, 2 y 3 son huecos normales.
-  const g='#6b7480', cx=26, cy=26, r=13, grosor=6.5, NEXITS=3, pasoDeg=240/NEXITS;
-  const exitReal=Math.max(1,parseInt(exit,10)||1);
-  const esVuelta=exitReal>=4;
-  const n=esVuelta?4:exitReal;
-  const a0=Math.PI/2;                        // entrada, siempre abajo
-  const aDe=k=>a0-(k*pasoDeg)*Math.PI/180;    // angulo de la salida k (1..NEXITS)
-  let s='<svg viewBox="0 0 52 52">';
-  s+='<circle cx="'+cx+'" cy="'+cy+'" r="'+(r-grosor/2-1)+'" fill="'+g+'" opacity=".18"/>';
-  s+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+g+'" stroke-width="3" opacity=".45"/>';
-  // entrada, en gris: aun no estas circulando por la rotonda
-  s+='<path d="M'+cx+' 52 L'+cx+' '+(cy+r)+'" stroke="'+g+'" stroke-width="'+grosor+'" stroke-linecap="round" opacity=".55"/>';
-  // las demas salidas normales, apenas insinuadas (si esta maniobra es la vuelta, ninguna esta seleccionada: se insinuan las 3)
-  for(let k=1;k<=NEXITS;k++){ if(k===n) continue; const a=aDe(k);
-    const x1=cx+Math.cos(a)*r, y1=cy+Math.sin(a)*r, x2=cx+Math.cos(a)*(r+7), y2=cy+Math.sin(a)*(r+7);
-    s+='<path d="M'+x1.toFixed(1)+' '+y1.toFixed(1)+' L'+x2.toFixed(1)+' '+y2.toFixed(1)+'" stroke="'+g+'" stroke-width="2.4" stroke-linecap="round" opacity=".4"/>'; }
-  // ARCO relleno (blanco, grueso) del tramo real, desde la entrada hasta tu salida.
-  // El cambio de sentido barre CASI toda la circunferencia (350 grados) en vez de
-  // parar en un hueco: se lee de un vistazo como "da la vuelta entera", no como
-  // una salida normal mas.
-  const aSel=esVuelta ? a0-350*Math.PI/180 : aDe(n);
-  // El arco NO se dibuja con el comando "A" de SVG: sus banderas large/sweep
-  // eligen entre dos centros posibles, y si no coinciden EXACTAMENTE con mi
-  // centro real (cx,cy) el arco se hincha hacia fuera en vez de seguir la
-  // circunferencia (era justo el fallo: salidas 5 y 6 desplazadas hacia fuera).
-  // En vez de adivinar las banderas, se muestrean puntos directamente sobre MI
-  // circulo -mismo criterio ya usado y probado en las flechas de giro-, lo que
-  // garantiza que el arco se ciñe siempre al aro real.
-  const xs=cx+Math.cos(aSel)*r, ys=cy+Math.sin(aSel)*r;
-  let dArco='M'+cx+' '+(cy+r);
-  for(let i=1;i<=24;i++){ const a=a0-(a0-aSel)*i/24;
-    dArco+=' L'+(cx+Math.cos(a)*r).toFixed(1)+' '+(cy+Math.sin(a)*r).toFixed(1); }
-  const col2='#ffb020';   // ambar: se diferencia bien tanto del aro gris-azulado como de un panel azul de autopista, cosa que el blanco no hacia
-  s+='<path d="'+dArco+'" fill="none" stroke="'+col2+'" stroke-width="'+grosor+'" stroke-linecap="round" stroke-linejoin="round"/>';
-  // Salida: MISMA TECNICA que las flechas de giro (forma rellena, sin trazo
-  // pegado). Un trazo + un triangulo suelto encima siempre se leia como "un
-  // pegote puesto"; una unica forma que nace del propio grosor del arco,
-  // se ensancha y cierra en punta, se lee como una flecha de verdad.
-  const largo=11;
-  const xo=cx+Math.cos(aSel)*(r+largo), yo=cy+Math.sin(aSel)*(r+largo);
-  const brg=Math.atan2(xo-cx,-(yo-cy));
-  const tan={x:Math.sin(brg),y:-Math.cos(brg)}, lat={x:Math.cos(brg),y:Math.sin(brg)};
-  const shaftHW=grosor/2, headHW=7.5, hombro=0.5;   // 0..1: donde esta el ensanche maximo
-  const hx=xs+(xo-xs)*hombro, hy=ys+(yo-ys)*hombro;
-  const poly=[
-    {x:xs+lat.x*shaftHW, y:ys+lat.y*shaftHW},
-    {x:hx+lat.x*headHW,  y:hy+lat.y*headHW},
-    {x:xo, y:yo},
-    {x:hx-lat.x*headHW,  y:hy-lat.y*headHW},
-    {x:xs-lat.x*shaftHW, y:ys-lat.y*shaftHW},
-  ];
-  s+='<path d="M'+poly.map(p=>p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' L')+' Z" fill="'+col2+'"/>';
-  s+='<text x="'+cx+'" y="'+(cy+1)+'" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="800" font-family="system-ui,sans-serif" fill="'+col+'">'+exitReal+'</text>';
-  return s+'</svg>';
-}
-
-function maneuverSVG(st,hw){const m=st.maneuver||{};const col=hw?'#ffffff':'#0a8a34';
-  if(m.type==='roundabout'||m.type==='rotary')return roundaboutSVG(m.exit,m.modifier,col);
-  if(m.type==='arrive')return '<svg viewBox="0 0 48 52"><path d="M24 6c-7 0-12 5-12 12 0 9 12 26 12 26s12-17 12-26c0-7-5-12-12-12z" fill="'+col+'"/><circle cx="24" cy="18" r="4.5" fill="#fff"/></svg>';
-  if(m.type==='fork'||m.type==='off ramp'){ // bifurcacion / salida: tronco + dos ramas, la tuya marcada
-    const izq=(m.modifier||'').indexOf('left')>=0, g='#9aa3b2';
-    return '<svg viewBox="0 0 48 52"><path d="M24 48 L24 28" stroke="'+col+'" stroke-width="7" stroke-linecap="round"/>'
-      +'<path d="M24 28 L'+(izq?36:12)+' 10" stroke="'+g+'" stroke-width="5" stroke-linecap="round"/>'
-      +'<path d="M24 28 L'+(izq?12:36)+' 10" stroke="'+col+'" stroke-width="7" stroke-linecap="round"/>'
-      +arrowHead(izq?12:36,10,izq?-0.6:0.6,col)+'</svg>'; }
-  if(m.type==='merge'||m.type==='on ramp'){ const izq=(m.modifier||'').indexOf('left')>=0;
-    return '<svg viewBox="0 0 48 52"><path d="M'+(izq?34:14)+' 48 L'+(izq?34:14)+' 6" stroke="#9aa3b2" stroke-width="5" stroke-linecap="round"/>'
-      +'<path d="M'+(izq?12:36)+' 48 Q'+(izq?14:34)+' 26 '+(izq?30:18)+' 14" fill="none" stroke="'+col+'" stroke-width="7" stroke-linecap="round"/></svg>'; }
-  return arrowSVG(m.modifier,col,7.5);}
+/* ==== FLECHAS DEL CARTEL: estilo "cruce con contexto" ===========================================
+   La maniobra va resaltada (verde sobre el cartel blanco, blanca sobre el azul de autopista) y las otras
+   calles del cruce, en gris: se ve de un vistazo cuantas opciones hay y cual es la tuya. Todo son lineas con
+   esquinas redondeadas y una punta triangular separada. Las de izquierda son el espejo de las de derecha.
+   Sustituye a arrowSVG / laneArrow / roundaboutSVG / maneuverSVG de AutoBoard (y al arrowHead que nunca
+   existio: fallaba en salidas y bifurcaciones). */
+const FL = { w:6, r:7, hl:10, hw:8.5 };
+function flColores(hw){ return { col: hw?'#ffffff':'#000000', g: hw?'#7fa2ee':'#c4cad2', off: hw?'#000000':'#9aa3b2' }; }
+const flMir = ps => ps.map(p => p.map(q => [48-q[0], q[1]]));
+function flRecorta(p,len){ const n=p.length,a=p[n-2],b=p[n-1],d=Math.hypot(b[0]-a[0],b[1]-a[1]),k=Math.max(0,d-len)/(d||1);
+  return p.slice(0,n-1).concat([[a[0]+(b[0]-a[0])*k, a[1]+(b[1]-a[1])*k]]); }
+function flPunta(p,len,w,col){ const n=p.length,a=p[n-2],b=p[n-1],th=Math.atan2(b[1]-a[1],b[0]-a[0]),ux=Math.cos(th),uy=Math.sin(th),nx=-uy,ny=ux,bx=b[0]-ux*len,by=b[1]-uy*len;
+  return '<path d="M'+b[0].toFixed(1)+' '+b[1].toFixed(1)+' L'+(bx+nx*w).toFixed(1)+' '+(by+ny*w).toFixed(1)+' L'+(bx-nx*w).toFixed(1)+' '+(by-ny*w).toFixed(1)+' Z" fill="'+col+'"/>'; }
+function flLinea(p,r){ let d='M'+p[0][0]+' '+p[0][1];
+  for(let i=1;i<p.length-1;i++){ const a=p[i-1],b=p[i],c=p[i+1],l1=Math.hypot(b[0]-a[0],b[1]-a[1]),l2=Math.hypot(c[0]-b[0],c[1]-b[1]),rr=Math.min(r,l1/2,l2/2);
+    if(rr<=0){ d+=' L'+b[0]+' '+b[1]; continue; }
+    const p1=[b[0]+(a[0]-b[0])*rr/l1,b[1]+(a[1]-b[1])*rr/l1],p2=[b[0]+(c[0]-b[0])*rr/l2,b[1]+(c[1]-b[1])*rr/l2];
+    d+=' L'+p1[0].toFixed(1)+' '+p1[1].toFixed(1)+' Q'+b[0]+' '+b[1]+' '+p2[0].toFixed(1)+' '+p2[1].toFixed(1); }
+  const e=p[p.length-1]; return d+' L'+e[0].toFixed(1)+' '+e[1].toFixed(1); }
+function flTrazos(bs,cs,col,g,k){ k=k||1; let s='';
+  (cs||[]).forEach(c => { s+='<path d="'+flLinea(c,0)+'" stroke="'+g+'" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'; });
+  bs.forEach(p => { s+='<path d="'+flLinea(flRecorta(p,FL.hl*0.55*k),FL.r*k)+'" stroke="'+col+'" stroke-width="'+(FL.w*k).toFixed(1)+'" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'+flPunta(p,FL.hl*k,FL.hw*k,col); });
+  return s; }
+const FL_R = {   // variantes de DERECHA; la izquierda es el espejo (x -> 48-x). La vuelta es siempre por la izquierda.
+  'straight':     { b:[[[24,50],[24,8]]],                        c:[[[6,24],[42,24]]] },
+  'slight right': { b:[[[24,50],[24,32],[38,10]]],               c:[[[24,32],[24,8]]] },
+  'right':        { b:[[[24,50],[24,24],[42,24]]],               c:[[[24,24],[24,8]],[[24,24],[6,24]]] },
+  'sharp right':  { b:[[[22,50],[22,14],[42,36]]],               c:[] },
+  'uturn':        { b:[[[33,50],[33,20],[15,20],[15,38]]],       c:[] },
+  'fork right':   { b:[[[24,50],[24,32],[38,10]]],               c:[[[24,32],[10,10]]] },
+  'merge right':  { b:[[[34,50],[34,34],[18,20],[18,8]]],        c:[[[18,50],[18,8]]] }
+};
+function flGeom(mod){ mod = mod || 'straight';
+  if (mod === 'straight' || mod === 'uturn') return FL_R[mod];
+  const base = FL_R[mod.replace('left','right')] || FL_R.straight;
+  return mod.indexOf('left') >= 0 ? { b:flMir(base.b), c:flMir(base.c) } : base; }
+function flRotonda(exit,c){
+  const exitReal = Math.max(1, parseInt(exit,10) || 1), ex = Math.min(exitReal, 4);
+  const cx=28, cy=26, r=10, ang={1:0,2:-90,3:-180,4:-235}, deg=ang[ex];   // 1.a a la derecha, 2.a de frente, 3.a a la izquierda, 4 o mas = vuelta
+  const rad=a=>a*Math.PI/180, pt=(a,d)=>[cx+Math.cos(rad(a))*d, cy+Math.sin(rad(a))*d];
+  let s='<svg viewBox="0 0 56 56"><circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+c.g+'" stroke-width="5"/>';
+  [0,-90,-180].forEach(a => { if (ex < 4 && a === deg) return; const p0=pt(a,r), p1=pt(a,r+16);
+    s+='<path d="M'+p0[0].toFixed(1)+' '+p0[1].toFixed(1)+' L'+p1[0].toFixed(1)+' '+p1[1].toFixed(1)+'" stroke="'+c.g+'" stroke-width="5" stroke-linecap="round" fill="none"/>'; });
+  let d='M'+cx+' 54 L'+cx+' '+(cy+r);
+  for(let a=84; a>=deg; a-=6){ const p=pt(a,r); d+=' L'+p[0].toFixed(1)+' '+p[1].toFixed(1); }
+  const pe=pt(deg,r), tip=pt(deg,r+17), stub=pt(deg,r+17-FL.hl*0.55);
+  d+=' L'+pe[0].toFixed(1)+' '+pe[1].toFixed(1)+' L'+stub[0].toFixed(1)+' '+stub[1].toFixed(1);
+  s+='<path d="'+d+'" stroke="'+c.col+'" stroke-width="'+(FL.w*0.85).toFixed(1)+'" fill="none" stroke-linecap="round" stroke-linejoin="round"/>';
+  s+=flPunta([pt(deg,r+3),tip],FL.hl,FL.hw*0.85,c.col);
+  s+='<text x="'+cx+'" y="'+(cy+5)+'" text-anchor="middle" font-size="14" font-weight="700" fill="'+c.col+'" style="font-family:system-ui,sans-serif">'+exitReal+'</text>';
+  return s+'</svg>'; }
+function maneuverSVG(st,hw){ const m=st.maneuver||{}, c=flColores(hw), svg=inner=>'<svg viewBox="0 0 48 52">'+inner+'</svg>';
+  if (m.type==='roundabout' || m.type==='rotary') return flRotonda(m.exit, c);
+  if (m.type==='arrive') return svg('<circle cx="24" cy="26" r="17" fill="none" stroke="'+c.col+'" stroke-width="5"/><circle cx="24" cy="26" r="7" fill="'+c.col+'"/>');
+  let g;
+  if (m.type==='fork' || m.type==='off ramp'){ const base=FL_R['fork right']; g = (m.modifier||'').indexOf('left')>=0 ? { b:flMir(base.b), c:flMir(base.c) } : base; }   // bifurcacion / salida
+  else if (m.type==='merge' || m.type==='on ramp'){ const base=FL_R['merge right']; g = (m.modifier||'').indexOf('left')>=0 ? { b:flMir(base.b), c:flMir(base.c) } : base; }   // incorporacion
+  else g = flGeom(m.modifier);
+  return svg(flTrazos(g.b, g.c, c.col, c.g)); }
+/* Carriles: una flecha por indicacion del carril (recto + derecha = dos puntas sobre un mismo tronco). */
+function flCarrilPath(d,sx){
+  switch(d){
+    case 'right':        return [[sx,44],[sx,23],[sx+16,23]];
+    case 'left':         return [[sx,44],[sx,23],[sx-16,23]];
+    case 'slight right': return [[sx,44],[sx,28],[sx+12,10]];
+    case 'slight left':  return [[sx,44],[sx,28],[sx-12,10]];
+    case 'sharp right':  return [[sx,44],[sx,14],[sx+11,30]];
+    case 'sharp left':   return [[sx,44],[sx,14],[sx-11,30]];
+    case 'uturn':        return [[sx+5,44],[sx+5,16],[sx-9,16],[sx-9,32]];
+    default:             return [[sx,44],[sx,6]];
+  } }
+function flCarril(dirs,valid,hw){ const c=flColores(hw), col=valid?c.col:c.off;
+  const lista=(dirs||[]).filter(d=>typeof d==='string' && d!=='none').slice(0,3); if(!lista.length) lista.push('straight');
+  const izq=lista.some(d=>d.indexOf('left')>=0), der=lista.some(d=>d.indexOf('right')>=0);
+  const sx=(der&&!izq)?11:((izq&&!der)?21:16);
+  return '<div class="lane"><svg viewBox="0 0 32 46">'+flTrazos(lista.map(d=>flCarrilPath(d,sx)),[],col,c.g,0.8)+'</svg></div>'; }
 
 function ttMan(it){ const m=(it.maneuver||it.instructionType||'').toString().toUpperCase(); const rb=it.roundaboutExitNumber;
   if(m.indexOf('ROUNDABOUT')>=0||m.indexOf('ROTARY')>=0) return {type:'roundabout',exit:rb,modifier:(m.indexOf('LEFT')>=0?'left':(m.indexOf('RIGHT')>=0?'right':'straight'))};
@@ -830,6 +823,63 @@ function ajustarARuta(lat, lon){
   return (mejor && md <= SNAP_M) ? mejor : [lat, lon];
 }
 
+/* ==== Limite de velocidad de la via: senal pequena abajo a la izquierda ===========================
+   Se pregunta a TomTom (Reverse Geocode con returnSpeedLimit, con el rumbo para coger el sentido de la via)
+   cada vez que has avanzado unos 120 m, con un minimo de 5 s entre consultas y un maximo de 30 s parado.
+   Funciona con o sin ruta. Si TomTom no da limite 3 veces seguidas, la senal se oculta. Si responde 403/429
+   (cuota), se pausa 2 minutos. Se pone a la DERECHA de la tarjeta de llegada (distancia y hora) sin taparla;
+   sin ruta ocupa su sitio. No recibe toques (pointer-events:none) y se oculta con el HUD o Faro abiertos. */
+const LIM = { cadaM:120, minMs:5000, maxMs:30000, ll:null, t:-1e9, ocupado:false, sinDato:0, valor:0, bloqueoHasta:0, avisado:false };
+const elLimite = document.createElement('div');
+elLimite.id = 'limitSign'; elLimite.setAttribute('aria-label', 'Limite de velocidad de la via');
+document.body.appendChild(elLimite);
+function colocarLimite(){
+  const eta = $('etaCard');
+  if (eta && eta.classList.contains('on')){
+    const r = eta.getBoundingClientRect();
+    elLimite.style.left = (r.right + 10) + 'px';
+    elLimite.style.bottom = Math.max(0, window.innerHeight - r.bottom) + 'px';
+  } else { elLimite.style.left = '10px'; elLimite.style.bottom = '92px'; }
+}
+function pintarLimite(){
+  const ver = LIM.valor > 0 && !hudAbierto && !faroOn;
+  elLimite.style.display = ver ? 'flex' : 'none';
+  if (!ver) return;
+  const t = String(LIM.valor);
+  if (elLimite.dataset.v !== t){ elLimite.dataset.v = t; elLimite.textContent = t; elLimite.classList.toggle('largo', t.length > 2); }
+  colocarLimite();
+}
+if (typeof ResizeObserver !== 'undefined' && $('etaCard')) new ResizeObserver(() => { if (elLimite.style.display === 'flex') colocarLimite(); }).observe($('etaCard'));
+addEventListener('resize', () => { if (elLimite.style.display === 'flex') colocarLimite(); });
+function parseLimite(txt){
+  if (!txt) return 0;
+  const m = String(txt).match(/([\d.]+)\s*(KPH|MPH)?/i); if (!m) return 0;
+  let v = parseFloat(m[1]); if (/MPH/i.test(m[2] || '')) v *= 1.609;
+  v = Math.round(v); return (v >= 5 && v <= 140) ? v : 0;
+}
+async function consultarLimite(lat, lon, rumbo){
+  const ahora = performance.now();
+  if (LIM.ocupado || document.hidden || ahora < LIM.bloqueoHasta) return;
+  const avanzo = !LIM.ll || dist(LIM.ll, [lat, lon]) >= LIM.cadaM;
+  if (ahora - LIM.t < LIM.minMs || (!avanzo && ahora - LIM.t < LIM.maxMs)) return;
+  LIM.ocupado = true; LIM.t = ahora; LIM.ll = [lat, lon];
+  try{
+    const r = await fetch('https://api.tomtom.com/search/2/reverseGeocode/'+lat.toFixed(6)+','+lon.toFixed(6)+'.json?key='+TT
+      +'&returnSpeedLimit=true&radius=30'+(rumbo != null ? '&heading='+Math.round(rumbo) : ''));
+    if (r.status === 403 || r.status === 429){
+      LIM.bloqueoHasta = performance.now() + 120000;
+      if (!LIM.avisado){ LIM.avisado = true; console.warn('[limite] TomTom respondio ' + r.status + ': se pausa 2 min'); }
+      return;
+    }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json(), a = j.addresses && j.addresses[0] && j.addresses[0].address;
+    const kmh = parseLimite(a && a.speedLimit);
+    if (kmh){ LIM.valor = kmh; LIM.sinDato = 0; } else if (++LIM.sinDato >= 3) LIM.valor = 0;
+    pintarLimite();
+  }catch(e){ console.warn('[limite]', e.message); }
+  finally{ LIM.ocupado = false; }
+}
+
 /* ---- GPS: mismo patron que index.html --------------------------------- */
 if (navigator.geolocation){
   navigator.geolocation.watchPosition(p => {
@@ -853,6 +903,8 @@ if (navigator.geolocation){
     // es lo primero que hay que descartar: se deja el mapa quieto del todo mientras
     // cualquiera de los dos este abierto, no solo con el HUD como hasta ahora.
     mapaOculto = hudAbierto || faroOn;
+    pintarLimite();
+    if (!mapaOculto && speedKmh >= 5) consultarLimite(now.lat, now.lon, heading);
     const vis = ajustarARuta(now.lat, now.lon);   // posicion para DIBUJAR (ajustada a la ruta si la hay)
     nuevoTramoCoche([vis[1], vis[0]], mapaOculto ? 0 : dt);
     if (!mapaOculto){
@@ -1032,6 +1084,7 @@ function avanzarPaso(recorrido){
    ruta -sigue siendo TomTom quien decide por donde ir-, solo la geometria de carriles
    en los cruces. Sin clave, gratuito, mismo servicio que ya usaba AutoBoard. */
 let osrmLanes = [];
+function pickDirs(inds){ if(!inds||!inds.length) return ['straight']; const out=[]; inds.forEach(d=>{ if(!d||d==='none') return; d=d.replace('merge to left','slight left').replace('merge to right','slight right'); if(out.indexOf(d)<0) out.push(d); }); return out.length?out:['straight']; }
 function pickDir(inds){ if(!inds||!inds.length)return 'straight'; let d=inds[inds.length-1]; if(d==='none')d=inds[0]; if(!d||d==='none')return 'straight'; d=d.replace('merge to left','slight left').replace('merge to right','slight right'); return d; }
 async function fetchLanes(pts){
   osrmLanes = [];
@@ -1044,7 +1097,7 @@ async function fetchLanes(pts){
     const avisos = [];   // fork / end of road / continue: cruces reales donde OSRM SI marca una decision, aunque sea "seguir recto"
     j.routes[0].legs.forEach(l => l.steps.forEach(st => {
       (st.intersections||[]).forEach(it => {
-        if (it.lanes && it.lanes.length) out.push({ ll:[it.location[1],it.location[0]], lanes: it.lanes.map(la=>({valid:!!la.valid, dir:pickDir(la.indications)})) });
+        if (it.lanes && it.lanes.length) out.push({ ll:[it.location[1],it.location[0]], lanes: it.lanes.map(la=>({valid:!!la.valid, dir:pickDir(la.indications), dirs:pickDirs(la.indications)})) });
       });
       const m = st.maneuver||{}, mod = m.modifier||'';
       if (['fork','end of road','continue'].indexOf(m.type)>=0 && ['straight','slight left','slight right'].indexOf(mod)>=0 && m.location){
@@ -1081,7 +1134,7 @@ function fusionarAvisosOSRM(avisos){
   }
 }
 function laneFor(ll){ if (!ll) return null; let best=null, bd=170; for (const e of osrmLanes){ const dd=dist(ll,e.ll); if(dd<bd){bd=dd;best=e;} } return best?best.lanes:null; }
-function lanesHTML(lanes,hw){ return '<div class="lanerow">'+lanes.map(l=>laneArrow(l.dir,l.valid,hw)).join('')+'</div>'; }
+function lanesHTML(lanes,hw){ return '<div class="lanerow">'+lanes.map(l=>flCarril(l.dirs||[l.dir],l.valid,hw)).join('')+'</div>'; }
 
 let ultimoStepPintado = '';   // cadena vacia fuerza el primer dibujo; se resetea al calcular ruta nueva
 function renderStep(){
@@ -1485,7 +1538,7 @@ async function abrirHud(){
     }
     $('hud2wrap').classList.add('on');
     if (hud3dActivo){ try{ HUD3D.show(); alimentarHud3D(); }catch(e){ console.warn('[hud3d] show:', e.message); } }
-    hudAbierto = true;
+    hudAbierto = true; pintarLimite();
     $('map').style.visibility = 'hidden';                        // mapa fuera de juego mientras el HUD esta abierto
     // Si al cerrar la ultima vez se encogio el lienzo a 1x1 para liberar memoria de
     // video (ver cerrarHud), hay que devolverle su tamano real ANTES de resize(), o

@@ -247,6 +247,13 @@ html.faromode .maplibregl-ctrl-top-left, html.faromode .maplibregl-ctrl-bottom-r
 #etaCard.on{display:flex}
 #etaLlegada{font:600 11px system-ui,sans-serif;color:#9aa7b2;margin-left:2px}
 
+/* ==== limite de velocidad de la via: senal pequena a la derecha de la tarjeta de llegada ==== */
+#limitSign{position:fixed;left:10px;bottom:92px;z-index:904;display:none;align-items:center;justify-content:center;pointer-events:none;
+  width:38px;height:38px;box-sizing:border-box;border-radius:50%;background:#fff;border:5px solid #d32f2f;color:#000;
+  font:800 15px/1 system-ui,sans-serif;box-shadow:0 1px 4px rgba(0,0,0,.45)}
+#limitSign.largo{font-size:12px;letter-spacing:-.5px}
+html.faromode #limitSign{display:none !important}
+
 /* ==== precision de GPS: oculta salvo cuando es mala ==== */
 #acc{position:fixed;left:10px;bottom:100px;z-index:905;font:600 11px system-ui,sans-serif;
   color:#e0b020;background:rgba(10,13,16,.72);border-radius:8px;padding:4px 9px}
@@ -259,7 +266,7 @@ html.faromode .maplibregl-ctrl-top-left, html.faromode .maplibregl-ctrl-bottom-r
    deja menos hueco muerto. El tamaño es SIEMPRE el mismo, salgan 1 o los carriles que
    salgan -- #navbanner no tiene un ancho maximo, crece para dejar sitio a la fila entera. */
 .lanerow{display:flex;gap:4px;align-items:center;height:84px;min-width:78px}
-.lane{width:32px;height:40px;flex:0 0 auto}
+.lane{width:34px;height:49px;flex:0 0 auto}
 .lane svg{width:100%;height:100%;display:block}
 
 /* ==== icono de cargador con la potencia escrita encima ==== */
