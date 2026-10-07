@@ -80,6 +80,8 @@ body{display:flex;flex-direction:column;overflow:hidden}
   <label>Ruta del archivo</label><input type="text" id="sPath" autocapitalize="off" autocorrect="off">
   <label>Token de GitHub (solo en el móvil donde editas)</label><input type="password" id="sTok" placeholder="github_pat_..." autocomplete="off">
   <div class="row" style="margin-top:10px"><button class="btn p" id="sSave">Guardar y subir ahora</button><button class="btn" id="sPull">Bajar ahora</button><button class="btn d" id="sClr">Quitar token</button></div>
+  <div class="row" style="margin-top:10px"><button class="btn p" id="sDown" style="background:#16a34a">⬇ Descargar config.json (para subir a mano)</button></div>
+  <div class="hint">Sin token: pulsa Descargar y sube ese archivo a la carpeta nav-hub/ del repo en github.com (Add file → Upload files, y confirma con Commit). El Tesla lo leerá al abrir.</div>
   <div class="hint">Sin token (Tesla): el hub solo lee y se actualiza al abrirlo. Con token (móvil): cada cambio se sube solo.</div>
  </div>
  <div class="row" style="flex-direction:column;align-items:stretch;gap:10px">
@@ -128,7 +130,10 @@ function unb64(b){return decodeURIComponent(escape(atob(b.replace(/\s/g,''))))}
 function setSync(txt,cls){const e=$('sync');if(!e)return;e.textContent=txt;e.className=cls||''}
 const hhmm=()=>new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
 function apiUrl(c){return 'https://api.github.com/repos/'+c.repo+'/contents/'+c.path.split('/').map(encodeURIComponent).join('/')}
-async function remoteGet(c){ // devuelve {data,sha} o null si no existe
+async function remoteGet(c){
+  try{return await remoteGetApi(c)}catch(e){
+    try{const r=await fetch('config.json?_='+Date.now(),{cache:'no-store'});if(r.status===404)return null;if(!r.ok)throw e;return{data:await r.json(),sha:''}}catch(e2){throw e}}}
+async function remoteGetApi(c){ // devuelve {data,sha} o null si no existe
   const h={'Accept':'application/vnd.github+json'};if(c.token)h.Authorization='Bearer '+c.token;
   const r=await fetch(apiUrl(c)+'?_='+Date.now(),{headers:h,cache:'no-store'});
   if(r.status===404)return null;if(!r.ok)throw new Error('GitHub '+r.status);
@@ -189,6 +194,8 @@ $('sSave').onclick=()=>{const o=syncCfg();const tk=$('sTok').value.trim()||o.tok
   saveSyncCfg({repo:$('sRepo').value.trim(),path:$('sPath').value.trim()||'config.json',token:tk});
   try{localStorage.setItem('navhub.t',String(Date.now()))}catch(e){}push();pintaSync();$('modal2').style.display='none'};
 $('sPull').onclick=()=>{const o=syncCfg();saveSyncCfg({repo:$('sRepo').value.trim(),path:$('sPath').value.trim()||'config.json',token:o.token});pull(true);$('modal2').style.display='none'};
+$('sDown').onclick=()=>{const t=+localStorage.getItem('navhub.t')||Date.now();
+  const b=new Blob([JSON.stringify({v:1,t,tabs:T},null,1)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='config.json';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000)};
 $('sClr').onclick=()=>{const o=syncCfg();saveSyncCfg({repo:o.repo,path:o.path,token:''});try{localStorage.removeItem('navhub.dirty')}catch(e){}pintaSync();setSync('')};
 // ---- editor
 function normURL(u){u=u.trim();if(u&&!/^[a-z][a-z0-9+.-]*:/i.test(u))u='https://'+u;return u}
