@@ -778,7 +778,7 @@ function actualizarZoomManiobra(distSiguiente, tipoSiguiente){
   camZoomObj = cerca ? Math.min(19.5, navZoom + 1.4) : navZoom;   // el bucle de camara lo suaviza
 }
 
-const VERSION = '2026.10.06-ml-c';
+const VERSION = '2026.10.07-ml-d';
 // X dibujada: el caracter U+2715 no esta en la fuente del navegador y salia como un rectangulo
 const X_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>';
 try{ $('ver').textContent = 'v'+VERSION; }catch(e){}
@@ -2218,3 +2218,42 @@ function fpsTick(t0, n){
 }
 function fpsArrancar(){ if (!fpsRaf && !mapaOculto) fpsRaf = requestAnimationFrame(fpsTick(performance.now(), 0)); }
 fpsArrancar();
+
+/* ---- PANTALLA SIEMPRE ENCENDIDA (Screen Wake Lock) --------------------------------------
+   Antes no se pedia nunca, asi que el movil apagaba la pantalla por su tiempo de espera aunque
+   se estuviera navegando. Se pide al abrir la app y se vuelve a pedir cada vez que la pagina
+   vuelve a ser visible (el navegador SUELTA el bloqueo al ocultarla o al cambiar de app).
+   Ajustes -> "Pantalla siempre encendida" lo activa/desactiva (por defecto: activado). */
+let wakeSentinel = null, wakeBusy = false;
+function wakePreferido(){ try{ return localStorage.getItem('wakeLockOn') !== '0'; }catch(e){ return true; } }
+async function wakePedir(){
+  if (!wakePreferido() || !('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
+  if (wakeBusy || (wakeSentinel && !wakeSentinel.released)) return;
+  wakeBusy = true;
+  try{
+    wakeSentinel = await navigator.wakeLock.request('screen');
+    wakeSentinel.addEventListener('release', () => { wakeSentinel = null; });
+  }catch(e){ wakeSentinel = null; console.warn('[wakeLock]', e.name + ': ' + e.message); }
+  finally{ wakeBusy = false; }
+}
+function wakeSoltar(){ try{ if (wakeSentinel) wakeSentinel.release(); }catch(e){} wakeSentinel = null; }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') wakePedir(); });
+/* algunos navegadores solo conceden el bloqueo tras un toque: se reintenta en el primero */
+['pointerdown','touchstart','click'].forEach(ev => addEventListener(ev, () => { if (!wakeSentinel) wakePedir(); }, {passive:true}));
+(function(){
+  const b = $('wakeBtn'); if (!b) return;
+  const pinta = () => {
+    const on = wakePreferido() && wakeSentinel && !wakeSentinel.released;
+    b.classList.toggle('on', wakePreferido());
+    b.textContent = !('wakeLock' in navigator) ? '☀️ Pantalla encendida: no compatible con este navegador'
+      : (wakePreferido() ? '☀️ Pantalla siempre encendida: SÍ' + (on ? '' : ' (pendiente)') : '☀️ Pantalla siempre encendida: NO');
+  };
+  b.onclick = () => {
+    const nuevo = !wakePreferido();
+    try{ localStorage.setItem('wakeLockOn', nuevo ? '1' : '0'); }catch(e){}
+    if (nuevo) wakePedir().then(pinta); else { wakeSoltar(); }
+    pinta();
+  };
+  setInterval(pinta, 3000); pinta();
+})();
+wakePedir();

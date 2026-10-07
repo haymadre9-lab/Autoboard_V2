@@ -34,7 +34,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="stylesheet" href="./maplibre-gl.css">
-<link rel="stylesheet" href="./maplibre-map.css?v=20261006c">
+<link rel="stylesheet" href="./maplibre-map.css?v=20261007d">
 </head>
 <body>
 
@@ -94,6 +94,7 @@
     <div class="seg" id="zoomSeg"><button data-z="17">Lejos</button><button data-z="17.4" class="on">Cerca</button><button data-z="18">Muy cerca</button><button data-z="18.4">Máximo</button></div>
   </div>
   <button class="setbtn" id="mapnight">🌙 Noche</button>
+  <button class="setbtn on" id="wakeBtn">☀️ Pantalla siempre encendida</button>
   <button class="setbtn" id="trafficBtn">🚦 Tráfico</button>
   <button class="setbtn on" id="rotateBtn">🧭 Quitar giro de mapa</button>
   <button class="setbtn" id="cargBtn">⚡ Lista de cargadores</button>
@@ -123,7 +124,7 @@
 </div>
 
 <script src="./maplibre-gl.js"></script>
-<script src="./maplibre-map.js?v=20261006c"></script>
+<script src="./maplibre-map.js?v=20261007d"></script>
 <script>if(/[?&]debug=1/.test(location.search)){var e=document.createElement("script");e.src="https://cdn.jsdelivr.net/npm/eruda";e.onload=function(){eruda.init()};document.head.appendChild(e);}</script>
 </body>
 <script>
