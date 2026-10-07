@@ -27,6 +27,8 @@ body{display:flex;flex-direction:column;overflow:hidden}
 .tab .ic img{height:100%;max-width:100%;object-fit:contain;border-radius:10px}
 .tab .nm{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .edit .tab{outline:4px dashed #fff8;outline-offset:-6px}
+#box input[type=password]{width:100%;padding:12px;border-radius:10px;border:1px solid #2c3d63;background:#0e1730;color:#fff;font-size:16px}
+#sync{font-size:13px;color:#8fa3c9;margin-right:6px;white-space:nowrap}#sync.ok{color:#4ade80}#sync.err{color:#fb7185}
 #empty{display:none;text-align:center;color:#8fa3c9;padding:60px 0}
 #modal{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;z-index:20;padding:12px}
 #box{background:#16213a;border-radius:16px;padding:18px;width:min(520px,100%);max-height:94vh;overflow:auto}
@@ -46,7 +48,7 @@ body{display:flex;flex-direction:column;overflow:hidden}
 </style>
 </head>
 <body>
-<div id="top"><h1>🧭 Nav Hub</h1><button class="ctl" id="bAdd" title="Añadir">＋</button><button class="ctl" id="bEdit" title="Modo edición">✎</button><button class="ctl" id="inst">⬇ Instalar</button><button class="ctl" id="bSet" title="Ajustes">⚙</button></div>
+<div id="top"><h1>🧭 Nav Hub</h1><span id="sync"></span><button class="ctl" id="bAdd" title="Añadir">＋</button><button class="ctl" id="bEdit" title="Modo edición">✎</button><button class="ctl" id="inst">⬇ Instalar</button><button class="ctl" id="bSet" title="Ajustes">⚙</button></div>
 <div id="scroll"><div id="grid"></div><div id="empty"><div style="font-size:48px">🧭</div>No hay iconos.<br>Pulsa ＋ para añadir.</div></div>
 
 <div id="modal"><div id="box">
@@ -71,6 +73,15 @@ body{display:flex;flex-direction:column;overflow:hidden}
 
 <div id="modal2" style="position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;z-index:21;padding:12px"><div id="box" style="width:min(420px,100%)">
  <h3>Ajustes del Hub</h3>
+ <div style="background:#0e1730;border-radius:12px;padding:12px;margin-bottom:12px">
+  <b>☁ Sincronizar con el Tesla</b>
+  <div class="hint" id="syncInfo"></div>
+  <label>Repositorio (usuario/repo)</label><input type="text" id="sRepo" autocapitalize="off" autocorrect="off">
+  <label>Ruta del archivo</label><input type="text" id="sPath" autocapitalize="off" autocorrect="off">
+  <label>Token de GitHub (solo en el móvil donde editas)</label><input type="password" id="sTok" placeholder="github_pat_..." autocomplete="off">
+  <div class="row" style="margin-top:10px"><button class="btn p" id="sSave">Guardar y subir ahora</button><button class="btn" id="sPull">Bajar ahora</button><button class="btn d" id="sClr">Quitar token</button></div>
+  <div class="hint">Sin token (Tesla): el hub solo lee y se actualiza al abrirlo. Con token (móvil): cada cambio se sube solo.</div>
+ </div>
  <div class="row" style="flex-direction:column;align-items:stretch;gap:10px">
   <button class="btn" id="bexp">⬆ Exportar pestañas (copia de seguridad)</button>
   <button class="btn" id="bimp">⬇ Importar pestañas</button>
@@ -103,7 +114,52 @@ function load(){
   try{const o=JSON.parse(localStorage.getItem('navhub.tabs')||'null'); // migra URLs editadas antes
     if(Array.isArray(o)&&o.length===DEF.length)o.forEach((x,i)=>{if(x&&typeof x.u==='string')T[i].u=x.u});}catch(e){}
 }
-function save(){try{localStorage.setItem(K,JSON.stringify(T))}catch(e){alert('No se pudo guardar (almacenamiento lleno o bloqueado)')}}
+function save(){try{localStorage.setItem(K,JSON.stringify(T));localStorage.setItem('navhub.t',String(Date.now()));if(syncCfg().token){localStorage.setItem('navhub.dirty','1');pushSoon()}}catch(e){alert('No se pudo guardar (almacenamiento lleno o bloqueado)')}}
+/* ---------- SINCRONIZACION via GitHub (archivo config.json del propio repo) ----------
+   Movil (con token): cada cambio se sube al repo. Tesla (sin token): al abrir lee config.json y lo adopta. */
+const SK='navhub.sync';
+function inferRepo(){const m=location.hostname.match(/^(.+)\.github\.io$/);if(!m)return{repo:'',path:'config.json'};
+  const seg=location.pathname.split('/').filter(x=>x&&!/\.html?$/i.test(x));const owner=m[1];const repo=seg.length?seg[0]:owner+'.github.io';const folder=seg.slice(1).join('/');
+  return{repo:owner+'/'+repo,path:(folder?folder+'/':'')+'config.json'}}
+function syncCfg(){let o={};try{o=JSON.parse(localStorage.getItem(SK)||'{}')||{}}catch(e){}const d=inferRepo();return{repo:o.repo||d.repo,path:o.path||d.path,token:o.token||''}}
+function saveSyncCfg(c){try{localStorage.setItem(SK,JSON.stringify(c))}catch(e){}}
+function b64(str){return btoa(unescape(encodeURIComponent(str)))}
+function unb64(b){return decodeURIComponent(escape(atob(b.replace(/\s/g,''))))}
+function setSync(txt,cls){const e=$('sync');if(!e)return;e.textContent=txt;e.className=cls||''}
+const hhmm=()=>new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+function apiUrl(c){return 'https://api.github.com/repos/'+c.repo+'/contents/'+c.path.split('/').map(encodeURIComponent).join('/')}
+async function remoteGet(c){ // devuelve {data,sha} o null si no existe
+  const h={'Accept':'application/vnd.github+json'};if(c.token)h.Authorization='Bearer '+c.token;
+  const r=await fetch(apiUrl(c)+'?_='+Date.now(),{headers:h,cache:'no-store'});
+  if(r.status===404)return null;if(!r.ok)throw new Error('GitHub '+r.status);
+  const j=await r.json();return{data:JSON.parse(unb64(j.content)),sha:j.sha}}
+let pushTm=0,pushing=false;
+function pushSoon(){clearTimeout(pushTm);pushTm=setTimeout(push,1500)}
+async function push(){
+  const c=syncCfg();if(!c.token||!c.repo||pushing)return;pushing=true;setSync('☁ subiendo…');
+  try{
+    for(let intento=0;intento<2;intento++){
+      const cur=await remoteGet(c);const t=+localStorage.getItem('navhub.t')||Date.now();
+      const body={message:'Nav Hub: actualizar pestañas',content:b64(JSON.stringify({v:1,t,tabs:T},null,1))};if(cur)body.sha=cur.sha;
+      const r=await fetch(apiUrl(c),{method:'PUT',headers:{'Accept':'application/vnd.github+json','Authorization':'Bearer '+c.token,'Content-Type':'application/json'},body:JSON.stringify(body)});
+      if(r.status===409||r.status===422){continue}
+      if(!r.ok)throw new Error('GitHub '+r.status+(r.status===401||r.status===403||r.status===404?' (revisa token/permisos/repo)':''));
+      localStorage.removeItem('navhub.dirty');setSync('☁ subido '+hhmm(),'ok');return}
+    throw new Error('conflicto, reintenta')
+  }catch(e){setSync('☁ error: '+e.message,'err')}finally{pushing=false}}
+async function pull(forzar){
+  const c=syncCfg();if(!c.repo)return;
+  try{
+    const cur=await remoteGet(c);
+    if(!cur||!cur.data||!Array.isArray(cur.data.tabs)){setSync(c.token?'☁ sin archivo en el repo: pulsa Guardar y subir':'☁ sin config en el repo','');return}
+    const rt=+cur.data.t||0,lt=+localStorage.getItem('navhub.t')||0,dirty=!!localStorage.getItem('navhub.dirty');
+    if(c.token&&dirty&&!forzar){await push();return}
+    if(!c.token||forzar||rt>lt){
+      T=cur.data.tabs.filter(x=>x&&typeof x==='object').map(x=>({n:String(x.n||''),u:String(x.u||''),c:String(x.c||'#1f6feb'),i:String(x.i||'')}));
+      try{localStorage.setItem(K,JSON.stringify(T));localStorage.setItem('navhub.t',String(rt))}catch(e){}
+      render()}
+    setSync('☁ sincronizado '+hhmm(),'ok')
+  }catch(e){setSync('☁ sin conexión','err')}}
 function iconHTML(i){if(!i)return '';if(/^(data:image|https?:)/.test(i)){const im=document.createElement('img');im.src=i;im.alt='';return im}return i}
 function setIcon(el,i){el.textContent='';const v=iconHTML(i);if(typeof v==='string')el.textContent=v;else el.appendChild(v)}
 const grid=$('grid'),scr=$('scroll');let modoEdit=false;
@@ -126,7 +182,14 @@ function render(){
 function abrir(){render()}
 $('bAdd').onclick=()=>editar(-1);
 $('bEdit').onclick=()=>{modoEdit=!modoEdit;render()};
-$('bSet').onclick=()=>$('modal2').style.display='flex';
+function pintaSync(){const c=syncCfg();$('sRepo').value=c.repo;$('sPath').value=c.path;$('sTok').value='';
+  $('syncInfo').textContent=c.token?'Este dispositivo EDITA y sube los cambios a GitHub.':'Este dispositivo solo LEE: al abrir el hub descarga la configuración del repo.'}
+$('bSet').onclick=()=>{pintaSync();$('modal2').style.display='flex'};
+$('sSave').onclick=()=>{const o=syncCfg();const tk=$('sTok').value.trim()||o.token;if(!tk){alert('Pega un token de GitHub (permiso Contents: lectura y escritura sobre ese repo)');return}
+  saveSyncCfg({repo:$('sRepo').value.trim(),path:$('sPath').value.trim()||'config.json',token:tk});
+  try{localStorage.setItem('navhub.t',String(Date.now()))}catch(e){}push();pintaSync();$('modal2').style.display='none'};
+$('sPull').onclick=()=>{const o=syncCfg();saveSyncCfg({repo:$('sRepo').value.trim(),path:$('sPath').value.trim()||'config.json',token:o.token});pull(true);$('modal2').style.display='none'};
+$('sClr').onclick=()=>{const o=syncCfg();saveSyncCfg({repo:o.repo,path:o.path,token:''});try{localStorage.removeItem('navhub.dirty')}catch(e){}pintaSync();setSync('')};
 // ---- editor
 function normURL(u){u=u.trim();if(u&&!/^[a-z][a-z0-9+.-]*:/i.test(u))u='https://'+u;return u}
 function pintaPrev(){
@@ -175,7 +238,7 @@ function instalar(){if(!dp)return;dp.prompt();dp.userChoice.finally(()=>{dp=null
 $('inst').onclick=instalar;
 addEventListener('beforeinstallprompt',e=>{e.preventDefault();dp=e;render()});
 addEventListener('appinstalled',()=>{dp=null;render()});
-load();render();
+load();render();pull();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')pull()});
 if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 </script>
 </body>
