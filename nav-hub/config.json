@@ -1,0 +1,48 @@
+{
+ "v": 1,
+ "t": 1791336406899,
+ "tabs": [
+  {
+   "n": "Auto-Next",
+   "u": "https://haymadre9-lab.github.io/Autoboard_V2/autoboard-next/index.html?v=64",
+   "c": "#33ccff",
+   "i": "🎯"
+  },
+  {
+   "n": "XYESLA",
+   "u": "https://xyesla.org",
+   "c": "#34a853",
+   "i": "📍"
+  },
+  {
+   "n": "AutoBoard",
+   "u": "https://haymadre9-lab.github.io/Autoboard_V2/",
+   "c": "#1f6feb",
+   "i": "🚗"
+  },
+  {
+   "n": "Viajando en Tesla",
+   "u": "https://www.viajandoentesla.es/navegador",
+   "c": "#e31937",
+   "i": "⚡"
+  },
+  {
+   "n": "Realme Mirror",
+   "u": "https://64-226-76-114.nip.io/ver/realme",
+   "c": "#8957e5",
+   "i": "📺"
+  },
+  {
+   "n": "codriver.io",
+   "u": "https://codriver.io",
+   "c": "#f59e0b",
+   "i": "🗺️"
+  },
+  {
+   "n": "Samsung Mirror",
+   "u": "https://64-226-76-114.nip.io/ver/samsung",
+   "c": "#64748b",
+   "i": "📱"
+  }
+ ]
+}
