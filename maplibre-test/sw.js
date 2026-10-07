@@ -5,7 +5,7 @@
    - Cache propia 'autoboard-ml-v1': solo borra caches 'autoboard-ml-*' antiguas. OJO: el SW de la
      raiz borra TODAS las que empiezan por 'autoboard' que no sean la suya, asi que si la app de la
      raiz se actualiza puede vaciar esta cache; no es grave (red primero), solo pierde el respaldo offline. */
-const C = 'autoboard-ml-v3';
+const C = 'autoboard-ml-v4';
 const BASE = ['./', './index.html', './maplibre-map.js', './maplibre-map.css', './maplibre-gl.js', './maplibre-gl.css',
               '../hud2.js', '../radares.json', '../senales.json', '../coche.png', './manifest.webmanifest', './autoboard-192.png', './autoboard-512.png'];
 self.addEventListener('install', e => {
