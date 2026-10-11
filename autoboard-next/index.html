@@ -81,7 +81,8 @@ body.modo-navegacion #minihud{display:flex}
 #radarAlerta{position:fixed;inset:0;z-index:18;pointer-events:none;display:none;box-shadow:inset 0 0 80px 20px rgba(255,0,0,.55), inset 0 0 200px 60px rgba(255,0,0,.25);animation:radarPulse 1s ease-in-out infinite}
 #radarAlerta.on{display:block}
 @keyframes radarPulse{0%{opacity:.35}50%{opacity:1}100%{opacity:.35}}
-#radarInfo{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;z-index:19;display:none;flex-direction:row;align-items:center;gap:14px;text-align:center}
+/* ====== PANEL DE RADAR SUBIDO PARA NO TAPAR EL COCHE ====== */
+#radarInfo{position:fixed;left:50%;transform:translateX(-50%);bottom:100px;z-index:19;display:none;flex-direction:row;align-items:center;gap:14px;text-align:center}
 #radarInfo.on{display:flex}
 #radarInfo .senalRadar{width:64px;height:64px;border-radius:50%;background:#ffffff;border:6px solid #d32f2f;display:flex;align-items:center;justify-content:center;font:800 28px/1 system-ui,sans-serif;color:#000;box-shadow:0 4px 16px rgba(255,0,0,.7);animation:radarPulse 1s ease-in-out infinite}
 #radarInfo .dist{font:800 18px/1.2 system-ui,sans-serif;color:#fff;background:rgba(120,10,10,.92);border-radius:8px;padding:8px 14px;border:2px solid #ff5252}
@@ -260,7 +261,6 @@ map.on('error',e=>{
   registrarError('map',msg);
 });
 
-/* ========== FUNCIONES DE ICONOS ========== */
 function crearFlechaRuta(){
   const size=60,c=document.createElement('canvas');c.width=size;c.height=size;
   const ctx=c.getContext('2d');ctx.clearRect(0,0,size,size);
@@ -413,11 +413,11 @@ const OPERADORES_COLORES={23:{nombre:'Tesla',color:'#ff1744'},1:{nombre:'ChargeP
 function colorPotencia(kw){if(kw>72) return '#d32f2f';if(kw>=50) return '#ff6f00';return '#f9a825';}
 
 /* ========== CONSTANTES NAVEGACIÓN INMERSIVA MÁXIMA ========== */
-let navZoomBase=19.0;
-const ZOOM_MANIOBRA_EXTRA=1.0;
-const PITCH_NAV_BASE=82;
-const PITCH_NAV_MAX=88;
-const PADDING_BOTTOM=380;
+let navZoomBase=19.8;
+const ZOOM_MANIOBRA_EXTRA=0.6;
+const PITCH_NAV_BASE=85;
+const PITCH_NAV_MAX=89;
+const PADDING_BOTTOM=520;
 const PADDING_LEFT=80;
 let fogOn=true;
 
@@ -448,7 +448,6 @@ function actualizarBotonCasa(){
   else{b.classList.remove('guardada');b.title='Guardar dirección de casa';}
 }
 
-/* ========== SNAPPING ========== */
 const SNAP_MAX_DIST_M = 30;
 function proyectarSobreRuta(lat,lon){
   if(!routeCoordsLL.length || routeCoordsLL.length < 2) return null;
@@ -475,7 +474,6 @@ function proyectarSobreRuta(lat,lon){
   return {lat:mejorLat, lon:mejorLon, dist:mejorD, idx:mejorI, t:mejorT};
 }
 
-/* ========== NIEBLA ========== */
 function aplicarFog(){
   if(!map.setFog) return;
   if(!fogOn){ map.setFog(null); return; }
@@ -489,20 +487,17 @@ function aplicarFog(){
   });
 }
 
-/* ========== PITCH DINÁMICO ========== */
 function pitchPorVelocidad(v){
   const t = Math.min(1, Math.max(0, v/120));
   return PITCH_NAV_BASE + (PITCH_NAV_MAX - PITCH_NAV_BASE)*t;
 }
 
-/* ========== ESTADO GLOBAL DE CÁMARA ========== */
-let ultimaPosMarcador = null;   // posición con snapping (donde se pinta el coche)
-let camZoomObjetivo = 19.0;
+let ultimaPosMarcador = null;
+let camZoomObjetivo = 19.8;
 let camPitchObjetivo = PITCH_NAV_BASE;
 
 map.on('load',()=>{
-  try{ map.setMaxPitch(88); }catch(e){}
-  /* COCHE ABAJO: padding.bottom grande */
+  try{ map.setMaxPitch(89); }catch(e){}
   map.setPadding({top:0,bottom:PADDING_BOTTOM,left:PADDING_LEFT,right:0});
   aplicarFog();
   document.getElementById('rArranque').innerHTML='<b>OK</b>';
@@ -850,7 +845,6 @@ function repintarRutaConNiveles(){
 }
 document.getElementById('btnLimpiarFavs').onclick=()=>{if(!confirm('¿Borrar todos los cargadores favoritos?')) return;favoritos=[];guardarFavoritos();refrescarIconosCargadores();alert('Favoritos borrados.');};
 
-/* ========== SIMULACIÓN ========== */
 let simulando=false;
 let simTimer=null;
 let simIdx=0;
@@ -921,7 +915,6 @@ function detenerSimulacion(){
 document.getElementById('btnSimularRuta').onclick = iniciarSimulacion;
 document.getElementById('btnDetenerSimulacion').onclick = detenerSimulacion;
 
-/* ========== LISTA DE CARGADORES CERCANOS ========== */
 document.getElementById('btnListaCargadores').onclick = async ()=>{
   if(!lastFix){ alert('Activa el GPS o la simulación primero.'); return; }
   const panel = document.getElementById('listaCargadores');
@@ -953,7 +946,6 @@ document.getElementById('btnListaCargadores').onclick = async ()=>{
 };
 document.getElementById('btnCerrarListaCargadores').onclick = ()=>{document.getElementById('listaCargadores').classList.remove('on');};
 
-/* ========== FAVORITOS DE DIRECCIONES ========== */
 let favsDir = JSON.parse(localStorage.getItem('dirs_favs') || '[]');
 function guardarFavsDir(){ localStorage.setItem('dirs_favs', JSON.stringify(favsDir)); }
 function esFavDir(lat,lon){return favsDir.findIndex(f => Math.abs(f.lat-lat) < 1e-6 && Math.abs(f.lon-lon) < 1e-6);}
@@ -1284,7 +1276,6 @@ function onFix(pos){
     if(elSnap) elSnap.textContent = 'sin ruta';
   }
 
-  /* Guardamos la posición del marcador con snapping: será el centro de la cámara */
   ultimaPosMarcador = posMarcador.slice();
 
   if(!marcadorCoche._map) marcadorCoche.setLngLat(posMarcador).addTo(map);
@@ -1294,7 +1285,6 @@ function onFix(pos){
   document.getElementById('g3').textContent=Math.round(heading)+'°';
   actualizarHUD();
 
-  /* Actualizar objetivos de zoom y pitch */
   const pitchObj = pitchPorVelocidad(speedKmh);
   camZoomObjetivo = navZoomBase;
   if(!zoomManiobraOn){ camPitchObjetivo = pitchObj; }
@@ -1334,11 +1324,6 @@ function actualizarHUD(){
   else lim.classList.add('oculto');
 }
 function ocultarHUD(){const vel=document.getElementById('hudVel');if(vel) vel.textContent='0';const lim=document.getElementById('hudLimite');if(lim) lim.classList.add('oculto');}
-
-/* ============================================================
-   BUCLE DE SEGUIMIENTO — SIN INTERPOLACIÓN
-   El coche queda clavado en el pixel de la pantalla. El mundo gira.
-   ============================================================ */
 function bucleSeguimiento(){
   if(seguirOn && !camaraLibre && !seguirBloqueado && ultimaPosMarcador){
     map.jumpTo({
@@ -1353,7 +1338,6 @@ function bucleSeguimiento(){
   requestAnimationFrame(bucleSeguimiento);
 }
 requestAnimationFrame(bucleSeguimiento);
-
 let timerVolverSeguir=null;
 function bloquearTemporalmente(){if(!seguirOn) return;seguirBloqueado=true;mostrarBotonCentrar(true);if(timerVolverSeguir) clearTimeout(timerVolverSeguir);}
 function programarVolverSeguir(){
