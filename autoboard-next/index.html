@@ -71,6 +71,7 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #panelAjustes button.ajuste{display:block;width:100%;text-align:left;background:#12161c;border:1px solid #232c33;color:#e8eef2;border-radius:10px;padding:14px 16px;margin-bottom:8px;font-size:14px;font-weight:700;cursor:pointer}
 #panelAjustes button.ajuste.on{background:#1d3a2c;border-color:#2e6b4a;color:#9ae6b4}
 #panelAjustes button.ajuste.peligro{background:#2a1a1a;border-color:#5a2020;color:#ff8a8a}
+#panelAjustes button.ajuste.sim{background:#1d2a3c;border-color:#2e5b8a;color:#90caf9}
 #panelAjustes .seccion{margin-top:16px;margin-bottom:6px;color:#8d99a5;font-size:12px;text-transform:uppercase;letter-spacing:1px}
 #minihud{position:fixed;left:14px;bottom:80px;z-index:15;display:none;background:rgba(10,13,16,.85);border:1px solid #232c33;border-radius:14px;padding:14px 18px;color:#fff;font:800 52px/1 system-ui,sans-serif;align-items:center;gap:16px;min-width:100px;justify-content:center}
 #minihud.on{display:flex}
@@ -192,6 +193,9 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
   <button class="ajuste on" id="btnFog">🌫 Niebla: ON</button>
   <button class="ajuste on" id="btnTrafico">🚦 Tráfico: ON</button>
   <button class="ajuste on" id="btnCelebracion">🎉 Celebración: ON</button>
+  <div class="seccion">Simulación</div>
+  <button class="ajuste sim" id="btnSimularRuta">▶ Simular ruta (demo)</button>
+  <button class="ajuste peligro" id="btnDetenerSimulacion">■ Detener simulación</button>
   <div class="seccion">Cargadores</div>
   <button class="ajuste" id="btnListaCargadores">⚡ Ver 10 más cercanos</button>
   <div class="seccion">Rendimiento</div>
@@ -216,6 +220,7 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
   <div>CARGADORES: <span id="rCargadores">-</span></div>
   <div>SNAP COCHE: <span id="rSnap">-</span></div>
   <div>PITCH NAV: <span id="rPitchNav">-</span></div>
+  <div>SIMULACIÓN: <span id="rSim">parada</span></div>
   <hr>
   <div>ROTACION (10s): <span id="rRot">sin probar</span></div>
   <div>PITCH (10s): <span id="rPitch">sin probar</span></div>
@@ -236,7 +241,7 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
 <div id="errlog"></div>
 
 <div id="controlesAbajo">
-  <div id="avisoInicial">📍 Toca GPS para empezar</div>
+  <div id="avisoInicial">📍 Toca GPS o Simular ruta para empezar</div>
 </div>
 
 <div id="grupoArribaDer">
@@ -477,10 +482,10 @@ function colorPotencia(kw){
 /* ========== CONSTANTES DE NAVEGACIÓN INMERSIVA ========== */
 let navZoomBase=16.8;
 const ZOOM_MANIOBRA_EXTRA=2.2;
-const PITCH_NAV_BASE=72;          // inclinación base en navegación
-const PITCH_NAV_MAX=80;           // inclinación máxima a alta velocidad
-const PADDING_TOP=220;            // coche desplazado hacia abajo
-const PADDING_LEFT=80;            // offset lateral (como si fueras al volante)
+const PITCH_NAV_BASE=72;
+const PITCH_NAV_MAX=80;
+const PADDING_TOP=220;
+const PADDING_LEFT=80;
 let fogOn=true;
 
 let terrenoActivo=false;
@@ -510,7 +515,7 @@ function actualizarBotonCasa(){
   else{b.classList.remove('guardada');b.title='Guardar dirección de casa';}
 }
 
-/* ========== SNAPPING: proyección del punto GPS sobre la ruta ========== */
+/* ========== SNAPPING ========== */
 const SNAP_MAX_DIST_M = 30;
 function proyectarSobreRuta(lat,lon){
   if(!routeCoordsLL.length || routeCoordsLL.length < 2) return null;
@@ -539,7 +544,7 @@ function proyectarSobreRuta(lat,lon){
   return {lat:mejorLat, lon:mejorLon, dist:mejorD, idx:mejorI, t:mejorT};
 }
 
-/* ========== NIEBLA ATMOSFÉRICA (mapa dentro del mapa) ========== */
+/* ========== NIEBLA ========== */
 function aplicarFog(){
   if(!map.setFog) return;
   if(!fogOn){ map.setFog(null); return; }
@@ -553,15 +558,13 @@ function aplicarFog(){
   });
 }
 
-/* ========== PITCH DINÁMICO SEGÚN VELOCIDAD ========== */
+/* ========== PITCH DINÁMICO ========== */
 function pitchPorVelocidad(v){
-  // De 0 km/h → PITCH_NAV_BASE. A 120 km/h → PITCH_NAV_MAX.
   const t = Math.min(1, Math.max(0, v/120));
   return PITCH_NAV_BASE + (PITCH_NAV_MAX - PITCH_NAV_BASE)*t;
 }
 
 map.on('load',()=>{
-  /* ===== NAVEGACIÓN INMERSIVA: coche abajo + offset lateral ===== */
   map.setPadding({top:PADDING_TOP,bottom:0,left:PADDING_LEFT,right:0});
   aplicarFog();
   document.getElementById('rArranque').innerHTML='<b>OK</b>';
@@ -754,7 +757,7 @@ async function cargarSenales(){
 }
 
 function comprobarRadaresCercanos(lat,lon,velocidadActualKmh){
-  if(!gpsOn){apagarAlertaRadar();return;}
+  if(!gpsOn && !simulando){apagarAlertaRadar();return;}
   if(!radaresCargados.length || !radaresOn){apagarAlertaRadar();return;}
   const dLat=0.01,dLon=0.01;
   let masCercano=null,distMin=Infinity;
@@ -906,7 +909,7 @@ function refrescarIconosCargadores(){
   map.getSource('cargadores').setData({type:'FeatureCollection',features:features});
 }
 async function navegarA(lat,lon){
-  if(!lastFix){alert('Activa el GPS primero.');return;}
+  if(!lastFix){alert('Activa el GPS o la simulación primero.');return;}
   ultimaRutaDestino=[lat,lon];
   document.getElementById('g5').innerHTML='<span class="aviso">calculando ruta…</span>';
   const ok=await calcularRuta([lastFix.lat,lastFix.lon],ultimaRutaDestino);
@@ -1025,9 +1028,131 @@ document.getElementById('btnLimpiarFavs').onclick=()=>{
   alert('Favoritos borrados.');
 };
 
+/* ============================================================
+   SIMULACIÓN DE RUTA (demo)
+   ============================================================ */
+let simulando=false;
+let simTimer=null;
+let simIdx=0;
+let simVelocidad=60;   // km/h
+let simRutaLL=[];      // puntos [lat, lon] de la ruta simulada
+let simHeading=0;
+let simEsBucle=true;
+// Origen y destino por defecto: Bilbao centro → Aeropuerto de Loiu
+const SIM_ORIGEN_DEFECTO=[43.2630,-2.9350];   // Bilbao centro
+const SIM_DESTINO_DEFECTO=[43.3010,-2.9105];  // Aeropuerto Loiu (aprox)
+
+function mostrarEstadoSim(txt){
+  const el=document.getElementById('rSim');
+  if(el) el.innerHTML = txt;
+}
+
+async function iniciarSimulacion(){
+  if(simulando){ alert('Simulación ya en marcha. Detén primero.'); return; }
+  const kmhStr = prompt('Velocidad de simulación en km/h:', String(simVelocidad));
+  if(kmhStr === null) return;
+  simVelocidad = Math.max(10, Math.min(180, parseInt(kmhStr,10) || 60));
+
+  mostrarEstadoSim('<span class="aviso">calculando ruta…</span>');
+
+  // 1) Calcular ruta de simulación con TomTom
+  const url = 'https://api.tomtom.com/routing/1/calculateRoute/'
+    + SIM_ORIGEN_DEFECTO[0]+','+SIM_ORIGEN_DEFECTO[1]+':'
+    + SIM_DESTINO_DEFECTO[0]+','+SIM_DESTINO_DEFECTO[1]
+    + '/json?key='+TT+'&routeType=fastest&traffic=false&travelMode=car';
+  try{
+    const r = await fetch(url);
+    const j = await r.json();
+    if(!j.routes || !j.routes.length) throw new Error('sin ruta');
+    const coords = j.routes[0].legs.flatMap(l=>l.points.map(p=>[p.latitude, p.longitude]));
+    simRutaLL = coords;
+    simIdx = 0;
+    simHeading = 0;
+    simulando = true;
+    mostrarEstadoSim('<b style="color:#90caf9">▶ simulando ('+simVelocidad+' km/h, '+simRutaLL.length+' pts)</b>');
+    // Activar modo navegación
+    gpsOn = true;
+    document.getElementById('btnGPS').classList.add('on');
+    document.body.classList.add('modo-navegacion');
+    document.getElementById('avisoInicial').classList.add('oculto');
+    document.getElementById('g1').innerHTML='<b>simulación</b>';
+    seguirOn = true;
+    const btnSeg=document.getElementById('btnSeguir');
+    if(btnSeg) btnSeg.classList.add('activo');
+
+    // 2) Bucle de inyección de fixes GPS
+    const tickMs = 200;   // 5 Hz
+    if(simTimer) clearInterval(simTimer);
+    simTimer = setInterval(()=>{
+      if(!simulando) return;
+      // Avanzar el índice según velocidad:
+      // cada tick (tickMs ms) a V km/h = V/3.6 m/s * (tickMs/1000) s metros
+      const metrosPorTick = (simVelocidad/3.6) * (tickMs/1000);
+      // Distancia media entre puntos de ruta ~30m, así que avanzamos fracción
+      let avanzado = 0;
+      while(simIdx < simRutaLL.length-2 && avanzado < metrosPorTick){
+        const a = simRutaLL[simIdx], b = simRutaLL[simIdx+1];
+        const dAB = dist(a,b);
+        avanzado += dAB;
+        simIdx++;
+      }
+      if(simIdx >= simRutaLL.length-2){
+        if(simEsBucle){ simIdx = 0; }
+        else { detenerSimulacion(); return; }
+      }
+      const p = simRutaLL[simIdx];
+      const pNext = simRutaLL[Math.min(simIdx+5, simRutaLL.length-1)];
+      simHeading = bearing(p, pNext);
+      // Inyectar fix GPS
+      onFix({
+        coords:{
+          latitude: p[0],
+          longitude: p[1],
+          speed: simVelocidad/3.6,
+          heading: simHeading,
+          accuracy: 5,
+          altitude: 0,
+          altitudeAccuracy: 5,
+          headingAccuracy: 2
+        },
+        timestamp: Date.now()
+      });
+    }, tickMs);
+  }catch(e){
+    mostrarEstadoSim('<span class="mal">error: '+e.message+'</span>');
+    registrarError('simulacion', e.message);
+  }
+}
+
+function detenerSimulacion(){
+  if(simTimer) clearInterval(simTimer);
+  simTimer = null;
+  simulando = false;
+  simIdx = 0;
+  simRutaLL = [];
+  mostrarEstadoSim('parada');
+  document.getElementById('g1').innerHTML='apagado';
+  document.getElementById('btnGPS').classList.remove('on');
+  document.body.classList.remove('modo-navegacion');
+  document.getElementById('avisoInicial').classList.remove('oculto');
+  seguirOn = false;
+  const btnSeg=document.getElementById('btnSeguir');
+  if(btnSeg) btnSeg.classList.remove('activo');
+  apagarAlertaRadar();
+  ocultarHUD();
+  detenerRuta();
+}
+
+document.getElementById('btnSimularRuta').onclick = iniciarSimulacion;
+document.getElementById('btnDetenerSimulacion').onclick = detenerSimulacion;
+
+/* ============================================================
+   RESTO DE LA APP
+   ============================================================ */
+
 /* ========== LISTA DE CARGADORES CERCANOS ========== */
 document.getElementById('btnListaCargadores').onclick = async ()=>{
-  if(!lastFix){ alert('Activa el GPS primero.'); return; }
+  if(!lastFix){ alert('Activa el GPS o la simulación primero.'); return; }
   const panel = document.getElementById('listaCargadores');
   const cont  = document.getElementById('listaCargadoresItems');
   panel.classList.add('on');
@@ -1504,7 +1629,7 @@ function onFix(pos){
   }
   comprobarRadaresCercanos(now.lat,now.lon,speedKmh);
   if(cargadoresOn) cargarCargadores(now.lat,now.lon);
-  if(parado&&lastFix){
+  if(parado&&lastFix && !simulando){
     document.getElementById('g2').textContent=Math.round(speedKmh)+' km/h';
     document.getElementById('g3').textContent=Math.round(heading)+'°';
     actualizarHUD();
@@ -1514,7 +1639,6 @@ function onFix(pos){
   const h=rumboDelGPS(c,now,v);
   if(h!==null) filtrarHeading(h);
 
-  /* ========== SNAPPING del marcador a la ruta ========== */
   let posMarcador = [now.lon, now.lat];
   if(routeCoordsLL.length){
     const proj = proyectarSobreRuta(now.lat, now.lon);
@@ -1539,16 +1663,12 @@ function onFix(pos){
   document.getElementById('g2').textContent=Math.round(speedKmh)+' km/h';
   document.getElementById('g3').textContent=Math.round(heading)+'°';
   actualizarHUD();
-  /* La cámara sigue al GPS real (no al marcador con snap) */
   camPosObjetivo=[now.lon,now.lat];
   camBearingObjetivo=heading;
 
-  /* ===== PITCH DINÁMICO POR VELOCIDAD ===== */
   const pitchObj = pitchPorVelocidad(speedKmh);
-  camZoomObjetivo = navZoomBase;   // puede sobreescribirse abajo con zoom maniobra
-  /* Si no estamos en maniobra cercana, aplicar pitch por velocidad */
+  camZoomObjetivo = navZoomBase;
   if(!zoomManiobraOn){
-    /* Usamos jumpTo dentro del bucle de seguimiento para suavizar */
     camPitchObjetivo = pitchObj;
   }
 
@@ -1575,7 +1695,6 @@ function onFix(pos){
       if(cerca!==zoomManiobraOn){
         zoomManiobraOn=cerca;
         camZoomObjetivo=cerca?Math.min(20,navZoomBase+ZOOM_MANIOBRA_EXTRA):navZoomBase;
-        /* En maniobra, pitch fijo base (72), no dinámico */
         camPitchObjetivo = cerca ? PITCH_NAV_BASE : pitchObj;
       }
     }
@@ -1613,7 +1732,7 @@ function bucleSeguimiento(){
     while(dB<-180) dB+=360;
     camBearingActual+=dB*.14;
     camZoomActual+=(camZoomObjetivo-camZoomActual)*.10;
-    camPitchActual+=(camPitchObjetivo-camPitchActual)*.06;   // pitch suavizado
+    camPitchActual+=(camPitchObjetivo-camPitchActual)*.06;
     const dx=Math.abs(camPosObjetivo[0]-camPosActual[0]);
     const dy=Math.abs(camPosObjetivo[1]-camPosActual[1]);
     const dz=Math.abs(camZoomObjetivo-camZoomActual);
@@ -1636,7 +1755,7 @@ function bloquearTemporalmente(){
 function programarVolverSeguir(){
   if(timerVolverSeguir) clearTimeout(timerVolverSeguir);
   timerVolverSeguir=setTimeout(()=>{
-    if(seguirOn && gpsOn){
+    if(seguirOn && (gpsOn||simulando)){
       seguirBloqueado=false;
       if(lastFix) centrarEnMi();
     }
@@ -1675,6 +1794,7 @@ function centrarEnMi(){
 }
 document.getElementById('btnCentrar').onclick=centrarEnMi;
 document.getElementById('btnGPS').onclick=function(){
+  if(simulando){ alert('Simulación en curso. Detén la simulación primero.'); return; }
   gpsOn=!gpsOn;
   this.classList.toggle('on',gpsOn);
   document.body.classList.toggle('modo-navegacion',gpsOn);
@@ -1707,8 +1827,8 @@ document.getElementById('btnGPS').onclick=function(){
   }
 };
 document.getElementById('btnSeguir').onclick=function(){
-  if(!gpsOn){
-    alert('Activa el GPS primero.');
+  if(!gpsOn && !simulando){
+    alert('Activa el GPS o la simulación primero.');
     return;
   }
   seguirOn=!seguirOn;
@@ -1720,7 +1840,7 @@ document.getElementById('btnSeguir').onclick=function(){
 };
 let fpsMarchaUltimoT=0,fpsMarchaUltimoConteo=0;
 setInterval(()=>{
-  if(!gpsOn){fpsMarchaUltimoT=0;return;}
+  if(!gpsOn && !simulando){fpsMarchaUltimoT=0;return;}
   const a=performance.now();
   if(!fpsMarchaUltimoT){fpsMarchaUltimoT=a;fpsMarchaUltimoConteo=contadorRenders;return;}
   const dt=(a-fpsMarchaUltimoT)/1000;
