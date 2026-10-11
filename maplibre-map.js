@@ -791,7 +791,7 @@ function actualizarZoomManiobra(distSiguiente, tipoSiguiente){
   camZoomObj = cerca ? Math.min(19.5, navZoom + 1.4) : navZoom;   // el bucle de camara lo suaviza
 }
 
-const VERSION = '2026.10.11-ml-f';
+const VERSION = '2026.10.11-ml-g';
 // X dibujada: el caracter U+2715 no esta en la fuente del navegador y salia como un rectangulo
 const X_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>';
 try{ $('ver').textContent = 'v'+VERSION; }catch(e){}
@@ -2277,15 +2277,18 @@ wakePedir();
    Formato (Ajustes): 'maps' = enlace de Google Maps con COORDENADAS (lo mas fiable: no depende de que la
    app entienda la direccion), 'texto' = solo el nombre/direccion, 'ambos' = nombre + enlace.
    Sin Web Share (navegador del Tesla, PC) se copia al portapapeles. */
-function shareFmt(){ try{ return localStorage.getItem('shareFmt') || 'maps'; }catch(e){ return 'maps'; } }
+function shareFmt(){ try{ return localStorage.getItem('shareFmt') || 'texto'; }catch(e){ return 'texto'; } }
 function textoCompartir(){
   const ll = destLL; if (!ll) return null;
-  const enlace = 'https://www.google.com/maps/search/?api=1&query=' + ll[0].toFixed(6) + ',' + ll[1].toFixed(6);
+  const la = ll[0].toFixed(6), lo = ll[1].toFixed(6);
   const nombre = (destNombre || '').trim();
   const f = shareFmt();
-  if (f === 'texto') return nombre || (ll[0].toFixed(6) + ', ' + ll[1].toFixed(6));
-  if (f === 'ambos') return (nombre ? nombre + '\n' : '') + enlace;
-  return enlace;
+  if (f === 'coord')  return la + ', ' + lo;                                   // coordenadas en texto plano
+  if (f === 'gmaps')  return 'https://maps.google.com/?q=' + la + ',' + lo;    // enlace clasico de Google Maps
+  if (f === 'waze')   return 'https://waze.com/ul?ll=' + la + ',' + lo + '&navigate=yes';
+  if (f === 'maps')   return 'https://www.google.com/maps/search/?api=1&query=' + la + ',' + lo;
+  if (f === 'ambos')  return (nombre ? nombre + '\n' : '') + 'https://maps.google.com/?q=' + la + ',' + lo;
+  return nombre || (la + ', ' + lo);                                           // 'texto': solo la direccion
 }
 async function enviarATesla(){
   const texto = textoCompartir();
