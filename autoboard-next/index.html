@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>autoboard-next · Fase 11 · carteles</title>
+<title>autoboard-next · Fase 11 · v75 codriver-look</title>
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
 <style>
 html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
@@ -77,7 +77,7 @@ body.modo-navegacion #minihud{display:flex}
 #minihud .limite{width:52px;height:52px;border-radius:50%;background:#ffffff;border:6px solid #d32f2f;display:flex;align-items:center;justify-content:center;font:800 22px/1 system-ui,sans-serif;color:#000;box-shadow:0 2px 6px rgba(0,0,0,.4)}
 #minihud .limite.oculto{display:none}
 .coche-marcador{width:48px!important;height:48px!important;will-change:transform;display:flex;align-items:center;justify-content:center}
-.coche-marcador svg{width:48px;height:48px;display:block;filter:drop-shadow(0 0 6px rgba(41,182,246,.75))}
+.coche-marcador svg{width:48px;height:48px;display:block;filter:drop-shadow(0 0 6px rgba(0,0,0,.55))}
 #radarAlerta{position:fixed;inset:0;z-index:18;pointer-events:none;display:none;box-shadow:inset 0 0 80px 20px rgba(255,0,0,.55), inset 0 0 200px 60px rgba(255,0,0,.25);animation:radarPulse 1s ease-in-out infinite}
 #radarAlerta.on{display:block}
 @keyframes radarPulse{0%{opacity:.35}50%{opacity:1}100%{opacity:.35}}
@@ -248,7 +248,7 @@ function registrarError(tipo,mensaje){
 }
 const map=new maplibregl.Map({
   container:'map',
-  style:'https://api.maptiler.com/maps/streets-v2/style.json?key='+MAPTILER_KEY,
+  style:'https://api.maptiler.com/maps/basic-v2/style.json?key='+MAPTILER_KEY,
   center:[-2.9387,43.2678],zoom:17.2,pitch:60,bearing:0,antialias:antialiasActivo
 });
 document.getElementById('btnAA').textContent=antialiasActivo?'🪄 Antialias: ON (recargar)':'🪄 Antialias: OFF (recargar)';
@@ -411,20 +411,20 @@ const OPERADORES={23:'Tesla',1:'ChargePoint',3449:'EasyGo',3586:'Repsol',3355:'I
 const OPERADORES_COLORES={23:{nombre:'Tesla',color:'#ff1744'},1:{nombre:'ChargePoint',color:'#00b0ff'},3449:{nombre:'EasyGo',color:'#7c4dff'},3586:{nombre:'Repsol',color:'#ff6f00'},3355:{nombre:'Iberdrola',color:'#00c853'},3515:{nombre:'Endesa',color:'#00bfa5'},3524:{nombre:'Wenea',color:'#ff4081'},3534:{nombre:'Zunder',color:'#ffd600'},3478:{nombre:'Ionity',color:'#536dfe'}};
 function colorPotencia(kw){if(kw>72) return '#d32f2f';if(kw>=50) return '#ff6f00';return '#f9a825';}
 
-/* ========== CONSTANTES ========== */
-const ZOOM_CIUDAD = 18.5;      // velocidad baja
-const ZOOM_CARRETERA = 17.5;   // autopista / alta velocidad
-const ZOOM_MANIOBRA = 19.5;    // cerca de maniobra
-const ZOOM_VEL_BAJA = 30;      // km/h
-const ZOOM_VEL_ALTA = 100;     // km/h
-const PITCH_NAV_BASE = 70;
+/* ========== CONSTANTES v75 — look codriver ========== */
+const ZOOM_CIUDAD = 18.8;      // velocidad baja
+const ZOOM_CARRETERA = 17.8;   // autopista
+const ZOOM_MANIOBRA = 20.5;    // muy cerca al acercarse la maniobra
+const ZOOM_VEL_BAJA = 25;      // km/h
+const ZOOM_VEL_ALTA = 90;      // km/h
+const PITCH_NAV_BASE = 65;     // bajado de 70 → se ve más lejos
 const PADDING_TOP = 450;
 const PADDING_LEFT = 80;
-let fogOn=false;
+let fogOn=true;
 let skyOn=true;
 let avisosRadaresOn=true;
-let radaresOn=false;    // ← desactivado por defecto: no pintar en mapa
-let cargadoresOn=false; // ← desactivado por defecto: no pintar en mapa
+let radaresOn=false;
+let cargadoresOn=false;
 
 let idFuenteBuildings=null,sourceLayerBuildings=null,edificiosOn=true;
 let limiteVelocidadVia=0;
@@ -474,20 +474,33 @@ function proyectarSobreRuta(lat,lon){
   return {lat:mejorLat, lon:mejorLon, dist:mejorD};
 }
 
-/* Niebla fuera, cielo suave */
-function aplicarFog(){ map.setFog(null); }
+/* Niebla suave grisácea (atmósfera codriver) */
+function aplicarFog(){
+  if(!map.setFog) return;
+  if(!fogOn){ map.setFog(null); return; }
+  map.setFog({
+    'range':[1.5, 12],
+    'color':'#e8eaed',
+    'horizon-blend':0.2,
+    'high-color':'#dfe3e8',
+    'space-color':'#dfe3e8',
+    'star-intensity':0
+  });
+}
+
+/* Cielo neutro gris claro */
 function aplicarSky(){
   if(!map.setSky) return;
   if(!skyOn){ map.setSky(null); return; }
   try{
     map.setSky({
-      'sky-color': '#87b8e8',
-      'sky-horizon-blend': 0.7,
-      'horizon-color': '#e0e8f0',
-      'horizon-fog-blend': 0.8,
-      'fog-color': '#e0e8f0',
-      'fog-ground-blend': 0.6,
-      'atmosphere-blend': ['interpolate',['linear'],['zoom'],0,0.15,10,0.1,15,0.05]
+      'sky-color': '#dde3ea',
+      'sky-horizon-blend': 0.8,
+      'horizon-color': '#e8eaed',
+      'horizon-fog-blend': 0.9,
+      'fog-color': '#e8eaed',
+      'fog-ground-blend': 0.7,
+      'atmosphere-blend': ['interpolate',['linear'],['zoom'],0,0.1,10,0.08,15,0.04]
     });
   }catch(e){}
 }
@@ -504,9 +517,48 @@ let ultimaPosMarcador = null;
 let camZoomObjetivo = ZOOM_CIUDAD;
 let camPitchObjetivo = PITCH_NAV_BASE;
 
+/* ========== LAVADO DE CAPAS — estilo codriver ========== */
+function lavarMapa(){
+  try{
+    const estilo = map.getStyle();
+    const capas = estilo.layers || [];
+    for(const l of capas){
+      const sl = l['source-layer'] || '';
+      const id = l.id || '';
+      /* Ocultar POIs, transporte, etc. */
+      if(sl === 'poi' || sl === 'transit' || sl === 'aerodrome_label'){
+        try{ map.setLayoutProperty(l.id,'visibility','none'); }catch(e){}
+        continue;
+      }
+      /* Agua → gris claro */
+      if(sl === 'water' || /water|ocean/i.test(id)){
+        try{ map.setPaintProperty(l.id,'fill-color','#e2e5e9'); }catch(e){}
+        try{ map.setPaintProperty(l.id,'fill-outline-color','#d0d4d9'); }catch(e){}
+      }
+      /* Parques / vegetación → gris muy claro */
+      if(sl === 'landcover' || sl === 'landuse' || /park|grass|wood|forest|landcover/i.test(id)){
+        try{ map.setPaintProperty(l.id,'fill-color','#e8ebee'); }catch(e){}
+        try{ map.setPaintProperty(l.id,'fill-opacity',0.6); }catch(e){}
+      }
+      /* Edificios footprint → gris muy claro (se verá debajo del 3D) */
+      if(sl === 'building' && l.type !== 'fill-extrusion'){
+        try{ map.setPaintProperty(l.id,'fill-color','#e0e3e7'); }catch(e){}
+      }
+      /* Vías: reducir saturación de carreteras principales */
+      if(sl === 'transportation' && l.type === 'line'){
+        try{ map.setPaintProperty(l.id,'line-color','#ffffff'); }catch(e){}
+      }
+    }
+  }catch(e){ console.warn('lavarMapa falló:',e); }
+}
+
 map.on('load',()=>{
   try{ map.setMaxPitch(85); }catch(e){}
   map.setPadding({top:PADDING_TOP,bottom:0,left:PADDING_LEFT,right:0});
+
+  /* Aplicar lavado codriver */
+  lavarMapa();
+
   aplicarFog();
   aplicarSky();
   document.getElementById('rArranque').innerHTML='<b>OK</b>';
@@ -547,15 +599,30 @@ map.on('load',()=>{
     tiles:['https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key='+TT],
     tileSize:256
   });
-  map.addLayer({id:'trafico-flujo',type:'raster',source:'trafico-tiles',paint:{'raster-opacity':0.7}});
+  map.addLayer({id:'trafico-flujo',type:'raster',source:'trafico-tiles',paint:{'raster-opacity':0.55}});
 
   map.addSource('giro-pos',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
   map.addLayer({id:'giro-pos',type:'symbol',source:'giro-pos',
     layout:{'icon-image':'chevron-giro','icon-size':0.85,'icon-rotate':['get','bearing'],'icon-rotation-alignment':'map','icon-allow-overlap':true,'icon-ignore-placement':true,'icon-pitch-alignment':'map'}});
 
-  /* RUTA — azul más ancha que el coche */
+  /* ========== RUTA CON BORDE BLANCO (look codriver) ========== */
   map.addSource('ruta',{type:'geojson',data:{type:'FeatureCollection',features:[]},lineMetrics:true});
-  const paintBase={'line-opacity':0.9,'line-width':['interpolate',['linear'],['zoom'],14,12,16,18,18,26,20,34]};
+
+  /* Capa de borde blanco debajo (más ancha) */
+  map.addLayer({
+    id:'ruta-borde',
+    type:'line',
+    source:'ruta',
+    paint:{
+      'line-color':'#ffffff',
+      'line-opacity':0.95,
+      'line-width':['interpolate',['linear'],['zoom'],14,16,16,24,18,32,20,42]
+    },
+    layout:{'line-cap':'round','line-join':'round','line-round-limit':1.0}
+  });
+
+  /* Capas de color encima (más finas que el borde) */
+  const paintBase={'line-opacity':0.95,'line-width':['interpolate',['linear'],['zoom'],14,9,16,15,18,22,20,30]};
   const layoutBase={'line-cap':'round','line-join':'round','line-round-limit':1.0};
   map.addLayer({id:'ruta-0',type:'line',source:'ruta',filter:['==',['get','nivel'],0],paint:{...paintBase,'line-color':'#1e88e5'},layout:layoutBase});
   map.addLayer({id:'ruta-1',type:'line',source:'ruta',filter:['==',['get','nivel'],1],paint:{...paintBase,'line-color':'#f9a825'},layout:layoutBase});
@@ -565,7 +632,6 @@ map.on('load',()=>{
   cargarRadares();
   cargarSenales();
 
-  /* Cargadores: capa creada pero OCULTA (solo para toggle si se activa) */
   map.addSource('cargadores',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
   map.addLayer({id:'cargadores',type:'symbol',source:'cargadores',minzoom:9,
     layout:{'visibility':'none','icon-image':['get','icono'],'icon-size':['interpolate',['linear'],['zoom'],9,0.25,11,0.35,15,0.5,18,0.65],
@@ -581,10 +647,17 @@ map.on('load',()=>{
   idFuenteBuildings=cand[0].source;
   sourceLayerBuildings=cand[0].sourceLayer;
   map.once('idle',()=>document.getElementById('rTiles').innerHTML=webglOk?'<b>OK</b>':'<span class="mal">con errores</span>');
+
+  /* Edificios en blanco hueso, muy claros */
   try{
     map.addLayer({id:'3d-buildings',source:idFuenteBuildings,'source-layer':sourceLayerBuildings,
       type:'fill-extrusion',minzoom:14,
-      paint:{'fill-extrusion-color':'#b8c0cc','fill-extrusion-height':['coalesce',['get','render_height'],8],'fill-extrusion-base':['coalesce',['get','render_min_height'],0],'fill-extrusion-opacity':0.5}});
+      paint:{
+        'fill-extrusion-color':'#f0f0f0',
+        'fill-extrusion-height':['coalesce',['get','render_height'],12],
+        'fill-extrusion-base':['coalesce',['get','render_min_height'],0],
+        'fill-extrusion-opacity':0.85
+      }});
   }catch(e){
     document.getElementById('rBuildings').innerHTML='<span class="mal">fallo capa: '+e.message+'</span>';
   }
@@ -610,7 +683,6 @@ async function cargarRadares(){
       return {type:'Feature',geometry:{type:'Point',coordinates:[rd.lon,rd.lat]},properties:{idx:i,tipo:tipo,velocidad:v}};
     });
     map.addSource('radares',{type:'geojson',data:{type:'FeatureCollection',features:features}});
-    /* Ambas capas OCULTAS por defecto */
     map.addLayer({id:'radares-circulo',type:'circle',source:'radares',minzoom:11,
       layout:{'visibility':'none'},
       paint:{'circle-radius':['interpolate',['linear'],['zoom'],11,2,14,4,17,7,20,10],
@@ -658,7 +730,6 @@ async function cargarSenales(){
   }
 }
 
-/* Avisos de radar: siguen funcionando aunque los iconos no se pinten */
 function comprobarRadaresCercanos(lat,lon,velocidadActualKmh){
   if(!avisosRadaresOn){apagarAlertaRadar();return;}
   if((!gpsOn && !simulando) || !radaresCargados.length){apagarAlertaRadar();return;}
@@ -697,7 +768,6 @@ function apagarAlertaRadar(){
 function clasificarPotencia(kw){if(kw>72) return {icono:'car-72mas'};if(kw>=50) return {icono:'car-50-72'};return {icono:'car-11-22'};}
 function potenciaMaxima(cp){let max=0;if(!cp.Connections) return 0;for(const c of cp.Connections) if(typeof c.PowerKW==='number' && c.PowerKW>max) max=c.PowerKW;return max;}
 
-/* Cargadores: solo carga datos para la LISTA. NO se pintan en el mapa. */
 async function cargarCargadores(lat,lon){
   if(ultimoCentroCargadores){
     const d=Math.max(Math.abs(ultimoCentroCargadores[0]-lat),Math.abs(ultimoCentroCargadores[1]-lon));
@@ -1089,9 +1159,10 @@ function filtrarHeading(h){
   heading=Math.atan2(sy,sx)*180/Math.PI;
   if(heading<0) heading+=360;
 }
+/* Marcador coche: flecha gris oscuro con borde blanco */
 const elCoche=document.createElement('div');
 elCoche.className='coche-marcador';
-elCoche.innerHTML='<svg viewBox="0 0 48 48" width="48" height="48"><path d="M24 6 L42 42 L24 36 L6 42 Z" fill="#29b6f6" stroke="#ffffff" stroke-width="3" stroke-linejoin="round"/></svg>';
+elCoche.innerHTML='<svg viewBox="0 0 48 48" width="48" height="48"><path d="M24 6 L42 42 L24 36 L6 42 Z" fill="#3a3a3a" stroke="#ffffff" stroke-width="3" stroke-linejoin="round"/></svg>';
 const marcadorCoche=new maplibregl.Marker({element:elCoche,rotationAlignment:'map',pitchAlignment:'map',anchor:'center'});
 let distanciaFueraRuta=0,fueraDesde=0,recalculando=false,ultimoRecalculo=0;
 const DESVIO_M=45,CONFIRMACION_MS=2500,COOLDOWN_MS=10000;
@@ -1215,7 +1286,6 @@ function onFix(pos){
   document.getElementById('g3').textContent=Math.round(heading)+'°';
   actualizarHUD();
 
-  /* Zoom dinámico por velocidad */
   const zoomObj = zoomPorVelocidad(speedKmh);
   camZoomObjetivo = zoomObj;
   if(!zoomManiobraOn){ camPitchObjetivo = PITCH_NAV_BASE; }
