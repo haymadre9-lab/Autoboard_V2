@@ -791,7 +791,7 @@ function actualizarZoomManiobra(distSiguiente, tipoSiguiente){
   camZoomObj = cerca ? Math.min(19.5, navZoom + 1.4) : navZoom;   // el bucle de camara lo suaviza
 }
 
-const VERSION = '2026.10.11-ml-e';
+const VERSION = '2026.10.11-ml-f';
 // X dibujada: el caracter U+2715 no esta en la fuente del navegador y salia como un rectangulo
 const X_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>';
 try{ $('ver').textContent = 'v'+VERSION; }catch(e){}
@@ -2270,3 +2270,41 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
   setInterval(pinta, 3000); pinta();
 })();
 wakePedir();
+
+/* ---- ENVIAR EL DESTINO A LA APP DE TESLA (hoja de compartir del movil) ----------------------------------
+   Una web no puede hablar con la app de Tesla; lo que si puede es abrir la hoja "Compartir" de Android
+   (Web Share API) con el destino. Se elige la app de Tesla y esta lo manda a la navegacion del coche.
+   Formato (Ajustes): 'maps' = enlace de Google Maps con COORDENADAS (lo mas fiable: no depende de que la
+   app entienda la direccion), 'texto' = solo el nombre/direccion, 'ambos' = nombre + enlace.
+   Sin Web Share (navegador del Tesla, PC) se copia al portapapeles. */
+function shareFmt(){ try{ return localStorage.getItem('shareFmt') || 'maps'; }catch(e){ return 'maps'; } }
+function textoCompartir(){
+  const ll = destLL; if (!ll) return null;
+  const enlace = 'https://www.google.com/maps/search/?api=1&query=' + ll[0].toFixed(6) + ',' + ll[1].toFixed(6);
+  const nombre = (destNombre || '').trim();
+  const f = shareFmt();
+  if (f === 'texto') return nombre || (ll[0].toFixed(6) + ', ' + ll[1].toFixed(6));
+  if (f === 'ambos') return (nombre ? nombre + '\n' : '') + enlace;
+  return enlace;
+}
+async function enviarATesla(){
+  const texto = textoCompartir();
+  if (!texto){ setStatus('No hay destino que enviar: busca uno primero'); return; }
+  const datos = { title: destNombre || 'Destino', text: texto };
+  try{
+    if (navigator.share){ await navigator.share(datos); setStatus('Destino enviado a la hoja de compartir'); return; }
+  }catch(e){ if (e && e.name === 'AbortError') return; console.warn('[compartir]', e.name + ': ' + e.message); }
+  try{ await navigator.clipboard.writeText(texto); setStatus('Este navegador no puede compartir: destino copiado al portapapeles'); }
+  catch(e){ setStatus('No se pudo compartir ni copiar el destino'); }
+}
+(function(){
+  const sb = $('shareBtn'), nb = $('navShare'), seg = $('shareSeg');
+  if (sb) sb.onclick = () => { $('settings').classList.remove('open'); enviarATesla(); };
+  if (nb) nb.onclick = enviarATesla;
+  if (seg){
+    const pinta = () => seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.f === shareFmt()));
+    seg.onclick = e => { const b = e.target.closest ? e.target.closest('button') : null; if (!b) return;
+      try{ localStorage.setItem('shareFmt', b.dataset.f); }catch(er){} pinta(); };
+    pinta();
+  }
+})();
