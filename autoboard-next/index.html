@@ -413,8 +413,8 @@ function colorPotencia(kw){if(kw>72) return '#d32f2f';if(kw>=50) return '#ff6f00
 /* ========== CONSTANTES ========== */
 let navZoomBase=18.5;
 const ZOOM_MANIOBRA_EXTRA=1.0;
-const PITCH_NAV_BASE=80;
-const PITCH_NAV_MAX=82;
+const PITCH_NAV_BASE=72;
+const PITCH_NAV_MAX=76;
 const PADDING_TOP=450;
 const PADDING_LEFT=80;
 let fogOn=true;
@@ -470,33 +470,33 @@ function proyectarSobreRuta(lat,lon){
   return {lat:mejorLat, lon:mejorLon, dist:mejorD, idx:mejorI, t:mejorT};
 }
 
-/* ========== NIEBLA — armonizada con el cielo ========== */
+/* ========== NIEBLA — reducida para que ocupe menos ========== */
 function aplicarFog(){
   if(!map.setFog) return;
   if(!fogOn){ map.setFog(null); return; }
   map.setFog({
-    'range': [0.5, 10],
-    'color': 'rgba(200, 215, 235, 0.7)',
-    'horizon-blend': 0.5,
-    'high-color': 'rgba(120, 170, 230, 0.6)',
-    'space-color': 'rgba(30, 60, 110, 0.7)',
+    'range': [0.5, 6],
+    'color': 'rgba(200, 215, 235, 0.5)',
+    'horizon-blend': 0.3,
+    'high-color': 'rgba(120, 170, 230, 0.4)',
+    'space-color': 'rgba(180, 200, 220, 0.3)',
     'star-intensity': 0
   });
 }
 
-/* ========== CIELO — degradado realista ========== */
+/* ========== CIELO — más discreto, no come media pantalla ========== */
 function aplicarSky(){
   if(!map.setSky) return;
   if(!skyOn){ map.setSky(null); return; }
   try{
     map.setSky({
       'sky-color': '#87b8e8',
-      'sky-horizon-blend': 0.9,
+      'sky-horizon-blend': 0.5,
       'horizon-color': '#c8d7eb',
-      'horizon-fog-blend': 0.9,
+      'horizon-fog-blend': 0.7,
       'fog-color': '#e0e8f0',
-      'fog-ground-blend': 0.9,
-      'atmosphere-blend': ['interpolate',['linear'],['zoom'],0,0.5,10,0.3,15,0.15]
+      'fog-ground-blend': 0.5,
+      'atmosphere-blend': ['interpolate',['linear'],['zoom'],0,0.2,10,0.15,15,0.05]
     });
   }catch(e){ console.warn('setSky falló:',e); }
 }
