@@ -520,19 +520,17 @@ function actualizarBearing(crudo, ahora){
     bearingSalto = crudo; return bearingMostrado;
   }
   bearingSalto = null;
-  const suavizado = bearingSuavizado(bearingMostrado, crudo);
-  const delta = diffAngulo(bearingMostrado, suavizado);
-  if (Math.abs(delta) < 4){                          // zona muerta de 4 grados
-    if (Math.abs(delta) >= 1.5){
-      if (bearingPendienteDesde === null){ bearingPendienteDesde = suavizado; bearingPendienteT = ahora; }
-      else if (ahora - bearingPendienteT >= 3000){ bearingPendienteDesde = null; bearingMostrado = suavizado; }
-    } else bearingPendienteDesde = null;
-    return bearingMostrado;
-  }
+  /* Umbral SUAVE: el error se reduce en BEARING_UMBRAL grados y el resto pasa. Es continuo (sin saltos):
+     el ruido del receptor (+-1-2 grados) casi no mueve el mapa en recta, pero una curva suave se sigue
+     sin escalones. ANTES habia una zona muerta de 4 grados con "settle" a los 3 s: el mapa se quedaba
+     quieto y luego giraba a trozos de 4-8 grados -> los "golpecitos" al girar. */
+  const e = diffAngulo(bearingMostrado, crudo);
+  const util = Math.sign(e) * Math.max(0, Math.abs(e) - BEARING_UMBRAL);
   bearingPendienteDesde = null;
-  bearingMostrado = suavizado;
+  bearingMostrado = ((bearingMostrado + util * BEARING_GANANCIA) % 360 + 360) % 360;
   return bearingMostrado;
 }
+const BEARING_UMBRAL = 1.0, BEARING_GANANCIA = 0.65;
 
 /* ==== seguimiento de camara: UN solo bucle requestAnimationFrame ==========================
    El GPS (1 Hz) solo fija OBJETIVOS (posicion del coche, rumbo, zoom). El bucle interpola:
@@ -546,6 +544,16 @@ function actualizarBearing(crudo, ahora){
 let carPos = null, carDesde = null, carHasta = null, carT0 = 0, carDur = 0;      // [lng,lat]
 let camBearing = 0, camBearingObj = 0, camZoom = null, camZoomObj = null, loopT = 0, rotMostrada = null;
 let prevFixT = null, zoomPendiente = true;
+/* El rumbo llega a 1 Hz. Si el objetivo salta de golpe cada segundo, la camara acelera y frena cada segundo
+   (se nota como golpecitos en una curva). Por eso el objetivo se RECORRE LINEALMENTE durante el intervalo
+   real entre fixes (igual que la posicion del coche) y encima va un suavizado corto (BEARING_TAU). */
+let bRampOn = false, bRampDesde = 0, bRampHasta = 0, bRampT0 = 0, bRampDur = 1000;
+const BEARING_TAU = 240;   // ms
+function fijarBearingObj(b, dtSeg){
+  if (!(dtSeg > 0) || !Number.isFinite(b)){ camBearingObj = b || 0; bRampOn = false; return; }
+  bRampDesde = camBearingObj; bRampHasta = b; bRampT0 = performance.now();
+  bRampDur = Math.min(1500, Math.max(300, dtSeg*1000)); bRampOn = true;
+}
 let renders = 0;
 
 const carSVG = `<svg viewBox="0 0 24 24"><path d="M12 2 L20 20 L12 16 L4 20 Z" fill="#1e88e5" stroke="#ffffff" stroke-width="1.2"/></svg>`;
@@ -566,7 +574,7 @@ function seguirCamara(ll, dt){   // ll = [lat,lon]
   if (zoomPendiente || dt <= 0){
     const z = zoomPendiente ? navZoom : map.getZoom();
     camZoom = camZoomObj = z;
-    camBearing = camBearingObj;
+    bRampOn = false; camBearing = camBearingObj;
     if (!carPos){ carPos = [ll[1], ll[0]]; marcarCoche(); }
     map.jumpTo({ center: [ll[1], ll[0]], zoom: z, bearing: camBearing, pitch: PITCH_NAV, padding: PAD_COCHE });
     zoomPendiente = false;
@@ -584,8 +592,13 @@ function bucleCamara(ts){
     if (k >= 1) carHasta = null;
     marcarCoche(); mover = true;
   }
+  if (bRampOn){
+    const kb = Math.max(0, Math.min(1, (ts - bRampT0) / bRampDur));
+    camBearingObj = ((bRampDesde + diffAngulo(bRampDesde, bRampHasta)*kb) % 360 + 360) % 360;
+    if (kb >= 1) bRampOn = false;
+  }
   const dB = diffAngulo(camBearing, camBearingObj);
-  if (Math.abs(dB) > 0.05){ camBearing = (((camBearing + dB*(1 - Math.exp(-dtMs/550))) % 360) + 360) % 360; mover = true; }
+  if (Math.abs(dB) > 0.05){ camBearing = (((camBearing + dB*(1 - Math.exp(-dtMs/BEARING_TAU))) % 360) + 360) % 360; mover = true; }
   else if (Math.abs(dB) > 1e-6){ camBearing = ((camBearingObj % 360) + 360) % 360; mover = true; }   // ultimo ajuste, UNA vez
   if (camZoom === null){ camZoom = camZoomObj = navZoom; }
   let zoomCambia = false;
@@ -778,7 +791,7 @@ function actualizarZoomManiobra(distSiguiente, tipoSiguiente){
   camZoomObj = cerca ? Math.min(19.5, navZoom + 1.4) : navZoom;   // el bucle de camara lo suaviza
 }
 
-const VERSION = '2026.10.07-ml-d';
+const VERSION = '2026.10.11-ml-e';
 // X dibujada: el caracter U+2715 no esta en la fuente del navegador y salia como un rectangulo
 const X_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M5 5L19 19M19 5L5 19" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>';
 try{ $('ver').textContent = 'v'+VERSION; }catch(e){}
@@ -1000,7 +1013,7 @@ if (navigator.geolocation){
     nuevoTramoCoche([vis[1], vis[0]], mapaOculto ? 0 : dt);
     if (!mapaOculto){
       // El mapa gira con el rumbo (suavizado por actualizarBearing) o se queda al norte.
-      camBearingObj = girarMapaOn ? actualizarBearing(heading, now.t) : 0;
+      fijarBearingObj(girarMapaOn ? actualizarBearing(heading, now.t) : 0, girarMapaOn ? dt : 0);
       if (follow) seguirCamara(vis, dt);
     }
     if (hudAbierto && hud2 && !hud3dActivo){ try{ hud2.setSpeed(hudDemo ? Math.max(speedKmh/3.6, 15) : speedKmh/3.6); if (!hudDemo) hud2.syncPosition(now.lat, now.lon); }catch(e){} }
@@ -1526,7 +1539,7 @@ $('rotateBtn').onclick = () => {
   girarMapaOn = !girarMapaOn;
   pintarBotonGiro();
   if (!girarMapaOn){ bearingMostrado = 0; bearingPendienteDesde = null; bearingSalto = null; }
-  camBearingObj = girarMapaOn ? bearingMostrado : 0;   // el bucle de camara lo suaviza
+  fijarBearingObj(girarMapaOn ? bearingMostrado : 0, 0);   // inmediato; el bucle de camara lo suaviza
 };
 
 
