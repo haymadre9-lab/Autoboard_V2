@@ -410,12 +410,12 @@ const OPERADORES={23:'Tesla',1:'ChargePoint',3449:'EasyGo',3586:'Repsol',3355:'I
 const OPERADORES_COLORES={23:{nombre:'Tesla',color:'#ff1744'},1:{nombre:'ChargePoint',color:'#00b0ff'},3449:{nombre:'EasyGo',color:'#7c4dff'},3586:{nombre:'Repsol',color:'#ff6f00'},3355:{nombre:'Iberdrola',color:'#00c853'},3515:{nombre:'Endesa',color:'#00bfa5'},3524:{nombre:'Wenea',color:'#ff4081'},3534:{nombre:'Zunder',color:'#ffd600'},3478:{nombre:'Ionity',color:'#536dfe'}};
 function colorPotencia(kw){if(kw>72) return '#d32f2f';if(kw>=50) return '#ff6f00';return '#f9a825';}
 
-/* ========== CONSTANTES NAVEGACIÓN INMERSIVA ========== */
+/* ========== CONSTANTES ========== */
 let navZoomBase=18.5;
 const ZOOM_MANIOBRA_EXTRA=1.0;
-const PITCH_NAV_BASE=85;
-const PITCH_NAV_MAX=85;
-const PADDING_TOP=320;
+const PITCH_NAV_BASE=80;
+const PITCH_NAV_MAX=82;
+const PADDING_TOP=450;
 const PADDING_LEFT=80;
 let fogOn=true;
 let skyOn=true;
@@ -470,32 +470,33 @@ function proyectarSobreRuta(lat,lon){
   return {lat:mejorLat, lon:mejorLon, dist:mejorD, idx:mejorI, t:mejorT};
 }
 
+/* ========== NIEBLA — armonizada con el cielo ========== */
 function aplicarFog(){
   if(!map.setFog) return;
   if(!fogOn){ map.setFog(null); return; }
   map.setFog({
-    'range': [0.5, 5],
-    'color': 'rgba(180, 205, 240, 0.6)',
-    'horizon-blend': 0.2,
-    'high-color': 'rgba(60, 100, 160, 0.5)',
-    'space-color': 'rgba(15, 25, 45, 0.7)',
+    'range': [0.5, 10],
+    'color': 'rgba(200, 215, 235, 0.7)',
+    'horizon-blend': 0.5,
+    'high-color': 'rgba(120, 170, 230, 0.6)',
+    'space-color': 'rgba(30, 60, 110, 0.7)',
     'star-intensity': 0
   });
 }
 
-/* ====== CIELO ====== */
+/* ========== CIELO — degradado realista ========== */
 function aplicarSky(){
   if(!map.setSky) return;
   if(!skyOn){ map.setSky(null); return; }
   try{
     map.setSky({
-      'sky-color':'#1e4a8a',
-      'horizon-color':'#8fc3ff',
-      'fog-color':'#c8d7eb',
-      'fog-ground-blend':0.4,
-      'horizon-fog-blend':0.6,
-      'sky-horizon-blend':0.7,
-      'atmosphere-blend':['interpolate',['linear'],['zoom'],0,0.8,8,0.5,12,0.2]
+      'sky-color': '#87b8e8',
+      'sky-horizon-blend': 0.9,
+      'horizon-color': '#c8d7eb',
+      'horizon-fog-blend': 0.9,
+      'fog-color': '#e0e8f0',
+      'fog-ground-blend': 0.9,
+      'atmosphere-blend': ['interpolate',['linear'],['zoom'],0,0.5,10,0.3,15,0.15]
     });
   }catch(e){ console.warn('setSky falló:',e); }
 }
@@ -511,7 +512,6 @@ let camPitchObjetivo = PITCH_NAV_BASE;
 
 map.on('load',()=>{
   try{ map.setMaxPitch(85); }catch(e){}
-  /* COCHE ABAJO: padding.top grande */
   map.setPadding({top:PADDING_TOP,bottom:0,left:PADDING_LEFT,right:0});
   aplicarFog();
   aplicarSky();
