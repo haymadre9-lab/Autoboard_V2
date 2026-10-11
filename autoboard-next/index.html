@@ -23,7 +23,6 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #avisoInicial.oculto{display:none}
 @keyframes avisoPulse{0%,100%{opacity:1}50%{opacity:.6}}
 
-/* ============ NAVBANNER ============ */
 #navbanner{
   position:fixed !important;left:50% !important;transform:translateX(-50%) !important;
   top:8px !important;z-index:20 !important;display:none;align-items:center !important;gap:14px !important;
@@ -135,7 +134,6 @@ body.modo-navegacion #minihud{display:flex}
 body.modo-navegacion #diag,body.modo-navegacion #diag2{display:none}
 body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner,body.modo-solomapa #minihud,body.modo-solomapa #controlesAbajo,body.modo-solomapa #grupoArribaDer,body.modo-solomapa #grupoAbajoDer,body.modo-solomapa #listaCargadores{display:none}
 
-/* ==== CELEBRACION AL LLEGAR ==== */
 #celebracion{position:fixed;inset:0;z-index:50;pointer-events:none;display:none;overflow:hidden}
 #celebracion.on{display:block}
 #celebracion .textoCentral{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(0);
@@ -480,11 +478,11 @@ function colorPotencia(kw){
 }
 
 /* ========== CONSTANTES DE NAVEGACIÓN INMERSIVA ========== */
-let navZoomBase=16.8;
-const ZOOM_MANIOBRA_EXTRA=2.2;
-const PITCH_NAV_BASE=72;
-const PITCH_NAV_MAX=80;
-const PADDING_TOP=220;
+let navZoomBase=18.2;
+const ZOOM_MANIOBRA_EXTRA=1.5;
+const PITCH_NAV_BASE=78;
+const PITCH_NAV_MAX=87;
+const PADDING_TOP=380;
 const PADDING_LEFT=80;
 let fogOn=true;
 
@@ -549,11 +547,11 @@ function aplicarFog(){
   if(!map.setFog) return;
   if(!fogOn){ map.setFog(null); return; }
   map.setFog({
-    'range': [0.8, 8],
-    'color': 'rgba(200, 215, 235, 0.5)',
-    'horizon-blend': 0.15,
-    'high-color': 'rgba(60, 100, 160, 0.4)',
-    'space-color': 'rgba(15, 25, 45, 0.6)',
+    'range': [0.6, 6],
+    'color': 'rgba(190, 210, 240, 0.55)',
+    'horizon-blend': 0.18,
+    'high-color': 'rgba(60, 100, 160, 0.45)',
+    'space-color': 'rgba(15, 25, 45, 0.65)',
     'star-intensity': 0
   });
 }
@@ -565,6 +563,7 @@ function pitchPorVelocidad(v){
 }
 
 map.on('load',()=>{
+  try{ map.setMaxPitch(87); }catch(e){}
   map.setPadding({top:PADDING_TOP,bottom:0,left:PADDING_LEFT,right:0});
   aplicarFog();
   document.getElementById('rArranque').innerHTML='<b>OK</b>';
@@ -1034,13 +1033,12 @@ document.getElementById('btnLimpiarFavs').onclick=()=>{
 let simulando=false;
 let simTimer=null;
 let simIdx=0;
-let simVelocidad=60;   // km/h
-let simRutaLL=[];      // puntos [lat, lon] de la ruta simulada
+let simVelocidad=60;
+let simRutaLL=[];
 let simHeading=0;
 let simEsBucle=true;
-// Origen y destino por defecto: Bilbao centro → Aeropuerto de Loiu
-const SIM_ORIGEN_DEFECTO=[43.2630,-2.9350];   // Bilbao centro
-const SIM_DESTINO_DEFECTO=[43.3010,-2.9105];  // Aeropuerto Loiu (aprox)
+const SIM_ORIGEN_DEFECTO=[43.2630,-2.9350];
+const SIM_DESTINO_DEFECTO=[43.3010,-2.9105];
 
 function mostrarEstadoSim(txt){
   const el=document.getElementById('rSim');
@@ -1055,7 +1053,6 @@ async function iniciarSimulacion(){
 
   mostrarEstadoSim('<span class="aviso">calculando ruta…</span>');
 
-  // 1) Calcular ruta de simulación con TomTom
   const url = 'https://api.tomtom.com/routing/1/calculateRoute/'
     + SIM_ORIGEN_DEFECTO[0]+','+SIM_ORIGEN_DEFECTO[1]+':'
     + SIM_DESTINO_DEFECTO[0]+','+SIM_DESTINO_DEFECTO[1]
@@ -1070,7 +1067,6 @@ async function iniciarSimulacion(){
     simHeading = 0;
     simulando = true;
     mostrarEstadoSim('<b style="color:#90caf9">▶ simulando ('+simVelocidad+' km/h, '+simRutaLL.length+' pts)</b>');
-    // Activar modo navegación
     gpsOn = true;
     document.getElementById('btnGPS').classList.add('on');
     document.body.classList.add('modo-navegacion');
@@ -1080,15 +1076,11 @@ async function iniciarSimulacion(){
     const btnSeg=document.getElementById('btnSeguir');
     if(btnSeg) btnSeg.classList.add('activo');
 
-    // 2) Bucle de inyección de fixes GPS
-    const tickMs = 200;   // 5 Hz
+    const tickMs = 200;
     if(simTimer) clearInterval(simTimer);
     simTimer = setInterval(()=>{
       if(!simulando) return;
-      // Avanzar el índice según velocidad:
-      // cada tick (tickMs ms) a V km/h = V/3.6 m/s * (tickMs/1000) s metros
       const metrosPorTick = (simVelocidad/3.6) * (tickMs/1000);
-      // Distancia media entre puntos de ruta ~30m, así que avanzamos fracción
       let avanzado = 0;
       while(simIdx < simRutaLL.length-2 && avanzado < metrosPorTick){
         const a = simRutaLL[simIdx], b = simRutaLL[simIdx+1];
@@ -1103,7 +1095,6 @@ async function iniciarSimulacion(){
       const p = simRutaLL[simIdx];
       const pNext = simRutaLL[Math.min(simIdx+5, simRutaLL.length-1)];
       simHeading = bearing(p, pNext);
-      // Inyectar fix GPS
       onFix({
         coords:{
           latitude: p[0],
@@ -1145,10 +1136,6 @@ function detenerSimulacion(){
 
 document.getElementById('btnSimularRuta').onclick = iniciarSimulacion;
 document.getElementById('btnDetenerSimulacion').onclick = detenerSimulacion;
-
-/* ============================================================
-   RESTO DE LA APP
-   ============================================================ */
 
 /* ========== LISTA DE CARGADORES CERCANOS ========== */
 document.getElementById('btnListaCargadores').onclick = async ()=>{
@@ -1506,7 +1493,7 @@ let lastFix=null,heading=0,speedKmh=0;
 let histFixes=[],headingHist=[];
 let camPosActual=null,camPosObjetivo=null;
 let camBearingActual=0,camBearingObjetivo=0;
-let camZoomActual=16.8,camZoomObjetivo=16.8;
+let camZoomActual=18.2,camZoomObjetivo=18.2;
 let camaraLibre=false;
 let seguirBloqueado=false;
 function rumboDelGPS(c,now,v){
@@ -1663,7 +1650,8 @@ function onFix(pos){
   document.getElementById('g2').textContent=Math.round(speedKmh)+' km/h';
   document.getElementById('g3').textContent=Math.round(heading)+'°';
   actualizarHUD();
-  camPosObjetivo=[now.lon,now.lat];
+  /* CÁMARA SIGUE AL MARCADOR CON SNAPPING → coche clavado en su sitio */
+  camPosObjetivo=[posMarcador[0], posMarcador[1]];
   camBearingObjetivo=heading;
 
   const pitchObj = pitchPorVelocidad(speedKmh);
@@ -1694,7 +1682,7 @@ function onFix(pos){
       const cerca=d<180&&s.maneuver&&s.maneuver.type!=='arrive';
       if(cerca!==zoomManiobraOn){
         zoomManiobraOn=cerca;
-        camZoomObjetivo=cerca?Math.min(20,navZoomBase+ZOOM_MANIOBRA_EXTRA):navZoomBase;
+        camZoomObjetivo=cerca?Math.min(20.5,navZoomBase+ZOOM_MANIOBRA_EXTRA):navZoomBase;
         camPitchObjetivo = cerca ? PITCH_NAV_BASE : pitchObj;
       }
     }
@@ -1943,7 +1931,6 @@ function ttMan(it){
   return {type:'turn',modifier:mod};
 }
 
-// ==== SISTEMA DE CARTELES — VARIANTE A ====
 function colorCartel(hw){
   if(hw) return {fondo:'#1565c0', borde:'#ffffff', flecha:'#ffffff', flechaInactiva:'#90caf9'};
   return {fondo:'#ffffff', borde:'#000000', flecha:'#000000', flechaInactiva:'#bdbdbd'};
@@ -2051,7 +2038,6 @@ function maneuverSVG(s, hw){
   return cartelSimple(m.modifier, hw);
 }
 
-// ==== CELEBRACION AL LLEGAR ====
 function dispararCelebracion(){
   if(!celebracionOn) return;
   if(celebracionDisparada) return;
