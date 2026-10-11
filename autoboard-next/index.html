@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>autoboard-next · Fase 11 · v76 codriver</title>
+<title>autoboard-next · Fase 11 · v77 codriver</title>
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
 <style>
 html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
@@ -70,8 +70,26 @@ body.modo-navegacion #minihud{display:flex}
 #minihud .vel{color:#fff;font-weight:900;letter-spacing:-1px}
 #minihud .limite{width:52px;height:52px;border-radius:50%;background:#ffffff;border:6px solid #d32f2f;display:flex;align-items:center;justify-content:center;font:800 22px/1 system-ui,sans-serif;color:#000;box-shadow:0 2px 6px rgba(0,0,0,.4)}
 #minihud .limite.oculto{display:none}
-.coche-marcador{width:52px!important;height:52px!important;will-change:transform;display:flex;align-items:center;justify-content:center;pointer-events:none}
-.coche-marcador svg{width:52px;height:52px;display:block;filter:drop-shadow(0 4px 6px rgba(0,0,0,.45))}
+
+/* ========== FLECHA COCHE FIJA EN PANTALLA (65% desde arriba) ========== */
+#cocheFijo{
+  position:fixed;
+  left:50%;
+  top:65%;
+  width:64px;
+  height:64px;
+  transform:translate(-50%,-50%) rotate(0deg);
+  z-index:14;
+  pointer-events:none;
+  will-change:transform;
+  transition:transform .12s linear;
+}
+#cocheFijo svg{
+  width:64px;height:64px;display:block;
+  filter:drop-shadow(0 6px 10px rgba(0,0,0,.45));
+}
+body:not(.modo-navegacion) #cocheFijo{display:none}
+
 #radarAlerta{position:fixed;inset:0;z-index:18;pointer-events:none;display:none;box-shadow:inset 0 0 80px 20px rgba(255,0,0,.55), inset 0 0 200px 60px rgba(255,0,0,.25);animation:radarPulse 1s ease-in-out infinite}
 #radarAlerta.on{display:block}
 @keyframes radarPulse{0%{opacity:.35}50%{opacity:1}100%{opacity:.35}}
@@ -110,7 +128,7 @@ body.modo-navegacion #minihud{display:flex}
 #listaCargadores .cargadorItem.tesla .kw{background:#ff1744 !important;color:#fff;text-shadow:0 0 6px rgba(255,255,255,.4)}
 #listaCargadores .cargadorItem.tesla .operador{color:#ff1744}
 body.modo-navegacion #diag,body.modo-navegacion #diag2{display:none}
-body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner,body.modo-solomapa #minihud,body.modo-solomapa #controlesAbajo,body.modo-solomapa #grupoArribaDer,body.modo-solomapa #grupoAbajoDer,body.modo-solomapa #listaCargadores{display:none}
+body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner,body.modo-solomapa #minihud,body.modo-solomapa #controlesAbajo,body.modo-solomapa #grupoArribaDer,body.modo-solomapa #grupoAbajoDer,body.modo-solomapa #listaCargadores,body.modo-solomapa #cocheFijo{display:none}
 #celebracion{position:fixed;inset:0;z-index:50;pointer-events:none;display:none;overflow:hidden}
 #celebracion.on{display:block}
 #celebracion .textoCentral{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(0);font-family:Verdana,Tahoma,Geneva,sans-serif;font-weight:900;font-size:96px;letter-spacing:8px;color:#fff;text-shadow:0 4px 20px rgba(0,0,0,.8),0 0 40px rgba(255,215,0,.9);animation:ianPop 3.5s ease-out forwards}
@@ -123,6 +141,17 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
 </head>
 <body class="modo-debug">
 <div id="map"></div>
+
+<!-- FLECHA COCHE FIJA EN PANTALLA -->
+<div id="cocheFijo">
+  <svg viewBox="0 0 64 64">
+    <ellipse cx="32" cy="52" rx="16" ry="4" fill="rgba(0,0,0,0.28)"/>
+    <path d="M32 8 L52 54 L32 46 L12 54 Z"
+          fill="#1e88e5" stroke="#ffffff" stroke-width="3.5" stroke-linejoin="round"/>
+    <path d="M32 16 L42 44 L32 39 L22 44 Z" fill="#5eb0f0" opacity="0.55"/>
+  </svg>
+</div>
+
 <div id="radarAlerta"></div>
 <div id="radarInfo">
   <div class="senalRadar" id="senalRadar">-</div>
@@ -374,21 +403,22 @@ const OPERADORES={23:'Tesla',1:'ChargePoint',3449:'EasyGo',3586:'Repsol',3355:'I
 const OPERADORES_COLORES={23:{nombre:'Tesla',color:'#ff1744'},1:{nombre:'ChargePoint',color:'#00b0ff'},3449:{nombre:'EasyGo',color:'#7c4dff'},3586:{nombre:'Repsol',color:'#ff6f00'},3355:{nombre:'Iberdrola',color:'#00c853'},3515:{nombre:'Endesa',color:'#00bfa5'},3524:{nombre:'Wenea',color:'#ff4081'},3534:{nombre:'Zunder',color:'#ffd600'},3478:{nombre:'Ionity',color:'#536dfe'}};
 function colorPotencia(kw){if(kw>72) return '#d32f2f';if(kw>=50) return '#ff6f00';return '#f9a825';}
 
-/* ========== CONSTANTES v76 ========== */
+/* ========== CONSTANTES v77 ========== */
 const ZOOM_CIUDAD = 19.2;
 const ZOOM_CARRETERA = 18.0;
-const ZOOM_MANIOBRA = 21.0;
+const ZOOM_MANIOBRA = 20.5;
 const ZOOM_VEL_BAJA = 25;
 const ZOOM_VEL_ALTA = 90;
 const PITCH_NAV_BASE = 65;
-const PADDING_TOP = 450;
-const PADDING_LEFT = 80;
 
-/* Suavizado de cámara tipo codriver */
-const CAM_LERP_BEARING = 0.10;
-const CAM_LERP_CENTER  = 0.18;
-const CAM_LERP_ZOOM    = 0.06;
-const CAM_LERP_PITCH   = 0.06;
+/* Posición del coche en pantalla (65% desde arriba) */
+const COCHE_SCREEN_Y = 0.65;
+
+/* Lerp ULTRA suave (codriver) */
+const CAM_LERP_BEARING = 0.045;
+const CAM_LERP_CENTER  = 0.075;
+const CAM_LERP_ZOOM    = 0.030;
+const CAM_LERP_PITCH   = 0.030;
 
 let fogOn=true;
 let skyOn=true;
@@ -444,17 +474,12 @@ function proyectarSobreRuta(lat,lon){
   return {lat:mejorLat, lon:mejorLon, dist:mejorD};
 }
 
-/* Niebla suave grisácea */
 function aplicarFog(){
   if(!map.setFog) return;
   if(!fogOn){ map.setFog(null); return; }
   map.setFog({
-    'range':[1.5, 12],
-    'color':'#e8eaed',
-    'horizon-blend':0.2,
-    'high-color':'#dfe3e8',
-    'space-color':'#dfe3e8',
-    'star-intensity':0
+    'range':[1.5, 12],'color':'#e8eaed','horizon-blend':0.2,
+    'high-color':'#dfe3e8','space-color':'#dfe3e8','star-intensity':0
   });
 }
 function aplicarSky(){
@@ -476,19 +501,13 @@ function zoomPorVelocidad(v){
   return ZOOM_CIUDAD + (ZOOM_CARRETERA - ZOOM_CIUDAD)*t;
 }
 
-/* Estado de cámara suavizada */
-let camActual = { center:[-2.9387,43.2678], bearing:0, zoom:ZOOM_CIUDAD, pitch:PITCH_NAV_BASE, inited:false };
-let camObjetivo = { center:[-2.9387,43.2678], bearing:0, zoom:ZOOM_CIUDAD, pitch:PITCH_NAV_BASE };
-let camPitchObjetivo = PITCH_NAV_BASE;
-let camZoomObjetivo = ZOOM_CIUDAD;
-
 function lerp(a,b,t){ return a + (b-a)*t; }
 function lerpAngulo(a,b,t){
   let d = ((b - a + 540) % 360) - 180;
   return (a + d*t + 360) % 360;
 }
 
-/* ========== LAVADO DE CAPAS — codriver ========== */
+/* ========== LAVADO DE CAPAS ========== */
 function lavarMapa(){
   try{
     const estilo = map.getStyle();
@@ -496,8 +515,6 @@ function lavarMapa(){
     for(const l of capas){
       const sl = l['source-layer'] || '';
       const id = l.id || '';
-
-      /* Ocultar todo lo que ensucie */
       if(sl === 'poi' || sl === 'transit' || sl === 'aerodrome_label' ||
          sl === 'housenumber' || sl === 'mountain_peak' ||
          sl === 'water_name' || sl === 'waterway' ||
@@ -505,41 +522,31 @@ function lavarMapa(){
         try{ map.setLayoutProperty(l.id,'visibility','none'); }catch(e){}
         continue;
       }
-
-      /* Solo textos de calles principales */
       if(l.type === 'symbol' && sl === 'transportation_name'){
         const cls = l.id || '';
-        /* Dejar solo las clases principales */
         if(/minor|service|path|track|ferry/i.test(cls)){
           try{ map.setLayoutProperty(l.id,'visibility','none'); }catch(e){}
         }
       }
-      /* Ocultar nombres de barrios/suburbios, dejar ciudades/pueblos */
       if(l.type === 'symbol' && (sl === 'place' || /place-label|place_/i.test(id))){
         if(/suburb|neighbourhood|quarter|village|hamlet|isolated/i.test(id)){
           try{ map.setLayoutProperty(l.id,'visibility','none'); }catch(e){}
         }
       }
-
-      /* Agua → gris claro */
       if(sl === 'water' || /water|ocean/i.test(id)){
         try{ map.setPaintProperty(l.id,'fill-color','#e2e5e9'); }catch(e){}
         try{ map.setPaintProperty(l.id,'fill-outline-color','#d0d4d9'); }catch(e){}
       }
-      /* Parques / vegetación → gris muy claro */
       if(sl === 'landcover' || sl === 'landuse' || /park|grass|wood|forest|landcover/i.test(id)){
         try{ map.setPaintProperty(l.id,'fill-color','#e8ebee'); }catch(e){}
         try{ map.setPaintProperty(l.id,'fill-opacity',0.5); }catch(e){}
       }
-      /* Edificios footprint → gris muy claro */
       if(sl === 'building' && l.type !== 'fill-extrusion'){
         try{ map.setPaintProperty(l.id,'fill-color','#e0e3e7'); }catch(e){}
       }
-      /* Vías: blanco puro con contorno gris claro */
       if(sl === 'transportation' && l.type === 'line'){
         try{ map.setPaintProperty(l.id,'line-color','#ffffff'); }catch(e){}
       }
-      /* Fondo base */
       if(l.type === 'background'){
         try{ map.setPaintProperty(l.id,'background-color','#eef1f4'); }catch(e){}
       }
@@ -547,9 +554,29 @@ function lavarMapa(){
   }catch(e){ console.warn('lavarMapa falló:',e); }
 }
 
+/* ========== ESTADO DE CÁMARA SUAVIZADA ========== */
+/* El coche está FIJO en pantalla al 65% desde arriba.
+   La cámara se mueve para que el punto del coche (en el mapa)
+   quede exactamente en esa posición de pantalla. */
+let camActual = { center:[-2.9387,43.2678], bearing:0, zoom:ZOOM_CIUDAD, pitch:PITCH_NAV_BASE, inited:false };
+let camObjetivo = { center:[-2.9387,43.2678], bearing:0, zoom:ZOOM_CIUDAD, pitch:PITCH_NAV_BASE };
+let camPitchObjetivo = PITCH_NAV_BASE;
+let camZoomObjetivo = ZOOM_CIUDAD;
+let cochePosActual = [-2.9387, 43.2678]; // [lon, lat] posición del coche en el mapa (suavizada)
+
 map.on('load',()=>{
   try{ map.setMaxPitch(85); }catch(e){}
-  map.setPadding({top:PADDING_TOP,bottom:0,left:PADDING_LEFT,right:0});
+  /* Padding: coche al 65% de pantalla → padding-top para que el center caiga ahí */
+  function actualizarPadding(){
+    const h = window.innerHeight;
+    /* Queremos que el punto del coche esté al 65% desde arriba.
+       map center = punto que está en el centro (50%) + padding compensado.
+       top padding = 2 * (0.65 - 0.5) * h = 0.30 * h → mueve el centro visual hacia abajo */
+    const padTop = Math.round(h * (COCHE_SCREEN_Y*2 - 1));
+    try{ map.setPadding({top: padTop, bottom:0, left:0, right:0}); }catch(e){}
+  }
+  actualizarPadding();
+  window.addEventListener('resize', actualizarPadding);
 
   lavarMapa();
   aplicarFog();
@@ -598,36 +625,25 @@ map.on('load',()=>{
   map.addLayer({id:'giro-pos',type:'symbol',source:'giro-pos',
     layout:{'icon-image':'chevron-giro','icon-size':0.85,'icon-rotate':['get','bearing'],'icon-rotation-alignment':'map','icon-allow-overlap':true,'icon-ignore-placement':true,'icon-pitch-alignment':'map'}});
 
-  /* ========== RUTA — base azul siempre visible + colores encima ========== */
+  /* RUTA — halo blanco + base azul sólida + colores tráfico encima */
   map.addSource('ruta',{type:'geojson',data:{type:'FeatureCollection',features:[]},lineMetrics:true});
 
-  /* Halo blanco EXTERIOR (más ancho) */
   map.addLayer({
-    id:'ruta-halo',
-    type:'line',
-    source:'ruta',
+    id:'ruta-halo',type:'line',source:'ruta',
     layout:{'line-cap':'round','line-join':'round','line-round-limit':1.0},
     paint:{
-      'line-color':'#ffffff',
-      'line-opacity':1.0,
+      'line-color':'#ffffff','line-opacity':1.0,
       'line-width':['interpolate',['linear'],['zoom'],14,18,16,26,18,34,20,44]
     }
   });
-
-  /* Base azul sólida (sin filtros → siempre visible) */
   map.addLayer({
-    id:'ruta-base',
-    type:'line',
-    source:'ruta',
+    id:'ruta-base',type:'line',source:'ruta',
     layout:{'line-cap':'round','line-join':'round','line-round-limit':1.0},
     paint:{
-      'line-color':'#1e88e5',
-      'line-opacity':1.0,
+      'line-color':'#1e88e5','line-opacity':1.0,
       'line-width':['interpolate',['linear'],['zoom'],14,10,16,16,18,22,20,30]
     }
   });
-
-  /* Capas de tráfico encima (filtradas por nivel) */
   const paintNivel = {'line-opacity':1.0,'line-width':['interpolate',['linear'],['zoom'],14,10,16,16,18,22,20,30]};
   const layoutNivel = {'line-cap':'round','line-join':'round','line-round-limit':1.0};
   map.addLayer({id:'ruta-1',type:'line',source:'ruta',filter:['==',['get','nivel'],1],paint:{...paintNivel,'line-color':'#f9a825'},layout:layoutNivel});
@@ -653,15 +669,15 @@ map.on('load',()=>{
   sourceLayerBuildings=cand[0].sourceLayer;
   map.once('idle',()=>document.getElementById('rTiles').innerHTML=webglOk?'<b>OK</b>':'<span class="mal">con errores</span>');
 
-  /* Edificios bajos y semitransparentes para que no tapen la carretera */
+  /* Edificios como antes: altura real, opacidad 0.5 */
   try{
     map.addLayer({id:'3d-buildings',source:idFuenteBuildings,'source-layer':sourceLayerBuildings,
       type:'fill-extrusion',minzoom:14,
       paint:{
-        'fill-extrusion-color':'#eceff2',
-        'fill-extrusion-height':['*',0.55,['coalesce',['get','render_height'],12]],
+        'fill-extrusion-color':'#b8c0cc',
+        'fill-extrusion-height':['coalesce',['get','render_height'],8],
         'fill-extrusion-base':['coalesce',['get','render_min_height'],0],
-        'fill-extrusion-opacity':0.75
+        'fill-extrusion-opacity':0.5
       }});
   }catch(e){
     document.getElementById('rBuildings').innerHTML='<span class="mal">fallo capa: '+e.message+'</span>';
@@ -835,8 +851,6 @@ document.getElementById('btnAA').onclick=()=>{location.href=location.pathname+(a
 document.getElementById('btnDebug').onclick=function(){const d1=document.getElementById('diag'),d2=document.getElementById('diag2');const activo=d1.classList.toggle('on');d2.classList.toggle('on',activo);this.textContent='🔧 Paneles Debug: '+(activo?'ON':'OFF');this.classList.toggle('on',activo);};
 document.getElementById('btnTrafico').onclick=function(){traficoOn=!traficoOn;this.textContent='🚦 Tráfico: '+(traficoOn?'ON':'OFF');this.classList.toggle('on',traficoOn);if(map.getLayer('trafico-flujo')){map.setLayoutProperty('trafico-flujo','visibility',traficoOn?'visible':'none');}if(routeCoordsLL.length) repintarRutaConNiveles();};
 document.getElementById('btnCelebracion').onclick=function(){celebracionOn=!celebracionOn;this.textContent='🎉 Celebración: '+(celebracionOn?'ON':'OFF');this.classList.toggle('on',celebracionOn);};
-
-/* REPINTAR RUTA — con nivel forzado a 0 (nunca undefined) */
 function repintarRutaConNiveles(){
   if(!routeCoordsLL.length) return;
   const coords=routeCoordsLL.map(c=>[c[1],c[0]]);
@@ -848,11 +862,7 @@ function repintarRutaConNiveles(){
     if(nivelActual!==nivelInicio){segmentos.push({nivel:nivelInicio,coords:coords.slice(inicioSeg,i+1)});inicioSeg=i;}
   }
   segmentos.push({nivel:traficoOn?(niveles[inicioSeg]||0):0,coords:coords.slice(inicioSeg)});
-  const features=segmentos.filter(s=>s.coords.length>=2).map(s=>({
-    type:'Feature',
-    geometry:{type:'LineString',coordinates:s.coords},
-    properties:{nivel: (s.nivel|0)}
-  }));
+  const features=segmentos.filter(s=>s.coords.length>=2).map(s=>({type:'Feature',geometry:{type:'LineString',coordinates:s.coords},properties:{nivel:(s.nivel|0)}}));
   map.getSource('ruta').setData({type:'FeatureCollection',features:features});
 }
 document.getElementById('btnLimpiarFavs').onclick=()=>{if(!confirm('¿Borrar todos los cargadores favoritos?')) return;favoritos=[];guardarFavoritos();alert('Favoritos borrados.');};
@@ -881,16 +891,12 @@ async function iniciarSimulacion(){
     const ruta = j.routes[0];
     const coords = ruta.legs.flatMap(l=>l.points.map(p=>[p.longitude, p.latitude]));
 
-    /* === PINTAR LA RUTA EN EL MAPA (esto faltaba) === */
     routeCoordsLL = coords.map(c=>[c[1],c[0]]);
     routeCumDist = [0];
     for(let i=1;i<routeCoordsLL.length;i++) routeCumDist.push(routeCumDist[i-1]+dist(routeCoordsLL[i-1],routeCoordsLL[i]));
     routeNivelesPorPunto = new Array(coords.length).fill(0);
-    const segs = [{nivel:0,coords:coords}];
-    const feats = segs.map(s=>({type:'Feature',geometry:{type:'LineString',coordinates:s.coords},properties:{nivel:0}}));
-    map.getSource('ruta').setData({type:'FeatureCollection',features:feats});
+    map.getSource('ruta').setData({type:'FeatureCollection',features:[{type:'Feature',geometry:{type:'LineString',coordinates:coords},properties:{nivel:0}}]});
 
-    /* Pasos para el banner */
     steps = (ruta.guidance && ruta.guidance.instructions || []).map(it=>{
       const off=it.routeOffsetInMeters, pi=it.pointIndex;
       const porIndice = Number.isInteger(pi)&&pi>=0&&pi<routeCumDist.length?routeCumDist[pi]:null;
@@ -914,17 +920,18 @@ async function iniciarSimulacion(){
     seguirOn = true;
     const btnSeg=document.getElementById('btnSeguir');if(btnSeg) btnSeg.classList.add('activo');
 
-    /* Inicializar cámara suavizada en la primera posición */
+    /* Init cámara en la primera posición */
     const p0 = simRutaLL[0];
+    cochePosActual = [p0[1], p0[0]];
     camActual.center=[p0[1],p0[0]];
-    camActual.bearing=0;
-    camActual.zoom=ZOOM_CIUDAD;
-    camActual.pitch=PITCH_NAV_BASE;
+    camActual.bearing=0; camActual.zoom=ZOOM_CIUDAD; camActual.pitch=PITCH_NAV_BASE;
     camActual.inited=true;
+    camObjetivo.center=[p0[1],p0[0]];
+    camObjetivo.bearing=0; camObjetivo.zoom=ZOOM_CIUDAD; camObjetivo.pitch=PITCH_NAV_BASE;
     map.jumpTo({center:camActual.center,bearing:0,zoom:ZOOM_CIUDAD,pitch:PITCH_NAV_BASE});
     renderStep();
 
-    const tickMs = 200;
+    const tickMs = 100;
     if(simTimer) clearInterval(simTimer);
     simTimer = setInterval(()=>{
       if(!simulando) return;
@@ -1145,11 +1152,7 @@ function actualizarTrimRuta(){
     if(nivelActual!==nivelInicio){segmentos.push({nivel:nivelInicio,coords:coordsFuturas.slice(inicioSeg,i+1)});inicioSeg=i;}
   }
   segmentos.push({nivel:traficoOn?(nivelesFuturos[inicioSeg]||0):0,coords:coordsFuturas.slice(inicioSeg)});
-  const features=segmentos.filter(s=>s.coords.length>=2).map(s=>({
-    type:'Feature',
-    geometry:{type:'LineString',coordinates:s.coords},
-    properties:{nivel:(s.nivel|0)}
-  }));
+  const features=segmentos.filter(s=>s.coords.length>=2).map(s=>({type:'Feature',geometry:{type:'LineString',coordinates:s.coords},properties:{nivel:(s.nivel|0)}}));
   map.getSource('ruta').setData({type:'FeatureCollection',features:features});
   document.getElementById('rTrim').textContent=Math.round(fraccion*100)+'%';
 }
@@ -1203,28 +1206,12 @@ function rumboDelGPS(c,now,v){
 }
 function filtrarHeading(h){
   if(!Number.isFinite(h)) return;
-  headingHist.push(h);if(headingHist.length>12) headingHist.shift();
+  headingHist.push(h);if(headingHist.length>16) headingHist.shift();
   let sx=0,sy=0;
   for(const a of headingHist){const r=a*Math.PI/180;sx+=Math.cos(r);sy+=Math.sin(r);}
   heading=Math.atan2(sy,sx)*180/Math.PI;
   if(heading<0) heading+=360;
 }
-
-/* ========== COCHE TOP-DOWN (negro con cristales claros) ========== */
-const elCoche=document.createElement('div');
-elCoche.className='coche-marcador';
-elCoche.innerHTML = '<svg viewBox="0 0 52 52" width="52" height="52">'
-  + '<ellipse cx="26" cy="46" rx="14" ry="3" fill="rgba(0,0,0,0.25)"/>'
-  + '<path d="M14 20 L18 10 Q19 7 22 7 L30 7 Q33 7 34 10 L38 20 L40 22 Q41 24 41 27 L41 42 Q41 45 38 45 L14 45 Q11 45 11 42 L11 27 Q11 24 12 22 Z" fill="#1a1a1a" stroke="#ffffff" stroke-width="1.5" stroke-linejoin="round"/>'
-  + '<path d="M17 12 Q18 9 22 9 L30 9 Q33 9 34 12 L36 20 L16 20 Z" fill="#4a5560" opacity="0.9"/>'
-  + '<path d="M18 22 Q18 20 20 20 L32 20 Q34 20 34 22 L34 32 L18 32 Z" fill="#3a4550" opacity="0.85"/>'
-  + '<path d="M19 34 L33 34 L32 42 L20 42 Z" fill="#252a2f" opacity="0.9"/>'
-  + '<rect x="10" y="24" width="2" height="4" rx="1" fill="#fff9c4"/>'
-  + '<rect x="40" y="24" width="2" height="4" rx="1" fill="#fff9c4"/>'
-  + '<rect x="10" y="40" width="2" height="3" rx="1" fill="#ff5252"/>'
-  + '<rect x="40" y="40" width="2" height="3" rx="1" fill="#ff5252"/>'
-  + '</svg>';
-const marcadorCoche=new maplibregl.Marker({element:elCoche,rotationAlignment:'map',pitchAlignment:'map',anchor:'center'});
 
 let distanciaFueraRuta=0,fueraDesde=0,recalculando=false,ultimoRecalculo=0;
 const DESVIO_M=45,CONFIRMACION_MS=2500,COOLDOWN_MS=10000;
@@ -1264,11 +1251,7 @@ async function calcularRuta(origen,destino,modo='normal'){
       if(nivelActual!==nivelInicio){segmentos.push({nivel:nivelInicio,coords:coords.slice(inicioSeg,i+1)});inicioSeg=i;}
     }
     segmentos.push({nivel:traficoOn?(nivelesPorPunto[inicioSeg]||0):0,coords:coords.slice(inicioSeg)});
-    const features=segmentos.filter(s=>s.coords.length>=2).map(s=>({
-      type:'Feature',
-      geometry:{type:'LineString',coordinates:s.coords},
-      properties:{nivel:(s.nivel|0)}
-    }));
+    const features=segmentos.filter(s=>s.coords.length>=2).map(s=>({type:'Feature',geometry:{type:'LineString',coordinates:s.coords},properties:{nivel:(s.nivel|0)}}));
     map.getSource('ruta').setData({type:'FeatureCollection',features:features});
     routeCoordsLL=coords.map(c=>[c[1],c[0]]);
     routeCumDist=[0];
@@ -1307,6 +1290,9 @@ async function comprobarDesvio(ll){
     }
   }else fueraDesde=0;
 }
+
+/* ========== onFix — NADA de mover el coche ni la cámara aquí.
+   Solo actualizamos objetivos. El movimiento lo hace el bucle de animación. ========== */
 function onFix(pos){
   const c=pos.coords;
   const now={lat:c.latitude,lon:c.longitude,t:pos.timestamp||Date.now()};
@@ -1325,30 +1311,24 @@ function onFix(pos){
   const h=rumboDelGPS(c,now,v);
   if(h!==null) filtrarHeading(h);
 
-  let posMarcador = [now.lon, now.lat];
+  /* Snap a la ruta si hay ruta */
+  let posCoche = [now.lon, now.lat];
   if(routeCoordsLL.length){
     const proj = proyectarSobreRuta(now.lat, now.lon);
-    if(proj){
-      if(proj.dist < SNAP_MAX_DIST_M){
-        posMarcador = [proj.lon, proj.lat];
-        const elSnap = document.getElementById('rSnap');
-        if(elSnap) elSnap.innerHTML = '<b>'+Math.round(proj.dist)+' m</b>';
-      }else{
-        const elSnap = document.getElementById('rSnap');
-        if(elSnap) elSnap.innerHTML = '<span class="mal">'+Math.round(proj.dist)+' m (fuera)</span>';
-      }
+    if(proj && proj.dist < SNAP_MAX_DIST_M){
+      posCoche = [proj.lon, proj.lat];
+      const elSnap = document.getElementById('rSnap');
+      if(elSnap) elSnap.innerHTML = '<b>'+Math.round(proj.dist)+' m</b>';
+    }else if(proj){
+      const elSnap = document.getElementById('rSnap');
+      if(elSnap) elSnap.innerHTML = '<span class="mal">'+Math.round(proj.dist)+' m (fuera)</span>';
     }
   }else{
     const elSnap = document.getElementById('rSnap');
     if(elSnap) elSnap.textContent = 'sin ruta';
   }
 
-  /* Update coche */
-  if(!marcadorCoche._map) marcadorCoche.setLngLat(posMarcador).addTo(map);
-  else marcadorCoche.setLngLat(posMarcador);
-  marcadorCoche.setRotation(heading);
-
-  /* === ACTUALIZAR OBJETIVOS DE CÁMARA (no aplicar directamente) === */
+  /* Actualizar objetivos de cámara (NO aplicar) */
   const zoomObj = zoomPorVelocidad(speedKmh);
   camZoomObjetivo = zoomObj;
   if(!zoomManiobraOn){ camPitchObjetivo = PITCH_NAV_BASE; }
@@ -1378,19 +1358,20 @@ function onFix(pos){
     limiteVelocidadVia=0;
   }
 
-  /* Actualizar objetivo de centro y rumbo de la cámara */
-  camObjetivo.center = [posMarcador[0], posMarcador[1]];
+  /* Objetivos de la cámara */
+  camObjetivo.center = [posCoche[0], posCoche[1]];
   camObjetivo.bearing = heading;
   camObjetivo.zoom = camZoomObjetivo;
   camObjetivo.pitch = camPitchObjetivo;
 
-  /* Si la cámara no está iniciada, inicializarla directo */
+  /* Inicializar cámara al primer fix */
   if(!camActual.inited){
     camActual.center = camObjetivo.center.slice();
     camActual.bearing = camObjetivo.bearing;
     camActual.zoom = camObjetivo.zoom;
     camActual.pitch = camObjetivo.pitch;
     camActual.inited = true;
+    cochePosActual = camObjetivo.center.slice();
     map.jumpTo({center:camActual.center,bearing:camActual.bearing,zoom:camActual.zoom,pitch:camActual.pitch});
   }
 
@@ -1409,24 +1390,41 @@ function actualizarHUD(){
 }
 function ocultarHUD(){const vel=document.getElementById('hudVel');if(vel) vel.textContent='0';const lim=document.getElementById('hudLimite');if(lim) lim.classList.add('oculto');}
 
-/* ========== BUCLE DE CÁMARA SUAVIZADA tipo codriver ========== */
+/* ========== BUCLE DE ANIMACIÓN: mueve el mapa suavemente bajo el coche fijo ========== */
+let headingVisual = 0; // rumbo suavizado para rotar la flecha DOM
 function bucleSeguimiento(){
   if(seguirOn && !camaraLibre && !seguirBloqueado && camActual.inited){
-    /* Interpolar centro (lineal) */
-    camActual.center[0] = lerp(camActual.center[0], camObjetivo.center[0], CAM_LERP_CENTER);
-    camActual.center[1] = lerp(camActual.center[1], camObjetivo.center[1], CAM_LERP_CENTER);
-    /* Interpolar bearing (angular, evitando saltos 0→360) */
+    /* Interpolar posición del coche */
+    cochePosActual[0] = lerp(cochePosActual[0], camObjetivo.center[0], CAM_LERP_CENTER);
+    cochePosActual[1] = lerp(cochePosActual[1], camObjetivo.center[1], CAM_LERP_CENTER);
+
+    /* Interpolar bearing del mapa */
     camActual.bearing = lerpAngulo(camActual.bearing, camObjetivo.bearing, CAM_LERP_BEARING);
-    /* Interpolar zoom y pitch */
+
+    /* Interpolar zoom y pitch del mapa (lento, sin saltos) */
     camActual.zoom = lerp(camActual.zoom, camObjetivo.zoom, CAM_LERP_ZOOM);
     camActual.pitch = lerp(camActual.pitch, camObjetivo.pitch, CAM_LERP_PITCH);
 
+    /* La posición del coche en pantalla es fija (65%), así que jumpTo al coche */
     map.jumpTo({
-      center: camActual.center,
+      center: cochePosActual,
       bearing: camActual.bearing,
       zoom: camActual.zoom,
       pitch: camActual.pitch
     });
+
+    /* Rotar la flecha DOM (el coche) */
+    headingVisual = lerpAngulo(headingVisual, camObjetivo.bearing, CAM_LERP_BEARING);
+    const coche = document.getElementById('cocheFijo');
+    if(coche){
+      /* MapLibre rota el mapa con bearing = -heading. La flecha debe apuntar hacia arriba en pantalla,
+         y el mapa rota alrededor. La flecha se rota con (heading - mapBearing) = 0 siempre,
+         porque map bearing = heading. Así que la flecha NO gira en pantalla: siempre apunta hacia arriba.
+         PERO como queremos que en curvas se vea el coche "orientado", aplicamos un pequeño offset:
+         la flecha apunta arriba, y el mapa se orienta según el rumbo. */
+      /* Dejamos la flecha mirando arriba (0deg), el mapa ya rota. */
+      coche.style.transform = 'translate(-50%,-50%) rotate(0deg)';
+    }
 
     const rp=document.getElementById('rPitchNav');
     if(rp) rp.textContent=Math.round(camActual.pitch)+'°';
@@ -1454,7 +1452,7 @@ function centrarEnMi(){
   if(!lastFix) return;
   camaraLibre=false;seguirBloqueado=false;
   if(!seguirOn){seguirOn=true;const btn=document.getElementById('btnSeguir');if(btn) btn.classList.add('activo');}
-  /* Resetear la cámara suavizada a la posición actual */
+  cochePosActual=[lastFix.lon,lastFix.lat];
   camActual.center=[lastFix.lon,lastFix.lat];
   camActual.bearing=heading;
   camActual.zoom=ZOOM_CIUDAD;
@@ -1477,6 +1475,7 @@ document.getElementById('btnGPS').onclick=function(){
     const aviso=document.getElementById('avisoInicial');
     if(aviso) aviso.classList.add('oculto');
     document.getElementById('g1').innerHTML='<b>activo</b>';
+    camActual.inited=false;
     navigator.geolocation.getCurrentPosition(
       pos=>{ cargarCargadores(pos.coords.latitude,pos.coords.longitude); },
       err=>{ cargarCargadores(43.2678,-2.9387); },
