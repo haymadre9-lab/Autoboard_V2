@@ -189,6 +189,7 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
   <button class="ajuste on" id="btnSenales">🚦 Señales: ON</button>
   <button class="ajuste on" id="btnCargadores">🔌 Cargadores: ON</button>
   <button class="ajuste on" id="btnPitch">📐 Pitch: ON</button>
+  <button class="ajuste on" id="btnFog">🌫 Niebla: ON</button>
   <button class="ajuste on" id="btnTrafico">🚦 Tráfico: ON</button>
   <button class="ajuste on" id="btnCelebracion">🎉 Celebración: ON</button>
   <div class="seccion">Cargadores</div>
@@ -214,6 +215,7 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
   <div>SEÑALES: <span id="rSenales">cargando…</span></div>
   <div>CARGADORES: <span id="rCargadores">-</span></div>
   <div>SNAP COCHE: <span id="rSnap">-</span></div>
+  <div>PITCH NAV: <span id="rPitchNav">-</span></div>
   <hr>
   <div>ROTACION (10s): <span id="rRot">sin probar</span></div>
   <div>PITCH (10s): <span id="rPitch">sin probar</span></div>
@@ -472,8 +474,15 @@ function colorPotencia(kw){
   return '#f9a825';
 }
 
+/* ========== CONSTANTES DE NAVEGACIÓN INMERSIVA ========== */
 let navZoomBase=16.8;
 const ZOOM_MANIOBRA_EXTRA=2.2;
+const PITCH_NAV_BASE=72;          // inclinación base en navegación
+const PITCH_NAV_MAX=80;           // inclinación máxima a alta velocidad
+const PADDING_TOP=220;            // coche desplazado hacia abajo
+const PADDING_LEFT=80;            // offset lateral (como si fueras al volante)
+let fogOn=true;
+
 let terrenoActivo=false;
 const TERRENO_EXAG=1.5;
 let trimSoportado=true;
@@ -502,7 +511,7 @@ function actualizarBotonCasa(){
 }
 
 /* ========== SNAPPING: proyección del punto GPS sobre la ruta ========== */
-const SNAP_MAX_DIST_M = 30;   // si estás a menos de 30m de la ruta, te pego a ella
+const SNAP_MAX_DIST_M = 30;
 function proyectarSobreRuta(lat,lon){
   if(!routeCoordsLL.length || routeCoordsLL.length < 2) return null;
   const i0 = Math.max(0, routeProgIdx-10);
@@ -530,9 +539,31 @@ function proyectarSobreRuta(lat,lon){
   return {lat:mejorLat, lon:mejorLon, dist:mejorD, idx:mejorI, t:mejorT};
 }
 
+/* ========== NIEBLA ATMOSFÉRICA (mapa dentro del mapa) ========== */
+function aplicarFog(){
+  if(!map.setFog) return;
+  if(!fogOn){ map.setFog(null); return; }
+  map.setFog({
+    'range': [0.8, 8],
+    'color': 'rgba(200, 215, 235, 0.5)',
+    'horizon-blend': 0.15,
+    'high-color': 'rgba(60, 100, 160, 0.4)',
+    'space-color': 'rgba(15, 25, 45, 0.6)',
+    'star-intensity': 0
+  });
+}
+
+/* ========== PITCH DINÁMICO SEGÚN VELOCIDAD ========== */
+function pitchPorVelocidad(v){
+  // De 0 km/h → PITCH_NAV_BASE. A 120 km/h → PITCH_NAV_MAX.
+  const t = Math.min(1, Math.max(0, v/120));
+  return PITCH_NAV_BASE + (PITCH_NAV_MAX - PITCH_NAV_BASE)*t;
+}
+
 map.on('load',()=>{
-  /* ===== COCHE DESPLAZADO HACIA ABAJO (top padding grande) ===== */
-  map.setPadding({top:220,bottom:0,left:0,right:0});
+  /* ===== NAVEGACIÓN INMERSIVA: coche abajo + offset lateral ===== */
+  map.setPadding({top:PADDING_TOP,bottom:0,left:PADDING_LEFT,right:0});
+  aplicarFog();
   document.getElementById('rArranque').innerHTML='<b>OK</b>';
   document.getElementById('rWebgl').innerHTML=webglOk?'<b>OK</b>':'<span class="mal">FALLO</span>';
 
@@ -919,6 +950,12 @@ document.getElementById('btnCargadores').onclick=function(){
   this.classList.toggle('on',cargadoresOn);
   if(!cargadoresOn) document.getElementById('popupCargador').classList.remove('on');
 };
+document.getElementById('btnFog').onclick=function(){
+  fogOn=!fogOn;
+  aplicarFog();
+  this.textContent='🌫 Niebla: '+(fogOn?'ON':'OFF');
+  this.classList.toggle('on',fogOn);
+};
 document.getElementById('btnTerreno').onclick=function(){
   terrenoActivo=!terrenoActivo;
   try{
@@ -938,7 +975,7 @@ document.getElementById('btnTerreno').onclick=function(){
 let pitchOn=true;
 document.getElementById('btnPitch').onclick=function(){
   pitchOn=!pitchOn;
-  map.easeTo({pitch:pitchOn?60:0,duration:400});
+  map.easeTo({pitch:pitchOn?PITCH_NAV_BASE:0,duration:400});
   this.textContent='📐 Pitch: '+(pitchOn?'ON':'OFF');
   this.classList.toggle('on',pitchOn);
 };
@@ -1479,11 +1516,9 @@ function onFix(pos){
 
   /* ========== SNAPPING del marcador a la ruta ========== */
   let posMarcador = [now.lon, now.lat];
-  let snapInfo = null;
   if(routeCoordsLL.length){
     const proj = proyectarSobreRuta(now.lat, now.lon);
     if(proj){
-      snapInfo = proj;
       if(proj.dist < SNAP_MAX_DIST_M){
         posMarcador = [proj.lon, proj.lat];
         const elSnap = document.getElementById('rSnap');
@@ -1504,13 +1539,24 @@ function onFix(pos){
   document.getElementById('g2').textContent=Math.round(speedKmh)+' km/h';
   document.getElementById('g3').textContent=Math.round(heading)+'°';
   actualizarHUD();
-  /* La cámara sigue al GPS real (no al marcador con snap), para no acumular error */
+  /* La cámara sigue al GPS real (no al marcador con snap) */
   camPosObjetivo=[now.lon,now.lat];
   camBearingObjetivo=heading;
+
+  /* ===== PITCH DINÁMICO POR VELOCIDAD ===== */
+  const pitchObj = pitchPorVelocidad(speedKmh);
+  camZoomObjetivo = navZoomBase;   // puede sobreescribirse abajo con zoom maniobra
+  /* Si no estamos en maniobra cercana, aplicar pitch por velocidad */
+  if(!zoomManiobraOn){
+    /* Usamos jumpTo dentro del bucle de seguimiento para suavizar */
+    camPitchObjetivo = pitchObj;
+  }
+
   if(!camPosActual){
     camPosActual=camPosObjetivo.slice();
     camBearingActual=camBearingObjetivo;
     camZoomActual=camZoomObjetivo=navZoomBase;
+    camPitchActual=camPitchObjetivo=pitchObj;
   }
   lastFix=now;
   if(steps.length){
@@ -1529,6 +1575,8 @@ function onFix(pos){
       if(cerca!==zoomManiobraOn){
         zoomManiobraOn=cerca;
         camZoomObjetivo=cerca?Math.min(20,navZoomBase+ZOOM_MANIOBRA_EXTRA):navZoomBase;
+        /* En maniobra, pitch fijo base (72), no dinámico */
+        camPitchObjetivo = cerca ? PITCH_NAV_BASE : pitchObj;
       }
     }
     if(s&&typeof s.limiteKmh==='number'&&s.limiteKmh>0) limiteVelocidadVia=s.limiteKmh;
@@ -1553,6 +1601,8 @@ function ocultarHUD(){
   const lim=document.getElementById('hudLimite');
   if(lim) lim.classList.add('oculto');
 }
+let camPitchActual=PITCH_NAV_BASE;
+let camPitchObjetivo=PITCH_NAV_BASE;
 function bucleSeguimiento(){
   if(seguirOn&&!camaraLibre&&!seguirBloqueado&&camPosActual&&camPosObjetivo){
     const k=.18;
@@ -1563,11 +1613,14 @@ function bucleSeguimiento(){
     while(dB<-180) dB+=360;
     camBearingActual+=dB*.14;
     camZoomActual+=(camZoomObjetivo-camZoomActual)*.10;
+    camPitchActual+=(camPitchObjetivo-camPitchActual)*.06;   // pitch suavizado
     const dx=Math.abs(camPosObjetivo[0]-camPosActual[0]);
     const dy=Math.abs(camPosObjetivo[1]-camPosActual[1]);
     const dz=Math.abs(camZoomObjetivo-camZoomActual);
-    const quieto=dx<1e-6&&dy<1e-6&&dz<0.001;
-    if(!quieto) map.jumpTo({center:camPosActual,bearing:camBearingActual,zoom:camZoomActual});
+    const dp=Math.abs(camPitchObjetivo-camPitchActual);
+    const quieto=dx<1e-6&&dy<1e-6&&dz<0.001&&dp<0.05;
+    if(!quieto) map.jumpTo({center:camPosActual,bearing:camBearingActual,zoom:camZoomActual,pitch:camPitchActual});
+    const rp=document.getElementById('rPitchNav');if(rp) rp.textContent=Math.round(camPitchActual)+'°';
   }
   requestAnimationFrame(bucleSeguimiento);
 }
@@ -1610,12 +1663,14 @@ function centrarEnMi(){
   camBearingObjetivo=heading;
   camZoomActual=navZoomBase;
   camZoomObjetivo=navZoomBase;
+  camPitchActual=PITCH_NAV_BASE;
+  camPitchObjetivo=PITCH_NAV_BASE;
   if(!seguirOn){
     seguirOn=true;
     const btn=document.getElementById('btnSeguir');
     if(btn) btn.classList.add('activo');
   }
-  map.jumpTo({center:[lastFix.lon,lastFix.lat],bearing:heading,zoom:navZoomBase,pitch:60,duration:400});
+  map.jumpTo({center:[lastFix.lon,lastFix.lat],bearing:heading,zoom:navZoomBase,pitch:PITCH_NAV_BASE,duration:400});
   mostrarBotonCentrar(false);
 }
 document.getElementById('btnCentrar').onclick=centrarEnMi;
@@ -1693,6 +1748,7 @@ function detenerRuta(){
   document.getElementById('rTrim').textContent='-';
   const elSnap=document.getElementById('rSnap');if(elSnap) elSnap.textContent='-';
   camZoomObjetivo=navZoomBase;
+  camPitchObjetivo=PITCH_NAV_BASE;
   actualizarHUD();
   celebracionDisparada=false;
 }
