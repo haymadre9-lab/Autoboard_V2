@@ -1365,19 +1365,35 @@ async function comprobarDesvio(ll){
 /* Velocidad fiable. El GPS del navegador a veces devuelve 0/2 km/h de golpe yendo a 60 (o speed=null):
    eso activaba "parado", congelaba la cámara y luego la hacía saltar. Se contrasta con el desplazamiento real
    entre fixes y se limita la deceleración a lo físicamente posible. */
-const velHist={lat:NaN,lon:NaN,t:0,v:0};
+const velHist={lat:NaN,lon:NaN,t:0,v:0,vd:0,win:[]};
 function filtrarVelocidad(c,now){
   const rep=Number.isFinite(c.speed)?Math.max(0,c.speed):NaN;
   let vEf=Number.isFinite(rep)?rep:0;
   const dt=(now.t-velHist.t)/1000;
+  let vd=0;
   if(velHist.t>0 && dt>0.2 && dt<6 && Number.isFinite(velHist.lat)){
-    const vDesp=dist([velHist.lat,velHist.lon],[now.lat,now.lon])/dt;
-    const confirma=vDesp>0.5*velHist.v && vDesp>3;           /* nos hemos movido de verdad */
-    if(!Number.isFinite(rep)){ vEf=vDesp; }                  /* sin speed: la deducimos */
-    else if(vDesp>5 && rep<0.5*vDesp) vEf=vDesp;             /* speed absurdamente bajo frente al desplazamiento */
-    else if(velHist.v>5 && confirma && rep<velHist.v-CAM.DECEL_MAX_MS2*dt) vEf=Math.max(rep,velHist.v-CAM.DECEL_MAX_MS2*dt);
+    vd=dist([velHist.lat,velHist.lon],[now.lat,now.lon])/dt;
+    const precisoOk=!Number.isFinite(c.accuracy) || c.accuracy<=20;
+    if(!Number.isFinite(rep)){
+      /* sin speed: se deduce del desplazamiento en una ventana de ~4 s, restando el ruido típico del GPS
+         (parado, el ruido de 5–10 m no puede inventar velocidad) */
+      const h=velHist.win; h.push({lat:now.lat,lon:now.lon,t:now.t});
+      while(h.length>1 && now.t-h[0].t>4500) h.shift();
+      let vw=0;
+      if(h.length>=2){
+        const T=(now.t-h[0].t)/1000, acc=Math.max(5,Number.isFinite(c.accuracy)?c.accuracy:5);
+        vw=Math.max(0, dist([h[0].lat,h[0].lon],[now.lat,now.lon])-1.2*acc)/Math.max(1,T);
+      }
+      vEf = precisoOk ? 0.6*vw+0.4*velHist.v : velHist.v;
+      vEf = Math.min(vEf, velHist.v+3*dt+2);
+    }else if(precisoOk && velHist.v>8 && rep<0.35*velHist.v && vd>=0.6*velHist.v){
+      /* caída brusca (60 → 2 km/h) que el desplazamiento NO confirma: se mantiene la velocidad, bajando como mucho DECEL_MAX */
+      vEf=Math.max(rep, Math.min(velHist.v, vd));
+    }
+    /* nunca se SUBE por encima de lo que dice el GPS salvo para el caso "sin speed" */
   }
-  velHist.lat=now.lat; velHist.lon=now.lon; velHist.t=now.t; velHist.v=vEf;
+  if(Number.isFinite(rep)){ velHist.win.push({lat:now.lat,lon:now.lon,t:now.t}); while(velHist.win.length>1 && now.t-velHist.win[0].t>4500) velHist.win.shift(); }
+  velHist.lat=now.lat; velHist.lon=now.lon; velHist.t=now.t; velHist.v=vEf; velHist.vd=vd;
   return vEf;
 }
 function onFix(pos){
