@@ -195,6 +195,35 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
 #celebracion .subtitulo{position:absolute;left:50%;top:65%;transform:translate(-50%,-50%);font-family:Verdana,Tahoma,sans-serif;font-weight:700;font-size:24px;color:#ffd166;text-shadow:0 2px 10px rgba(0,0,0,.8);opacity:0;animation:ianSub 3.5s ease-out forwards}
 @keyframes ianSub{0%,15%{opacity:0;transform:translate(-50%,-50%) translateY(20px)}30%{opacity:1;transform:translate(-50%,-50%) translateY(0)}85%{opacity:1;transform:translate(-50%,-50%) translateY(0)}100%{opacity:0;transform:translate(-50%,-50%) translateY(-20px)}}
 .confeti{position:absolute;width:10px;height:16px;opacity:.95;pointer-events:none;will-change:transform}
+
+/* ---- v103: paneles claros, grises y suaves (ajustes, cargadores, aviso inicial) ---- */
+#avisoInicial{background:rgba(255,255,255,.88);border:1px solid #d5dae0;color:#6b7580;box-shadow:0 3px 12px rgba(60,70,80,.15);font-weight:600}
+#panelAjustes{background:rgba(244,246,248,.97);border-left:1px solid #d5dae0;color:#3b444d;box-shadow:-6px 0 24px rgba(60,70,80,.18)}
+#panelAjustes h2{color:#3b444d}
+#panelAjustes .cerrarPanel{color:#8b949e}
+#panelAjustes button.ajuste{background:#ffffff;border:1px solid #d5dae0;color:#7b8590;font-weight:600}
+#panelAjustes button.ajuste.on{background:#cfd5dc;border-color:#aab2bb;color:#2f373f}
+#panelAjustes button.ajuste.peligro{background:#ffffff;border-color:#d5dae0;color:#a0707a}
+#panelAjustes .seccion{color:#8b949e}
+#popupCargador{background:rgba(255,255,255,.96);border:1px solid #d5dae0;color:#3b444d;box-shadow:0 6px 24px rgba(60,70,80,.25)}
+#popupCargador h3{color:#3b444d}
+#popupCargador .info{color:#6b7580}
+#popupCargador .info b{color:#2f373f}
+#popupCargador .conector{background:#f1f3f5;border-color:#d5dae0;color:#4a545e}
+#popupCargador .acciones button{background:#e3e7eb;border-color:#cfd5dc;color:#3b444d}
+#popupCargador .acciones button.cerrar{background:#ffffff;border-color:#d5dae0;color:#8b949e}
+#listaCargadores{background:rgba(255,255,255,.94);border:1px solid #d5dae0;box-shadow:0 6px 24px rgba(60,70,80,.22)}
+#listaCargadores .cabecera{background:#f1f3f5;border-bottom:1px solid #e3e7eb}
+#listaCargadores h2{color:#6b7580}
+#listaCargadores .cerrarLista{color:#8b949e}
+#listaCargadores .cargadorItem{background:#f6f7f9}
+#listaCargadores .cargadorItem:active{background:#e8ebee}
+#listaCargadores .cargadorItem .titulo{color:#3b444d}
+#listaCargadores .cargadorItem .dir{color:#8b949e}
+#listaCargadores .cargadorItem .dist{color:#6b7580}
+#listaCargadores .cargadorItem.tesla{box-shadow:none}
+#listaCargadores .cargadorItem.tesla .titulo{color:#3b444d}
+#listaCargadores .cargadorItem.tesla .kw{text-shadow:none}
 </style>
 </head>
 <body class="modo-debug">
@@ -256,15 +285,8 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
   <button class="ajuste on" id="btnAvisosRadares">📸 Avisos radares: ON</button>
   <div class="seccion">Cargadores</div>
   <button class="ajuste" id="btnListaCargadores">⚡ Ver 10 más cercanos</button>
-  <div class="seccion">Simulación</div>
-  <button class="ajuste sim" id="btnSimularRuta">▶ Simular ruta (demo)</button>
-  <button class="ajuste peligro" id="btnDetenerSimulacion">■ Detener simulación</button>
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
-  <div class="seccion">Diagnóstico</div>
-  <button class="ajuste" id="btnRot">▶ Prueba rotación 10s</button>
-  <button class="ajuste" id="btnPitchTest">▶ Prueba pitch 10s</button>
-  <button class="ajuste" id="btnDebug">🔧 Paneles Debug: OFF</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
 </div>
 
@@ -302,7 +324,7 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
 <div id="errlog"></div>
 
 <div id="controlesAbajo">
-  <div id="avisoInicial">📍 Toca GPS o Simular ruta para empezar</div>
+  <div id="avisoInicial">📍 Toca GPS para empezar</div>
 </div>
 
 <div id="grupoArribaDer">
@@ -1063,7 +1085,6 @@ document.getElementById('btnSky').onclick=function(){skyOn=!skyOn;aplicarSky();t
 let pitchOn=true;
 document.getElementById('btnPitch').onclick=function(){pitchOn=!pitchOn;map.easeTo({pitch:pitchOn?PITCH_NAV_BASE:0,duration:400});this.textContent='📐 Pitch: '+(pitchOn?'ON':'OFF');this.classList.toggle('on',pitchOn);};
 document.getElementById('btnAA').onclick=()=>{location.href=location.pathname+(antialiasActivo?'':'?aa=1');};
-document.getElementById('btnDebug').onclick=function(){const d1=document.getElementById('diag'),d2=document.getElementById('diag2');const activo=d1.classList.toggle('on');d2.classList.toggle('on',activo);this.textContent='🔧 Paneles Debug: '+(activo?'ON':'OFF');this.classList.toggle('on',activo);};
 /* Tráfico EN LA RUTA: la línea azul se pinta amarillo (leve) / naranja (retención) / rojo (parado) según TomTom */
 document.getElementById('btnTrafico').onclick=function(){traficoOn=!traficoOn;this.textContent='🚦 Tráfico en ruta: '+(traficoOn?'ON':'OFF');this.classList.toggle('on',traficoOn);if(routeCoordsLL.length){repintarRutaConNiveles();actualizarTrimRuta();}};
 /* Tráfico EN LAS CALLES (capa raster de TomTom): apagado por defecto */
@@ -1195,8 +1216,6 @@ function detenerSimulacion(){
   const btnSeg=document.getElementById('btnSeguir');if(btnSeg) btnSeg.classList.remove('activo');
   apagarAlertaRadar();ocultarHUD();detenerRuta();
 }
-document.getElementById('btnSimularRuta').onclick = iniciarSimulacion;
-document.getElementById('btnDetenerSimulacion').onclick = detenerSimulacion;
 
 document.getElementById('btnListaCargadores').onclick = async ()=>{
   if(!lastFix){ alert('Activa el GPS o la simulación primero.'); return; }
@@ -2751,8 +2770,6 @@ function medirDurante(ms,id,mover){
     requestAnimationFrame(paso);
   });
 }
-document.getElementById('btnRot').onclick=async function(){this.disabled=true;document.getElementById('rRot').innerHTML='<span class="aviso">girando 10s…</span>';const b0=map.getBearing();await medirDurante(10000,'rRot',p=>map.setBearing((b0+p*720)%360));this.disabled=false;};
-document.getElementById('btnPitchTest').onclick=async function(){this.disabled=true;document.getElementById('rPitch').innerHTML='<span class="aviso">pitch 10s…</span>';await medirDurante(10000,'rPitch',p=>map.setPitch(30+30*Math.sin(p*Math.PI*6)));this.disabled=false;};
 function dist(a,b){const R=6371000,la1=a[0]*Math.PI/180,la2=b[0]*Math.PI/180;const dla=(b[0]-a[0])*Math.PI/180,dlo=(b[1]-a[1])*Math.PI/180;const h=Math.sin(dla/2)**2+Math.cos(la1)*Math.cos(la2)*Math.sin(dlo/2)**2;return 2*R*Math.asin(Math.sqrt(h));}
 function bearing(a,b){const la1=a[0]*Math.PI/180,la2=b[0]*Math.PI/180,dlo=(b[1]-a[1])*Math.PI/180;const y=Math.sin(dlo)*Math.cos(la2);const x=Math.cos(la1)*Math.sin(la2)-Math.sin(la1)*Math.cos(la2)*Math.cos(dlo);return ((Math.atan2(y,x)*180/Math.PI)+360)%360;}
 function urlRutaTomTom(o,d){return 'https://api.tomtom.com/routing/1/calculateRoute/'+o[0]+','+o[1]+':'+d[0]+','+d[1]+'/json?key='+TT+'&routeType=fastest&traffic=true&travelMode=car&instructionsType=text&language=es-ES&sectionType=traffic';}
