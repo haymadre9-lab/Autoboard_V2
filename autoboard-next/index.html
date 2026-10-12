@@ -98,6 +98,13 @@ body:not(.modo-navegacion) #cocheFijo{display:none}
 #radarInfo .senalRadar{width:64px;height:64px;border-radius:50%;background:#ffffff;border:6px solid #9aa3ad;display:flex;align-items:center;justify-content:center;font:800 28px/1 system-ui,sans-serif;color:#4a525b;box-shadow:0 4px 14px rgba(90,98,108,.35)}
 #radarInfo .dist{font:800 18px/1.2 system-ui,sans-serif;color:#4a525b;background:rgba(236,239,242,.94);border-radius:8px;padding:8px 14px;border:2px solid #b4bcc5}
 #radarInfo .lim{display:none}
+#popupCampo{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;z-index:23;display:none;min-width:260px;max-width:90vw;background:rgba(255,255,255,.97);border:1px solid #d5dae0;border-radius:16px;padding:14px 16px;box-shadow:0 6px 24px rgba(90,98,108,.3);color:#4a525b;font:600 14px/1.35 system-ui,sans-serif}
+#popupCampo.on{display:block}
+#popupCampo h3{margin:0 0 2px;font:800 18px/1.2 system-ui,sans-serif;color:#3f474f}
+#popupCampo .sub{color:#8b949e;font-size:13px;margin-bottom:10px}
+#popupCampo .acc{display:flex;gap:8px}
+#popupCampo .acc button{flex:1;border-radius:12px;border:1px solid #d5dae0;background:#f4f6f8;color:#4a525b;font:800 15px system-ui,sans-serif;padding:12px;cursor:pointer}
+#popupCampo .acc button.ir{background:#1e88e5;border-color:#1e88e5;color:#fff}
 #barraRuta{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:21;display:none;align-items:center;gap:14px;background:rgba(255,255,255,.86);border:1px solid rgba(180,188,197,.7);border-radius:16px;padding:7px 8px 7px 16px;box-shadow:0 3px 14px rgba(90,98,108,.22);color:#4a525b;font:700 15px/1.1 system-ui,sans-serif;white-space:nowrap;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
 #barraRuta.on{display:flex}
 #barraRuta .d{display:flex;flex-direction:column;gap:2px;align-items:flex-start}
@@ -193,6 +200,7 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
   </button>
 </div>
 <div id="panelAlt"></div>
+<div id="popupCampo"></div>
 <div id="popupCargador"></div>
 <div id="listaCargadores">
   <div class="cabecera">
@@ -2145,6 +2153,12 @@ function crearDetallesMapa(){
   try{ map.addSource('futbol',{type:'geojson',data:{type:'FeatureCollection',features:[]}}); map.addSource('futbol-pt',{type:'geojson',data:{type:'FeatureCollection',features:[]}}); }catch(e){ registrarError('futbol-src',e.message); }
   add({id:'fut-franjas',type:'fill',source:'futbol',filter:['==',['get','k'],'f'],minzoom:14.5,paint:{'fill-color':['get','c'],'fill-opacity':0.95}});
   add({id:'fut-lineas',type:'line',source:'futbol',filter:['==',['get','k'],'l'],minzoom:15.5,layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#fbfdf9','line-width':op(15.5,0.8,19,2.4),'line-opacity':0.95}});
+  try{
+    const capaTexto=(estilo.layers||[]).find(l=>l.type==='symbol'&&l.layout&&l.layout['text-font']);
+    if(capaTexto) add({id:'fut-nombre',type:'symbol',source:'futbol-pt',filter:['has','n'],minzoom:14.5,
+      layout:{'text-field':['get','n'],'text-font':capaTexto.layout['text-font'],'text-size':13,'text-offset':[0,1.3],'text-anchor':'top','text-optional':true,'text-max-width':9},
+      paint:{'text-color':'#4a525b','text-halo-color':'#ffffff','text-halo-width':1.6}});
+  }catch(e){ registrarError('fut-nombre',e.message); }
   add({id:'fut-punto',type:'circle',source:'futbol-pt',minzoom:12,paint:{'circle-radius':op(12,4,16,7),'circle-color':'#8ecb98','circle-stroke-color':'#ffffff','circle-stroke-width':2,'circle-opacity':op(16,1,17.5,0),'circle-stroke-opacity':op(16,1,17.5,0)}});
 }
 
@@ -2219,16 +2233,66 @@ function escanearFutbol(){
     const cLat=r.lat0+r.cy/r.my, cLon=r.lon0+r.cx/r.mx;
     const igual=__fut.lista.findIndex(e=>dist([e.lat,e.lon],[cLat,cLon])<FUTBOL.DUP_M);
     if(igual>=0){ if(r.areaPoli<=__fut.lista[igual].area*1.15) continue; __fut.lista.splice(igual,1); }   /* mismo campo cortado por teselas: se queda el trozo mayor */
-    __fut.lista.push({lat:cLat,lon:cLon,area:r.areaPoli,feats:dibujoFutbol(r)}); cambios++;
+    __fut.lista.push({lat:cLat,lon:cLon,area:r.areaPoli,feats:dibujoFutbol(r),r:r,nombre:''}); cambios++;
   }
+  if(ponerNombresFutbol()) cambios++;
   if(!cambios) return 0;
   if(__fut.lista.length>FUTBOL.MAX) __fut.lista.splice(0,__fut.lista.length-FUTBOL.MAX);
   const a=map.getSource('futbol'), b=map.getSource('futbol-pt');
   if(a) a.setData({type:'FeatureCollection',features:[].concat(...__fut.lista.map(e=>e.feats))});
-  if(b) b.setData({type:'FeatureCollection',features:__fut.lista.map(e=>({type:'Feature',properties:{},geometry:{type:'Point',coordinates:[e.lon,e.lat]}}))});
+  if(b) b.setData({type:'FeatureCollection',features:__fut.lista.map(e=>({type:'Feature',properties:(e.nombre?{n:e.nombre}:{}),geometry:{type:'Point',coordinates:[e.lon,e.lat]}}))});
   return cambios;
 }
 setInterval(()=>{ try{ escanearFutbol(); }catch(e){ registrarError('futbol',e.message); } },FUTBOL.CADA_MS);
+
+/* Nombre del campo: las teselas no lo traen en el polígono; se toma de un punto de interés CON nombre y de tipo deportivo
+   (pitch/soccer/football/stadium/sports…) que caiga dentro o muy cerca del campo. Si no hay, queda "Campo de fútbol". */
+function ponerNombresFutbol(){
+  const sin=__fut.lista.filter(e=>!e.nombre); if(!sin.length) return false;
+  let pois; try{ pois=map.querySourceFeatures(idFuenteBuildings,{sourceLayer:'poi'})||[]; }catch(e){ return false; }
+  const cand=pois.filter(p=>p.properties&&(p.properties.name||p.properties['name:latin'])&&p.geometry&&p.geometry.type==='Point'
+    &&/pitch|soccer|football|stadium|sport/i.test((p.properties.class||'')+' '+(p.properties.subclass||'')));
+  if(!cand.length) return false;
+  let hubo=false;
+  for(const e of sin){
+    let mejor=null, md=Math.max(45,e.r.L*0.6);
+    for(const p of cand){ const d=dist([e.lat,e.lon],[p.geometry.coordinates[1],p.geometry.coordinates[0]]); if(d<md){ md=d; mejor=p; } }
+    if(mejor){ e.nombre=String(mejor.properties.name||mejor.properties['name:latin']).slice(0,40); hubo=true; }
+  }
+  return hubo;
+}
+/* Toque sobre un campo → tarjeta con nombre y "Ir aquí" */
+function campoEnPunto(e){
+  let mejor=null, md=1e9;
+  for(const f of __fut.lista){
+    const r=f.r, c=Math.cos(r.ang), s=Math.sin(r.ang);
+    const px=(e.lngLat.lng-r.lon0)*r.mx-r.cx, py=(e.lngLat.lat-r.lat0)*r.my-r.cy;
+    const u=px*c+py*s, v=-px*s+py*c;
+    const dentro=Math.abs(u)<=r.L/2+3 && Math.abs(v)<=r.W/2+3;
+    const q=map.project([f.lon,f.lat]), dpx=Math.hypot(q.x-e.point.x,q.y-e.point.y);
+    if(dentro||dpx<32){ const d=dentro?0:dpx; if(d<md){ md=d; mejor=f; } }
+  }
+  return mejor;
+}
+let __campoSel=null;
+function cerrarPopupCampo(){ const p=document.getElementById('popupCampo'); if(p) p.classList.remove('on'); __campoSel=null; }
+function abrirPopupCampo(f){
+  __campoSel=f;
+  const p=document.getElementById('popupCampo'); if(!p) return;
+  const esc=t=>String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  const d=lastFix?dist([lastFix.lat,lastFix.lon],[f.lat,f.lon]):null;
+  p.innerHTML='<h3>⚽ '+esc(f.nombre||'Campo de fútbol')+'</h3><div class="sub">'+(f.nombre?'Campo de fútbol · ':'')+(d!==null?(d>=1000?(d/1000).toFixed(1).replace('.',',')+' km':Math.round(d)+' m')+' en línea recta':'activa el GPS para ver la distancia')+'</div>'
+    +'<div class="acc"><button id="campoCerrar">Cerrar</button><button class="ir" id="campoIr">Ir aquí</button></div>';
+  p.classList.add('on');
+}
+document.getElementById('popupCampo').onclick=async (ev)=>{
+  const t=ev.target;
+  if(t.closest('#campoCerrar')){ cerrarPopupCampo(); return; }
+  if(t.closest('#campoIr')){ const f=__campoSel; cerrarPopupCampo(); if(f) await navegarA(f.lat,f.lon); }
+};
+map.on('click',(e)=>{
+  try{ const f=campoEnPunto(e); if(f) abrirPopupCampo(f); else if(__campoSel) cerrarPopupCampo(); }catch(err){ registrarError('campo-click',err.message); }
+});
 
 
 /* ---- Tráfico: ¿merece la pena desviarse del atasco? ----
