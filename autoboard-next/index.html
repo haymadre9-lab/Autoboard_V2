@@ -529,8 +529,9 @@ function aplicarSky(){
   if(!skyOn){ map.setSky(null); return; }
   try{
     map.setSky({
-      'sky-color':'#dde3ea','sky-horizon-blend':0.8,'horizon-color':'#e8eaed','horizon-fog-blend':0.9,
-      'fog-color':'#e8eaed','fog-ground-blend':0.7,
+      /* cielo gris pizarra que se aclara hacia el horizonte con una banda de bruma, en la misma gama fría del mapa lavado */
+      'sky-color':'#8f99a5','sky-horizon-blend':0.75,'horizon-color':'#c7ccd2','horizon-fog-blend':0.9,
+      'fog-color':'#cdd1d6','fog-ground-blend':0.65,
       'atmosphere-blend':['interpolate',['linear'],['zoom'],0,0.1,10,0.08,15,0.04]
     });
   }catch(e){}
@@ -1365,40 +1366,40 @@ async function comprobarDesvio(ll){
 /* Velocidad fiable. El GPS del navegador a veces devuelve 0/2 km/h de golpe yendo a 60 (o speed=null):
    eso activaba "parado", congelaba la cámara y luego la hacía saltar. Se contrasta con el desplazamiento real
    entre fixes y se limita la deceleración a lo físicamente posible. */
-const velHist={lat:NaN,lon:NaN,t:0,v:0,vd:0,win:[]};
+const velHist={lat:NaN,lon:NaN,t:0,v:0,win:[],bajos:0};
 function filtrarVelocidad(c,now){
   const rep=Number.isFinite(c.speed)?Math.max(0,c.speed):NaN;
-  let vEf=Number.isFinite(rep)?rep:0;
   const dt=(now.t-velHist.t)/1000;
-  let vd=0;
-  if(velHist.t>0 && dt>0.2 && dt<6 && Number.isFinite(velHist.lat)){
-    vd=dist([velHist.lat,velHist.lon],[now.lat,now.lon])/dt;
-    const precisoOk=!Number.isFinite(c.accuracy) || c.accuracy<=20;
-    if(!Number.isFinite(rep)){
-      /* sin speed: se deduce del desplazamiento en una ventana de ~4 s, restando el ruido típico del GPS
-         (parado, el ruido de 5–10 m no puede inventar velocidad) */
-      const h=velHist.win; h.push({lat:now.lat,lon:now.lon,t:now.t});
-      while(h.length>1 && now.t-h[0].t>4500) h.shift();
-      let vw=0;
-      if(h.length>=2){
-        const T=(now.t-h[0].t)/1000, acc=Math.max(5,Number.isFinite(c.accuracy)?c.accuracy:5);
-        vw=Math.max(0, dist([h[0].lat,h[0].lon],[now.lat,now.lon])-1.2*acc)/Math.max(1,T);
-      }
-      vEf = precisoOk ? 0.6*vw+0.4*velHist.v : velHist.v;
-      vEf = Math.min(vEf, velHist.v+3*dt+2);
-    }else if(precisoOk && velHist.v>8 && rep<0.35*velHist.v && vd>=0.6*velHist.v){
-      /* caída brusca (60 → 2 km/h) que el desplazamiento NO confirma: se mantiene la velocidad, bajando como mucho DECEL_MAX */
-      vEf=Math.max(rep, Math.min(velHist.v, vd));
+  const seguido = velHist.t>0 && dt>0.2 && dt<6;
+  /* ventana de posiciones (~4 s): sirve para deducir la velocidad cuando el navegador no da "speed" */
+  const h=velHist.win; h.push({lat:now.lat,lon:now.lon,t:now.t});
+  while(h.length>1 && now.t-h[0].t>4500) h.shift();
+  let vRaw=rep;
+  if(!Number.isFinite(rep)){
+    vRaw=0;
+    if(h.length>=2){
+      const T=(now.t-h[0].t)/1000, acc=Math.max(5,Number.isFinite(c.accuracy)?c.accuracy:5);
+      vRaw=Math.max(0, dist([h[0].lat,h[0].lon],[now.lat,now.lon])-1.2*acc)/Math.max(1,T);
     }
-    /* nunca se SUBE por encima de lo que dice el GPS salvo para el caso "sin speed" */
   }
-  if(Number.isFinite(rep)){ velHist.win.push({lat:now.lat,lon:now.lon,t:now.t}); while(velHist.win.length>1 && now.t-velHist.win[0].t>4500) velHist.win.shift(); }
-  velHist.lat=now.lat; velHist.lon=now.lon; velHist.t=now.t; velHist.v=vEf; velHist.vd=vd;
+  let vEf=vRaw;
+  if(seguido){
+    const prev=velHist.v;
+    /* Lecturas sueltas de ~0 yendo a velocidad (1 ↔ 60 km/h): la caída se amortigua (tau 5 s);
+       solo se acepta "parado" si llegan 3 lecturas seguidas ≈0. Una frenada real sí baja: sigue a la lectura. */
+    velHist.bajos = vRaw<0.5 ? velHist.bajos+1 : 0;
+    if(vRaw<0.35*prev && velHist.bajos<3) vEf=Math.max(vRaw, prev*Math.exp(-dt/5.0));
+    /* y una velocidad no puede dispararse más rápido que un coche (picos 1 → 60 km/h en 1 s) */
+    const sube=prev+7*dt+1;
+    if(vEf>sube) vEf=sube;
+  }else{ velHist.bajos=0; }
+  velHist.lat=now.lat; velHist.lon=now.lon; velHist.t=now.t; velHist.v=vEf;
   return vEf;
 }
 function onFix(pos){
   const c=pos.coords;
   const now={lat:c.latitude,lon:c.longitude,t:pos.timestamp||Date.now()};
+  camDiag.vCrudo=c.speed;
   const v=filtrarVelocidad(c,now);
   speedKmh=v*3.6;
   /* Histéresis de "parado": entra por debajo de 2 km/h, sale por encima de 4 km/h (evita parpadeo con ruido de velocidad GPS).
@@ -1775,7 +1776,8 @@ function iniciarDiagCam(){
     camDiag.el.textContent='CAM '+fps.toFixed(0)+' fps · medio '+avg.toFixed(1)+' ms · max '+(camDiag.maxDt*1000).toFixed(0)+' ms\n'
       +'frames >25 ms: '+camDiag.lentos+' · >50 ms: '+camDiag.muyLentos+' · jumpTo/s: '+(camDiag.jumps/s).toFixed(0)+'\n'
       +'zoom '+camActual.zoom.toFixed(2)+' · pitch '+camActual.pitch.toFixed(1)+'° · rumbo '+camActual.bearing.toFixed(0)+'° · '+man.estado+'\n'
-      +'GPS edad '+((performance.now()-est.fixT)/1000).toFixed(1)+' s · v '+(vSuave*3.6).toFixed(0)+' km/h';
+      +'GPS edad '+((performance.now()-est.fixT)/1000).toFixed(1)+' s · v '+(vSuave*3.6).toFixed(0)+' km/h · GPS crudo '+(Number.isFinite(camDiag.vCrudo)?(camDiag.vCrudo*3.6).toFixed(0):'null')+'\n'
+      +'ruta '+routeCoordsLL.length+' pts · onRoute '+est.onRoute+' · paso '+stepIdx+'/'+steps.length+' · libre '+camaraLibre+' · dest '+(ultimaRutaDestino?'sí':'no')+' · capa ruta '+(map.getLayer('ruta-base')?(map.getLayoutProperty('ruta-base','visibility')||'visible'):'NO');
     const rp=document.getElementById('rPitchNav'); if(rp) rp.textContent=Math.round(camActual.pitch)+'°';
     const rz=document.getElementById('rZoomNav'); if(rz) rz.textContent=camActual.zoom.toFixed(1);
     camDiag.frames=0; camDiag.sumDt=0; camDiag.maxDt=0; camDiag.lentos=0; camDiag.muyLentos=0; camDiag.jumps=0; camDiag.t0=performance.now();
