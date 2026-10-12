@@ -95,9 +95,32 @@ body:not(.modo-navegacion) #cocheFijo{display:none}
 @keyframes radarPulse{0%{opacity:.35}50%{opacity:1}100%{opacity:.35}}
 #radarInfo{position:fixed;left:50%;transform:translateX(-50%);bottom:100px;z-index:19;display:none;flex-direction:row;align-items:center;gap:14px;text-align:center}
 #radarInfo.on{display:flex}
-#radarInfo .senalRadar{width:64px;height:64px;border-radius:50%;background:#ffffff;border:6px solid #d32f2f;display:flex;align-items:center;justify-content:center;font:800 28px/1 system-ui,sans-serif;color:#000;box-shadow:0 4px 16px rgba(255,0,0,.7);animation:radarPulse 1s ease-in-out infinite}
-#radarInfo .dist{font:800 18px/1.2 system-ui,sans-serif;color:#fff;background:rgba(120,10,10,.92);border-radius:8px;padding:8px 14px;border:2px solid #ff5252}
+#radarInfo .senalRadar{width:64px;height:64px;border-radius:50%;background:#ffffff;border:6px solid #9aa3ad;display:flex;align-items:center;justify-content:center;font:800 28px/1 system-ui,sans-serif;color:#4a525b;box-shadow:0 4px 14px rgba(90,98,108,.35)}
+#radarInfo .dist{font:800 18px/1.2 system-ui,sans-serif;color:#4a525b;background:rgba(236,239,242,.94);border-radius:8px;padding:8px 14px;border:2px solid #b4bcc5}
 #radarInfo .lim{display:none}
+#barraRuta{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:21;display:none;align-items:center;gap:14px;background:rgba(255,255,255,.86);border:1px solid rgba(180,188,197,.7);border-radius:16px;padding:7px 8px 7px 16px;box-shadow:0 3px 14px rgba(90,98,108,.22);color:#4a525b;font:700 15px/1.1 system-ui,sans-serif;white-space:nowrap;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+#barraRuta.on{display:flex}
+#barraRuta .d{display:flex;flex-direction:column;gap:2px;align-items:flex-start}
+#barraRuta .d small{font:600 10px/1 system-ui,sans-serif;color:#8b949e;letter-spacing:.3px}
+#barraRuta .sep{width:1px;height:26px;background:#d5dae0}
+#btnAlt{width:52px;height:40px;border-radius:12px;border:1px solid #d5dae0;background:#f4f6f8;color:#9aa3ad;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;transition:color .25s,background .25s,border-color .25s}
+#btnAlt svg{width:34px;height:26px}
+#btnAlt.alerta{color:#1e88e5;background:#e8f2fd;border-color:#9cc8f3}
+#panelAlt{position:fixed;left:50%;transform:translateX(-50%);bottom:76px;z-index:22;display:none;width:min(430px,92vw);max-height:56vh;overflow-y:auto;background:rgba(255,255,255,.96);border:1px solid #d5dae0;border-radius:16px;padding:10px;box-shadow:0 6px 24px rgba(90,98,108,.3);color:#4a525b;font:600 14px/1.3 system-ui,sans-serif}
+#panelAlt.on{display:block}
+#panelAlt .cab{display:flex;justify-content:space-between;align-items:center;padding:2px 4px 8px;font:800 13px system-ui,sans-serif;color:#8b949e;letter-spacing:.4px;text-transform:uppercase}
+#panelAlt .cab button{border:0;background:none;color:#8b949e;font-size:18px;cursor:pointer;padding:2px 8px}
+#panelAlt .alt{display:grid;grid-template-columns:14px 1fr auto;column-gap:10px;row-gap:2px;align-items:center;padding:9px 10px;border-radius:12px;border:2px solid transparent;cursor:pointer;margin-bottom:4px;background:#f4f6f8}
+#panelAlt .alt.sel{border-color:#1e88e5;background:#eaf3fd}
+#panelAlt .alt .pt{width:12px;height:12px;border-radius:50%;grid-row:1/3}
+#panelAlt .alt .t{font:800 16px system-ui,sans-serif}
+#panelAlt .alt .dl{font:800 13px system-ui,sans-serif;text-align:right}
+#panelAlt .alt .dl.mas{color:#8b949e}#panelAlt .alt .dl.menos{color:#2e9b5f}
+#panelAlt .alt .e{grid-column:2/4;font:600 12px system-ui,sans-serif;color:#8b949e}
+#panelAlt .acc{display:flex;gap:8px;margin-top:6px}
+#panelAlt .acc button{flex:1;border-radius:12px;border:1px solid #d5dae0;background:#f4f6f8;color:#4a525b;font:800 15px system-ui,sans-serif;padding:12px;cursor:pointer}
+#panelAlt .acc button.ir{background:#1e88e5;border-color:#1e88e5;color:#fff}
+#panelAlt .vacio{padding:14px 6px;color:#8b949e;text-align:center}
 #popupCargador{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;z-index:30;display:none;background:rgba(15,20,26,.96);border:2px solid #2e6b4a;border-radius:16px;padding:16px 20px;color:#e8eef2;font:14px/1.5 system-ui,sans-serif;max-width:520px;width:92vw;box-shadow:0 4px 20px rgba(0,0,0,.6)}
 #popupCargador.on{display:block}
 #popupCargador h3{margin:0 0 8px;color:#9ae6b4;font-size:18px}
@@ -158,6 +181,18 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
   <div class="dist" id="radarDist">-</div>
   <div class="lim" id="radarLim">-</div>
 </div>
+<div id="barraRuta">
+  <div class="d"><span id="brLlegada">--:--</span><small>LLEGADA</small></div><div class="sep"></div>
+  <div class="d"><span id="brTiempo">-- min</span><small>RESTANTE</small></div><div class="sep"></div>
+  <div class="d"><span id="brDist">-- km</span><small>DISTANCIA</small></div>
+  <button id="btnAlt" aria-label="Rutas alternativas">
+    <svg viewBox="0 0 40 30" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 28 C20 19 11 17 7 8"/><path d="M3.5 12.5 L7 7.5 L11.8 11"/>
+      <path d="M20 28 C20 19 29 17 33 8"/><path d="M36.5 12.5 L33 7.5 L28.2 11"/>
+    </svg>
+  </button>
+</div>
+<div id="panelAlt"></div>
 <div id="popupCargador"></div>
 <div id="listaCargadores">
   <div class="cabecera">
@@ -676,6 +711,19 @@ map.on('load',()=>{
   /* RUTA — halo blanco + base azul sólida + colores tráfico encima */
   map.addSource('ruta',{type:'geojson',data:{type:'FeatureCollection',features:[]},lineMetrics:true});
 
+  /* Ruta ya recorrida: la ruta ENTERA en gris DEBAJO del azul. Como el azul empieza justo bajo el coche,
+     lo que dejas atrás se queda en gris sin ningún cálculo extra. */
+  map.addSource('ruta-alt',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+  map.addLayer({id:'ruta-alt-halo',type:'line',source:'ruta-alt',layout:{'line-cap':'round','line-join':'round'},
+    paint:{'line-color':'#ffffff','line-opacity':0.9,'line-width':['interpolate',['linear'],['zoom'],10,5,16,14,19,22]}});
+  map.addLayer({id:'ruta-alt',type:'line',source:'ruta-alt',layout:{'line-cap':'round','line-join':'round'},
+    paint:{'line-color':['get','c'],'line-opacity':['case',['==',['get','sel'],1],1,0.55],'line-width':['interpolate',['linear'],['zoom'],10,3,16,9,19,15]}});
+  map.addSource('ruta-hecha',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+  map.addLayer({
+    id:'ruta-hecha',type:'line',source:'ruta-hecha',
+    layout:{'line-cap':'round','line-join':'round','line-round-limit':1.0},
+    paint:{'line-color':'#aeb6bf','line-opacity':0.95,'line-width':['interpolate',['linear'],['zoom'],14,10,16,16,18,22,20,30]}
+  });
   map.addLayer({
     id:'ruta-halo',type:'line',source:'ruta',
     layout:{'line-cap':'round','line-join':'round','line-round-limit':1.0},
@@ -833,12 +881,14 @@ async function cargarSenales(){
       if(ok) porLetra=deducido;
     }
     __senalesPts=[];
-    const features = puntos.map((p, i) => {
+    const features = [];
+    puntos.forEach((p, i) => {
       const lat=p[0],lon=p[1],tipo=p[2],sub=p[3]||'';
+      if(porLetra[tipo]==='semaforo_peatonal') return;   /* los semáforos/cruces de peatones no se dibujan (más limpio) */
       let icono=nombres[porLetra[tipo]]||'senal-stop';
       if(porLetra[tipo]==='semaforo' && sub==='b') icono='senal-semaforo-b';
       __senalesPts.push({idx:i,la:lat,lo:lon,ic:icono});
-      return {type:'Feature',geometry:{type:'Point',coordinates:[lon,lat]},properties:{idx:i,icono:icono,la:lat,lo:lon}};
+      features.push({type:'Feature',geometry:{type:'Point',coordinates:[lon,lat]},properties:{idx:i,icono:icono,la:lat,lo:lon}});
     });
     map.addSource('senales',{type:'geojson',data:{type:'FeatureCollection',features:features}});
     map.addLayer({
@@ -852,7 +902,7 @@ async function cargarSenales(){
     const nStop=datos.n?datos.n.stop:0;
     const nCeda=datos.n?datos.n.ceda:0;
     const nSem=(datos.n?datos.n.semaforo:0)+(datos.n?datos.n.semaforo_peatonal:0);
-    document.getElementById('rSenales').innerHTML='<b>'+puntos.length+'</b> ('+nStop+' stop · '+nCeda+' ceda · '+nSem+' sem)';
+    document.getElementById('rSenales').innerHTML='<b>'+features.length+'</b> ('+nStop+' stop · '+nCeda+' ceda · '+(datos.n?datos.n.semaforo:0)+' sem · peatonales ocultos)';
   }catch(e){
     document.getElementById('rSenales').innerHTML='<span class="mal">error: '+e.message+'</span>';
   }
@@ -1255,7 +1305,15 @@ function recorridoAhora(ll){
   return base+t*Math.sqrt(L2);
 }
 function avanzarPaso(r){while(stepIdx<steps.length-1&&(steps[stepIdx].metro||0)<=r+15) stepIdx++;}
+let __rutaHechaRef=null;
+function sincronizarRutaHecha(){
+  if(routeCoordsLL===__rutaHechaRef) return;
+  __rutaHechaRef=routeCoordsLL;
+  const src=map.getSource('ruta-hecha'); if(!src) return;
+  src.setData(routeCoordsLL.length>1 ? {type:'Feature',geometry:{type:'LineString',coordinates:routeCoordsLL.map(c=>[c[1],c[0]])},properties:{}} : {type:'FeatureCollection',features:[]});
+}
 function actualizarTrimRuta(sAncla){
+  sincronizarRutaHecha();
   if(!routeCoordsLL.length || !routeNivelesPorPunto.length) return;
   const n=routeCoordsLL.length, total=routeCumDist[n-1];
   if(!(total>0)) return;
@@ -1357,15 +1415,19 @@ function distanciaRutaActual(ll){
   for(let i=i0;i<i1;i++) md=Math.min(md,segDistM2(ll,routeCoordsLL[i],routeCoordsLL[i+1]));
   return md;
 }
-async function calcularRuta(origen,destino,modo='normal'){
+let rutaResumen=null;
+async function calcularRuta(origen,destino,modo='normal',rutaPre=null){
   if(recalculando) return false;
   recalculando=true;
   if(modo==='recalculo') document.getElementById('g5').innerHTML='<span class="aviso">↻ recalculando ruta…</span>';
   try{
-    const r=await fetch(urlRutaTomTom(origen,destino));
-    const j=await r.json();
-    if(!j.routes||!j.routes.length) throw new Error('TomTom no devolvió ruta');
-    const ruta=j.routes[0];
+    let ruta=rutaPre;
+    if(!ruta){
+      const r=await fetch(urlRutaTomTom(origen,destino));
+      const j=await r.json();
+      if(!j.routes||!j.routes.length) throw new Error('TomTom no devolvió ruta');
+      ruta=j.routes[0];
+    }
     const coords=ruta.legs.flatMap(l=>l.points.map(p=>[p.longitude,p.latitude]));
     const nivelesPorPunto=new Array(coords.length).fill(0);
     routeNivelesPorPunto=nivelesPorPunto;
@@ -1404,6 +1466,7 @@ async function calcularRuta(origen,destino,modo='normal'){
     renderStep();actualizarTrimRuta();
     const km=(ruta.summary.lengthInMeters/1000).toFixed(1);
     const min=Math.round(ruta.summary.travelTimeInSeconds/60);
+    rutaResumen={m:ruta.summary.lengthInMeters,s:ruta.summary.travelTimeInSeconds}; altAlerta=false; limpiarAlternativas(); actualizarBarraRuta();
     document.getElementById('g5').innerHTML='<b>'+km+' km · '+min+' min</b>';
     return true;
   }catch(e){
@@ -1968,6 +2031,103 @@ async function navegarA(lat,lon){
   return true;
 }
 
+/* ---- Destino destacado: al navegar a un sitio se pinta el edificio / campo / parque del destino y un pin ----
+   Se busca en las teselas vectoriales YA cargadas (querySourceFeatures) el polígono que contiene el punto de destino
+   (o el edificio más cercano a ≤30 m si el punto cae en la calle). Se reintenta mientras te acercas, porque las
+   teselas del destino no existen hasta que está a la vista. Si no hay polígono, queda solo el pin. */
+const DESTACADO = { COLOR:'#ff7a45', MAX_BUSCA_M:1500, ZOOM_MIN:14.5, CERCA_M:30, ESCALA:1.03,
+  CLASES_SUELO:['stadium','pitch','playground','track','school','university','hospital','cemetery','park','garden','sports_centre'] };
+let __dest={key:null,hecho:false,capas:false};
+function anilloContiene(lon,lat,r){ let c=false; for(let i=0,j=r.length-1;i<r.length;j=i++){ const xi=r[i][0],yi=r[i][1],xj=r[j][0],yj=r[j][1]; if(((yi>lat)!==(yj>lat)) && (lon<(xj-xi)*(lat-yi)/(yj-yi)+xi)) c=!c; } return c; }
+function poligonosDe(g){ return g.type==='Polygon'?[g.coordinates]:(g.type==='MultiPolygon'?g.coordinates:[]); }
+function poligonoContiene(lon,lat,g){
+  for(const pl of poligonosDe(g)){
+    if(!anilloContiene(lon,lat,pl[0])) continue;
+    let hueco=false; for(let k=1;k<pl.length;k++) if(anilloContiene(lon,lat,pl[k])){ hueco=true; break; }
+    if(!hueco) return true;
+  }
+  return false;
+}
+function distAPoligonoM(lat,lon,g){
+  let m=Infinity;
+  for(const pl of poligonosDe(g)){ const r=pl[0]; for(let i=0;i<r.length-1;i++){ const d=segDistM2([lat,lon],[r[i][1],r[i][0]],[r[i+1][1],r[i+1][0]]); if(d<m) m=d; } }
+  return m;
+}
+/* Ensancha el polígono un 3 % desde su centro: así las paredes resaltadas no coinciden con las del edificio gris (z-fighting) */
+function ensancharPoligono(g,f){
+  const polys=poligonosDe(g).map(pl=>{
+    const r0=pl[0]; let cx=0,cy=0; for(const q of r0){ cx+=q[0]; cy+=q[1]; } cx/=r0.length; cy/=r0.length;
+    return pl.map((r,k)=>k===0 ? r.map(q=>[cx+(q[0]-cx)*f, cy+(q[1]-cy)*f]) : r);
+  });
+  return g.type==='Polygon' ? {type:'Polygon',coordinates:polys[0]} : {type:'MultiPolygon',coordinates:polys};
+}
+function asegurarCapasDestacado(){
+  if(__dest.capas || !map.getSource) return;
+  try{
+    map.addSource('destacado',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+    map.addSource('destino-pin',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+    map.addLayer({id:'destacado-ext',type:'fill-extrusion',source:'destacado',minzoom:13,
+      paint:{'fill-extrusion-color':DESTACADO.COLOR,'fill-extrusion-height':['get','h'],'fill-extrusion-base':['get','min'],'fill-extrusion-opacity':0.88,'fill-extrusion-vertical-gradient':true}});
+    map.addLayer({id:'destacado-borde',type:'line',source:'destacado',minzoom:13,
+      layout:{'line-join':'round'},paint:{'line-color':DESTACADO.COLOR,'line-width':['interpolate',['linear'],['zoom'],13,2,18,4],'line-opacity':0.95}});
+    map.addLayer({id:'destino-pin',type:'circle',source:'destino-pin',minzoom:10,
+      paint:{'circle-radius':['interpolate',['linear'],['zoom'],10,5,16,9,20,12],'circle-color':DESTACADO.COLOR,'circle-stroke-color':'#ffffff','circle-stroke-width':3,'circle-pitch-alignment':'viewport'}});
+    __dest.capas=true;
+  }catch(e){ registrarError('destacado',e.message); }
+}
+function limpiarDestacado(){
+  __dest.key=null; __dest.hecho=false;
+  if(!__dest.capas) return;
+  const a=map.getSource('destacado'), b=map.getSource('destino-pin');
+  if(a) a.setData({type:'FeatureCollection',features:[]});
+  if(b) b.setData({type:'FeatureCollection',features:[]});
+}
+function buscarDestacado(){
+  if(!ultimaRutaDestino){ if(__dest.key) limpiarDestacado(); return false; }
+  const key=ultimaRutaDestino[0].toFixed(6)+','+ultimaRutaDestino[1].toFixed(6);
+  if(__dest.key!==key){
+    limpiarDestacado(); __dest.key=key; asegurarCapasDestacado();
+    const pin=map.getSource('destino-pin');
+    if(pin) pin.setData({type:'Feature',geometry:{type:'Point',coordinates:[ultimaRutaDestino[1],ultimaRutaDestino[0]]},properties:{}});
+  }
+  if(__dest.hecho || !__dest.capas) return false;
+  const c=map.getCenter();
+  if(map.getZoom()<DESTACADO.ZOOM_MIN || dist([c.lat,c.lng],ultimaRutaDestino)>DESTACADO.MAX_BUSCA_M) return false;   /* aún sin teselas del destino */
+  const lat=ultimaRutaDestino[0], lon=ultimaRutaDestino[1];
+  let elegido=null, geom=null, h=10, hmin=0;
+  const src=idFuenteBuildings;
+  if(!src) return false;
+  const edificios=map.querySourceFeatures(src,{sourceLayer:sourceLayerBuildings})||[];
+  /* 1) edificio que contiene el punto */
+  for(const f of edificios){ if(f.geometry && poligonoContiene(lon,lat,f.geometry)){ elegido=f; break; } }
+  if(elegido){ geom=elegido.geometry; h=Number(elegido.properties.render_height||elegido.properties.height)||10; hmin=Number(elegido.properties.render_min_height||elegido.properties.min_height)||0; }
+  /* 2) campo / estadio / parque / colegio... que lo contiene */
+  if(!elegido){
+    for(const capa of ['landuse','park']){
+      const fs=map.querySourceFeatures(src,{sourceLayer:capa})||[];
+      for(const f of fs){
+        const cl=(f.properties&&f.properties.class)||'';
+        if(capa==='landuse' && DESTACADO.CLASES_SUELO.indexOf(cl)<0) continue;
+        if(f.geometry && poligonoContiene(lon,lat,f.geometry)){ elegido=f; break; }
+      }
+      if(elegido) break;
+    }
+    if(elegido){ geom=elegido.geometry; h=1.5; hmin=0; }
+  }
+  /* 3) edificio más cercano (≤30 m) cuando el punto cae en la acera / portal */
+  if(!elegido){
+    let md=DESTACADO.CERCA_M;
+    for(const f of edificios){ if(!f.geometry) continue; const d=distAPoligonoM(lat,lon,f.geometry); if(d<md){ md=d; elegido=f; } }
+    if(elegido){ geom=elegido.geometry; h=Number(elegido.properties.render_height||elegido.properties.height)||10; hmin=Number(elegido.properties.render_min_height||elegido.properties.min_height)||0; }
+  }
+  if(!elegido||!geom) return false;
+  const dst=map.getSource('destacado');
+  if(dst) dst.setData({type:'Feature',geometry:ensancharPoligono(geom,DESTACADO.ESCALA),properties:{h:Math.max(h,2)+0.3,min:hmin}});
+  __dest.hecho=true;
+  return true;
+}
+setInterval(buscarDestacado,2000);
+
 /* ---- Tráfico: ¿merece la pena desviarse del atasco? ----
    Cada 90 s compara dos tiempos con tráfico ACTUAL de TomTom:
      A = seguir por la ruta que llevas (pasando por puntos de ella cada ~1,2 km)
@@ -2051,12 +2211,149 @@ async function evaluarAtascoYDesvio(){
   finally{ evaluandoTrafico=false; }
 }
 setInterval(evaluarAtascoYDesvio, TRAFICO.CHECK_MS);
+
+/* ---- Barra de ruta (llegada · tiempo · distancia) + rutas alternativas ----
+   Tiempo restante = tiempo total de TomTom (con tráfico) repartido por la distancia que falta: es una ESTIMACIÓN.
+   El botón de las dos flechas está gris; se pone azul si hay retención ≥ naranja por delante o si una alternativa ahorra ≥ 1 min. */
+const ALT={ COLORES:['#7c6fd1','#17a398','#e08a1e'], CHECK_MS:120000, AHORRO_AZUL_S:60, MAX:3, DIVERGE_M:40 };
+let altAlerta=false, alts=[], altActual=null, altSel=-1, altBuscando=false, altAbierto=false;
+const $id=id=>document.getElementById(id);
+function fmtMin(s){ const m=Math.max(1,Math.round(s/60)); return m>=60 ? Math.floor(m/60)+' h '+String(m%60).padStart(2,'0')+' min' : m+' min'; }
+function fmtKm(m){ return m>=10000 ? Math.round(m/1000)+' km' : (m/1000).toFixed(1).replace('.',',')+' km'; }
+function fmtHora(ms){ const d=new Date(ms); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+function atascoPorDelante(){
+  const n=routeNivelesPorPunto||[];
+  for(let i=Math.max(0,routeProgIdx); i<n.length; i++) if(n[i]>=2) return true;
+  return false;
+}
+function restanteRutaActual(){
+  if(!routeCoordsLL.length||!rutaResumen||!lastFix) return null;
+  const total=routeCumDist[routeCumDist.length-1]||rutaResumen.m;
+  const m=Math.max(0,total-recorridoAhora([lastFix.lat,lastFix.lon]));
+  return { m:m, s:rutaResumen.s*(m/Math.max(1,total)) };
+}
+function actualizarBarraRuta(){ try{ pintarBarraRuta(); }catch(e){ registrarError('barra',e.message); } }
+function pintarBarraRuta(){
+  const b=$id('barraRuta'); if(!b) return;
+  const r=restanteRutaActual();
+  if(!r){ b.classList.remove('on'); return; }
+  b.classList.add('on');
+  $id('brLlegada').textContent=fmtHora(Date.now()+r.s*1000);
+  $id('brTiempo').textContent=fmtMin(r.s);
+  $id('brDist').textContent=fmtKm(r.m);
+  $id('btnAlt').classList.toggle('alerta', altAlerta || atascoPorDelante());
+}
+setInterval(actualizarBarraRuta,1000);
+
+function limpiarAlternativas(){
+  alts=[]; altActual=null; altSel=-1;
+  const s=map.getSource&&map.getSource('ruta-alt'); if(s) s.setData({type:'FeatureCollection',features:[]});
+  if(altAbierto) pintarPanelAlt();
+}
+function pintarAltEnMapa(){
+  const s=map.getSource('ruta-alt'); if(!s) return;
+  s.setData({type:'FeatureCollection',features:alts.map((a,i)=>({type:'Feature',geometry:{type:'LineString',coordinates:a.coords},properties:{c:ALT.COLORES[i%ALT.COLORES.length],sel:i===altSel?1:0}}))});
+}
+function etiquetaTrafico(delayS){ return delayS<60 ? '🟢 fluido' : (delayS<240 ? '🟠 algo de retención' : '🔴 atasco'); }
+/* Metro (desde el coche, por la alternativa) en el que deja de coincidir con la ruta actual */
+function metroDeSeparacion(pts){
+  let acum=0;
+  for(let k=1;k<pts.length;k++){
+    acum+=dist(pts[k-1],pts[k]);
+    let md=Infinity;
+    for(let i=Math.max(0,routeProgIdx-2); i<routeCoordsLL.length-1; i++){ const d=segDistM2(pts[k],routeCoordsLL[i],routeCoordsLL[i+1]); if(d<md) md=d; if(md<ALT.DIVERGE_M) break; }
+    if(md>=ALT.DIVERGE_M) return acum;
+  }
+  return null;
+}
+async function buscarAlternativas(){
+  if(altBuscando||!ultimaRutaDestino||!lastFix||!routeCoordsLL.length) return false;
+  altBuscando=true;
+  try{
+    const o=[lastFix.lat,lastFix.lon], d=ultimaRutaDestino;
+    const rec=recorridoAhora(o), total=routeCumDist[routeCumDist.length-1];
+    const via=[o]; let sig=rec+TRAFICO.VIA_CADA_M;
+    for(let i=routeProgIdx;i<routeCoordsLL.length && via.length<=TRAFICO.MAX_VIAS;i++){
+      if(routeCumDist[i]>=sig && routeCumDist[i]<total-300){ via.push(routeCoordsLL[i]); sig=routeCumDist[i]+TRAFICO.VIA_CADA_M; }
+    }
+    via.push(d);
+    const [jB,jA]=await Promise.all([
+      fetch(urlRutaTomTom(o,d)+'&maxAlternatives='+ALT.MAX).then(r=>r.json()),
+      fetch(urlRutaPorPuntos(via)).then(r=>r.json()).catch(()=>null)
+    ]);
+    const A=jA&&jA.routes&&jA.routes[0];
+    if(A) aplicarNivelesDeRuta(A);
+    const r0=restanteRutaActual();
+    altActual = A ? { s:A.summary.travelTimeInSeconds, m:A.summary.lengthInMeters, delay:A.summary.trafficDelayInSeconds||0, exacto:true }
+                  : (r0 ? { s:r0.s, m:r0.m, delay:0, exacto:false } : null);
+    const lista=(jB.routes||[]).filter(R=>R.legs&&R.legs.length&&rutaDifiereDeLaActual(R)).slice(0,ALT.MAX);
+    alts=lista.map(R=>{
+      const pts=R.legs.flatMap(l=>l.points.map(q=>[q.latitude,q.longitude]));
+      return { R:R, s:R.summary.travelTimeInSeconds, m:R.summary.lengthInMeters, delay:R.summary.trafficDelayInSeconds||0,
+               coords:pts.map(p=>[p[1],p[0]]), sep:metroDeSeparacion(pts) };
+    });
+    altSel=-1;
+    altAlerta = !!(altActual && alts.some(a=>altActual.s-a.s>=ALT.AHORRO_AZUL_S));
+    pintarAltEnMapa(); actualizarBarraRuta(); if(altAbierto) pintarPanelAlt();
+    return true;
+  }catch(e){ registrarError('alternativas',e.message); alts=[]; if(altAbierto) pintarPanelAlt('No se pudieron cargar las alternativas'); return false; }
+  finally{ altBuscando=false; }
+}
+function pintarPanelAlt(error){
+  const p=$id('panelAlt'); if(!p) return;
+  let h='<div class="cab"><span>Rutas</span><button id="altCerrar">✕</button></div>';
+  if(altBuscando && !alts.length){ h+='<div class="vacio">Buscando alternativas…</div>'; }
+  else if(error){ h+='<div class="vacio">'+error+'</div>'; }
+  else{
+    if(altActual){
+      h+='<div class="alt" style="cursor:default"><span class="pt" style="background:#1e88e5"></span><span class="t">'+fmtMin(altActual.s)+'</span><span class="dl">actual</span>'
+        +'<span class="e">'+fmtKm(altActual.m)+' · llegas '+fmtHora(Date.now()+altActual.s*1000)+' · '+etiquetaTrafico(altActual.delay)+'</span></div>';
+    }
+    if(!alts.length) h+='<div class="vacio">No hay otra ruta claramente distinta ahora mismo.</div>';
+    alts.forEach((a,i)=>{
+      const dS=altActual?a.s-altActual.s:0;
+      const dl = Math.abs(dS)<30 ? '<span class="dl">igual</span>' : (dS<0 ? '<span class="dl menos">−'+fmtMin(-dS)+'</span>' : '<span class="dl mas">+'+fmtMin(dS)+'</span>');
+      h+='<div class="alt'+(i===altSel?' sel':'')+'" data-i="'+i+'"><span class="pt" style="background:'+ALT.COLORES[i%ALT.COLORES.length]+'"></span><span class="t">'+fmtMin(a.s)+'</span>'+dl
+        +'<span class="e">'+fmtKm(a.m)+' · llegas '+fmtHora(Date.now()+a.s*1000)+' · '+etiquetaTrafico(a.delay)+(a.sep!==null?' · se separa en '+fmtKm(a.sep):'')+'</span></div>';
+    });
+    if(altSel>=0) h+='<div class="acc"><button id="altVolver">Mantener la actual</button><button class="ir" id="altIr">Ir por esta ruta</button></div>';
+  }
+  p.innerHTML=h;
+}
+function abrirPanelAlt(){
+  altAbierto=true; $id('panelAlt').classList.add('on'); pintarPanelAlt();
+  buscarAlternativas();
+}
+function cerrarPanelAlt(){
+  altAbierto=false; const p=$id('panelAlt'); if(p) p.classList.remove('on');
+  if(altSel>=0){ altSel=-1; pintarAltEnMapa(); }
+}
+async function irPorAlternativa(i){
+  const a=alts[i]; if(!a||!lastFix||!ultimaRutaDestino) return;
+  const o=[lastFix.lat,lastFix.lon], d=ultimaRutaDestino;
+  const R=a.R;
+  cerrarPanelAlt();
+  ultimoRecalculo=performance.now(); ultimoCambioTrafico=ultimoRecalculo;
+  await calcularRuta(o,d,'manual',R);
+}
+$id('btnAlt').onclick=()=>{ altAbierto ? cerrarPanelAlt() : abrirPanelAlt(); };
+$id('panelAlt').onclick=(ev)=>{
+  const t=ev.target;
+  if(t.closest('#altCerrar')){ cerrarPanelAlt(); return; }
+  if(t.closest('#altVolver')){ altSel=-1; pintarAltEnMapa(); pintarPanelAlt(); return; }
+  if(t.closest('#altIr')){ irPorAlternativa(altSel); return; }
+  const row=t.closest('.alt[data-i]');
+  if(row){ altSel=+row.dataset.i; pintarAltEnMapa(); pintarPanelAlt(); }
+};
+setInterval(()=>{ if(routeCoordsLL.length && ultimaRutaDestino && !altAbierto && !recalculando) buscarAlternativas(); }, ALT.CHECK_MS);
 function detenerRuta(){
   steps=[];stepIdx=0;routeCoordsLL=[];routeCumDist=[];routeProgIdx=0;
   ultimaRutaDestino=null;limiteVelocidadVia=0;ultimoStepPintado='';
   resetCamRuta();
   routeNivelesPorPunto=[];
   const srcRuta=map.getSource('ruta');if(srcRuta) srcRuta.setData({type:'FeatureCollection',features:[]});
+  sincronizarRutaHecha(); limpiarDestacado();
+  rutaResumen=null; altAlerta=false; limpiarAlternativas(); cerrarPanelAlt(); actualizarBarraRuta();
   const srcGiro=map.getSource('giro-pos');if(srcGiro) srcGiro.setData({type:'FeatureCollection',features:[]});
   document.getElementById('navbanner').style.display='none';
   document.getElementById('btnPararRuta').classList.remove('on');
