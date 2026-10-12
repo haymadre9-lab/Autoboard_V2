@@ -422,7 +422,7 @@ const CAM = {
   /* --- suavizado (segundos) --- */
   TAU_CENTER:0.45,        /* absorbe la CORRECCIÓN de cada fix GPS (la posición ya se extrapola, así no añade retraso) */
   TAU_RETORNO:0.70,       /* vuelta suave a seguir tras tocar el mapa / pulsar 🎯 */
-  TAU_BEARING:0.28,       /* rumbo siguiendo la geometría de la ruta */
+  TAU_BEARING:0.40,       /* rumbo de la CÁMARA (mapa): más lento que la flecha, así la flecha se ve girar */
   TAU_BEARING_LIBRE:0.55, /* rumbo siguiendo solo el GPS (sin ruta) */
   BEARING_MAX_DEG_S:140,  /* velocidad angular máxima de la cámara */
   TAU_ZOOM_IN:0.45, TAU_ZOOM_OUT:0.90,  /* acercar rápido, alejar con calma */
@@ -435,7 +435,9 @@ const CAM = {
   EXTRAP_DECAY_S:3.0,     /* y luego frenada gradual hasta 0 (pérdida de GPS: la cámara se detiene, no salta) */
   SNAP_JUMP_M:150,        /* corrección GPS mayor que esto → salto directo en vez de deslizar */
   /* --- anticipación del rumbo (mirar la ruta por delante) --- */
-  LOOKAHEAD_S:1.4, LOOKAHEAD_MIN_M:12, LOOKAHEAD_MAX_M:55,
+  LOOKAHEAD_S:0, LOOKAHEAD_MIN_M:4, LOOKAHEAD_MAX_M:4,   /* mirada corta: la ruta no se desvía del coche en las curvas */
+  TAU_FLECHA:0.15, FLECHA_MAX_DEG:55, TANGENTE_M:4,       /* flecha del coche: sigue la tangente de la ruta bajo el coche */
+  RUTA_COLA_M:4, RUTA_HORIZONTE_M:5000, TRIM_MS:120,      /* azul: empieza justo bajo la flecha, se recorta cada ~120 ms */
   /* --- rumbo GPS filtrado: ventana por TIEMPO, no por nº de fixes --- */
   HEADING_WINDOW_MS:3500, HEADING_MAX_MUESTRAS:16,
   /* --- zoom de maniobra --- */
@@ -1163,17 +1165,27 @@ function recorridoAhora(ll){
   return base+t*Math.sqrt(L2);
 }
 function avanzarPaso(r){while(stepIdx<steps.length-1&&(steps[stepIdx].metro||0)<=r+15) stepIdx++;}
-function actualizarTrimRuta(){
+function actualizarTrimRuta(sAncla){
   if(!routeCoordsLL.length || !routeNivelesPorPunto.length) return;
-  const total=routeCumDist[routeCumDist.length-1];
-  if(total<=0) return;
-  const recorrido=routeCumDist[routeProgIdx]||0;
-  const fraccion=Math.max(0,Math.min(1,recorrido/total));
-  let idxFuturo=routeProgIdx;
-  for(let i=routeProgIdx;i<routeCoordsLL.length;i++){if((routeCumDist[i]||0) >= recorrido){ idxFuturo=i; break; }}
-  if(idxFuturo>=routeCoordsLL.length-1){map.getSource('ruta').setData({type:'FeatureCollection',features:[]});document.getElementById('rTrim').textContent='100%';return;}
-  const coordsFuturas=routeCoordsLL.slice(idxFuturo).map(c=>[c[1],c[0]]);
-  const nivelesFuturos=routeNivelesPorPunto.slice(idxFuturo);
+  const n=routeCoordsLL.length, total=routeCumDist[n-1];
+  if(!(total>0)) return;
+  if(!(sAncla>=0)) sAncla = lastFix ? recorridoAhora([lastFix.lat,lastFix.lon]) : (routeCumDist[routeProgIdx]||0);
+  const sIni=Math.max(0,sAncla-CAM.RUTA_COLA_M);          /* el azul empieza justo bajo la flecha */
+  const fraccion=Math.max(0,Math.min(1,sAncla/total));
+  if(sAncla>=total-1){map.getSource('ruta').setData({type:'FeatureCollection',features:[]});document.getElementById('rTrim').textContent='100%';return;}
+  /* primer vértice estrictamente por delante de sIni (búsqueda binaria) */
+  let lo=0, hi=n-1;
+  while(lo<hi){ const m=(lo+hi)>>1; if(routeCumDist[m]>sIni) hi=m; else lo=m+1; }
+  const idx=lo;
+  let fin=n; const sFin=sIni+CAM.RUTA_HORIZONTE_M;
+  if(sFin<total){ let l2=idx, h2=n-1; while(l2<h2){ const m=(l2+h2)>>1; if(routeCumDist[m]>sFin) h2=m; else l2=m+1; } fin=Math.min(n,l2+1); }
+  /* punto inicial interpolado exactamente en sIni */
+  const i0=Math.max(0,idx-1), A=routeCoordsLL[i0], B=routeCoordsLL[idx];
+  const seg=routeCumDist[idx]-routeCumDist[i0];
+  const t=seg>0 ? Math.max(0,Math.min(1,(sIni-routeCumDist[i0])/seg)) : 0;
+  const ini=[A[1]+(B[1]-A[1])*t, A[0]+(B[0]-A[0])*t];
+  const coordsFuturas=[ini]; const nivelesFuturos=[routeNivelesPorPunto[idx]||0];
+  for(let i=idx;i<fin;i++){ coordsFuturas.push([routeCoordsLL[i][1],routeCoordsLL[i][0]]); nivelesFuturos.push(routeNivelesPorPunto[i]||0); }
   const segmentos=[];let inicioSeg=0;
   for(let i=1;i<coordsFuturas.length;i++){
     const nivelActual=traficoOn?(nivelesFuturos[i]||0):0;
@@ -1350,7 +1362,7 @@ function onFix(pos){
   let snapRuta = false;
   if(routeCoordsLL.length){
     const proj = proyectarSobreRuta(now.lat, now.lon);
-    if(proj && proj.dist < SNAP_MAX_DIST_M){
+    if(proj && proj.dist < (est.onRoute ? DESVIO_M : SNAP_MAX_DIST_M)){   /* histéresis: una vez sobre la ruta, no se suelta por 30 m de ruido GPS */
       posCoche = [proj.lon, proj.lat];
       snapRuta = true;
       const elSnap = document.getElementById('rSnap');
@@ -1413,7 +1425,7 @@ function ocultarHUD(){const vel=document.getElementById('hudVel');if(vel) vel.te
    · El coche es el <div id="cocheFijo"> fijo al 65 %: aquí no se toca; el mapa se mueve debajo.
    ========================================================================== */
 const est = { fixOk:false, fixT:0, frameT:0, lon:0, lat:0, v:0, hdg:0, s:null, onRoute:false,
-              offLon:0, offLat:0, retorno:false, cur:[0,0] };
+              offLon:0, offLat:0, retorno:false, cur:[0,0,0,0,0] };
 let vSuave = 0, vZoom = 0;
 const man = { aprox:null, salida:null, estado:'CRUCERO' };
 const camAplicada = { lon:NaN, lat:NaN, b:NaN, z:NaN, p:NaN };
@@ -1433,7 +1445,7 @@ function suavizarAngulo(a,b,k,maxPaso){
 /* Cambio de ruta (nueva, recalculada o detenida): el arco recorrido y el estado de maniobra dejan de ser válidos */
 function resetCamRuta(){
   man.aprox=null; man.salida=null; man.estado='CRUCERO'; zoomManiobraOn=false;
-  est.s=null; est.onRoute=false; est.cur[0]=0; est.cur[1]=0;
+  est.s=null; est.onRoute=false; for(let q=0;q<est.cur.length;q++) est.cur[q]=0;
 }
 
 /* Punto sobre la ruta a distancia s (m) desde el origen. Cursor monotónico: O(1) por frame. */
@@ -1457,6 +1469,22 @@ function rumboRutaAdelante(s,L){
   if(!p0||!p1) return null;
   if(Math.abs(p1.lat-p0.lat)+Math.abs(p1.lon-p0.lon)<1e-9) return null;
   return bearing([p0.lat,p0.lon],[p1.lat,p1.lon]);
+}
+
+/* Tangente de la ruta justo bajo el coche (±TANGENTE_M): hacia dónde apunta realmente la flecha */
+function rumboTangente(s){
+  const a=puntoEnRuta(s-CAM.TANGENTE_M,2), b=puntoEnRuta(s+CAM.TANGENTE_M,3);
+  if(!a||!b) return null;
+  if(Math.abs(b.lat-a.lat)+Math.abs(b.lon-a.lon)<1e-9) return null;
+  return bearing([a.lat,a.lon],[b.lat,b.lon]);
+}
+/* Flecha del coche: gira respecto a la pantalla = rumbo del coche − rumbo de la cámara */
+let angCoche=0, __flechaDeg=NaN, __flechaEl=null;
+function rotarFlecha(deg){
+  if(!__flechaEl){ __flechaEl=document.getElementById('cocheFijo'); if(!__flechaEl) return; __flechaEl.style.transition='none'; }
+  if(Math.abs(deg-__flechaDeg)<0.1) return;
+  __flechaDeg=deg;
+  __flechaEl.style.transform='translate(-50%,-50%) rotate('+deg.toFixed(1)+'deg)';
 }
 
 /* ---- estimador de posición: extrapola entre fixes (GPS a ~1 Hz, render a 30–60 Hz) ---- */
@@ -1523,7 +1551,7 @@ function reiniciarCamaraEn(lon,lat,rumbo){
   camActual.zoom=ZOOM_CIUDAD; camActual.pitch=PITCH_NAV_BASE; camActual.inited=true;
   camObjetivo.center[0]=lon; camObjetivo.center[1]=lat; camObjetivo.bearing=r;
   camObjetivo.zoom=ZOOM_CIUDAD; camObjetivo.pitch=PITCH_NAV_BASE;
-  camAplicada.lon=NaN;
+  camAplicada.lon=NaN; angCoche=r; rotarFlecha(0);
   aplicarCamara(lon,lat,r,ZOOM_CIUDAD,PITCH_NAV_BASE);
 }
 
@@ -1599,6 +1627,7 @@ function aplicarCamara(lon,lat,b,z,p){
 }
 
 /* ---- bucle: se inicia UNA vez (iniciarBucleSeguimiento es idempotente) ---- */
+let __trimT=0, __trimS=-1e9;
 let __bucleId=null, __bucleInstancias=0, __ultimoTs=0;
 function iniciarBucleSeguimiento(){
   if(__bucleId!==null) return false;
@@ -1636,6 +1665,16 @@ function bucleSeguimiento(ts){
     if(rr!==null){ rumboObj=rr; tauB=CAM.TAU_BEARING; }
   }
   camActual.bearing=suavizarAngulo(camActual.bearing, rumboObj, camK(tauB,dt), CAM.BEARING_MAX_DEG_S*dt);
+
+  /* flecha: rumbo real del coche (tangente de la ruta bajo él; GPS si no hay ruta) menos rumbo de la cámara */
+  let rumboCoche=est.hdg;
+  if(pred.enRuta){ const tg=rumboTangente(pred.s); if(tg!==null) rumboCoche=tg; }
+  angCoche=suavizarAngulo(angCoche, rumboCoche, camK(CAM.TAU_FLECHA,dt), 0);
+  let dif=((angCoche-camActual.bearing+540)%360)-180;
+  rotarFlecha(camClamp(dif,-CAM.FLECHA_MAX_DEG,CAM.FLECHA_MAX_DEG));
+
+  /* azul de la ruta: recorte fino anclado a la flecha (no al último fix) */
+  if(pred.enRuta && ts-__trimT>=CAM.TRIM_MS && Math.abs(pred.s-__trimS)>=0.5){ __trimT=ts; __trimS=pred.s; actualizarTrimRuta(pred.s); }
 
   /* zoom y pitch: base por velocidad + extra de maniobra */
   const zBase=zoomPorVelocidad(vZoom*3.6);
