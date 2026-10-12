@@ -697,6 +697,9 @@ map.on('load',()=>{
     if(!map.hasImage('senal-semaforo-peatonal')) map.addImage('senal-semaforo-peatonal',crearIconoSemaforoPeatonal());
   }catch(e){}
 
+  /* Detalles suaves: verde de parques/bosques con arbolitos, campos de juego, pistas. Quedan debajo de la ruta y las señales. */
+  try{ crearDetallesMapa(); }catch(e){ registrarError('detalles',e.message); }
+
   map.addSource('trafico-tiles',{
     type:'raster',
     tiles:['https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key='+TT],
@@ -2127,6 +2130,111 @@ function buscarDestacado(){
   return true;
 }
 setInterval(buscarDestacado,2000);
+
+/* ========== Detalles de color suaves (arbolitos, campos, edificios singulares) ========== */
+const DETALLES = { ON:true, VERDE:'#dcebd8', VERDE_BOSQUE:'#d2e5cf', CAMPO:'#bfe0b5', CAMPO_LINEA:'#f7faf4', PISTA:'#e8cdbf', ESTADIO:'#e1e8dd',
+                   ARBOL_MINZOOM:15.5 };
+/* Imagen 64×64 (pixelRatio 2) con tres arbolitos: copa verde suave, brillo, tronco marrón suave y sombra tenue.
+   Se rellena píxel a píxel (sin canvas) para que funcione igual en cualquier navegador. */
+function crearArbolitos(){
+  const W=64, buf=new Uint8Array(W*W*4);
+  const mezcla=(x,y,r,g,b,a)=>{ if(x<0||y<0||x>=W||y>=W||a<=0) return; const i=(y*W+x)*4, ao=buf[i+3]/255, an=a+ao*(1-a);
+    if(an<=0) return; buf[i]=(r*a+buf[i]*ao*(1-a))/an; buf[i+1]=(g*a+buf[i+1]*ao*(1-a))/an; buf[i+2]=(b*a+buf[i+2]*ao*(1-a))/an; buf[i+3]=an*255; };
+  const disco=(cx,cy,rx,ry,rgb,alfa)=>{ for(let y=Math.floor(cy-ry-1);y<=cy+ry+1;y++) for(let x=Math.floor(cx-rx-1);x<=cx+rx+1;x++){
+    const d=Math.hypot((x+.5-cx)/rx,(y+.5-cy)/ry); const a=Math.max(0,Math.min(1,(1-d)*Math.min(rx,ry)))*alfa; mezcla(x,y,rgb[0],rgb[1],rgb[2],a); } };
+  const rect=(x0,y0,w,h,rgb,alfa)=>{ for(let y=y0;y<y0+h;y++) for(let x=x0;x<x0+w;x++) mezcla(x,y,rgb[0],rgb[1],rgb[2],alfa); };
+  const arbol=(cx,cy,r)=>{
+    disco(cx+2,cy+r+4,r*0.95,r*0.38,[110,130,105],0.22);                 /* sombra */
+    rect(Math.round(cx-1.5),Math.round(cy+r*0.45),3,Math.round(r*0.9),[176,137,104],1);   /* tronco marrón suave */
+    disco(cx,cy,r,r,[143,199,154],1);                                      /* copa verde suave */
+    disco(cx-r*0.28,cy-r*0.3,r*0.55,r*0.55,[170,214,176],0.9);             /* brillo */
+  };
+  arbol(18,22,10); arbol(46,46,8); arbol(50,12,6);
+  return { width:W, height:W, data:buf };
+}
+function crearDetallesMapa(){
+  if(!DETALLES.ON) return;
+  const estilo=map.getStyle();
+  const src=Object.keys(estilo.sources).find(k=>estilo.sources[k].type==='vector');
+  if(!src) return;
+  const hay=(sl)=>true;   /* si la capa no existe en las teselas simplemente no dibuja nada */
+  if(!map.hasImage('arbolitos')) map.addImage('arbolitos',crearArbolitos(),{pixelRatio:2});
+  const add=(l)=>{ try{ map.addLayer(l); }catch(e){ registrarError('detalle '+l.id,e.message); } };
+  const op=(z0,a0,z1,a1)=>['interpolate',['linear'],['zoom'],z0,a0,z1,a1];
+  /* verdes de fondo muy suaves */
+  add({id:'det-parque',type:'fill',source:src,'source-layer':'park',minzoom:12,paint:{'fill-color':DETALLES.VERDE,'fill-opacity':op(12,0.0,14,0.8)}});
+  add({id:'det-bosque',type:'fill',source:src,'source-layer':'landcover',filter:['==',['get','class'],'wood'],minzoom:12,paint:{'fill-color':DETALLES.VERDE_BOSQUE,'fill-opacity':op(12,0.0,14,0.85)}});
+  add({id:'det-hierba',type:'fill',source:src,'source-layer':'landcover',filter:['==',['get','class'],'grass'],minzoom:13,paint:{'fill-color':'#e4efe0','fill-opacity':op(13,0.0,15,0.6)}});
+  /* campos de juego, pistas y estadios */
+  add({id:'det-estadio',type:'fill',source:src,'source-layer':'landuse',filter:['==',['get','class'],'stadium'],minzoom:13,paint:{'fill-color':DETALLES.ESTADIO,'fill-opacity':0.9}});
+  add({id:'det-pista',type:'fill',source:src,'source-layer':'landuse',filter:['==',['get','class'],'track'],minzoom:14,paint:{'fill-color':DETALLES.PISTA,'fill-opacity':0.9}});
+  add({id:'det-campo',type:'fill',source:src,'source-layer':'landuse',filter:['==',['get','class'],'pitch'],minzoom:13,paint:{'fill-color':DETALLES.CAMPO,'fill-opacity':0.95}});
+  add({id:'det-campo-borde',type:'line',source:src,'source-layer':'landuse',filter:['==',['get','class'],'pitch'],minzoom:14,
+       layout:{'line-join':'round'},paint:{'line-color':DETALLES.CAMPO_LINEA,'line-width':op(14,1,19,3),'line-opacity':0.95}});
+  /* arbolitos (solo cerca; en lejos serían ruido) */
+  add({id:'det-arboles-parque',type:'fill',source:src,'source-layer':'park',minzoom:DETALLES.ARBOL_MINZOOM,paint:{'fill-pattern':'arbolitos','fill-opacity':0.95}});
+  add({id:'det-arboles-bosque',type:'fill',source:src,'source-layer':'landcover',filter:['==',['get','class'],'wood'],minzoom:DETALLES.ARBOL_MINZOOM,paint:{'fill-pattern':'arbolitos','fill-opacity':0.95}});
+}
+
+/* Edificios singulares: museos, estadios, ayuntamiento, iglesias, hospitales, universidades… (según los puntos de interés
+   de las propias teselas, sin listas a mano). Se dibujan opacos y definidos, en grises más oscuros/claros. */
+const HITOS = { MINZOOM:15, CADA_MS:2500, MAX:80, CERCA_M:25,
+  CLASES:{ museum:'#6f7983', art_gallery:'#6f7983', castle:'#68727c', monument:'#68727c', attraction:'#7a848e', theatre:'#7a848e',
+           stadium:'#5f6973', town_hall:'#7d8791', place_of_worship:'#a3acb5', hospital:'#8f99a3', college:'#8f99a3', library:'#8f99a3' } };
+const __hitos={ vistos:new Set(), feats:[], capas:false };
+function asegurarCapasHitos(){
+  if(__hitos.capas) return;
+  try{
+    map.addSource('hitos',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+    map.addLayer({id:'hitos-ext',type:'fill-extrusion',source:'hitos',minzoom:14,
+      paint:{'fill-extrusion-color':['get','c'],'fill-extrusion-height':['get','h'],'fill-extrusion-base':['get','min'],'fill-extrusion-opacity':1,'fill-extrusion-vertical-gradient':true}},
+      map.getLayer('trafico-flujo')?'trafico-flujo':undefined);
+    __hitos.capas=true;
+  }catch(e){ registrarError('hitos',e.message); }
+}
+function bboxAnillo(g){
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  for(const pl of poligonosDe(g)) for(const q of pl[0]){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
+  return [x0,y0,x1,y1];
+}
+function escanearHitos(){
+  if(!idFuenteBuildings || map.getZoom()<HITOS.MINZOOM) return 0;
+  let pois; try{ pois=map.querySourceFeatures(idFuenteBuildings,{sourceLayer:'poi'})||[]; }catch(e){ return 0; }
+  const nuevos=[];
+  for(const p of pois){
+    const cl=p.properties&&p.properties.class; if(!cl||!HITOS.CLASES[cl]||!p.geometry||p.geometry.type!=='Point') continue;
+    const [lon,lat]=p.geometry.coordinates; const k=lat.toFixed(5)+','+lon.toFixed(5);
+    if(__hitos.vistos.has(k)) continue; __hitos.vistos.add(k); nuevos.push({lat,lon,cl});
+  }
+  if(!nuevos.length) return 0;
+  const edificios=(map.querySourceFeatures(idFuenteBuildings,{sourceLayer:sourceLayerBuildings})||[]).filter(f=>f.geometry).map(f=>({f,bb:bboxAnillo(f.geometry)}));
+  const mLat=0.00025;   /* ≈ 28 m de margen para el pre-filtro por caja */
+  let anadidos=0;
+  for(const n of nuevos){
+    let el=null, md=HITOS.CERCA_M;
+    for(const e of edificios){
+      if(n.lon<e.bb[0]-mLat||n.lon>e.bb[2]+mLat||n.lat<e.bb[1]-mLat||n.lat>e.bb[3]+mLat) continue;
+      if(poligonoContiene(n.lon,n.lat,e.f.geometry)){ el=e.f; break; }
+      const d=distAPoligonoM(n.lat,n.lon,e.f.geometry); if(d<md){ md=d; el=e.f; }
+    }
+    if(!el) continue;
+    const pr=el.properties||{}, h=Number(pr.render_height||pr.height)||10, hm=Number(pr.render_min_height||pr.min_height)||0;
+    /* dos tonos por clase para que no sea todo igual */
+    const base=HITOS.CLASES[n.cl], tono=((Math.abs(Math.round(n.lat*1e5)+Math.round(n.lon*1e5)))%2)?base:aclarar(base,0.12);
+    __hitos.feats.push({type:'Feature',geometry:ensancharPoligono(el.geometry,1.02),properties:{h:Math.max(h,3)+0.5,min:hm,c:tono}});
+    anadidos++;
+  }
+  if(!anadidos) return 0;
+  if(__hitos.feats.length>HITOS.MAX) __hitos.feats.splice(0,__hitos.feats.length-HITOS.MAX);
+  asegurarCapasHitos();
+  const s=map.getSource('hitos'); if(s) s.setData({type:'FeatureCollection',features:__hitos.feats});
+  return anadidos;
+}
+function aclarar(hex,f){
+  const n=parseInt(hex.slice(1),16); const c=[(n>>16)&255,(n>>8)&255,n&255].map(v=>Math.round(v+(255-v)*f));
+  return '#'+c.map(v=>v.toString(16).padStart(2,'0')).join('');
+}
+setInterval(()=>{ try{ escanearHitos(); }catch(e){ registrarError('hitos',e.message); } },HITOS.CADA_MS);
 
 /* ---- Tráfico: ¿merece la pena desviarse del atasco? ----
    Cada 90 s compara dos tiempos con tráfico ACTUAL de TomTom:
