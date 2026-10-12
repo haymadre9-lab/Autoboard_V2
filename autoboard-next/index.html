@@ -905,7 +905,7 @@ document.getElementById('btnLimpiarFavs').onclick=()=>{if(!confirm('¿Borrar tod
 
 let simulando=false;
 let simTimer=null;
-let simIdx=0;
+let simIdx=0, simS=0;
 let simVelocidad=60;
 let simRutaLL=[];
 let simHeading=0;
@@ -962,24 +962,39 @@ async function iniciarSimulacion(){
     reiniciarCamaraEn(p0[1], p0[0], 0);
     renderStep();
 
-    const tickMs = 100;
+    /* Simulación a velocidad REAL: avanza por metros recorridos (no por vértices) e interpola la posición,
+       y emite un fix cada SIM_FIX_MS como un GPS de verdad (antes saltaba un vértice entero cada 100 ms:
+       a "60 km/h" iba a cientos de km/h con las polilíneas de TomTom). */
+    const SIM_FIX_MS = 1000;
+    const total = routeCumDist[routeCumDist.length-1];
+    const posEn = (m)=>{
+      if(m<=0) return routeCoordsLL[0];
+      if(m>=total) return routeCoordsLL[routeCoordsLL.length-1];
+      let lo=0, hi=routeCumDist.length-1;
+      while(hi-lo>1){ const mid=(lo+hi)>>1; if(routeCumDist[mid]<=m) lo=mid; else hi=mid; }
+      const seg=routeCumDist[hi]-routeCumDist[lo], t=seg>0?(m-routeCumDist[lo])/seg:0;
+      const A=routeCoordsLL[lo], B=routeCoordsLL[hi];
+      return [A[0]+(B[0]-A[0])*t, A[1]+(B[1]-A[1])*t];
+    };
+    simS = 0; let simT = performance.now(), simFixT = 0;
     if(simTimer) clearInterval(simTimer);
     simTimer = setInterval(()=>{
       if(!simulando) return;
-      const metrosPorTick = (simVelocidad/3.6) * (tickMs/1000);
-      let avanzado = 0;
-      while(simIdx < simRutaLL.length-2 && avanzado < metrosPorTick){
-        const a = simRutaLL[simIdx], b = simRutaLL[simIdx+1];
-        avanzado += dist(a,b);simIdx++;
+      const ahoraT = performance.now();
+      const dtS = Math.min(0.5, (ahoraT-simT)/1000); simT = ahoraT;
+      simS += (simVelocidad/3.6)*dtS;
+      if(simS >= total-1){
+        if(simEsBucle){
+          simS = 0; stepIdx=0; routeProgIdx=0; ultimoStepPintado=''; resetCamRuta();
+          const q0 = routeCoordsLL[0]; reiniciarCamaraEn(q0[1], q0[0], 0); simFixT = 0; renderStep();
+        } else { detenerSimulacion(); return; }
       }
-      if(simIdx >= simRutaLL.length-2){
-        if(simEsBucle){ simIdx = 0; } else { detenerSimulacion(); return; }
-      }
-      const p = simRutaLL[simIdx];
-      const pNext = simRutaLL[Math.min(simIdx+5, simRutaLL.length-1)];
+      if(ahoraT - simFixT < SIM_FIX_MS) return;
+      simFixT = ahoraT;
+      const p = posEn(simS), pNext = posEn(simS+10);
       simHeading = bearing(p, pNext);
       onFix({coords:{latitude:p[0],longitude:p[1],speed:simVelocidad/3.6,heading:simHeading,accuracy:5,altitude:0,altitudeAccuracy:5,headingAccuracy:2},timestamp:Date.now()});
-    }, tickMs);
+    }, 50);
   }catch(e){
     mostrarEstadoSim('<span class="mal">error: '+e.message+'</span>');
     registrarError('simulacion', e.message);
