@@ -3019,6 +3019,16 @@ api.color = hex => {
   matCarroceria.forEach((m,i)=>{ if(hex) m.color.set(hex); else m.color.copy(colorOrig[i]); });
   render();
 };
+/* tamaño: el coche mide de ancho lo mismo que la línea azul de la ruta (1,9 m de coche -> largo = ancho_ruta × 4,8/1,9) */
+function anchoRutaPx(z){ const P=[[14,10],[16,16],[18,22],[20,30]]; if(z<=P[0][0]) return P[0][1]; for(let i=1;i<P.length;i++){ if(z<=P[i][0]){ const t=(z-P[i-1][0])/(P[i][0]-P[i-1][0]); return P[i-1][1]+t*(P[i][1]-P[i-1][1]); } } return P[P.length-1][1]; }
+let escalaAplicada=0;
+function ajustarTamano(){
+  if(!api.activo||typeof map==='undefined'||!map.getZoom) return;
+  const px=anchoRutaPx(map.getZoom())*(4.8/1.9), esc=Math.max(0.3,px/LARGO_PX);
+  if(Math.abs(esc-escalaAplicada)<0.01) return;
+  escalaAplicada=esc; $('coche3D').style.transform='translate(-50%,-50%) scale('+esc.toFixed(3)+')';
+}
+setInterval(ajustarTamano,300);
 function posCamara(){
   const tilt = (typeof CAM!=='undefined' && CAM.FLECHA_TILT!=null) ? CAM.FLECHA_TILT : 42;
   const el = (90-tilt)*Math.PI/180;
@@ -3080,7 +3090,7 @@ async function activar(){
   if(!ok){ api.activo=false; document.body.classList.remove('coche3d-on'); ponerTexto(' (no se pudo cargar)'); return false; }
   api.activo=true; document.body.classList.add('coche3d-on');
   const c=gs('coche3d_color')||'orig'; api.color(c==='orig'?null:c);
-  api.yaw(yawActual); ponerTexto(); return true;
+  api.yaw(yawActual); escalaAplicada=0; ajustarTamano(); ponerTexto(); return true;
 }
 function desactivar(){ api.activo=false; document.body.classList.remove('coche3d-on'); ponerTexto(); }
 api.activar=activar; api.desactivar=desactivar;
