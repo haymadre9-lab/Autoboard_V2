@@ -78,7 +78,7 @@ body.modo-navegacion #minihud{display:flex}
   top:65%;
   width:64px;
   height:64px;
-  transform:translate(-50%,-50%) rotate(0deg);
+  transform:translate(-50%,-50%) perspective(260px) rotateX(28deg) rotate(0deg);
   z-index:14;
   pointer-events:none;
   will-change:transform;
@@ -176,6 +176,7 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
 <div id="cocheFijo">
   <svg viewBox="0 0 64 64">
     <ellipse cx="32" cy="52" rx="16" ry="4" fill="rgba(0,0,0,0.28)"/>
+    <path d="M32 12 L52 58 L32 50 L12 58 Z" fill="#1565b8" stroke="#ffffff" stroke-width="3.5" stroke-linejoin="round"/>
     <path d="M32 8 L52 54 L32 46 L12 54 Z"
           fill="#1e88e5" stroke="#ffffff" stroke-width="3.5" stroke-linejoin="round"/>
     <path d="M32 16 L42 44 L32 39 L22 44 Z" fill="#5eb0f0" opacity="0.55"/>
@@ -485,7 +486,7 @@ const CAM = {
   /* --- el coche se dibuja en la calle real aunque la polilínea de TomTom vaya por fuera --- */
   LATERAL_GPS:true, LATERAL_MAX_M:14, LATERAL_ACC_M:9, TAU_LATERAL:2.5,
   LOOKAHEAD_S:0, LOOKAHEAD_MIN_M:4, LOOKAHEAD_MAX_M:4,   /* mirada corta: la ruta no se desvía del coche en las curvas */
-  TAU_FLECHA:0.15, FLECHA_MAX_DEG:55, TANGENTE_M:4,       /* flecha del coche: sigue la tangente de la ruta bajo el coche */
+  TAU_FLECHA:0.15, FLECHA_MAX_DEG:55, FLECHA_TILT:28, TANGENTE_M:4,       /* flecha del coche: sigue la tangente de la ruta bajo el coche */
   RUTA_COLA_M:4, RUTA_HORIZONTE_M:5000, TRIM_MS:120,      /* azul: empieza justo bajo la flecha, se recorta cada ~120 ms */
   /* --- rumbo GPS filtrado: ventana por TIEMPO, no por nº de fixes --- */
   HEADING_WINDOW_MS:3500, HEADING_MAX_MUESTRAS:16,
@@ -1692,7 +1693,7 @@ function rotarFlecha(deg){
   if(!__flechaEl){ __flechaEl=document.getElementById('cocheFijo'); if(!__flechaEl) return; __flechaEl.style.transition='none'; }
   if(Math.abs(deg-__flechaDeg)<0.1) return;
   __flechaDeg=deg;
-  __flechaEl.style.transform='translate(-50%,-50%) rotate('+deg.toFixed(1)+'deg)';
+  __flechaEl.style.transform='translate(-50%,-50%) perspective(260px) rotateX('+CAM.FLECHA_TILT+'deg) rotate('+deg.toFixed(1)+'deg)';   /* tumbada hacia delante: da sensación de avance */
 }
 
 /* ---- estimador de posición: extrapola entre fixes (GPS a ~1 Hz, render a 30–60 Hz) ---- */
