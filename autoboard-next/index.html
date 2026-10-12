@@ -176,7 +176,8 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
   <button class="ajuste on" id="btnSenales">🚦 Señales: ON</button>
   <button class="ajuste on" id="btnPitch">📐 Pitch: ON</button>
   <button class="ajuste on" id="btnSky">☀️ Cielo: ON</button>
-  <button class="ajuste on" id="btnTrafico">🚦 Tráfico: ON</button>
+  <button class="ajuste on" id="btnTrafico">🚦 Tráfico en ruta: ON</button>
+  <button class="ajuste" id="btnTraficoCalles">🛣️ Tráfico en calles: OFF</button>
   <button class="ajuste on" id="btnCelebracion">🎉 Celebración: ON</button>
   <div class="seccion">Avisos</div>
   <button class="ajuste on" id="btnAvisosRadares">📸 Avisos radares: ON</button>
@@ -409,7 +410,7 @@ const ZOOM_CARRETERA = 18.0;
 const ZOOM_MANIOBRA = 20.8;   /* zoom máximo en un giro (antes 20.5). Rango útil probado en mapa: 20.5–21.0 */
 const ZOOM_VEL_BAJA = 25;
 const ZOOM_VEL_ALTA = 90;
-const PITCH_NAV_BASE = 65;
+const PITCH_NAV_BASE = 72;   /* con el coche al 65 % de la pantalla, el horizonte asoma a partir de ~67°; a 72° hay ~15 % de cielo */
 
 /* Posición del coche en pantalla (65% desde arriba) */
 const COCHE_SCREEN_Y = 0.65;
@@ -435,6 +436,10 @@ const CAM = {
   EXTRAP_DECAY_S:3.0,     /* y luego frenada gradual hasta 0 (pérdida de GPS: la cámara se detiene, no salta) */
   SNAP_JUMP_M:150,        /* corrección GPS mayor que esto → salto directo en vez de deslizar */
   /* --- anticipación del rumbo (mirar la ruta por delante) --- */
+  /* --- velocidad GPS: filtro anti-glitch (60 → 2 km/h → 60) --- */
+  DECEL_MAX_MS2:9,        /* frenada máxima creíble; una caída mayor que no confirma el desplazamiento se descarta */
+  /* --- el coche se dibuja en la calle real aunque la polilínea de TomTom vaya por fuera --- */
+  LATERAL_GPS:true, LATERAL_MAX_M:14, LATERAL_ACC_M:9, TAU_LATERAL:2.5,
   LOOKAHEAD_S:0, LOOKAHEAD_MIN_M:4, LOOKAHEAD_MAX_M:4,   /* mirada corta: la ruta no se desvía del coche en las curvas */
   TAU_FLECHA:0.15, FLECHA_MAX_DEG:55, TANGENTE_M:4,       /* flecha del coche: sigue la tangente de la ruta bajo el coche */
   RUTA_COLA_M:4, RUTA_HORIZONTE_M:5000, TRIM_MS:120,      /* azul: empieza justo bajo la flecha, se recorta cada ~120 ms */
@@ -655,7 +660,7 @@ map.on('load',()=>{
     tiles:['https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key='+TT],
     tileSize:256
   });
-  map.addLayer({id:'trafico-flujo',type:'raster',source:'trafico-tiles',paint:{'raster-opacity':0.5}});
+  map.addLayer({id:'trafico-flujo',type:'raster',source:'trafico-tiles',layout:{visibility:'none'},paint:{'raster-opacity':0.5}});   /* apagado por defecto: el coche se ve sobre la calle, no sobre las líneas de tráfico */
 
   map.addSource('giro-pos',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
   map.addLayer({id:'giro-pos',type:'symbol',source:'giro-pos',
@@ -682,8 +687,8 @@ map.on('load',()=>{
   });
   const paintNivel = {'line-opacity':1.0,'line-width':['interpolate',['linear'],['zoom'],14,10,16,16,18,22,20,30]};
   const layoutNivel = {'line-cap':'round','line-join':'round','line-round-limit':1.0};
-  map.addLayer({id:'ruta-1',type:'line',source:'ruta',filter:['==',['get','nivel'],1],paint:{...paintNivel,'line-color':'#f9a825'},layout:layoutNivel});
-  map.addLayer({id:'ruta-2',type:'line',source:'ruta',filter:['==',['get','nivel'],2],paint:{...paintNivel,'line-color':'#ff6f00'},layout:layoutNivel});
+  map.addLayer({id:'ruta-1',type:'line',source:'ruta',filter:['==',['get','nivel'],1],paint:{...paintNivel,'line-color':'#fdd835'},layout:layoutNivel});
+  map.addLayer({id:'ruta-2',type:'line',source:'ruta',filter:['==',['get','nivel'],2],paint:{...paintNivel,'line-color':'#fb8c00'},layout:layoutNivel});
   map.addLayer({id:'ruta-3',type:'line',source:'ruta',filter:['==',['get','nivel'],3],paint:{...paintNivel,'line-color':'#d32f2f'},layout:layoutNivel});
 
   cargarRadares();
@@ -885,7 +890,11 @@ let pitchOn=true;
 document.getElementById('btnPitch').onclick=function(){pitchOn=!pitchOn;map.easeTo({pitch:pitchOn?PITCH_NAV_BASE:0,duration:400});this.textContent='📐 Pitch: '+(pitchOn?'ON':'OFF');this.classList.toggle('on',pitchOn);};
 document.getElementById('btnAA').onclick=()=>{location.href=location.pathname+(antialiasActivo?'':'?aa=1');};
 document.getElementById('btnDebug').onclick=function(){const d1=document.getElementById('diag'),d2=document.getElementById('diag2');const activo=d1.classList.toggle('on');d2.classList.toggle('on',activo);this.textContent='🔧 Paneles Debug: '+(activo?'ON':'OFF');this.classList.toggle('on',activo);};
-document.getElementById('btnTrafico').onclick=function(){traficoOn=!traficoOn;this.textContent='🚦 Tráfico: '+(traficoOn?'ON':'OFF');this.classList.toggle('on',traficoOn);if(map.getLayer('trafico-flujo')){map.setLayoutProperty('trafico-flujo','visibility',traficoOn?'visible':'none');}if(routeCoordsLL.length) repintarRutaConNiveles();};
+/* Tráfico EN LA RUTA: la línea azul se pinta amarillo (leve) / naranja (retención) / rojo (parado) según TomTom */
+document.getElementById('btnTrafico').onclick=function(){traficoOn=!traficoOn;this.textContent='🚦 Tráfico en ruta: '+(traficoOn?'ON':'OFF');this.classList.toggle('on',traficoOn);if(routeCoordsLL.length){repintarRutaConNiveles();actualizarTrimRuta();}};
+/* Tráfico EN LAS CALLES (capa raster de TomTom): apagado por defecto */
+let traficoCallesOn=false;
+document.getElementById('btnTraficoCalles').onclick=function(){traficoCallesOn=!traficoCallesOn;this.textContent='🛣️ Tráfico en calles: '+(traficoCallesOn?'ON':'OFF');this.classList.toggle('on',traficoCallesOn);if(map.getLayer('trafico-flujo')) map.setLayoutProperty('trafico-flujo','visibility',traficoCallesOn?'visible':'none');};
 document.getElementById('btnCelebracion').onclick=function(){celebracionOn=!celebracionOn;this.textContent='🎉 Celebración: '+(celebracionOn?'ON':'OFF');this.classList.toggle('on',celebracionOn);};
 function repintarRutaConNiveles(){
   if(!routeCoordsLL.length) return;
@@ -1353,10 +1362,28 @@ async function comprobarDesvio(ll){
 
 /* ========== onFix — NADA de mover el coche ni la cámara aquí.
    Solo actualizamos objetivos. El movimiento lo hace el bucle de animación. ========== */
+/* Velocidad fiable. El GPS del navegador a veces devuelve 0/2 km/h de golpe yendo a 60 (o speed=null):
+   eso activaba "parado", congelaba la cámara y luego la hacía saltar. Se contrasta con el desplazamiento real
+   entre fixes y se limita la deceleración a lo físicamente posible. */
+const velHist={lat:NaN,lon:NaN,t:0,v:0};
+function filtrarVelocidad(c,now){
+  const rep=Number.isFinite(c.speed)?Math.max(0,c.speed):NaN;
+  let vEf=Number.isFinite(rep)?rep:0;
+  const dt=(now.t-velHist.t)/1000;
+  if(velHist.t>0 && dt>0.2 && dt<6 && Number.isFinite(velHist.lat)){
+    const vDesp=dist([velHist.lat,velHist.lon],[now.lat,now.lon])/dt;
+    const confirma=vDesp>0.5*velHist.v && vDesp>3;           /* nos hemos movido de verdad */
+    if(!Number.isFinite(rep)){ vEf=vDesp; }                  /* sin speed: la deducimos */
+    else if(vDesp>5 && rep<0.5*vDesp) vEf=vDesp;             /* speed absurdamente bajo frente al desplazamiento */
+    else if(velHist.v>5 && confirma && rep<velHist.v-CAM.DECEL_MAX_MS2*dt) vEf=Math.max(rep,velHist.v-CAM.DECEL_MAX_MS2*dt);
+  }
+  velHist.lat=now.lat; velHist.lon=now.lon; velHist.t=now.t; velHist.v=vEf;
+  return vEf;
+}
 function onFix(pos){
   const c=pos.coords;
   const now={lat:c.latitude,lon:c.longitude,t:pos.timestamp||Date.now()};
-  const v=Number.isFinite(c.speed)?Math.max(0,c.speed):0;
+  const v=filtrarVelocidad(c,now);
   speedKmh=v*3.6;
   /* Histéresis de "parado": entra por debajo de 2 km/h, sale por encima de 4 km/h (evita parpadeo con ruido de velocidad GPS).
      El bloqueo por gesto del usuario ya NO se anula en cada fix: lo gestiona volverASeguir(). */
@@ -1380,6 +1407,13 @@ function onFix(pos){
     if(proj && proj.dist < (est.onRoute ? DESVIO_M : SNAP_MAX_DIST_M)){   /* histéresis: una vez sobre la ruta, no se suelta por 30 m de ruido GPS */
       posCoche = [proj.lon, proj.lat];
       snapRuta = true;
+      /* desviación lateral GPS−ruta (m): si el GPS es bueno, el coche se dibuja donde está la calle de verdad */
+      if(CAM.LATERAL_GPS && Number.isFinite(c.accuracy) && c.accuracy<=CAM.LATERAL_ACC_M && !simulando){
+        let le=(now.lon-proj.lon)*111320*Math.cos(now.lat*Math.PI/180), ln=(now.lat-proj.lat)*110540;
+        const m=Math.hypot(le,ln); if(m>CAM.LATERAL_MAX_M){ le*=CAM.LATERAL_MAX_M/m; ln*=CAM.LATERAL_MAX_M/m; }
+        const w=0.8*Math.max(0,Math.min(1,(CAM.LATERAL_ACC_M+3-c.accuracy)/6));
+        est.latTe=le*w; est.latTn=ln*w;
+      }else{ est.latTe=0; est.latTn=0; }
       const elSnap = document.getElementById('rSnap');
       if(elSnap) elSnap.innerHTML = '<b>'+Math.round(proj.dist)+' m</b>';
     }else if(proj){
@@ -1440,7 +1474,7 @@ function ocultarHUD(){const vel=document.getElementById('hudVel');if(vel) vel.te
    · El coche es el <div id="cocheFijo"> fijo al 65 %: aquí no se toca; el mapa se mueve debajo.
    ========================================================================== */
 const est = { fixOk:false, fixT:0, frameT:0, lon:0, lat:0, v:0, hdg:0, s:null, onRoute:false,
-              offLon:0, offLat:0, retorno:false, cur:[0,0,0,0,0] };
+              offLon:0, offLat:0, retorno:false, cur:[0,0,0,0,0], latTe:0, latTn:0, latE:0, latN:0 };
 let vSuave = 0, vZoom = 0;
 const man = { aprox:null, salida:null, estado:'CRUCERO' };
 const camAplicada = { lon:NaN, lat:NaN, b:NaN, z:NaN, p:NaN };
@@ -1559,7 +1593,7 @@ function alimentarEstimador(posCoche,v,snap){
 function reiniciarCamaraEn(lon,lat,rumbo){
   const r=Number.isFinite(rumbo)?rumbo:0;
   est.fixOk=true; est.fixT=performance.now(); est.lon=lon; est.lat=lat; est.v=0; est.hdg=r;
-  est.s=null; est.onRoute=false; est.offLon=0; est.offLat=0; est.retorno=false;
+  est.s=null; est.onRoute=false; est.offLon=0; est.offLat=0; est.retorno=false; est.latTe=est.latTn=est.latE=est.latN=0;
   vSuave=0; vZoom=0; resetCamRuta();
   cochePosActual[0]=lon; cochePosActual[1]=lat;
   camActual.center[0]=lon; camActual.center[1]=lat; camActual.bearing=r;
@@ -1670,7 +1704,10 @@ function bucleSeguimiento(ts){
   const dec=Math.exp(-dt/tauOffset());
   est.offLon*=dec; est.offLat*=dec; est.frameT=ts;
   if(est.retorno && Math.abs(est.offLon)<1e-7 && Math.abs(est.offLat)<1e-7) est.retorno=false;
-  const cx=pred.lon+est.offLon, cy=pred.lat+est.offLat;
+  const kl=camK(CAM.TAU_LATERAL,dt);
+  est.latE+=(est.latTe-est.latE)*kl; est.latN+=(est.latTn-est.latN)*kl;
+  if(!pred.enRuta){ est.latE=0; est.latN=0; }
+  const cx=pred.lon+est.offLon+est.latE/(111320*Math.cos(pred.lat*Math.PI/180)), cy=pred.lat+est.offLat+est.latN/110540;
   cochePosActual[0]=cx; cochePosActual[1]=cy;
 
   /* rumbo: geometría de la ruta por delante si vamos sobre ella; si no, rumbo GPS filtrado */
@@ -1821,7 +1858,105 @@ setInterval(()=>{
   document.getElementById('g4').textContent=Math.round((contadorRenders-fpsMarchaUltimoConteo)/dt)+' fps';
   fpsMarchaUltimoT=a;fpsMarchaUltimoConteo=contadorRenders;
 },1000);
-setInterval(async ()=>{if(!ultimaRutaDestino || !lastFix || recalculando) return;await calcularRuta([lastFix.lat,lastFix.lon], ultimaRutaDestino, 'recalculo');}, 120000);
+/* ---- Navegar a un destino. (En el archivo recibido esta función NO existía: buscar, casa, favoritos y cargadores
+   llamaban a navegarA() y daban ReferenceError; y ultimaRutaDestino nunca se asignaba, así que ni el recálculo
+   por desvío ni el periódico se ejecutaban nunca.) ---- */
+async function navegarA(lat,lon){
+  if(!lastFix){ alert('Activa el GPS o la simulación primero.'); return false; }
+  if(!Number.isFinite(lat)||!Number.isFinite(lon)) return false;
+  ultimaRutaDestino=[lat,lon];
+  ultimoRecalculo=performance.now(); ultimoCambioTrafico=performance.now();
+  const ok=await calcularRuta([lastFix.lat,lastFix.lon],[lat,lon],'normal');
+  if(!ok){ ultimaRutaDestino=null; return false; }
+  document.body.classList.add('modo-navegacion');
+  const av=document.getElementById('avisoInicial'); if(av) av.classList.add('oculto');
+  seguirOn=true; const btnSeg=document.getElementById('btnSeguir'); if(btnSeg) btnSeg.classList.add('activo');
+  return true;
+}
+
+/* ---- Tráfico: ¿merece la pena desviarse del atasco? ----
+   Cada 90 s compara dos tiempos con tráfico ACTUAL de TomTom:
+     A = seguir por la ruta que llevas (pasando por puntos de ella cada ~1,2 km)
+     B = la mejor ruta ahora mismo
+   Solo cambia si B ahorra ≥ max(2 min, 10 %) Y es realmente otro camino. Sin cambios en los 5 min siguientes
+   a otro cálculo y nunca a menos de 400 m de la próxima maniobra. */
+let ultimoCambioTrafico=0, evaluandoTrafico=false;
+const TRAFICO = { CHECK_MS:90000, COOLDOWN_MS:300000, GANANCIA_MIN_S:120, GANANCIA_PCT:0.10, VIA_CADA_M:1200, MAX_VIAS:8, NO_CERCA_MANIOBRA_M:400, DIFIERE_PCT:0.15, DIFIERE_M:40 };
+function nivelDeMagnitud(m){ return m>=3 ? 3 : (m===2 ? 2 : (m===1 ? 1 : 0)); }
+function urlRutaPorPuntos(pts){
+  return 'https://api.tomtom.com/routing/1/calculateRoute/'+pts.map(p=>p[0].toFixed(6)+','+p[1].toFixed(6)).join(':')+'/json?key='+TT+'&routeType=fastest&traffic=true&travelMode=car&sectionType=traffic';
+}
+/* Metro de la ruta actual más cercano a un punto [lat,lon] (null si queda a más de 80 m) */
+function metroEnRutaActual(p){
+  let md=Infinity, ms=null;
+  for(let i=Math.max(0,routeProgIdx-2); i<routeCoordsLL.length-1; i++){
+    const d=segDistM2(p,routeCoordsLL[i],routeCoordsLL[i+1]);
+    if(d<md){ md=d; ms=routeCumDist[i]; }
+  }
+  return md<=80 ? ms : null;
+}
+/* Repinta amarillo/naranja/rojo sobre la ruta ACTUAL con el tráfico fresco de A (sin cambiar su geometría) */
+function aplicarNivelesDeRuta(R){
+  if(!R.sections||!R.sections.length||!routeCoordsLL.length) return;
+  const pts=R.legs.flatMap(l=>l.points.map(q=>[q.latitude,q.longitude]));
+  const niv=new Array(routeCoordsLL.length).fill(0);
+  for(const sec of R.sections){
+    if(sec.sectionType && sec.sectionType!=='TRAFFIC') continue;
+    const nivel=nivelDeMagnitud(typeof sec.magnitudeOfDelay==='number'?sec.magnitudeOfDelay:0);
+    if(!nivel) continue;
+    const a=pts[sec.startPointIndex||0], b=pts[Math.min(pts.length-1,sec.endPointIndex||pts.length-1)];
+    if(!a||!b) continue;
+    const sa=metroEnRutaActual(a), sb=metroEnRutaActual(b);
+    if(sa===null||sb===null) continue;
+    const lo=Math.min(sa,sb), hi=Math.max(sa,sb);
+    for(let i=0;i<routeCumDist.length;i++) if(routeCumDist[i]>=lo-1 && routeCumDist[i]<=hi+1) niv[i]=Math.max(niv[i],nivel);
+  }
+  routeNivelesPorPunto=niv;
+  actualizarTrimRuta();
+}
+function rutaDifiereDeLaActual(R){
+  const pts=R.legs.flatMap(l=>l.points.map(q=>[q.latitude,q.longitude]));
+  if(pts.length<2) return false;
+  let lejos=0, n=0;
+  for(let k=0;k<pts.length;k+=Math.max(1,Math.floor(pts.length/60))){
+    n++; let md=Infinity;
+    for(let i=Math.max(0,routeProgIdx-2); i<routeCoordsLL.length-1; i++){ const d=segDistM2(pts[k],routeCoordsLL[i],routeCoordsLL[i+1]); if(d<md) md=d; if(md<TRAFICO.DIFIERE_M) break; }
+    if(md>=TRAFICO.DIFIERE_M) lejos++;
+  }
+  return n>0 && lejos/n>=TRAFICO.DIFIERE_PCT;
+}
+async function evaluarAtascoYDesvio(){
+  if(evaluandoTrafico||recalculando||!ultimaRutaDestino||!lastFix||!routeCoordsLL.length||simulando) return false;
+  const t=performance.now();
+  if(t-ultimoCambioTrafico<TRAFICO.COOLDOWN_MS || t-ultimoRecalculo<TRAFICO.COOLDOWN_MS) return false;
+  const rec=recorridoAhora([lastFix.lat,lastFix.lon]), total=routeCumDist[routeCumDist.length-1];
+  const st=steps[stepIdx];
+  if(st && st.maneuver && st.maneuver.type!=='arrive' && (st.metro||0)-rec<TRAFICO.NO_CERCA_MANIOBRA_M) return false;
+  if(total-rec<1500) return false;   /* casi llegando: no compensa */
+  evaluandoTrafico=true;
+  try{
+    const o=[lastFix.lat,lastFix.lon], d=ultimaRutaDestino;
+    const via=[o]; let sig=rec+TRAFICO.VIA_CADA_M;
+    for(let i=routeProgIdx;i<routeCoordsLL.length && via.length<=TRAFICO.MAX_VIAS;i++){
+      if(routeCumDist[i]>=sig && routeCumDist[i]<total-300){ via.push(routeCoordsLL[i]); sig=routeCumDist[i]+TRAFICO.VIA_CADA_M; }
+    }
+    via.push(d);
+    const [jA,jB]=await Promise.all([ fetch(urlRutaPorPuntos(via)).then(r=>r.json()), fetch(urlRutaTomTom(o,d)).then(r=>r.json()) ]);
+    const A=jA.routes&&jA.routes[0], B=jB.routes&&jB.routes[0];
+    if(!A||!B) return false;
+    aplicarNivelesDeRuta(A);                                   /* colores frescos sobre la ruta que llevas */
+    const etaA=A.summary.travelTimeInSeconds, etaB=B.summary.travelTimeInSeconds, gan=etaA-etaB;
+    if(gan>=Math.max(TRAFICO.GANANCIA_MIN_S, TRAFICO.GANANCIA_PCT*etaA) && rutaDifiereDeLaActual(B)){
+      ultimoCambioTrafico=performance.now(); ultimoRecalculo=ultimoCambioTrafico;
+      const ok=await calcularRuta(o,d,'trafico');
+      if(ok){ const g5=document.getElementById('g5'); if(g5) g5.innerHTML+=' · <span class="aviso">🔀 ahorra '+Math.round(gan/60)+' min</span>'; }
+      return ok;
+    }
+    return false;
+  }catch(e){ registrarError('trafico',e.message); return false; }
+  finally{ evaluandoTrafico=false; }
+}
+setInterval(evaluarAtascoYDesvio, TRAFICO.CHECK_MS);
 function detenerRuta(){
   steps=[];stepIdx=0;routeCoordsLL=[];routeCumDist=[];routeProgIdx=0;
   ultimaRutaDestino=null;limiteVelocidadVia=0;ultimoStepPintado='';
