@@ -410,7 +410,7 @@ const ZOOM_CARRETERA = 18.0;
 const ZOOM_MANIOBRA = 20.8;   /* zoom máximo en un giro (antes 20.5). Rango útil probado en mapa: 20.5–21.0 */
 const ZOOM_VEL_BAJA = 25;
 const ZOOM_VEL_ALTA = 90;
-const PITCH_NAV_BASE = 72;   /* con el coche al 65 % de la pantalla, el horizonte asoma a partir de ~67°; a 72° hay ~15 % de cielo */
+const PITCH_NAV_BASE = 74;   /* circulando por ciudad (referencia codriver.io). Con el coche al 65 %, el horizonte asoma desde ~67°; a 74° el cielo ocupa ~20 % */
 
 /* Posición del coche en pantalla (65% desde arriba) */
 const COCHE_SCREEN_Y = 0.65;
@@ -457,7 +457,12 @@ const CAM = {
   MAN_HOLD_M:25,            /* mantener zoom tras pasar la maniobra... */
   ROT_HOLD_M:55,            /* ...(rotondas: más) */
   MAN_RELEASE_M:70,         /* ...y soltarlo durante estos metros */
-  PITCH_MAN_DELTA:-3,       /* grados de pitch menos en el giro (0 = desactivar) */
+  PITCH_MAN_DELTA:2,        /* maniobra: algo MÁS inclinado y muy cerca (referencia codriver.io); negativo = menos inclinado */
+  /* --- modo "perspectiva" (autopista / carretera general con la próxima maniobra lejos) --- */
+  PITCH_AUTOPISTA:50,       /* menos inclinado: se ve más ruta por delante */
+  ZOOM_AUTOPISTA_EXTRA:-1.6,/* y más alejado (zoom restado al de crucero) */
+  AUT_V_MIN_KMH:55, AUT_V_MAX_KMH:90,       /* el modo entra gradualmente entre estas velocidades */
+  AUT_D_MIN_M:600, AUT_D_MAX_M:2200,        /* ...y entre estas distancias a la próxima maniobra (cerca = no) */
   /* --- diagnóstico: abrir con ?diag=1 --- */
   DIAG:new URLSearchParams(location.search).get('diag')==='1'
 };
@@ -529,9 +534,9 @@ function aplicarSky(){
   if(!skyOn){ map.setSky(null); return; }
   try{
     map.setSky({
-      /* cielo gris pizarra que se aclara hacia el horizonte con una banda de bruma, en la misma gama fría del mapa lavado */
-      'sky-color':'#8f99a5','sky-horizon-blend':0.75,'horizon-color':'#c7ccd2','horizon-fog-blend':0.9,
-      'fog-color':'#cdd1d6','fog-ground-blend':0.65,
+      /* cielo gris muy claro que se funde con una bruma blanca en el horizonte (como codriver.io): nada oscuro */
+      'sky-color':'#d3d8de','sky-horizon-blend':0.6,'horizon-color':'#f0f2f4','horizon-fog-blend':0.85,
+      'fog-color':'#eceef1','fog-ground-blend':0.55,
       'atmosphere-blend':['interpolate',['linear'],['zoom'],0,0.1,10,0.08,15,0.04]
     });
   }catch(e){}
@@ -621,6 +626,7 @@ map.on('load',()=>{
   if(!__paddingListener){ window.addEventListener('resize', actualizarPadding); __paddingListener = true; }
 
   lavarMapa();
+  try{ map.getContainer().style.background="#e9ecef"; }catch(e){}   /* si algo no se dibuja (p. ej. sobre el horizonte), se ve gris claro, nunca negro */
   aplicarFog();
   aplicarSky();
   document.getElementById('rArranque').innerHTML='<b>OK</b>';
@@ -1369,19 +1375,21 @@ async function comprobarDesvio(ll){
 const velHist={lat:NaN,lon:NaN,t:0,v:0,win:[],bajos:0};
 function filtrarVelocidad(c,now){
   const rep=Number.isFinite(c.speed)?Math.max(0,c.speed):NaN;
+  if(velHist.t>0 && now.t<=velHist.t-1000){ velHist.win.length=0; velHist.t=0; velHist.bajos=0; }   /* reloj que retrocede / timestamps de otra base: se reinicia el historial */
   const dt=(now.t-velHist.t)/1000;
   const seguido = velHist.t>0 && dt>0.2 && dt<6;
   /* ventana de posiciones (~4 s): sirve para deducir la velocidad cuando el navegador no da "speed" */
   const h=velHist.win; h.push({lat:now.lat,lon:now.lon,t:now.t});
   while(h.length>1 && now.t-h[0].t>4500) h.shift();
-  let vRaw=rep;
-  if(!Number.isFinite(rep)){
-    vRaw=0;
-    if(h.length>=2){
-      const T=(now.t-h[0].t)/1000, acc=Math.max(5,Number.isFinite(c.accuracy)?c.accuracy:5);
-      vRaw=Math.max(0, dist([h[0].lat,h[0].lon],[now.lat,now.lon])-1.2*acc)/Math.max(1,T);
-    }
+  /* velocidad por desplazamiento en la ventana de ~4 s, restando el ruido típico (1,2 × precisión) */
+  let vw=0;
+  if(h.length>=2){
+    const T=(now.t-h[0].t)/1000, acc=Math.max(5,Number.isFinite(c.accuracy)?c.accuracy:5);
+    vw=Math.max(0, dist([h[0].lat,h[0].lon],[now.lat,now.lon])-1.2*acc)/Math.max(1,T);
   }
+  /* El GPS del navegador del coche a veces da speed=0/null mientras avanzas: eso congelaba la cámara ("parado") y
+     luego la hacía saltar. Si el desplazamiento dice claramente que te mueves (>11 km/h), manda el desplazamiento. */
+  let vRaw = Number.isFinite(rep) ? (vw>3 && h.length>=3 ? Math.max(rep,vw) : rep) : vw;
   let vEf=vRaw;
   if(seguido){
     const prev=velHist.v;
@@ -1748,7 +1756,16 @@ function bucleSeguimiento(ts){
   /* zoom y pitch: base por velocidad + extra de maniobra */
   const zBase=zoomPorVelocidad(vZoom*3.6);
   const mn=actualizarManiobra(pred.s, vSuave, zBase);
-  const zObj=zBase+mn.extra, pObj=pitchOn ? PITCH_NAV_BASE+CAM.PITCH_MAN_DELTA*mn.peso : 0;   /* respeta el botón 📐 Pitch de Ajustes */
+  /* modo perspectiva: velocidad alta Y próxima maniobra lejos (continuo, sin umbrales binarios); se apaga al acercarse a una maniobra */
+  const stN=steps[stepIdx];
+  const dNext=(pred.enRuta && stN && stN.maneuver && stN.maneuver.type!=='arrive') ? (stN.metro||0)-pred.s : Infinity;
+  const fVel=camSmooth(camClamp((vZoom*3.6-CAM.AUT_V_MIN_KMH)/(CAM.AUT_V_MAX_KMH-CAM.AUT_V_MIN_KMH),0,1));
+  const fDis=camSmooth(camClamp((dNext-CAM.AUT_D_MIN_M)/(CAM.AUT_D_MAX_M-CAM.AUT_D_MIN_M),0,1));
+  const fAut=fVel*fDis*(1-mn.peso);
+  const zObj=zBase+mn.extra+CAM.ZOOM_AUTOPISTA_EXTRA*fAut;
+  const pCiudad=PITCH_NAV_BASE+CAM.PITCH_MAN_DELTA*mn.peso;
+  const pObj=pitchOn ? pCiudad+(CAM.PITCH_AUTOPISTA-pCiudad)*fAut : 0;   /* respeta el botón 📐 Pitch de Ajustes */
+  camDiag.fAut=fAut;
   camActual.zoom  += (zObj-camActual.zoom)*camK(zObj<camActual.zoom ? CAM.TAU_ZOOM_OUT : CAM.TAU_ZOOM_IN, dt);
   camActual.pitch += (pObj-camActual.pitch)*camK(CAM.TAU_PITCH, dt);
   camActual.center[0]=cx; camActual.center[1]=cy;
@@ -1775,7 +1792,7 @@ function iniciarDiagCam(){
     const fps=camDiag.frames/s, avg=camDiag.frames?1000*camDiag.sumDt/camDiag.frames:0;
     camDiag.el.textContent='CAM '+fps.toFixed(0)+' fps · medio '+avg.toFixed(1)+' ms · max '+(camDiag.maxDt*1000).toFixed(0)+' ms\n'
       +'frames >25 ms: '+camDiag.lentos+' · >50 ms: '+camDiag.muyLentos+' · jumpTo/s: '+(camDiag.jumps/s).toFixed(0)+'\n'
-      +'zoom '+camActual.zoom.toFixed(2)+' · pitch '+camActual.pitch.toFixed(1)+'° · rumbo '+camActual.bearing.toFixed(0)+'° · '+man.estado+'\n'
+      +'perspectiva '+(camDiag.fAut||0).toFixed(2)+' · zoom '+camActual.zoom.toFixed(2)+' · pitch '+camActual.pitch.toFixed(1)+'° · rumbo '+camActual.bearing.toFixed(0)+'° · '+man.estado+'\n'
       +'GPS edad '+((performance.now()-est.fixT)/1000).toFixed(1)+' s · v '+(vSuave*3.6).toFixed(0)+' km/h · GPS crudo '+(Number.isFinite(camDiag.vCrudo)?(camDiag.vCrudo*3.6).toFixed(0):'null')+'\n'
       +'ruta '+routeCoordsLL.length+' pts · onRoute '+est.onRoute+' · paso '+stepIdx+'/'+steps.length+' · libre '+camaraLibre+' · dest '+(ultimaRutaDestino?'sí':'no')+' · capa ruta '+(map.getLayer('ruta-base')?(map.getLayoutProperty('ruta-base','visibility')||'visible'):'NO');
     const rp=document.getElementById('rPitchNav'); if(rp) rp.textContent=Math.round(camActual.pitch)+'°';
