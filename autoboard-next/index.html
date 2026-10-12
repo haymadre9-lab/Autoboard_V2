@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>autoboard-next · Fase 11 · v78 codriver</title>
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
 <style>
 html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #map{position:absolute;inset:0}
@@ -224,12 +225,24 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
 #listaCargadores .cargadorItem.tesla{box-shadow:none}
 #listaCargadores .cargadorItem.tesla .titulo{color:#3b444d}
 #listaCargadores .cargadorItem.tesla .kw{text-shadow:none}
+
+/* ---- v105: coche 3D opcional (canvas fijo sobre el mismo punto que la flecha) ---- */
+#coche3D{position:fixed;left:50%;top:65%;width:220px;height:220px;transform:translate(-50%,-50%);z-index:14;pointer-events:none;display:none}
+body.modo-navegacion.coche3d-on #coche3D{display:block}
+body.coche3d-on #cocheFijo{display:none !important}
+body.modo-solomapa #coche3D{display:none !important}
+#filaColorCoche{display:none;flex-wrap:wrap;gap:10px;padding:4px 2px 12px}
+#filaColorCoche.on{display:flex}
+#filaColorCoche button{width:34px;height:34px;border-radius:50%;border:2px solid #d5dae0;padding:0;cursor:pointer}
+#filaColorCoche button.sel{border-color:#2f373f;box-shadow:0 0 0 2px #fff inset}
+#filaColorCoche button.orig{background:conic-gradient(#fff,#c4cad1,#8b949e,#fff)}
 </style>
 </head>
 <body class="modo-debug">
 <div id="map"></div>
 
 <!-- FLECHA COCHE FIJA EN PANTALLA -->
+<canvas id="coche3D" width="220" height="220"></canvas>
 <div id="cocheFijo">
   <svg viewBox="0 0 64 64">
     <ellipse cx="32" cy="52" rx="16" ry="4" fill="rgba(0,0,0,0.28)"/>
@@ -285,6 +298,9 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
   <button class="ajuste on" id="btnAvisosRadares">📸 Avisos radares: ON</button>
   <div class="seccion">Cargadores</div>
   <button class="ajuste" id="btnListaCargadores">⚡ Ver 10 más cercanos</button>
+  <div class="seccion">Coche</div>
+  <button class="ajuste" id="btnCoche">🚗 Coche: Flecha</button>
+  <div id="filaColorCoche"></div>
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
@@ -1839,6 +1855,7 @@ function rotarFlecha(deg){
   if(!__flechaEl){ __flechaEl=document.getElementById('cocheFijo'); if(!__flechaEl) return; __flechaEl.style.transition='none'; }
   if(Math.abs(deg-__flechaDeg)<0.1) return;
   __flechaDeg=deg;
+  if(window.__coche3D&&window.__coche3D.activo) window.__coche3D.yaw(deg);
   __flechaEl.style.transform='translate(-50%,-50%) perspective(260px) rotateX('+CAM.FLECHA_TILT+'deg) rotate('+deg.toFixed(1)+'deg)';   /* tumbada hacia delante: da sensación de avance */
 }
 
@@ -2979,6 +2996,98 @@ function __selfTest(){
   console.log(fallos.length?('__selfTest: '+fallos.length+' FALLO(S)'):'__selfTest: todo OK ('+res.length+' comprobaciones)');
   return {ok:fallos.length===0, resultados:res};
 }
+</script>
+
+<script type="module">
+/* ============ COCHE 3D OPCIONAL ============
+   El coche va en un <canvas> pequeño fijo, encima del mismo punto que la flecha (65 %): no hay que sincronizarlo con la cámara del mapa,
+   solo girarlo igual que la flecha. Three.js y el modelo se cargan SOLO si eliges "Coche: 3D". Si algo falla, se queda la flecha. */
+const THREE_BASE = window.__THREE_BASE || 'https://cdn.jsdelivr.net/npm/three@0.160.0';
+const MODELO = window.__COCHE_GLB || 'car.glb';
+const COLORES = [['orig',null,'Original'],['#f2f4f6','#f2f4f6','Blanco'],['#c4cad1','#c4cad1','Plata'],['#8b949e','#8b949e','Gris'],['#6f8fb5','#6f8fb5','Azul grisáceo'],['#b5656b','#b5656b','Rojo apagado'],['#3a4047','#3a4047','Negro']];
+const LARGO_PX = 110, FOV = 28;
+const $ = id => document.getElementById(id);
+const gs = k => { try{ return localStorage.getItem(k); }catch(e){ return null; } };
+const ss = (k,v) => { try{ localStorage.setItem(k,v); }catch(e){} };
+const api = { activo:false, cargando:false, listo:false, yaw(){}, color(){} };
+window.__coche3D = api;
+let THREE, renderer, scene, camera, grupo, coche, matCarroceria=[], colorOrig=[], yawActual=0;
+
+function render(){ if(renderer) renderer.render(scene,camera); }
+api.yaw = deg => { yawActual=deg; if(grupo){ grupo.rotation.y = -deg*Math.PI/180; render(); } };
+api.color = hex => {
+  matCarroceria.forEach((m,i)=>{ if(hex) m.color.set(hex); else m.color.copy(colorOrig[i]); });
+  render();
+};
+function posCamara(){
+  const tilt = (typeof CAM!=='undefined' && CAM.FLECHA_TILT!=null) ? CAM.FLECHA_TILT : 42;
+  const el = (90-tilt)*Math.PI/180;
+  const dist = (4.8*220/LARGO_PX)/(2*Math.tan(FOV/2*Math.PI/180));
+  camera.position.set(0, Math.sin(el)*dist, Math.cos(el)*dist);
+  camera.lookAt(0,0.3,0);
+}
+async function cargar(){
+  if(api.listo) return true;
+  if(api.cargando) return false;
+  api.cargando=true;
+  try{
+    THREE = await import(THREE_BASE+'/build/three.module.js');
+    const { GLTFLoader } = await import(THREE_BASE+'/examples/jsm/loaders/GLTFLoader.js');
+    const gltf = await new Promise((ok,ko)=>new GLTFLoader().load(MODELO,ok,undefined,ko));
+    renderer = new THREE.WebGLRenderer({ canvas:$('coche3D'), antialias:true, alpha:true, powerPreference:'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2)); renderer.setSize(220,220,false); renderer.setClearColor(0x000000,0);
+    scene = new THREE.Scene();
+    scene.add(new THREE.HemisphereLight(0xffffff,0xb8c0c8,1.7));
+    const dl = new THREE.DirectionalLight(0xffffff,1.5); dl.position.set(-8,14,6); scene.add(dl);
+    camera = new THREE.PerspectiveCamera(FOV,1,1,100); posCamara();
+    coche = gltf.scene;
+    const caja = new THREE.Box3().setFromObject(coche), sz = caja.getSize(new THREE.Vector3());
+    const largo = Math.max(sz.x,sz.z); coche.scale.setScalar(4.8/largo);
+    const c2 = new THREE.Box3().setFromObject(coche), ctr = c2.getCenter(new THREE.Vector3());
+    coche.position.set(-ctr.x, -c2.min.y, -ctr.z);
+    const orient = new THREE.Group(); orient.add(coche);
+    orient.rotation.y = (sz.x>sz.z ? Math.PI/2 : 0) + Math.PI;     /* morro hacia -Z (arriba en pantalla) */
+    grupo = new THREE.Group(); grupo.add(orient); scene.add(grupo);
+    /* sombra suave */
+    const sombra = new THREE.Mesh(new THREE.CircleGeometry(1,32), new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:.14,depthWrite:false}));
+    sombra.rotation.x=-Math.PI/2; sombra.scale.set(1.15,2.5,1); sombra.position.y=0.01; grupo.add(sombra);
+    coche.traverse(o=>{ if(o.isMesh){ const ms=Array.isArray(o.material)?o.material:[o.material]; ms.forEach(m=>{ if(m&&m.name==='Body'){ matCarroceria.push(m); colorOrig.push(m.color.clone()); } }); } });
+    api.listo=true; api.cargando=false;
+    return true;
+  }catch(e){
+    api.cargando=false; console.warn('[coche3D]',e&&e.message||e);
+    return false;
+  }
+}
+function pintarColores(){
+  const fila=$('filaColorCoche'); if(!fila) return;
+  const act=gs('coche3d_color')||'orig';
+  fila.innerHTML=COLORES.map(c=>'<button data-c="'+c[0]+'" title="'+c[2]+'" class="'+(c[0]==='orig'?'orig ':'')+(c[0]===act?'sel':'')+'" style="'+(c[1]?'background:'+c[1]:'')+'"></button>').join('');
+  fila.onclick=e=>{
+    const b=e.target.closest&&e.target.closest('button'); if(!b) return;
+    ss('coche3d_color',b.dataset.c); api.color(b.dataset.c==='orig'?null:b.dataset.c); pintarColores();
+  };
+}
+function ponerTexto(extra){
+  const b=$('btnCoche'); if(!b) return;
+  b.textContent='🚗 Coche: '+(api.activo?'3D':'Flecha')+(extra||'');
+  b.classList.toggle('on',api.activo);
+  $('filaColorCoche').classList.toggle('on',api.activo);
+}
+async function activar(){
+  const b=$('btnCoche'); if(b) b.textContent='🚗 Cargando coche…';
+  const ok = await cargar();
+  if(!ok){ api.activo=false; document.body.classList.remove('coche3d-on'); ponerTexto(' (no se pudo cargar)'); return false; }
+  api.activo=true; document.body.classList.add('coche3d-on');
+  const c=gs('coche3d_color')||'orig'; api.color(c==='orig'?null:c);
+  api.yaw(yawActual); ponerTexto(); return true;
+}
+function desactivar(){ api.activo=false; document.body.classList.remove('coche3d-on'); ponerTexto(); }
+api.activar=activar; api.desactivar=desactivar;
+const btn=$('btnCoche');
+if(btn){ btn.onclick=()=>{ if(api.activo){ ss('coche3d','0'); desactivar(); } else { ss('coche3d','1'); activar(); } }; }
+pintarColores(); ponerTexto();
+if(gs('coche3d')==='1') activar();
 </script>
 </body>
 </html>
