@@ -617,8 +617,8 @@ function lavarMapa(){
         }
       }
       if(sl === 'water' || /water|ocean/i.test(id)){
-        try{ map.setPaintProperty(l.id,'fill-color','#e2e5e9'); }catch(e){}
-        try{ map.setPaintProperty(l.id,'fill-outline-color','#d0d4d9'); }catch(e){}
+        try{ map.setPaintProperty(l.id,'fill-color','#d9e7f1'); }catch(e){}
+        try{ map.setPaintProperty(l.id,'fill-outline-color','#c9dbe8'); }catch(e){}
       }
       if(sl === 'landcover' || sl === 'landuse' || /park|grass|wood|forest|landcover/i.test(id)){
         try{ map.setPaintProperty(l.id,'fill-color','#e8ebee'); }catch(e){}
@@ -2161,6 +2161,11 @@ function crearDetallesMapa(){
   if(!map.hasImage('arbolitos')) map.addImage('arbolitos',crearArbolitos(),{pixelRatio:2});
   const add=(l)=>{ try{ map.addLayer(l); }catch(e){ registrarError('detalle '+l.id,e.message); } };
   const op=(z0,a0,z1,a1)=>['interpolate',['linear'],['zoom'],z0,a0,z1,a1];
+  /* zonas con un toque de color muy suave (todas tenues; la mayoría de la ciudad sigue clara) */
+  const ZONAS=[ ['cemetery','#e1ece0'],['school','#f1eadf'],['university','#f1eadf'],['college','#f1eadf'],['kindergarten','#f1eadf'],
+                ['hospital','#f4e7e7'],['industrial','#ebe8ee'],['commercial','#efeaf0'],['retail','#f2e9e4'],['playground','#f3ebc9'] ];
+  ZONAS.forEach(z=>add({id:'det-zona-'+z[0],type:'fill',source:src,'source-layer':'landuse',filter:['==',['get','class'],z[0]],minzoom:12,paint:{'fill-color':z[1],'fill-opacity':op(12,0.0,14,0.75)}}));
+  add({id:'det-arena',type:'fill',source:src,'source-layer':'landcover',filter:['==',['get','class'],'sand'],minzoom:12,paint:{'fill-color':'#f3ecd9','fill-opacity':0.8}});
   /* verdes de fondo muy suaves */
   add({id:'det-parque',type:'fill',source:src,'source-layer':'park',minzoom:12,paint:{'fill-color':DETALLES.VERDE,'fill-opacity':op(12,0.0,14,0.8)}});
   add({id:'det-bosque',type:'fill',source:src,'source-layer':'landcover',filter:['==',['get','class'],'wood'],minzoom:12,paint:{'fill-color':DETALLES.VERDE_BOSQUE,'fill-opacity':op(12,0.0,14,0.85)}});
@@ -2173,8 +2178,95 @@ function crearDetallesMapa(){
        layout:{'line-join':'round'},paint:{'line-color':DETALLES.CAMPO_LINEA,'line-width':op(14,1,19,3),'line-opacity':0.95}});
   /* arbolitos (solo cerca; en lejos serían ruido) */
   add({id:'det-arboles-parque',type:'fill',source:src,'source-layer':'park',minzoom:DETALLES.ARBOL_MINZOOM,paint:{'fill-pattern':'arbolitos','fill-opacity':0.95}});
+  /* campos de FÚTBOL detectados (franjas de césped + líneas + punto visible de lejos); los datos los rellena escanearFutbol() */
+  try{ map.addSource('futbol',{type:'geojson',data:{type:'FeatureCollection',features:[]}}); map.addSource('futbol-pt',{type:'geojson',data:{type:'FeatureCollection',features:[]}}); }catch(e){ registrarError('futbol-src',e.message); }
+  add({id:'fut-franjas',type:'fill',source:'futbol',filter:['==',['get','k'],'f'],minzoom:14.5,paint:{'fill-color':['get','c'],'fill-opacity':0.95}});
+  add({id:'fut-lineas',type:'line',source:'futbol',filter:['==',['get','k'],'l'],minzoom:15.5,layout:{'line-cap':'round','line-join':'round'},paint:{'line-color':'#fbfdf9','line-width':op(15.5,0.8,19,2.4),'line-opacity':0.95}});
+  add({id:'fut-punto',type:'circle',source:'futbol-pt',minzoom:12,paint:{'circle-radius':op(12,4,16,7),'circle-color':'#8ecb98','circle-stroke-color':'#ffffff','circle-stroke-width':2,'circle-opacity':op(16,1,17.5,0),'circle-stroke-opacity':op(16,1,17.5,0)}});
   add({id:'det-arboles-bosque',type:'fill',source:src,'source-layer':'landcover',filter:['==',['get','class'],'wood'],minzoom:DETALLES.ARBOL_MINZOOM,paint:{'fill-pattern':'arbolitos','fill-opacity':0.95}});
 }
+
+
+/* ========== Campos de fútbol: detección + dibujo con franjas y marcas ==========
+   El mapa NO indica el deporte: se deduce por la forma. Rectángulo orientado (mín. área) con relación largo/ancho 1,3–2,4,
+   rectitud ≥ 0,8 y área 1.000–12.000 m² (fútbol 7/8/11). Pistas de tenis/pádel/baloncesto (<700 m²) no entran. */
+const FUTBOL = { MINZOOM:13.5, CADA_MS:2500, MAX:80, AREA_MIN:1000, AREA_MAX:12000, RATIO_MIN:1.3, RATIO_MAX:2.4, RECT_MIN:0.8, DUP_M:30,
+                 C1:'#b9dcae', C2:'#aad3a0' };
+const __fut={ lista:[], capas:false };
+function casco(pts){
+  const p=pts.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]); if(p.length<3) return p;
+  const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);
+  const lo=[]; for(const q of p){ while(lo.length>=2&&cr(lo[lo.length-2],lo[lo.length-1],q)<=0) lo.pop(); lo.push(q); }
+  const up=[]; for(let i=p.length-1;i>=0;i--){ const q=p[i]; while(up.length>=2&&cr(up[up.length-2],up[up.length-1],q)<=0) up.pop(); up.push(q); }
+  lo.pop(); up.pop(); return lo.concat(up);
+}
+function areaPoli(r){ let a=0; for(let i=0;i<r.length;i++){ const j=(i+1)%r.length; a+=r[i][0]*r[j][1]-r[j][0]*r[i][1]; } return Math.abs(a)/2; }
+/* Rectángulo orientado de mínima área de un anillo [lon,lat]; devuelve en metros locales respecto a (lat0,lon0) */
+function rectOrientado(anillo){
+  const lat0=anillo.reduce((s,q)=>s+q[1],0)/anillo.length, lon0=anillo.reduce((s,q)=>s+q[0],0)/anillo.length;
+  const mx=111320*Math.cos(lat0*Math.PI/180), my=110540;
+  const P=anillo.map(q=>[(q[0]-lon0)*mx,(q[1]-lat0)*my]);
+  const H=casco(P); if(H.length<3) return null;
+  let best=null;
+  for(let i=0;i<H.length;i++){
+    const a=H[i], b=H[(i+1)%H.length], ang=Math.atan2(b[1]-a[1],b[0]-a[0]), c=Math.cos(ang), s=Math.sin(ang);
+    let u0=1e18,u1=-1e18,v0=1e18,v1=-1e18;
+    for(const q of H){ const u=q[0]*c+q[1]*s, v=-q[0]*s+q[1]*c; if(u<u0)u0=u; if(u>u1)u1=u; if(v<v0)v0=v; if(v>v1)v1=v; }
+    const A=(u1-u0)*(v1-v0); if(!best||A<best.A) best={A,ang,u0,u1,v0,v1};
+  }
+  let L=best.u1-best.u0, W=best.v1-best.v0, ang=best.ang, cu=(best.u0+best.u1)/2, cv=(best.v0+best.v1)/2;
+  if(W>L){ const t=L; L=W; W=t; ang+=Math.PI/2; const nu=cv, nv=-cu; cu=nu; cv=nv; }   /* eje largo = u */
+  const c=Math.cos(ang), s=Math.sin(ang);
+  const cx=cu*c-cv*s, cy=cu*s+cv*c;                                       /* centro en metros locales */
+  return { lat0,lon0,mx,my,L,W,ang,cx,cy,areaPoli:areaPoli(P),areaRect:L*W };
+}
+function esFutbol(r){
+  if(!r) return false;
+  const ratio=r.L/Math.max(1,r.W), rect=r.areaPoli/Math.max(1,r.areaRect);
+  return r.areaPoli>=FUTBOL.AREA_MIN && r.areaPoli<=FUTBOL.AREA_MAX && ratio>=FUTBOL.RATIO_MIN && ratio<=FUTBOL.RATIO_MAX && rect>=FUTBOL.RECT_MIN;
+}
+/* Construye franjas + marcas en coordenadas del campo (u largo, v ancho, centro 0,0) y las pasa a lon/lat */
+function dibujoFutbol(r){
+  const c=Math.cos(r.ang), s=Math.sin(r.ang);
+  const aLL=(u,v)=>[ r.lon0+(r.cx+u*c-v*s)/r.mx, r.lat0+(r.cy+u*s+v*c)/r.my ];
+  const hl=r.L/2, hw=r.W/2, sx=r.L/105, sy=r.W/68, F=[];
+  const NF=10, fw=r.L/NF;
+  for(let i=0;i<NF;i++){ const u0=-hl+i*fw, u1=u0+fw;
+    F.push({type:'Feature',properties:{k:'f',c:(i%2?FUTBOL.C2:FUTBOL.C1)},geometry:{type:'Polygon',coordinates:[[aLL(u0,-hw),aLL(u1,-hw),aLL(u1,hw),aLL(u0,hw),aLL(u0,-hw)]]}}); }
+  const linea=(pts)=>F.push({type:'Feature',properties:{k:'l'},geometry:{type:'LineString',coordinates:pts.map(p=>aLL(p[0],p[1]))}});
+  linea([[-hl,-hw],[hl,-hw],[hl,hw],[-hl,hw],[-hl,-hw]]);
+  linea([[0,-hw],[0,hw]]);
+  const rc=9.15*Math.min(sx,sy), circ=[]; for(let i=0;i<=28;i++){ const a=i/28*Math.PI*2; circ.push([rc*Math.cos(a),rc*Math.sin(a)]); } linea(circ);
+  for(const sg of [-1,1]){
+    const d1=16.5*sx, w1=20.15*sy, d2=5.5*sx, w2=9.16*sy, x0=sg*hl;
+    linea([[x0,-w1],[x0-sg*d1,-w1],[x0-sg*d1,w1],[x0,w1]]);
+    linea([[x0,-w2],[x0-sg*d2,-w2],[x0-sg*d2,w2],[x0,w2]]);
+  }
+  return F;
+}
+function escanearFutbol(){
+  if(!idFuenteBuildings || map.getZoom()<FUTBOL.MINZOOM) return 0;
+  let fs; try{ fs=map.querySourceFeatures(idFuenteBuildings,{sourceLayer:'landuse'})||[]; }catch(e){ return 0; }
+  let cambios=0;
+  for(const f of fs){
+    if(!f.properties||f.properties.class!=='pitch'||!f.geometry) continue;
+    let anillo=null, areaMax=0;
+    for(const pl of poligonosDe(f.geometry)){ const a=areaPoli(pl[0]); if(a>areaMax){ areaMax=a; anillo=pl[0]; } }
+    if(!anillo||anillo.length<4) continue;
+    const r=rectOrientado(anillo); if(!esFutbol(r)) continue;
+    const cLat=r.lat0+r.cy/r.my, cLon=r.lon0+r.cx/r.mx;
+    const igual=__fut.lista.findIndex(e=>dist([e.lat,e.lon],[cLat,cLon])<FUTBOL.DUP_M);
+    if(igual>=0){ if(r.areaPoli<=__fut.lista[igual].area*1.15) continue; __fut.lista.splice(igual,1); }   /* mismo campo cortado por teselas: se queda el trozo mayor */
+    __fut.lista.push({lat:cLat,lon:cLon,area:r.areaPoli,feats:dibujoFutbol(r)}); cambios++;
+  }
+  if(!cambios) return 0;
+  if(__fut.lista.length>FUTBOL.MAX) __fut.lista.splice(0,__fut.lista.length-FUTBOL.MAX);
+  const a=map.getSource('futbol'), b=map.getSource('futbol-pt');
+  if(a) a.setData({type:'FeatureCollection',features:[].concat(...__fut.lista.map(e=>e.feats))});
+  if(b) b.setData({type:'FeatureCollection',features:__fut.lista.map(e=>({type:'Feature',properties:{},geometry:{type:'Point',coordinates:[e.lon,e.lat]}}))});
+  return cambios;
+}
+setInterval(()=>{ try{ escanearFutbol(); }catch(e){ registrarError('futbol',e.message); } },FUTBOL.CADA_MS);
 
 /* Edificios singulares: museos, estadios, ayuntamiento, iglesias, hospitales, universidades… (según los puntos de interés
    de las propias teselas, sin listas a mano). Se dibujan opacos y definidos, en grises más oscuros/claros. */
