@@ -767,20 +767,78 @@ async function cargarRadares(){
   }
 }
 
+/* Solo se dibujan las señales CERCANAS al centro de la cámara. Con la inclinación de navegación (74°) un mapa
+   sin límite enseña todas las señales hasta el horizonte (cientos de STOP a la vez). Radio según el zoom. */
+let __senalesFiltro={la:NaN,lo:NaN,r:0}, __senalesPts=[], __senalesRutaRef=null, __senalesRutaIds=null;
+const SENALES_RUTA_M=18;   /* con ruta, STOP y CEDA solo si están a ≤18 m de ella (no los de calles sueltas) */
+/* Índices de STOP/CEDA a ≤SENALES_RUTA_M de la ruta actual (rejilla de 40 m: coste despreciable) */
+function calcularSenalesDeRuta(){
+  __senalesRutaRef=routeCoordsLL;
+  if(!routeCoordsLL.length||!__senalesPts.length){ __senalesRutaIds=null; return; }
+  const cel=40, la0=43, mx0=111320*Math.cos(43.25*Math.PI/180), my0=110540;
+  const key=(la,lo)=>Math.floor((lo*mx0)/cel)+','+Math.floor((la*my0)/cel);
+  const grid=new Map();
+  for(const q of __senalesPts){ if(q.ic!=='senal-stop'&&q.ic!=='senal-ceda') continue; const k=key(q.la,q.lo); let a=grid.get(k); if(!a){a=[];grid.set(k,a);} a.push(q); }
+  const ids=new Set();
+  for(let i=0;i<routeCoordsLL.length-1;i++){
+    const A=routeCoordsLL[i], B=routeCoordsLL[i+1];
+    const x0=Math.floor((Math.min(A[1],B[1])*mx0-SENALES_RUTA_M)/cel), x1=Math.floor((Math.max(A[1],B[1])*mx0+SENALES_RUTA_M)/cel);
+    const y0=Math.floor((Math.min(A[0],B[0])*my0-SENALES_RUTA_M)/cel), y1=Math.floor((Math.max(A[0],B[0])*my0+SENALES_RUTA_M)/cel);
+    for(let cx=x0;cx<=x1;cx++) for(let cy=y0;cy<=y1;cy++){
+      const a=grid.get(cx+','+cy); if(!a) continue;
+      for(const q of a){ if(!ids.has(q.idx) && segDistM2([q.la,q.lo],A,B)<=SENALES_RUTA_M) ids.add(q.idx); }
+    }
+  }
+  __senalesRutaIds=Array.from(ids);
+  __senalesFiltro.r=0;   /* fuerza refiltrar */
+}
+function actualizarFiltroSenales(forzar){
+  if(!map.getLayer('senales')) return;
+  if(routeCoordsLL!==__senalesRutaRef) calcularSenalesDeRuta();
+  const c=map.getCenter(), z=map.getZoom();
+  const r = z>=18 ? 250 : (z>=17 ? 450 : (z>=16 ? 900 : 1800));
+  const mx=111320*Math.cos(c.lat*Math.PI/180), my=110540;
+  const mov=Math.hypot((c.lng-__senalesFiltro.lo)*mx,(c.lat-__senalesFiltro.la)*my);
+  if(!forzar && mov<r*0.15 && r===__senalesFiltro.r) return;   /* se refiltra cada vez que te mueves un 15 % del radio */
+  __senalesFiltro={la:c.lat,lo:c.lng,r:r};
+  const dla=r/my, dlo=r/mx;
+  const zona=['all',['>=',['get','la'],c.lat-dla],['<=',['get','la'],c.lat+dla],['>=',['get','lo'],c.lng-dlo],['<=',['get','lo'],c.lng+dlo]];
+  let f=zona;
+  if(__senalesRutaIds){
+    f=['all',zona,['any',['!',['in',['get','icono'],['literal',['senal-stop','senal-ceda']]]],['in',['get','idx'],['literal',__senalesRutaIds]]]];
+  }
+  try{ map.setFilter('senales',f); }catch(e){}
+}
+setInterval(()=>actualizarFiltroSenales(false),1000);
 async function cargarSenales(){
   try{
     const r = await fetch('./assets/senales.json');
     if(!r.ok) throw new Error('HTTP '+r.status);
     const datos = await r.json();
     const puntos = datos.p || [];
+    /* Qué letra del JSON es cada tipo: se deduce comparando cuántos puntos hay de cada letra con los contadores "n" del
+       propio archivo (stop/ceda/semaforo/semaforo_peatonal). El mapa fijo anterior (p=stop, s=semáforo, t=peatonal)
+       no coincidía con el senales.json actual (s=2840 stop, p=1111 semáforo peatonal, t=496 semáforo) y pintaba
+       los semáforos peatonales como STOP. Si no se puede deducir, se usa el mapa antiguo. */
+    const cuenta={}; for(const q of puntos){ cuenta[q[2]]=(cuenta[q[2]]||0)+1; }
+    const nombres={ stop:'senal-stop', ceda:'senal-ceda', semaforo:'senal-semaforo', semaforo_peatonal:'senal-semaforo-peatonal' };
+    let porLetra={ p:'stop', c:'ceda', s:'semaforo', t:'semaforo_peatonal' };   /* mapa antiguo (respaldo) */
+    if(datos.n){
+      const deducido={}; let ok=true;
+      for(const k of Object.keys(nombres)){
+        const letras=Object.keys(cuenta).filter(l=>cuenta[l]===datos.n[k]);
+        if(letras.length!==1 || deducido[letras[0]]){ ok=false; break; }
+        deducido[letras[0]]=k;
+      }
+      if(ok) porLetra=deducido;
+    }
+    __senalesPts=[];
     const features = puntos.map((p, i) => {
       const lat=p[0],lon=p[1],tipo=p[2],sub=p[3]||'';
-      let icono='senal-stop';
-      if(tipo==='p'){icono='senal-stop';}
-      else if(tipo==='c'){icono='senal-ceda';}
-      else if(tipo==='s'){icono=(sub==='b')?'senal-semaforo-b':'senal-semaforo';}
-      else if(tipo==='t'){icono='senal-semaforo-peatonal';}
-      return {type:'Feature',geometry:{type:'Point',coordinates:[lon,lat]},properties:{idx:i,icono:icono}};
+      let icono=nombres[porLetra[tipo]]||'senal-stop';
+      if(porLetra[tipo]==='semaforo' && sub==='b') icono='senal-semaforo-b';
+      __senalesPts.push({idx:i,la:lat,lo:lon,ic:icono});
+      return {type:'Feature',geometry:{type:'Point',coordinates:[lon,lat]},properties:{idx:i,icono:icono,la:lat,lo:lon}};
     });
     map.addSource('senales',{type:'geojson',data:{type:'FeatureCollection',features:features}});
     map.addLayer({
@@ -790,6 +848,7 @@ async function cargarSenales(){
         'icon-pitch-alignment':'viewport','icon-rotation-alignment':'viewport'}
     });
     if(!senalesOn) map.setLayoutProperty('senales','visibility','none');
+    actualizarFiltroSenales(true);
     const nStop=datos.n?datos.n.stop:0;
     const nCeda=datos.n?datos.n.ceda:0;
     const nSem=(datos.n?datos.n.semaforo:0)+(datos.n?datos.n.semaforo_peatonal:0);
