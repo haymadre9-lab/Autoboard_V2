@@ -334,6 +334,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <h2>⚙️ Ajustes</h2>
   <div class="seccion">Visualización</div>
   <button class="ajuste on" id="btnEdificios">🏢 Edificios: ON</button>
+  <button class="ajuste on" id="btnHitos">🏛️ Edificios singulares: ON</button>
   <button class="ajuste on" id="btnSenales">🚦 Señales: ON</button>
   <button class="ajuste on" id="btnPitch">📐 Pitch: ON</button>
   <button class="ajuste on" id="btnSky">☀️ Cielo: ON</button>
@@ -353,7 +354,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v120</div>
+  <div class="seccion">Versión v121</div>
 </div>
 
 <div id="diag">
@@ -1187,6 +1188,7 @@ const panelA=document.getElementById('panelAjustes');
 document.getElementById('btnAjustes').onclick=()=>panelA.classList.add('on');
 document.getElementById('btnCerrarAjustes').onclick=()=>panelA.classList.remove('on');
 document.getElementById('btnEdificios').onclick=function(){edificiosOn=!edificiosOn;if(map.getLayer('3d-buildings')) map.setLayoutProperty('3d-buildings','visibility',edificiosOn?'visible':'none');this.textContent='🏢 Edificios: '+(edificiosOn?'ON':'OFF');this.classList.toggle('on',edificiosOn);};
+document.getElementById('btnHitos').onclick=function(){ HITOS_CFG.ON=!HITOS_CFG.ON; try{ localStorage.setItem('hitos_on',HITOS_CFG.ON?'1':'0'); }catch(e){} if(typeof ocultarHitos==='function') ocultarHitos(!HITOS_CFG.ON); this.textContent='🏛️ Edificios singulares: '+(HITOS_CFG.ON?'ON':'OFF'); this.classList.toggle('on',HITOS_CFG.ON); };
 document.getElementById('btnSenales').onclick=function(){senalesOn=!senalesOn;if(map.getLayer('senales')) map.setLayoutProperty('senales','visibility',senalesOn?'visible':'none');this.textContent='🚦 Señales: '+(senalesOn?'ON':'OFF');this.classList.toggle('on',senalesOn);};
 document.getElementById('btnAvisosRadares').onclick=function(){avisosRadaresOn=!avisosRadaresOn;this.textContent='📸 Avisos radares: '+(avisosRadaresOn?'ON':'OFF');this.classList.toggle('on',avisosRadaresOn);if(!avisosRadaresOn) apagarAlertaRadar();};
 document.getElementById('btnSky').onclick=function(){skyOn=!skyOn;aplicarSky();this.textContent='☀️ Cielo: '+(skyOn?'ON':'OFF');this.classList.toggle('on',skyOn);};
@@ -2539,6 +2541,108 @@ function ponerNombresFutbol(){
   }
   return hubo;
 }
+/* ========== EDIFICIOS SINGULARES: iglesias y estadios con volumen propio ==========
+   No son modelos descargados: se generan con código sobre la HUELLA REAL del edificio (la de las teselas del mapa).
+   Iglesia = nave con tejado a dos aguas (escalonado) + torre con aguja en un extremo. Estadio = gradas escalonadas alrededor del campo.
+   Solo se construyen los que están a ≤700 m del centro del mapa y con zoom ≥15; si no se encuentra la huella, no se pinta nada.
+   Para añadir uno: una línea en HITOS (t:'iglesia' | 'estadio'). */
+const HITOS_CFG = { ON:(function(){ try{ return localStorage.getItem('hitos_on')!=='0'; }catch(e){ return true; } })(),
+  MINZOOM:15, RADIO_M:700, CADA_MS:2500, CERCA_M:30, ESTADIO_M:140,
+  COL:{ dia:{p:'#e9e6e0',t:'#b9b2a9',g:'#d4d9de'}, noche:{p:'#4c535d',t:'#393e45',g:'#3f464f'} } };
+const HITOS = [
+  { n:'Iglesia de San Vicente Mártir',            t:'iglesia', lat:43.2958, lon:-2.9973 },
+  { n:'Iglesia de Santa Teresa de Jesús',         t:'iglesia', lat:43.2997, lon:-2.9929 },
+  { n:'Iglesia de San José',                      t:'iglesia', lat:43.2961, lon:-2.9871 },
+  { n:'Iglesia de Nuestra Señora del Carmen',     t:'iglesia', lat:43.2999, lon:-2.9851 },
+  { n:'Iglesia de San Ignacio de Loyola',         t:'iglesia', lat:43.2941, lon:-2.9843 },
+  { n:'Iglesia de Nuestra Señora de la Esperanza',t:'iglesia', lat:43.2927, lon:-2.9911 },
+  { n:'Estadio de Lasesarre',                     t:'estadio', lat:43.30278, lon:-2.98639 }
+];
+const __hitos = { feats:[], pts:[], hechos:{}, capas:false, sucio:false };
+function colorHitos(n){ const c=HITOS_CFG.COL[n?'noche':'dia']; return ['match',['get','k'],'t',c.t,'g',c.g,c.p]; }
+function rectLL(r,u0,u1,v0,v1){
+  const c=Math.cos(r.ang), s=Math.sin(r.ang);
+  const a=(u,v)=>[ r.lon0+(r.cx+u*c-v*s)/r.mx, r.lat0+(r.cy+u*s+v*c)/r.my ];
+  return [[a(u0,v0),a(u1,v0),a(u1,v1),a(u0,v1),a(u0,v0)]];
+}
+function bloque(r,u0,u1,v0,v1,min,h,k){ return {type:'Feature',properties:{k:k,min:min,h:h},geometry:{type:'Polygon',coordinates:rectLL(r,u0,u1,v0,v1)}}; }
+/* Iglesia: paredes con la huella real + tejado escalonado sobre la nave + torre con aguja en el extremo oeste */
+function construirIglesia(geom,h0){
+  const polis=poligonosDe(geom); if(!polis.length) return null;
+  let anillo=polis[0][0], am=0; for(const pl of polis){ const a=areaPoli(pl[0]); if(a>am){ am=a; anillo=pl[0]; } }
+  const r=rectOrientado(anillo); if(!r||r.W<6||r.L<8) return null;
+  const eave=Math.max(9,Math.min(h0||12,18)), hl=r.L/2, hw=r.W/2, F=[];
+  F.push({type:'Feature',properties:{k:'p',min:0,h:eave},geometry:ensancharPoligono(geom,1.03)});
+  /* torre en el extremo más al oeste del eje largo */
+  const c=Math.cos(r.ang), s=Math.sin(r.ang), lonMas=(r.lon0+(r.cx+hl*c)/r.mx), lonMenos=(r.lon0+(r.cx-hl*c)/r.mx);
+  const sg = lonMenos<lonMas ? -1 : 1;                       /* sg=-1: el extremo oeste es u=-hl */
+  const ts=Math.max(5,Math.min(0.45*r.W,10)), ht=Math.max(eave+12,26);
+  const uT0 = sg<0 ? -hl : hl-ts, uT1 = sg<0 ? -hl+ts : hl;
+  const uN0 = sg<0 ? -hl+ts : -hl, uN1 = sg<0 ? hl : hl-ts;
+  F.push(bloque(r,uT0,uT1,-ts/2,ts/2,0,ht,'p'));
+  const NT=6; for(let j=0;j<NT;j++){ const w=(ts/2)*(1-j/NT)*0.97; const uc=(uT0+uT1)/2; F.push(bloque(r,uc-w,uc+w,-w,w,ht+j*2,ht+(j+1)*2,'t')); }
+  const N=8, rise=Math.min(r.W*0.32,9);
+  for(let i=0;i<N;i++){ const w=hw*(1-i/N)*0.98; F.push(bloque(r,uN0,uN1,-w,w,eave+i*rise/N,eave+(i+1)*rise/N,'t')); }
+  return F;
+}
+/* Estadio: 4 gradas escalonadas (3 peldaños) alrededor del rectángulo del campo */
+function construirEstadio(r){
+  const hl=r.L/2, hw=r.W/2, g=5, F=[], pel=[[0,4],[1,7.5],[2,11]];
+  const dl=5, de=4;                                        /* fondo de cada peldaño: lados largos / fondos */
+  for(const [i,h] of pel){
+    for(const sg of [-1,1]){
+      F.push(bloque(r,-hl-g,hl+g,sg>0?hw+g+i*dl:-(hw+g+(i+1)*dl),sg>0?hw+g+(i+1)*dl:-(hw+g+i*dl),0,h,'g'));
+      F.push(bloque(r,sg>0?hl+g+i*de:-(hl+g+(i+1)*de),sg>0?hl+g+(i+1)*de:-(hl+g+i*de),-hw,hw,0,h,'g'));
+    }
+  }
+  return F;
+}
+function asegurarCapasHitos(){
+  if(__hitos.capas || !map.getSource) return;
+  try{
+    map.addSource('hitos',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+    map.addSource('hitos-pt',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+    const antes = map.getLayer('ruta-base') ? 'ruta-base' : undefined;
+    map.addLayer({id:'hitos-ext',type:'fill-extrusion',source:'hitos',minzoom:14.5,
+      paint:{'fill-extrusion-color':colorHitos(false),'fill-extrusion-height':['get','h'],'fill-extrusion-base':['get','min'],'fill-extrusion-opacity':0.97,'fill-extrusion-vertical-gradient':true}},antes);
+    const capaTexto=(map.getStyle().layers||[]).find(l=>l.type==='symbol'&&l.layout&&l.layout['text-font']);
+    if(capaTexto) map.addLayer({id:'hitos-nombre',type:'symbol',source:'hitos-pt',minzoom:16,
+      layout:{'text-field':['get','n'],'text-font':capaTexto.layout['text-font'],'text-size':12,'text-anchor':'bottom','text-offset':[0,-1.2],'text-optional':true,'text-max-width':9},
+      paint:{'text-color':'#4a525b','text-halo-color':'#ffffff','text-halo-width':1.6}});
+    __hitos.capas=true;
+    if(!HITOS_CFG.ON) ocultarHitos(true);
+    if(nocheAct){ try{ pintarMapaNoche(true); }catch(e){} }
+  }catch(e){ registrarError('hitos',e.message); }
+}
+function ocultarHitos(oc){ for(const id of ['hitos-ext','hitos-nombre']){ if(map.getLayer(id)) map.setLayoutProperty(id,'visibility',oc?'none':'visible'); } }
+function escanearHitos(){
+  if(!HITOS_CFG.ON || !idFuenteBuildings || map.getZoom()<HITOS_CFG.MINZOOM) return;
+  const c=map.getCenter();
+  const pend=HITOS.filter(h=>!__hitos.hechos[h.n] && dist([c.lat,c.lng],[h.lat,h.lon])<=HITOS_CFG.RADIO_M);
+  if(!pend.length) return;
+  asegurarCapasHitos(); if(!__hitos.capas) return;
+  let edificios=null, cambio=false;
+  for(const h of pend){
+    let F=null;
+    if(h.t==='iglesia'){
+      if(!edificios){ try{ edificios=map.querySourceFeatures(idFuenteBuildings,{sourceLayer:sourceLayerBuildings})||[]; }catch(e){ edificios=[]; } }
+      let el=null; for(const f of edificios){ if(f.geometry && poligonoContiene(h.lon,h.lat,f.geometry)){ el=f; break; } }
+      if(!el){ let md=HITOS_CFG.CERCA_M; for(const f of edificios){ if(!f.geometry) continue; const d=distAPoligonoM(h.lat,h.lon,f.geometry); if(d<md){ md=d; el=f; } } }
+      if(el) F=construirIglesia(el.geometry,Number(el.properties.render_height||el.properties.height)||12);
+    }else if(h.t==='estadio'){
+      let mej=null, md=HITOS_CFG.ESTADIO_M; for(const e of __fut.lista){ const d=dist([h.lat,h.lon],[e.lat,e.lon]); if(d<md){ md=d; mej=e; } }
+      if(mej) F=construirEstadio(mej.r);
+    }
+    if(F&&F.length){ __hitos.feats.push(...F); __hitos.pts.push({type:'Feature',properties:{n:h.n},geometry:{type:'Point',coordinates:[h.lon,h.lat]}}); __hitos.hechos[h.n]=true; cambio=true; }
+  }
+  if(!cambio) return;
+  const a=map.getSource('hitos'), b=map.getSource('hitos-pt');
+  if(a) a.setData({type:'FeatureCollection',features:__hitos.feats});
+  if(b) b.setData({type:'FeatureCollection',features:__hitos.pts});
+}
+setInterval(()=>{ try{ escanearHitos(); }catch(e){ registrarError('hitos',e.message); } },HITOS_CFG.CADA_MS);
+(function(){ const b=document.getElementById('btnHitos'); if(b&&!HITOS_CFG.ON){ b.textContent='🏛️ Edificios singulares: OFF'; b.classList.remove('on'); } })();
+
 /* Toque sobre un campo → tarjeta con nombre y "Ir aquí" */
 function campoEnPunto(e){
   let mejor=null, md=1e9;
@@ -3148,6 +3252,7 @@ function pintarMapaNoche(n){
     if(id==='ruta-halo'||id==='ruta-alt-halo'||id==='ruta-oferta-halo'){ sp(id,'line-color',n?'#0c1015':'#ffffff'); continue; }
     if(id==='ruta-hecha'){ sp(id,'line-color',n?'#48525d':'#aeb6bf'); continue; }
     if(id==='3d-buildings'){ sp(id,'fill-extrusion-color',n?NOCHE.extr:'#b8c0cc'); sp(id,'fill-extrusion-opacity',n?0.7:0.5); continue; }
+    if(id==='hitos-ext'){ sp(id,'fill-extrusion-color',colorHitos(n)); continue; }
     if(id==='fut-franjas'){ sp(id,'fill-opacity',n?0.6:0.95); continue; }
     if(l.type==='symbol' && l.layout && l.layout['text-field']){
       const tc=orig(id,'text-color'), th=orig(id,'text-halo-color');
