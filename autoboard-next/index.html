@@ -9,6 +9,7 @@
 <style>
 html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #map{position:absolute;inset:0}
+html.noche0 #map,body.noche #map{background:#0b0f14}
 #diag{position:fixed;top:10px;left:10px;z-index:10;background:rgba(10,13,16,.88);border:1px solid #232c33;border-radius:10px;padding:10px 14px;color:#e8eef2;font:12px/1.6 ui-monospace,monospace;max-width:320px;max-height:70vh;overflow-y:auto;display:none}
 #diag.on{display:block}
 #diag b{color:#9ae6b4}.mal{color:#ff8a8a}.aviso{color:#ffd166}
@@ -351,7 +352,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v114</div>
+  <div class="seccion">Versión v115</div>
 </div>
 
 <div id="diag">
@@ -639,7 +640,12 @@ const CAM = {
 };
 
 let fogOn=true;
-let nocheAct=false;   /* modo noche activo (ver MODO NOCHE al final) */
+let nocheAct=false;
+try{ /* decide día/noche YA, antes de crear el mapa: evita el destello de cielo claro al abrir */
+  const _m=localStorage.getItem('modo_mapa')||'auto';
+  nocheAct = _m==='noche' || (_m==='auto' && alturaSolar(43.26,-2.93,new Date())<-2);
+  if(nocheAct) document.documentElement.classList.add('noche0');
+}catch(e){}   /* modo noche activo (ver MODO NOCHE al final) */
 let skyOn=true;
 let avisosRadaresOn=true;
 let radaresOn=false;
@@ -3163,7 +3169,7 @@ function aplicarModoMapa(forzar){
 (function(){
   const b=document.getElementById('btnModoMapa');
   if(b) b.onclick=function(){ modoMapa={auto:'dia',dia:'noche',noche:'auto'}[modoMapa]; try{ localStorage.setItem('modo_mapa',modoMapa); }catch(e){} aplicarModoMapa(true); };
-  map.on('load',()=>{ setTimeout(()=>aplicarModoMapa(true),1200); });
+  map.on('load',()=>{ aplicarModoMapa(true); setTimeout(()=>aplicarModoMapa(true),1200); setTimeout(()=>aplicarModoMapa(true),4000); });
   setInterval(()=>aplicarModoMapa(false),60000);
   textoBotonModo();
 })();
