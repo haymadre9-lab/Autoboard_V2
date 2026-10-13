@@ -94,7 +94,7 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #minihud.on{display:flex}
 body.modo-navegacion #minihud{display:flex}
 #minihud .vel{color:#fff;font-weight:900;letter-spacing:-1px}
-#minihud .limite{width:38px;height:38px;box-sizing:border-box;border-radius:50%;background:#ffffff;border:4px solid #d32f2f;display:flex;align-items:center;justify-content:center;font:800 16px/1 system-ui,sans-serif;color:#000;box-shadow:0 2px 6px rgba(0,0,0,.4)}
+#minihud .limite{position:absolute;right:-19px;top:50%;transform:translateY(-50%);width:38px;height:38px;box-sizing:border-box;border-radius:50%;background:#ffffff;border:4px solid #d32f2f;display:flex;align-items:center;justify-content:center;font:800 16px/1 system-ui,sans-serif;color:#000;box-shadow:0 2px 6px rgba(0,0,0,.4)}
 #minihud .limite.oculto{display:none}
 
 /* ========== FLECHA COCHE FIJA EN PANTALLA (65% desde arriba) ========== */
@@ -351,7 +351,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v111</div>
+  <div class="seccion">Versión v114</div>
 </div>
 
 <div id="diag">
@@ -1441,6 +1441,16 @@ function seleccionarSugerencia(res){
 }
 document.getElementById('btnCasa').onclick=async()=>{
   if(!casa){
+    if(lastFix && confirm('¿Guardar tu ubicación actual como casa?\n\nAceptar = usar donde estás ahora\nCancelar = escribir una dirección')){
+      const la=lastFix.lat, lo=lastFix.lon; let nombre='Mi ubicación actual';
+      try{
+        const j=await fetch('https://api.tomtom.com/search/2/reverseGeocode/'+la.toFixed(6)+','+lo.toFixed(6)+'.json?key='+TT+'&language=es-ES').then(r=>r.json());
+        const a=j&&j.addresses&&j.addresses[0]&&j.addresses[0].address; if(a&&a.freeformAddress) nombre=a.freeformAddress;
+      }catch(e){}
+      guardarCasa({lat:la,lon:lo,nombre});
+      avisoEnvio('🏠 Casa guardada: '+nombre);
+      return;
+    }
     const dir=prompt('¿Cuál es tu dirección de casa?');
     if(!dir) return;
     const url='https://api.tomtom.com/search/2/search/'+encodeURIComponent(dir)+'.json?key='+TT+'&language=es-ES&countrySet=ES&limit=1';
@@ -1605,7 +1615,7 @@ function cuadroNav(inner,hw,tam){
 function cuadrosDeStep(s,hw,tam,conCarriles){
   const m=s.maneuver||{}, c=colorCartel(hw);
   if(m.type==='arrive') return cuadroNav('<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="14" fill="'+c.flecha+'"/><circle cx="24" cy="24" r="5.5" fill="'+c.fondo+'"/></svg>',hw,tam);
-  if(m.type==='roundabout'||m.type==='rotary') return cuadroNav(roundaboutSVG(m.exit,c),hw,tam);
+  if(m.type==='roundabout'||m.type==='rotary') return cuadroNav(roundaboutSVG(m.exit,c,m.modifier),hw,tam);
   if(conCarriles && s.lanes && s.lanes.length>=2){
     const n=s.lanes.length, t=Math.min(tam,Math.floor((290-(n-1)*6)/n));
     return '<div class="nbCuadros">'+s.lanes.map(l=>{
@@ -2887,30 +2897,34 @@ function dist(a,b){const R=6371000,la1=a[0]*Math.PI/180,la2=b[0]*Math.PI/180;con
 function bearing(a,b){const la1=a[0]*Math.PI/180,la2=b[0]*Math.PI/180,dlo=(b[1]-a[1])*Math.PI/180;const y=Math.sin(dlo)*Math.cos(la2);const x=Math.cos(la1)*Math.sin(la2)-Math.sin(la1)*Math.cos(la2)*Math.cos(dlo);return ((Math.atan2(y,x)*180/Math.PI)+360)%360;}
 function urlRutaTomTom(o,d){return 'https://api.tomtom.com/routing/1/calculateRoute/'+o[0]+','+o[1]+':'+d[0]+','+d[1]+'/json?key='+TT+'&routeType=fastest&traffic=true&travelMode=car&instructionsType=text&language=es-ES&sectionType=traffic&sectionType=speedLimit';}
 
-function roundaboutSVG(exit, colores){
-  const col = colores.flecha;
-  const c = 24, r = 12, grosor = 5;
+function roundaboutSVG(exit, colores, modif){
+  /* Circulación por la derecha: se entra por abajo-derecha y se gira en sentido antihorario.
+     Se dibuja el recorrido real por el anillo hasta la salida, acabado en flecha. */
+  const col = colores.flecha, ina = colores.flechaInactiva;
   const exitReal = Math.max(1, parseInt(exit,10) || 1);
-  let s = '<svg viewBox="0 0 48 48" width="48" height="48">';
-  s += '<circle cx="'+c+'" cy="24" r="'+r+'" fill="none" stroke="'+col+'" stroke-width="'+grosor+'" opacity="0.9"/>';
-  s += '<path d="M'+c+' 46 L'+c+' '+(24+r)+'" stroke="'+col+'" stroke-width="'+grosor+'" stroke-linecap="round"/>';
-  const NEXITS = 3, pasoDeg = 360/NEXITS, a0 = Math.PI/2;
-  for(let k=0;k<NEXITS;k++){
-    const a = a0 - (k*pasoDeg)*Math.PI/180;
-    const x1 = c + Math.cos(a)*r,     y1 = 24 + Math.sin(a)*r;
-    const x2 = c + Math.cos(a)*(r+7), y2 = 24 + Math.sin(a)*(r+7);
-    const esElegida = (k === Math.min(exitReal-1, NEXITS-1));
-    const stroke   = esElegida ? col : colores.flechaInactiva;   /* salida correcta en el color del cartel, las demás en gris */
-    const grosorSalida = esElegida ? 5 : 3;
-    s += '<path d="M'+x1.toFixed(1)+' '+y1.toFixed(1)+' L'+x2.toFixed(1)+' '+y2.toFixed(1)+'" stroke="'+stroke+'" stroke-width="'+grosorSalida+'" stroke-linecap="round"/>';
-  }
-  s += '<text x="'+c+'" y="29" text-anchor="middle" font-size="14" font-weight="800" fill="'+col+'" font-family="system-ui,sans-serif">'+exitReal+'</text>';
-  return s + '</svg>';
+  const dir = (modif==='right'||modif==='left'||modif==='straight'||modif==='uturn') ? modif : (['right','straight','left'][exitReal-1]||'uturn');
+  const cx=24, cy=22, r=10, TE=47;                       /* ángulos en pantalla (grados, 0=este, positivo=horario) */
+  const EX={right:{t:0,ux:1,uy:0}, straight:{t:-90,ux:0,uy:-1}, left:{t:-180,ux:-1,uy:0}, uturn:{t:133,ux:0,uy:1}};
+  const P=(t,rr)=>[cx+rr*Math.cos(t*Math.PI/180), cy+rr*Math.sin(t*Math.PI/180)];
+  const head=(x,y,ux,uy,hl,hw)=>{const bx=x-ux*hl,by=y-uy*hl,px=-uy,py=ux;return '<polygon points="'+x+','+y+' '+(bx+px*hw)+','+(by+py*hw)+' '+(bx-px*hw)+','+(by-py*hw)+'" fill="'+col+'"/>';};
+  let s='<svg viewBox="0 0 48 48" width="48" height="48">';
+  s+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+ina+'" stroke-width="3"/>';
+  for(const j in EX){ if(j===dir) continue; const q=EX[j], [x,y]=P(q.t,r);
+    s+='<path d="M'+x.toFixed(1)+' '+y.toFixed(1)+' L'+(x+q.ux*8).toFixed(1)+' '+(y+q.uy*8).toFixed(1)+'" stroke="'+ina+'" stroke-width="3" stroke-linecap="round"/>'; }
+  const e=EX[dir], [sx,sy]=P(TE,r), [ex,ey]=P(e.t,r);
+  const span=((TE-e.t)+720)%360, large=span>180?1:0;
+  const L = dir==='uturn' ? 47-ey : dir==='straight' ? ey-2 : dir==='left' ? ex-1 : 47-ex;
+  const x2=ex+e.ux*L, y2=ey+e.uy*L, bx=x2-e.ux*8, by=y2-e.uy*8;
+  s+='<path d="M'+sx.toFixed(1)+' 47 V'+sy.toFixed(1)+'" stroke="'+col+'" stroke-width="5"/>';
+  s+='<path d="M'+sx.toFixed(1)+' '+sy.toFixed(1)+' A'+r+' '+r+' 0 '+large+' 0 '+ex.toFixed(1)+' '+ey.toFixed(1)+' L'+bx.toFixed(1)+' '+by.toFixed(1)+'" fill="none" stroke="'+col+'" stroke-width="5"/>';
+  s+=head(x2.toFixed(1),y2.toFixed(1),e.ux,e.uy,8,6);
+  s+='<text x="'+cx+'" y="'+(cy+4)+'" text-anchor="middle" font-size="10" font-weight="800" fill="'+ina+'" font-family="system-ui,sans-serif">'+exitReal+'</text>';
+  return s+'</svg>';
 }
 function ttMan(it){
   const m=(it.maneuver||it.instructionType||'').toString().toUpperCase();
   if(m.includes('ARRIVE')||m.includes('WAYPOINT')) return {type:'arrive'};
-  if(m.includes('ROUNDABOUT')||m.includes('ROTARY')) return {type:'roundabout',exit:it.roundaboutExitNumber||1,modifier:m.includes('LEFT')?'left':(m.includes('RIGHT')?'right':'straight')};
+  if(m.includes('ROUNDABOUT')||m.includes('ROTARY')) return {type:'roundabout',exit:it.roundaboutExitNumber||1,modifier:m.includes('BACK')?'uturn':(m.includes('LEFT')?'left':(m.includes('RIGHT')?'right':'straight'))};
   let mod='straight';
   if(m.includes('SHARP_LEFT')) mod='sharp left';
   else if(m.includes('SHARP_RIGHT')) mod='sharp right';
@@ -3011,7 +3025,7 @@ function maneuverSVG(s, hw){
   if(m.type === 'arrive'){
     return '<svg viewBox="0 0 48 48" width="48" height="48"><circle cx="24" cy="24" r="15" fill="'+col+'"/><circle cx="24" cy="24" r="6" fill="'+colores.fondo+'"/></svg>';
   }
-  if(m.type === 'roundabout' || m.type === 'rotary'){ return roundaboutSVG(m.exit, colores); }
+  if(m.type === 'roundabout' || m.type === 'rotary'){ return roundaboutSVG(m.exit, colores, m.modifier); }
   if(s.lanes && s.lanes.length){ return cartelConCarriles(s.lanes, m.modifier, hw); }
   return cartelSimple(m.modifier, hw);
 }
