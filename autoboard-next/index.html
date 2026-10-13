@@ -349,10 +349,11 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Coche</div>
   <button class="ajuste" id="btnCoche">🚗 Coche: Flecha</button>
   <div id="filaColorCoche"></div>
+  <button class="ajuste" id="btnTiltCoche" style="display:none">📐 Inclinación coche: 60°</button>
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v119</div>
+  <div class="seccion">Versión v120</div>
 </div>
 
 <div id="diag">
@@ -3204,6 +3205,8 @@ const ss = (k,v) => { try{ localStorage.setItem(k,v); }catch(e){} };
 const api = { activo:false, cargando:false, listo:false, yaw(){}, color(){} };
 window.__coche3D = api;
 let THREE, renderer, scene, camera, yawActual=0;
+const TILTS=[52,60,68];       /* inclinación de la cámara del coche 3D (grados desde la vertical); la flecha sigue usando CAM.FLECHA_TILT */
+let tiltCoche = (function(){ const v=parseInt((function(){ try{ return localStorage.getItem('coche3d_tilt'); }catch(e){ return null; } })(),10); return TILTS.indexOf(v)>=0 ? v : 60; })();
 
 function render(){ if(renderer) renderer.render(scene,camera); }
 api.yaw = deg => { yawActual=deg; if(actual){ actual.grupo.rotation.y = -deg*Math.PI/180; render(); } };
@@ -3223,7 +3226,7 @@ function ajustarTamano(){
 }
 setInterval(ajustarTamano,300);
 function posCamara(){
-  const tilt = (typeof CAM!=='undefined' && CAM.FLECHA_TILT!=null) ? CAM.FLECHA_TILT : 42;
+  const tilt = tiltCoche;
   const el = (90-tilt)*Math.PI/180;
   const dist = (4.8*220/LARGO_PX)/(2*Math.tan(FOV/2*Math.PI/180));
   camera.position.set(0, Math.sin(el)*dist, Math.cos(el)*dist);
@@ -3288,6 +3291,7 @@ function ponerTexto(extra){
   b.textContent='🚗 Coche: '+(api.activo?COCHES[idx].nombre:'Flecha')+(extra||'');
   b.classList.toggle('on',api.activo);
   $('filaColorCoche').classList.toggle('on',api.activo);
+  const bt=$('btnTiltCoche'); if(bt){ bt.style.display=api.activo?'block':'none'; bt.textContent='📐 Inclinación coche: '+tiltCoche+'°'; }
 }
 async function activar(){
   const b=$('btnCoche'); if(b) b.textContent='🚗 Cargando coche…';
@@ -3295,10 +3299,12 @@ async function activar(){
   if(!ok){ api.activo=false; document.body.classList.remove('coche3d-on'); ponerTexto(' (no se pudo cargar)'); return false; }
   api.activo=true; document.body.classList.add('coche3d-on');
   const c=gs('coche3d_color')||'orig'; api.color(c==='orig'?null:c);
-  api.yaw(yawActual); escalaAplicada=0; ajustarTamano(); ponerTexto(); return true;
+  posCamara(); api.yaw(yawActual); escalaAplicada=0; ajustarTamano(); ponerTexto(); return true;
 }
 function desactivar(){ api.activo=false; document.body.classList.remove('coche3d-on'); ponerTexto(); }
-api.activar=activar; api.desactivar=desactivar; api._grupo=()=>actual&&actual.grupo; api._render=render;
+api.activar=activar; api.desactivar=desactivar; api._grupo=()=>actual&&actual.grupo; api._render=render; api._pos=()=>{ if(camera){ posCamara(); render(); } };
+const btnT=$('btnTiltCoche');
+if(btnT){ btnT.onclick=()=>{ tiltCoche=TILTS[(TILTS.indexOf(tiltCoche)+1)%TILTS.length]; ss('coche3d_tilt',String(tiltCoche)); if(camera){ posCamara(); render(); } ponerTexto(); }; }
 const btn=$('btnCoche');
 if(btn){ btn.onclick=async()=>{
   if(api.cargando) return;
