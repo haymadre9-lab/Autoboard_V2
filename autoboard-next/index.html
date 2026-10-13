@@ -94,7 +94,7 @@ html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #minihud.on{display:flex}
 body.modo-navegacion #minihud{display:flex}
 #minihud .vel{color:#fff;font-weight:900;letter-spacing:-1px}
-#minihud .limite{width:52px;height:52px;border-radius:50%;background:#ffffff;border:6px solid #d32f2f;display:flex;align-items:center;justify-content:center;font:800 22px/1 system-ui,sans-serif;color:#000;box-shadow:0 2px 6px rgba(0,0,0,.4)}
+#minihud .limite{width:38px;height:38px;box-sizing:border-box;border-radius:50%;background:#ffffff;border:4px solid #d32f2f;display:flex;align-items:center;justify-content:center;font:800 16px/1 system-ui,sans-serif;color:#000;box-shadow:0 2px 6px rgba(0,0,0,.4)}
 #minihud .limite.oculto{display:none}
 
 /* ========== FLECHA COCHE FIJA EN PANTALLA (65% desde arriba) ========== */
@@ -304,7 +304,7 @@ body.modo-solomapa #coche3D{display:none !important}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v109</div>
+  <div class="seccion">Versión v110</div>
 </div>
 
 <div id="diag">
@@ -599,6 +599,8 @@ let cargadoresOn=false;
 
 let idFuenteBuildings=null,sourceLayerBuildings=null,edificiosOn=true;
 let limiteVelocidadVia=0;
+let routeLimites=[];   /* [{s0,s1,kmh}] en metros de ruta, de sectionType=speedLimit */
+function limiteEnRuta(sM){ for(const q of routeLimites){ if(sM>=q.s0-1 && sM<=q.s1+1) return q.kmh; } return 0; }
 let radaresCargados=[];
 let senalesOn=true;
 let alertaRadarActiva=false;
@@ -1009,15 +1011,45 @@ async function cargarSenales(){
   }
 }
 
+const RADAR_CONO_DEG=75, RADAR_RUTA_LAT_M=35;
+/* Posición de un radar respecto a la ruta por delante: {d: distancia lateral (m), s: metros de ruta} (solo mira ~700 m hacia delante) */
+function radarEnRuta(lat,lon,sCoche){
+  const n=routeCoordsLL.length; if(n<2||routeCumDist.length!==n) return null;
+  const mx=111320*Math.cos(lat*Math.PI/180), my=110540, px=lon*mx, py=lat*my;
+  let mejorD=Infinity, mejorS=0;
+  for(let i=Math.max(0,routeProgIdx-3); i<n-1 && routeCumDist[i]<=sCoche+RADAR_DIST_APAGADO+150; i++){
+    const a=routeCoordsLL[i], b=routeCoordsLL[i+1], ax=a[1]*mx, ay=a[0]*my, dx=b[1]*mx-ax, dy=b[0]*my-ay, L2=dx*dx+dy*dy;
+    const t=L2?Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/L2)):0, d=Math.hypot(px-(ax+t*dx), py-(ay+t*dy));
+    if(d<mejorD){ mejorD=d; mejorS=routeCumDist[i]+t*Math.sqrt(L2); }
+  }
+  return mejorD<Infinity ? {d:mejorD, s:mejorS} : null;
+}
 function comprobarRadaresCercanos(lat,lon,velocidadActualKmh){
   if(!avisosRadaresOn){apagarAlertaRadar();return;}
   if((!gpsOn && !simulando) || !radaresCargados.length){apagarAlertaRadar();return;}
+  const conRuta=routeCoordsLL.length>1;
+  const enMarcha=velocidadActualKmh>=6;
+  /* parado y sin ruta el rumbo GPS no vale: se deja el aviso como estaba */
+  if(!enMarcha && !conRuta) return;
+  const sCoche=conRuta ? recorridoAhora([lat,lon]) : 0;
   const dLat=0.01,dLon=0.01;
   let masCercano=null,distMin=Infinity;
   for(const rd of radaresCargados){
     if(Math.abs(rd.lat-lat)>dLat||Math.abs(rd.lon-lon)>dLon) continue;
     const d=dist([lat,lon],[rd.lat,rd.lon]);
-    if(d<distMin){distMin=d;masCercano=rd;}
+    if(d>=distMin) continue;
+    if(conRuta){
+      /* con ruta: solo radares sobre la ruta y por delante (no los que dejas atrás ni los de otras calles) */
+      const rp=radarEnRuta(rd.lat,rd.lon,sCoche);
+      if(!rp||rp.d>RADAR_RUTA_LAT_M) continue;
+      const delante=rp.s-sCoche;
+      if(delante<-10||delante>RADAR_DIST_APAGADO+50) continue;
+    }else{
+      /* sin ruta: solo los que están dentro de un cono hacia donde miras */
+      const dif=Math.abs(((bearing([lat,lon],[rd.lat,rd.lon])-heading+540)%360)-180);
+      if(dif>RADAR_CONO_DEG) continue;
+    }
+    distMin=d; masCercano=rd;
   }
   const g9=document.getElementById('g9');
   if(!masCercano||distMin>RADAR_DIST_APAGADO){apagarAlertaRadar();g9.textContent='-';return;}
@@ -1611,8 +1643,16 @@ async function calcularRuta(origen,destino,modo='normal',rutaPre=null){
     const coords=ruta.legs.flatMap(l=>l.points.map(p=>[p.longitude,p.latitude]));
     const nivelesPorPunto=new Array(coords.length).fill(0);
     routeNivelesPorPunto=nivelesPorPunto;
+    const limRaw=[];
     if(ruta.sections && ruta.sections.length){
       for(const sec of ruta.sections){
+        /* límite legal de velocidad (sectionType=speedLimit → maxSpeedLimitInKmh): se guarda por metros de ruta */
+        const tipoSec=String(sec.sectionType||'').toUpperCase().replace(/_/g,'');
+        if(tipoSec==='SPEEDLIMIT' || typeof sec.maxSpeedLimitInKmh==='number'){
+          const kmh=Number(sec.maxSpeedLimitInKmh), a0=sec.startPointIndex||0, b0=Number.isInteger(sec.endPointIndex)?sec.endPointIndex:coords.length-1;
+          if(kmh>0) limRaw.push({a0:a0,b0:b0,kmh:kmh});
+          continue;
+        }
         if(sec.sectionType && sec.sectionType!=='TRAFFIC') continue;
         const mag=typeof sec.magnitudeOfDelay==='number'?sec.magnitudeOfDelay:0;
         let nivel=0;
@@ -1633,6 +1673,7 @@ async function calcularRuta(origen,destino,modo='normal',rutaPre=null){
     routeCoordsLL=coords.map(c=>[c[1],c[0]]);
     routeCumDist=[0];
     for(let i=1;i<routeCoordsLL.length;i++) routeCumDist.push(routeCumDist[i-1]+dist(routeCoordsLL[i-1],routeCoordsLL[i]));
+    routeLimites=limRaw.map(q=>({s0:routeCumDist[Math.min(q.a0,routeCumDist.length-1)]||0, s1:routeCumDist[Math.min(q.b0,routeCumDist.length-1)]||0, kmh:q.kmh}));
     steps=(ruta.guidance&&ruta.guidance.instructions||[]).map(it=>{
       const off=it.routeOffsetInMeters,pi=it.pointIndex;
       const porIndice=Number.isInteger(pi)&&pi>=0&&pi<routeCumDist.length?routeCumDist[pi]:null;
@@ -1764,7 +1805,9 @@ function onFix(pos){
     if(s && s.maneuver && s.maneuver.type==='arrive' && d<50){ dispararCelebracion(); }
     /* El zoom de maniobra ya no se decide aquí (un solo umbral binario a 180 m, sin histéresis):
        lo gobierna actualizarManiobra() cada frame, con la distancia extrapolada. */
-    if(s&&typeof s.limiteKmh==='number'&&s.limiteKmh>0) limiteVelocidadVia=s.limiteKmh;
+    const limRuta=limiteEnRuta(recorrido);
+    if(limRuta>0) limiteVelocidadVia=limRuta;
+    else if(s&&typeof s.limiteKmh==='number'&&s.limiteKmh>0) limiteVelocidadVia=s.limiteKmh;
     else limiteVelocidadVia=0;
   }else{
     renderStep();
@@ -2475,7 +2518,7 @@ let ultimoCambioTrafico=0, evaluandoTrafico=false;
 const TRAFICO = { CHECK_MS:90000, COOLDOWN_MS:300000, GANANCIA_MIN_S:120, GANANCIA_PCT:0.10, VIA_CADA_M:1200, MAX_VIAS:8, NO_CERCA_MANIOBRA_M:400, DIFIERE_PCT:0.15, DIFIERE_M:40 };
 function nivelDeMagnitud(m){ return m>=3 ? 3 : (m===2 ? 2 : (m===1 ? 1 : 0)); }
 function urlRutaPorPuntos(pts){
-  return 'https://api.tomtom.com/routing/1/calculateRoute/'+pts.map(p=>p[0].toFixed(6)+','+p[1].toFixed(6)).join(':')+'/json?key='+TT+'&routeType=fastest&traffic=true&travelMode=car&sectionType=traffic';
+  return 'https://api.tomtom.com/routing/1/calculateRoute/'+pts.map(p=>p[0].toFixed(6)+','+p[1].toFixed(6)).join(':')+'/json?key='+TT+'&routeType=fastest&traffic=true&travelMode=car&sectionType=traffic&sectionType=speedLimit';
 }
 /* Metro de la ruta actual más cercano a un punto [lat,lon] (null si queda a más de 80 m) */
 function metroEnRutaActual(p){
@@ -2765,7 +2808,7 @@ async function enviarATesla(){
 $id('btnEnviar').onclick=enviarATesla;
 function detenerRuta(){
   steps=[];stepIdx=0;routeCoordsLL=[];routeCumDist=[];routeProgIdx=0;
-  ultimaRutaDestino=null;destinoNombre='';limiteVelocidadVia=0;ultimoStepPintado='';
+  ultimaRutaDestino=null;destinoNombre='';limiteVelocidadVia=0;routeLimites=[];ultimoStepPintado='';
   resetCamRuta();
   routeNivelesPorPunto=[];
   const srcRuta=map.getSource('ruta');if(srcRuta) srcRuta.setData({type:'FeatureCollection',features:[]});
@@ -2794,7 +2837,7 @@ function medirDurante(ms,id,mover){
 }
 function dist(a,b){const R=6371000,la1=a[0]*Math.PI/180,la2=b[0]*Math.PI/180;const dla=(b[0]-a[0])*Math.PI/180,dlo=(b[1]-a[1])*Math.PI/180;const h=Math.sin(dla/2)**2+Math.cos(la1)*Math.cos(la2)*Math.sin(dlo/2)**2;return 2*R*Math.asin(Math.sqrt(h));}
 function bearing(a,b){const la1=a[0]*Math.PI/180,la2=b[0]*Math.PI/180,dlo=(b[1]-a[1])*Math.PI/180;const y=Math.sin(dlo)*Math.cos(la2);const x=Math.cos(la1)*Math.sin(la2)-Math.sin(la1)*Math.cos(la2)*Math.cos(dlo);return ((Math.atan2(y,x)*180/Math.PI)+360)%360;}
-function urlRutaTomTom(o,d){return 'https://api.tomtom.com/routing/1/calculateRoute/'+o[0]+','+o[1]+':'+d[0]+','+d[1]+'/json?key='+TT+'&routeType=fastest&traffic=true&travelMode=car&instructionsType=text&language=es-ES&sectionType=traffic';}
+function urlRutaTomTom(o,d){return 'https://api.tomtom.com/routing/1/calculateRoute/'+o[0]+','+o[1]+':'+d[0]+','+d[1]+'/json?key='+TT+'&routeType=fastest&traffic=true&travelMode=car&instructionsType=text&language=es-ES&sectionType=traffic&sectionType=speedLimit';}
 
 function roundaboutSVG(exit, colores){
   const col = colores.flecha;
