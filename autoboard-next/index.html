@@ -9,7 +9,7 @@
 <style>
 html,body{margin:0;height:100%;background:#0b0e12;overflow:hidden}
 #map{position:absolute;inset:0}
-html.noche0 #map,body.noche #map{background:#0b0f14}
+html.noche0 #map,body.noche #map{background:#1b2128}
 #diag{position:fixed;top:10px;left:10px;z-index:10;background:rgba(10,13,16,.88);border:1px solid #232c33;border-radius:10px;padding:10px 14px;color:#e8eef2;font:12px/1.6 ui-monospace,monospace;max-width:320px;max-height:70vh;overflow-y:auto;display:none}
 #diag.on{display:block}
 #diag b{color:#9ae6b4}.mal{color:#ff8a8a}.aviso{color:#ffd166}
@@ -352,7 +352,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v115</div>
+  <div class="seccion">Versión v117</div>
 </div>
 
 <div id="diag">
@@ -715,8 +715,8 @@ function aplicarSky(){
   try{
     map.setSky({
       /* cielo gris muy claro que se funde con una bruma blanca en el horizonte (como codriver.io): nada oscuro */
-      'sky-color':nocheAct?'#0b0f14':'#d3d8de','sky-horizon-blend':0.6,'horizon-color':nocheAct?'#1a212a':'#f0f2f4','horizon-fog-blend':0.85,
-      'fog-color':nocheAct?'#12171c':'#eceef1','fog-ground-blend':0.55,
+      'sky-color':nocheAct?'#1b2128':'#d3d8de','sky-horizon-blend':0.6,'horizon-color':nocheAct?'#2a323c':'#f0f2f4','horizon-fog-blend':0.85,
+      'fog-color':nocheAct?'#252c35':'#eceef1','fog-ground-blend':0.55,
       'atmosphere-blend':['interpolate',['linear'],['zoom'],0,0.1,10,0.08,15,0.04]
     });
   }catch(e){}
@@ -3151,6 +3151,11 @@ function pintarMapaNoche(n){
     if(l.type==='symbol' && l.layout && l.layout['text-field']){
       const tc=orig(id,'text-color'), th=orig(id,'text-halo-color');
       sp(id,'text-color',n?NOCHE.txt:tc); sp(id,'text-halo-color',n?NOCHE.halo:th); continue;
+    }
+    if(sl){   /* genérico: cualquier capa vectorial del mapa base que no conozca (suelo lejano, aeródromos, etc.) también se oscurece */
+      if(l.type==='fill'){ sp(id,'fill-color',n?NOCHE.suelo:orig(id,'fill-color')); sp(id,'fill-outline-color',n?NOCHE.suelo:orig(id,'fill-outline-color')); }
+      else if(l.type==='line'){ sp(id,'line-color',n?NOCHE.via:orig(id,'line-color')); }
+      else if(l.type==='fill-extrusion'){ sp(id,'fill-extrusion-color',n?NOCHE.extr:orig(id,'fill-extrusion-color')); }
     }
     if(sl==='water' || /water|ocean/i.test(id)){ sp(id,'fill-color',n?NOCHE.agua:'#d9e7f1'); sp(id,'fill-outline-color',n?NOCHE.aguaL:'#c9dbe8'); }
     if(sl==='landcover' || sl==='landuse' || /park|grass|wood|forest|landcover/i.test(id)){ sp(id,'fill-color',n?NOCHE.suelo:'#e8ebee'); }
