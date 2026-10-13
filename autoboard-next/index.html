@@ -236,6 +236,51 @@ body.modo-solomapa #coche3D{display:none !important}
 #filaColorCoche button{width:34px;height:34px;border-radius:50%;border:2px solid #d5dae0;padding:0;cursor:pointer}
 #filaColorCoche button.sel{border-color:#2f373f;box-shadow:0 0 0 2px #fff inset}
 #filaColorCoche button.orig{background:conic-gradient(#fff,#c4cad1,#8b949e,#fff)}
+
+/* ---- v111: modo noche (body.noche): paneles oscuros y suaves ---- */
+body.noche #navbanner,body.noche #cartelAlt{background:#232a31;box-shadow:0 6px 20px rgba(0,0,0,.45);color:#e8edf2}
+body.noche #navd,body.noche #navsub,body.noche #navd2,body.noche #navsub2,body.noche #cartelAlt .alTit,body.noche #cartelAlt .alMotivo{color:#e8edf2}
+body.noche #navsep{background:#3a434c}
+body.noche #cartelAlt .alSep{color:#9aa5b1}
+body.noche #cartelAlt .alX,body.noche #navbanner #btnPararRuta{background:#343c45;color:#9aa5b1}
+body.noche .nbCuadro.hw{outline-color:#4a5560}
+body.noche #barraBusqueda{background:#2a3138}
+body.noche #inputBusqueda{color:#d5dce3}
+body.noche #inputBusqueda::placeholder,body.noche #btnCerrarBusqueda{color:#7f8a95}
+body.noche #sugerencias{background:#232a31;box-shadow:0 6px 20px rgba(0,0,0,.5)}
+body.noche #sugerencias .sug{color:#e8edf2;border-bottom-color:#323a43}
+body.noche #sugerencias .sug:hover{background:#2d353d}
+body.noche #sugerencias .sug .sub{color:#9aa5b1}
+body.noche .botonMapa{background:rgba(35,42,49,.92);border-color:#3a434c;color:#9aa5b1;box-shadow:0 2px 10px rgba(0,0,0,.4)}
+body.noche #btnGPS.on,body.noche #btnSeguir.activo{background:#4a5560;border-color:#66717c;color:#f0f3f6}
+body.noche #barraRuta{background:rgba(35,42,49,.9);border-color:#3a434c;color:#e8edf2;box-shadow:0 3px 14px rgba(0,0,0,.45)}
+body.noche #barraRuta .sep{background:#3a434c}
+body.noche #barraRuta .d small{color:#9aa5b1}
+body.noche #btnAlt,body.noche #btnEnviar{background:#2d353d;border-color:#3a434c;color:#9aa5b1}
+body.noche #btnAlt.alerta{background:#1d3550;border-color:#2f6aa6;color:#6db3f2}
+body.noche #panelAlt,body.noche #popupCampo{background:rgba(35,42,49,.97);border-color:#3a434c;color:#d5dce3;box-shadow:0 6px 24px rgba(0,0,0,.5)}
+body.noche #popupCampo h3{color:#e8edf2}
+body.noche #panelAlt .alt{background:#2d353d}
+body.noche #panelAlt .alt.sel{background:#1f3550}
+body.noche #panelAlt .acc button,body.noche #popupCampo .acc button{background:#2d353d;border-color:#3a434c;color:#d5dce3}
+body.noche #panelAlt .acc button.ir,body.noche #popupCampo .acc button.ir{background:#1e88e5;border-color:#1e88e5;color:#fff}
+body.noche #avisoInicial{background:rgba(35,42,49,.9);border-color:#3a434c;color:#9aa5b1;box-shadow:0 3px 12px rgba(0,0,0,.4)}
+body.noche #radarInfo .dist{background:rgba(35,42,49,.94);color:#d5dce3;border-color:#4a5560}
+body.noche #radarInfo .senalRadar{box-shadow:0 4px 14px rgba(0,0,0,.5)}
+body.noche #panelAjustes{background:rgba(28,34,40,.97);border-left-color:#3a434c;color:#d5dce3;box-shadow:-6px 0 24px rgba(0,0,0,.5)}
+body.noche #panelAjustes h2{color:#e8edf2}
+body.noche #panelAjustes button.ajuste{background:#2a3138;border-color:#3a434c;color:#9aa5b1}
+body.noche #panelAjustes button.ajuste.on{background:#46505b;border-color:#66717c;color:#f0f3f6}
+body.noche #panelAjustes button.ajuste.peligro{background:#2a3138;border-color:#3a434c;color:#b08088}
+body.noche #panelAjustes .seccion,body.noche #panelAjustes .cerrarPanel{color:#7f8a95}
+body.noche #popupCargador{background:rgba(35,42,49,.96);border-color:#3a434c;color:#d5dce3}
+body.noche #popupCargador h3,body.noche #popupCargador .info b{color:#e8edf2}
+body.noche #popupCargador .conector{background:#2d353d;border-color:#3a434c;color:#d5dce3}
+body.noche #popupCargador .acciones button{background:#3a434c;border-color:#4a5560;color:#e8edf2}
+body.noche #listaCargadores{background:rgba(35,42,49,.94);border-color:#3a434c}
+body.noche #listaCargadores .cabecera{background:#2a3138;border-bottom-color:#3a434c}
+body.noche #listaCargadores .cargadorItem{background:#2d353d}
+body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
 </style>
 </head>
 <body class="modo-debug">
@@ -298,13 +343,15 @@ body.modo-solomapa #coche3D{display:none !important}
   <button class="ajuste on" id="btnAvisosRadares">📸 Avisos radares: ON</button>
   <div class="seccion">Cargadores</div>
   <button class="ajuste" id="btnListaCargadores">⚡ Ver 10 más cercanos</button>
+  <div class="seccion">Mapa</div>
+  <button class="ajuste" id="btnModoMapa">🌙 Mapa: Auto</button>
   <div class="seccion">Coche</div>
   <button class="ajuste" id="btnCoche">🚗 Coche: Flecha</button>
   <div id="filaColorCoche"></div>
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v110</div>
+  <div class="seccion">Versión v111</div>
 </div>
 
 <div id="diag">
@@ -592,6 +639,7 @@ const CAM = {
 };
 
 let fogOn=true;
+let nocheAct=false;   /* modo noche activo (ver MODO NOCHE al final) */
 let skyOn=true;
 let avisosRadaresOn=true;
 let radaresOn=false;
@@ -651,8 +699,8 @@ function aplicarFog(){
   if(!map.setFog) return;
   if(!fogOn){ map.setFog(null); return; }
   map.setFog({
-    'range':[1.5, 12],'color':'#e8eaed','horizon-blend':0.2,
-    'high-color':'#dfe3e8','space-color':'#dfe3e8','star-intensity':0
+    'range':[1.5, 12],'color':nocheAct?'#12171c':'#e8eaed','horizon-blend':0.2,
+    'high-color':nocheAct?'#0d1116':'#dfe3e8','space-color':nocheAct?'#0a0d11':'#dfe3e8','star-intensity':0
   });
 }
 function aplicarSky(){
@@ -661,8 +709,8 @@ function aplicarSky(){
   try{
     map.setSky({
       /* cielo gris muy claro que se funde con una bruma blanca en el horizonte (como codriver.io): nada oscuro */
-      'sky-color':'#d3d8de','sky-horizon-blend':0.6,'horizon-color':'#f0f2f4','horizon-fog-blend':0.85,
-      'fog-color':'#eceef1','fog-ground-blend':0.55,
+      'sky-color':nocheAct?'#0b0f14':'#d3d8de','sky-horizon-blend':0.6,'horizon-color':nocheAct?'#1a212a':'#f0f2f4','horizon-fog-blend':0.85,
+      'fog-color':nocheAct?'#12171c':'#eceef1','fog-ground-blend':0.55,
       'atmosphere-blend':['interpolate',['linear'],['zoom'],0,0.1,10,0.08,15,0.04]
     });
   }catch(e){}
@@ -3044,6 +3092,67 @@ function __selfTest(){
   console.log(fallos.length?('__selfTest: '+fallos.length+' FALLO(S)'):'__selfTest: todo OK ('+res.length+' comprobaciones)');
   return {ok:fallos.length===0, resultados:res};
 }
+
+/* ============================ MODO NOCHE ============================
+   No se cambia de estilo (eso borraría las capas propias): se recolorean las capas del mapa con setPaintProperty, igual que lavarMapa(),
+   y se añade body.noche para los paneles. Modos: Auto (por la altura del sol en tu posición) · Día · Noche. */
+let modoMapa=(()=>{ try{ return localStorage.getItem('modo_mapa')||'auto'; }catch(e){ return 'auto'; } })();
+const NOCHE={ bg:'#151a20', agua:'#1a2633', aguaL:'#213041', suelo:'#1b2320', edif:'#212831', via:'#313943', txt:'#9aa5b1', halo:'#151a20', extr:'#434d59' };
+const __origPaint={};
+function alturaSolar(lat,lon,d){
+  const rad=Math.PI/180;
+  const dia=(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate())-Date.UTC(d.getUTCFullYear(),0,0))/864e5;
+  const g=2*Math.PI/365*(dia-1+(d.getUTCHours()-12)/24);
+  const eqt=229.18*(0.000075+0.001868*Math.cos(g)-0.032077*Math.sin(g)-0.014615*Math.cos(2*g)-0.040849*Math.sin(2*g));
+  const decl=0.006918-0.399912*Math.cos(g)+0.070257*Math.sin(g)-0.006758*Math.cos(2*g)+0.000907*Math.sin(2*g)-0.002697*Math.cos(3*g)+0.00148*Math.sin(3*g);
+  const min=d.getUTCHours()*60+d.getUTCMinutes()+d.getUTCSeconds()/60;
+  const ha=((min+eqt+4*lon)/4-180)*rad, la=lat*rad;
+  const cosz=Math.sin(la)*Math.sin(decl)+Math.cos(la)*Math.cos(decl)*Math.cos(ha);
+  return 90-Math.acos(Math.max(-1,Math.min(1,cosz)))/rad;
+}
+function esNocheAhora(){
+  if(modoMapa==='noche') return true;
+  if(modoMapa==='dia') return false;
+  const p=lastFix?[lastFix.lat,lastFix.lon]:[43.26,-2.93];
+  const alt=alturaSolar(p[0],p[1],new Date());
+  return nocheAct ? alt<0 : alt<-2;      /* histéresis: entra con el sol 2° bajo el horizonte, sale al salir */
+}
+function pintarMapaNoche(n){
+  const sp=(id,prop,val)=>{ try{ map.setPaintProperty(id,prop,val); }catch(e){} };
+  const orig=(id,prop)=>{ const k=id+'|'+prop; if(!(k in __origPaint)){ try{ __origPaint[k]=map.getPaintProperty(id,prop); }catch(e){ __origPaint[k]=undefined; } } return __origPaint[k]; };
+  let capas=[]; try{ capas=map.getStyle().layers||[]; }catch(e){ return; }
+  for(const l of capas){
+    const sl=l['source-layer']||'', id=l.id||'';
+    if(l.type==='background'){ sp(id,'background-color',n?NOCHE.bg:'#eef1f4'); continue; }
+    if(id==='ruta-halo'||id==='ruta-alt-halo'||id==='ruta-oferta-halo'){ sp(id,'line-color',n?'#0c1015':'#ffffff'); continue; }
+    if(id==='ruta-hecha'){ sp(id,'line-color',n?'#48525d':'#aeb6bf'); continue; }
+    if(id==='3d-buildings'){ sp(id,'fill-extrusion-color',n?NOCHE.extr:'#b8c0cc'); sp(id,'fill-extrusion-opacity',n?0.7:0.5); continue; }
+    if(id==='fut-franjas'){ sp(id,'fill-opacity',n?0.6:0.95); continue; }
+    if(l.type==='symbol' && l.layout && l.layout['text-field']){
+      const tc=orig(id,'text-color'), th=orig(id,'text-halo-color');
+      sp(id,'text-color',n?NOCHE.txt:tc); sp(id,'text-halo-color',n?NOCHE.halo:th); continue;
+    }
+    if(sl==='water' || /water|ocean/i.test(id)){ sp(id,'fill-color',n?NOCHE.agua:'#d9e7f1'); sp(id,'fill-outline-color',n?NOCHE.aguaL:'#c9dbe8'); }
+    if(sl==='landcover' || sl==='landuse' || /park|grass|wood|forest|landcover/i.test(id)){ sp(id,'fill-color',n?NOCHE.suelo:'#e8ebee'); }
+    if(sl==='building' && l.type!=='fill-extrusion'){ sp(id,'fill-color',n?NOCHE.edif:'#e0e3e7'); }
+    if(sl==='transportation' && l.type==='line'){ sp(id,'line-color',n?NOCHE.via:'#ffffff'); }
+  }
+}
+function textoBotonModo(){ const b=document.getElementById('btnModoMapa'); if(b){ b.textContent='🌙 Mapa: '+({auto:'Auto',dia:'Día',noche:'Noche'}[modoMapa]); b.classList.toggle('on',nocheAct); } }
+function aplicarModoMapa(forzar){
+  let n=false; try{ n=esNocheAhora(); }catch(e){ registrarError('noche',e.message); }
+  if(n===nocheAct && !forzar){ textoBotonModo(); return; }
+  nocheAct=n; document.body.classList.toggle('noche',n);
+  try{ pintarMapaNoche(n); aplicarSky(); aplicarFog(); }catch(e){ registrarError('noche-pintar',e.message); }
+  textoBotonModo();
+}
+(function(){
+  const b=document.getElementById('btnModoMapa');
+  if(b) b.onclick=function(){ modoMapa={auto:'dia',dia:'noche',noche:'auto'}[modoMapa]; try{ localStorage.setItem('modo_mapa',modoMapa); }catch(e){} aplicarModoMapa(true); };
+  map.on('load',()=>{ setTimeout(()=>aplicarModoMapa(true),1200); });
+  setInterval(()=>aplicarModoMapa(false),60000);
+  textoBotonModo();
+})();
 </script>
 
 <script type="module">
