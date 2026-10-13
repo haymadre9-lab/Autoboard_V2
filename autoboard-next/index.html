@@ -352,7 +352,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v117</div>
+  <div class="seccion">Versión v118</div>
 </div>
 
 <div id="diag">
@@ -810,7 +810,7 @@ map.on('load',()=>{
   if(!__paddingListener){ window.addEventListener('resize', actualizarPadding); __paddingListener = true; }
 
   lavarMapa();
-  try{ map.getContainer().style.background="#e9ecef"; }catch(e){}   /* si algo no se dibuja (p. ej. sobre el horizonte), se ve gris claro, nunca negro */
+  try{ map.getContainer().style.background=nocheAct?"#232a33":"#e9ecef"; }catch(e){}   /* si algo no se dibuja (p. ej. sobre el horizonte), se ve gris claro, nunca negro */
   aplicarFog();
   aplicarSky();
   document.getElementById('rArranque').innerHTML='<b>OK</b>';
@@ -3168,6 +3168,7 @@ function aplicarModoMapa(forzar){
   let n=false; try{ n=esNocheAhora(); }catch(e){ registrarError('noche',e.message); }
   if(n===nocheAct && !forzar){ textoBotonModo(); return; }
   nocheAct=n; document.body.classList.toggle('noche',n);
+  try{ map.getContainer().style.background=n?'#232a33':'#e9ecef'; }catch(e){}
   try{ pintarMapaNoche(n); aplicarSky(); aplicarFog(); }catch(e){ registrarError('noche-pintar',e.message); }
   textoBotonModo();
 }
