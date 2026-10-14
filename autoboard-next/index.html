@@ -354,7 +354,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v121</div>
+  <div class="seccion">Versión v122</div>
 </div>
 
 <div id="diag">
@@ -2550,12 +2550,6 @@ const HITOS_CFG = { ON:(function(){ try{ return localStorage.getItem('hitos_on')
   MINZOOM:15, RADIO_M:700, CADA_MS:2500, CERCA_M:30, ESTADIO_M:140,
   COL:{ dia:{p:'#e9e6e0',t:'#b9b2a9',g:'#d4d9de'}, noche:{p:'#4c535d',t:'#393e45',g:'#3f464f'} } };
 const HITOS = [
-  { n:'Iglesia de San Vicente Mártir',            t:'iglesia', lat:43.2958, lon:-2.9973 },
-  { n:'Iglesia de Santa Teresa de Jesús',         t:'iglesia', lat:43.2997, lon:-2.9929 },
-  { n:'Iglesia de San José',                      t:'iglesia', lat:43.2961, lon:-2.9871 },
-  { n:'Iglesia de Nuestra Señora del Carmen',     t:'iglesia', lat:43.2999, lon:-2.9851 },
-  { n:'Iglesia de San Ignacio de Loyola',         t:'iglesia', lat:43.2941, lon:-2.9843 },
-  { n:'Iglesia de Nuestra Señora de la Esperanza',t:'iglesia', lat:43.2927, lon:-2.9911 },
   { n:'Estadio de Lasesarre',                     t:'estadio', lat:43.30278, lon:-2.98639 }
 ];
 const __hitos = { feats:[], pts:[], hechos:{}, capas:false, sucio:false };
@@ -3422,6 +3416,122 @@ if(btn){ btn.onclick=async()=>{
 }; }
 pintarColores(); ponerTexto();
 if(gs('coche3d')==='1') activar();
+</script>
+<script type="module">
+/* ============ EDIFICIOS .GLB SOBRE EL MAPA ============
+   Capa propia de MapLibre (custom layer) que dibuja modelos .glb de la raíz del repo en unas coordenadas.
+   Solo se carga Three.js y el modelo cuando el centro del mapa está a ≤1,5 km y zoom ≥14,5. Si algo falla, no se pinta nada.
+   Para añadir uno: subir el .glb y añadir una línea en GLB_HITOS.
+   rot = grados, giro del modelo (antihorario desde el este) · esc = escala · campoL = largo (m) del campo de fútbol dentro del modelo (para ajustar posición/giro/escala con el campo real del mapa) · base = intentar ocultar el edificio plano del mapa que hay debajo */
+const THREE_BASE = window.__THREE_BASE || 'https://cdn.jsdelivr.net/npm/three@0.160.0';
+const GLB_HITOS = [
+  { n:'Estadio San Mamés', archivo: window.__GLB_SANMAMES || 'sanmames.glb', lat:43.2642, lon:-2.9494, rot:0, esc:1, campoL:105, base:true }
+];
+const GLB_CFG = { MINZOOM:14.5, RADIO_M:1500, CADA_MS:2500, CAMPO_M:120 };
+let T=null, renderer=null, scene=null, camera=null, capaOk=false, luzH=null, luzD=null, cargando=false, ultimoNoche=null;
+const items=[];   /* {def, grupo, lat, lon, rot, esc} */
+const gl_ = { ON:()=> (typeof HITOS_CFG==='undefined') || HITOS_CFG.ON };
+window.__glbHitos = { items, estado:'inicio' };
+
+function aplicarLuz(){
+  if(!luzH) return;
+  const n = (typeof nocheAct!=='undefined') && nocheAct;
+  if(n===ultimoNoche) return; ultimoNoche=n;
+  luzH.intensity = n ? 0.75 : 1.7; luzH.color.set(n?0x8a96a6:0xffffff); luzH.groundColor.set(n?0x252b33:0xb8c0c8);
+  luzD.intensity = n ? 0.35 : 1.4;
+}
+function colocar(it){
+  const m = maplibregl.MercatorCoordinate.fromLngLat([it.lon,it.lat],0), s = m.meterInMercatorCoordinateUnits()*it.esc;
+  it.m = { x:m.x, y:m.y, z:m.z, s:s };
+  it.grupo.rotation.y = it.rot*Math.PI/180;
+}
+const capa = {
+  id:'glb-hitos', type:'custom', renderingMode:'3d',
+  onAdd(map_, gl){
+    renderer = new T.WebGLRenderer({ canvas:map_.getCanvas(), context:gl, antialias:true });
+    renderer.autoClear = false;
+    scene = new T.Scene(); camera = new T.Camera();
+    luzH = new T.HemisphereLight(0xffffff,0xb8c0c8,1.7); scene.add(luzH);
+    luzD = new T.DirectionalLight(0xffffff,1.4); luzD.position.set(-0.4,1,0.5); scene.add(luzD);
+    for(const it of items) scene.add(it.grupo);
+  },
+  render(gl, matrix){
+    if(!gl_.ON() || !items.length || map.getZoom()<GLB_CFG.MINZOOM) return;
+    const mm = (matrix && matrix.defaultProjectionData) ? matrix.defaultProjectionData.mainMatrix : matrix;
+    aplicarLuz();
+    const proy = new T.Matrix4().fromArray(mm);
+    const c = map.getCenter();
+    renderer.resetState();
+    for(const it of items){
+      if(!it.m) continue;
+      /* solo los que están cerca: dibujar muchos a la vez cuesta */
+      if(dist([c.lat,c.lng],[it.lat,it.lon])>GLB_CFG.RADIO_M) { it.grupo.visible=false; continue; }
+      it.grupo.visible=true;
+      const l = new T.Matrix4().makeTranslation(it.m.x,it.m.y,it.m.z).scale(new T.Vector3(it.m.s,-it.m.s,it.m.s)).multiply(new T.Matrix4().makeRotationX(Math.PI/2));
+      camera.projectionMatrix = proy.clone().multiply(l);
+      renderer.render(scene,camera);
+    }
+    renderer.resetState();
+  }
+};
+async function cargarItem(def){
+  const { GLTFLoader } = await import(THREE_BASE+'/examples/jsm/loaders/GLTFLoader.js');
+  const gltf = await new Promise((ok,ko)=>new GLTFLoader().load(def.archivo,ok,undefined,ko));
+  const grupo = new T.Group(); grupo.add(gltf.scene);
+  const it = { def, grupo, lat:def.lat, lon:def.lon, rot:def.rot||0, esc:def.esc||1, ajustado:false };
+  items.push(it); colocar(it);
+  if(scene) scene.add(grupo);
+  return it;
+}
+/* Ajuste fino con el campo de fútbol real del mapa (si las teselas lo traen): posición, giro y escala */
+function ajustarConCampo(it){
+  if(it.ajustado || !it.def.campoL || typeof __fut==='undefined' || !__fut.lista) return;
+  let mej=null, md=GLB_CFG.CAMPO_M;
+  for(const e of __fut.lista){ const d=dist([it.def.lat,it.def.lon],[e.lat,e.lon]); if(d<md){ md=d; mej=e; } }
+  if(!mej||!mej.r) return;
+  it.lat=mej.lat; it.lon=mej.lon; it.rot=mej.r.ang*180/Math.PI;
+  const k = mej.r.L/it.def.campoL; it.esc = (k>0.9&&k<1.12)? k : (it.def.esc||1);
+  it.ajustado=true; colocar(it);
+  window.__glbHitos.estado='ajustado con campo ('+md.toFixed(0)+' m, rot '+it.rot.toFixed(0)+'°, esc '+it.esc.toFixed(2)+')';
+  ocultarBaseDe(it);
+}
+/* Quitar el edificio plano del mapa que quedaría tapando las gradas: se filtra por su altura SOLO si no hay otros edificios lejanos con esa misma altura */
+let filtroOrig=undefined, filtroAplicado=false;
+function ocultarBaseDe(it){
+  try{
+    if(!it.def.base || filtroAplicado || !map.getLayer('3d-buildings') || !idFuenteBuildings) return;
+    const fs = map.querySourceFeatures(idFuenteBuildings,{sourceLayer:sourceLayerBuildings})||[];
+    const dentro = fs.filter(f=>f.geometry && poligonoContiene(it.lon,it.lat,f.geometry));
+    if(!dentro.length) return;
+    const claves = new Set(dentro.map(f=>(f.properties.render_height||0)+'|'+(f.properties.render_min_height||0)));
+    const lejos = fs.filter(f=>f.geometry && !poligonoContiene(it.lon,it.lat,f.geometry) && claves.has((f.properties.render_height||0)+'|'+(f.properties.render_min_height||0)) && distAPoligonoM(it.lat,it.lon,f.geometry)>150);
+    if(lejos.length){ registrarError('glb','no se oculta la base: '+lejos.length+' edificios lejanos con la misma altura'); return; }
+    const excl = [...claves].map(k=>{ const [h,m]=k.split('|'); return ['all',['==',['coalesce',['get','render_height'],0],Number(h)],['==',['coalesce',['get','render_min_height'],0],Number(m)]]; });
+    filtroOrig = map.getFilter('3d-buildings') || null;
+    const nuevo = ['all', ['!',['any',...excl]]]; if(filtroOrig) nuevo.push(filtroOrig);
+    map.setFilter('3d-buildings', nuevo); filtroAplicado=true;
+  }catch(e){ registrarError('glb',e.message); }
+}
+function restaurarBase(){ if(filtroAplicado){ try{ map.setFilter('3d-buildings', filtroOrig); }catch(e){} filtroAplicado=false; } }
+async function escanear(){
+  if(cargando || typeof map==='undefined' || !map.getZoom) return;
+  const on=gl_.ON();
+  if(!on){ restaurarBase(); return; }
+  if(map.getZoom()<GLB_CFG.MINZOOM) return;
+  const c=map.getCenter();
+  const cerca = GLB_HITOS.filter(h=>dist([c.lat,c.lng],[h.lat,h.lon])<=GLB_CFG.RADIO_M);
+  if(!cerca.length) return;
+  cargando=true;
+  try{
+    if(!T){ T = await import(THREE_BASE+'/build/three.module.js'); }
+    for(const h of cerca){ if(!items.find(i=>i.def===h)){ window.__glbHitos.estado='cargando '+h.archivo; await cargarItem(h); window.__glbHitos.estado='cargado'; } }
+    if(!capaOk){ const antes = map.getLayer('ruta-base') ? 'ruta-base' : undefined; map.addLayer(capa, antes); capaOk=true; }
+    for(const it of items){ ajustarConCampo(it); if(!filtroAplicado && it.ajustado===false) ocultarBaseDe(it); }
+    map.triggerRepaint();
+  }catch(e){ window.__glbHitos.estado='error: '+e.message; if(typeof registrarError==='function') registrarError('glb',e.message); }
+  finally{ cargando=false; }
+}
+setInterval(()=>{ try{ escanear(); }catch(e){} }, GLB_CFG.CADA_MS);
 </script>
 </body>
 </html>
