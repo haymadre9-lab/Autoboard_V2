@@ -354,7 +354,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v128</div>
+  <div class="seccion">Versión v129</div>
 </div>
 
 <div id="diag">
@@ -3532,8 +3532,21 @@ function ocultarBase(it){ it.ocultar=true; }
 /* El filtro solo incluye los modelos cercanos (pocos puntos = filtro barato); se rehace solo cuando cambia el conjunto */
 let firmaBase='';
 function sincronizarBase(cercaDefs){
-  const pts=[]; for(const it of items){ if(!it.ocultar||it.def.sc||cercaDefs.indexOf(it.def)<0) continue; const rr=it.def.huella?Math.max(1,Math.min(120,0.4*Math.max(it.def.huella[0],it.def.huella[1]))):1; pts.push([it.lon,it.lat,rr],[it.def.lon,it.def.lat,rr]); }
-  const f=pts.map(q=>q[0].toFixed(6)+','+q[1].toFixed(6)+','+q[2]).join(';'); if(f===firmaBase) return; firmaBase=f;
+  const pts=[];
+  for(const it of items){
+    if(!it.ocultar||it.def.sc||cercaDefs.indexOf(it.def)<0) continue;
+    pts.push([it.lon,it.lat,1.5],[it.def.lon,it.def.lat,1.5]);
+    /* rejilla 3×3 de puntos dentro de la huella del modelo (en su giro y escala): atrapa también los trozos del edificio partidos por teselas, sin tocar a los vecinos */
+    const h=it.def.huella; if(h && (h[0]>60||h[1]>60)){
+      const a=it.def.ancla||[0,0], f=it.rot*Math.PI/180, c=Math.cos(f), sn=Math.sin(f), mxm=111320*Math.cos(it.lat*Math.PI/180), mym=110540;
+      for(const gx of [-0.3,0,0.3]) for(const gz of [-0.3,0,0.3]){
+        if(!gx&&!gz) continue;
+        const x=gx*h[0]-a[0], z=gz*h[1]-a[1], e=it.esc*(x*c+z*sn), n=it.esc*(x*sn-z*c);
+        pts.push([it.lon+e/mxm, it.lat+n/mym, 1.5]);
+      }
+    }
+  }
+  const f=pts.map(q=>q[0].toFixed(6)+','+q[1].toFixed(6)).join(';'); if(f===firmaBase) return; firmaBase=f;
   puntosOcultos.length=0; puntosOcultos.push(...pts); aplicarFiltroBase();
 }
 function ajustarEdificio(it, fs){
