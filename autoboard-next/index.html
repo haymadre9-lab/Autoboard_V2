@@ -354,7 +354,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v125</div>
+  <div class="seccion">Versión v127</div>
 </div>
 
 <div id="diag">
@@ -3435,16 +3435,22 @@ const GLB_HITOS = [
   { n:'Palacio Euskalduna',   archivo:'euskalduna.glb', lat:43.26694, lon:-2.9450,  snap:'edificio', huella:[160,72],  area:[4000,40000], radio:90 },
   { n:'Basílica de Begoña',   archivo:'begona.glb',     lat:43.25861, lon:-2.91411, snap:'edificio', huella:[62,32],   area:[400,4000],   radio:50 },
   { n:'Catedral de Santiago', archivo:'catedral.glb',   lat:43.25719, lon:-2.92372, snap:'edificio', huella:[70,48],   area:[500,5000],   radio:50 },
-  { n:'Torre BEC',            archivo:'bec.glb',        lat:43.2870,  lon:-2.9872 },
+  { n:'Torre BEC',            archivo:'bec.glb',        lat:43.288006, lon:-2.990372 },
   { n:'Campo de Retuerto',    archivo:'retuerto.glb',   lat:43.285038, lon:-2.999579, snap:'campo', campoL:105 },
   { n:'Hospital de Cruces',   archivo:'cruces.glb',     lat:43.28258, lon:-2.98436, snap:'edificio', huella:[100,60],  area:[3000,40000], radio:150 },
   { n:'Hospital de Basurto',  archivo:'basurto.glb',    lat:43.26173,  lon:-2.952926, snap:'edificio', huella:[130,20],  ancla:[0,-80], area:[1200,8000], radio:150 }
 ];
-const GLB_CFG = { MINZOOM:14.5, RADIO_M:1500, CADA_MS:2500 };
+const GLB_CFG = { MINZOOM:14.5, RADIO_M:1500, CADA_MS:2500, DIR:'modelos/' };   /* carpeta de los .glb; si un archivo no está ahí se busca en la raíz */
+const glbDesactivado = /[?&]glb=0\b/.test(location.search);                    /* interruptor de emergencia: añadir ?glb=0 a la URL */
+async function cargarGLB(archivo){
+  const { GLTFLoader } = await import(THREE_BASE+'/examples/jsm/loaders/GLTFLoader.js');
+  const una = url => new Promise((ok,ko)=>new GLTFLoader().load(url,ok,undefined,ko));
+  try{ return await una(GLB_CFG.DIR+archivo); }catch(e){ return await una(archivo); }
+}
 let T=null, renderer=null, scene=null, camera=null, capaOk=false, luzH=null, luzD=null, cargando=false, ultimoNoche=null;
 const items=[];   /* {def, grupo, lat, lon, rot, esc, ajustado} */
 window.__glbHitos = { items, estado:'inicio' };
-const glbOn = () => (typeof HITOS_CFG==='undefined') || HITOS_CFG.ON;
+const glbOn = () => !glbDesactivado && ((typeof HITOS_CFG==='undefined') || HITOS_CFG.ON);
 
 function aplicarLuz(){
   if(!luzH) return;
@@ -3488,8 +3494,7 @@ const capa = {
   }
 };
 async function cargarItem(def){
-  const { GLTFLoader } = await import(THREE_BASE+'/examples/jsm/loaders/GLTFLoader.js');
-  const gltf = await new Promise((ok,ko)=>new GLTFLoader().load(def.archivo,ok,undefined,ko));
+  const gltf = await cargarGLB(def.archivo);
   const grupo = new T.Group(); const ra = gltf.scene; if(def.ancla) ra.position.set(-def.ancla[0],0,-def.ancla[1]); grupo.add(ra);
   const it = { def, grupo, lat:def.lat, lon:def.lon, rot:def.rot||0, esc:def.esc||1, ajustado:false };
   items.push(it); colocar(it);
@@ -3509,23 +3514,24 @@ function ajustarCampo(it){
   const k=mej.r.L/d0.campoL; it.esc=(k>0.85&&k<1.2)?k:1;
   it.ajustado=true; colocar(it); return true;
 }
-const clavesOcultas = new Set(); let filtroOrig, filtroGuardado=false;
-function clave(f){ return (f.properties.render_height||0)+'|'+(f.properties.render_min_height||0); }
+const puntosOcultos = []; let filtroOrig, filtroGuardado=false;
+/* Ocultar el edificio plano del mapa que hay bajo un modelo: se filtra por geometría (distancia ≤1 m al punto del modelo), no por altura */
 function aplicarFiltroBase(){
   try{
     if(!map.getLayer('3d-buildings')) return;
     if(!filtroGuardado){ filtroOrig = map.getFilter('3d-buildings') || null; filtroGuardado=true; }
-    if(!clavesOcultas.size){ map.setFilter('3d-buildings', filtroOrig); return; }
-    const excl=[...clavesOcultas].map(k=>{ const [h,m]=k.split('|'); return ['all',['==',['coalesce',['get','render_height'],0],Number(h)],['==',['coalesce',['get','render_min_height'],0],Number(m)]]; });
-    const nuevo=['all',['!',['any',...excl]]]; if(filtroOrig) nuevo.push(filtroOrig);
+    if(!puntosOcultos.length){ map.setFilter('3d-buildings', filtroOrig); return; }
+    const cond=puntosOcultos.map(pt=>['<=',['distance',{type:'Point',coordinates:pt}],1]);
+    const nuevo=['all',['!',['any',...cond]]]; if(filtroOrig) nuevo.push(filtroOrig);
     map.setFilter('3d-buildings', nuevo);
-  }catch(e){ registrarError('glb',e.message); }
+  }catch(e){ registrarError('glb','ocultar base: '+e.message); }
 }
-/* ocultar el edificio plano del mapa solo si ninguno lejano comparte su altura */
-function ocultarBase(it,fs,fb){
-  const kk=clave(fb);
-  const lejos=fs.filter(f=>f.geometry && clave(f)===kk && f!==fb && !poligonoContiene(it.lon,it.lat,f.geometry) && distAPoligonoM(it.lat,it.lon,f.geometry)>150);
-  if(!lejos.length){ clavesOcultas.add(kk); aplicarFiltroBase(); } else registrarError('glb','base de '+it.def.n+' no se oculta ('+lejos.length+' con misma altura)');
+function ocultarBase(it){
+  if(it.def.sc) return;
+  const k=(lo,la)=>puntosOcultos.some(q=>Math.abs(q[0]-lo)<1e-6&&Math.abs(q[1]-la)<1e-6);
+  let cambio=false;
+  for(const pt of [[it.lon,it.lat],[it.def.lon,it.def.lat]]){ if(!k(pt[0],pt[1])){ puntosOcultos.push(pt); cambio=true; } }
+  if(cambio) aplicarFiltroBase();
 }
 function ajustarEdificio(it, fs){
   const d0=it.def, ra=d0.radio||60; let mej=null, mp=-1, mejC=false;
@@ -3545,7 +3551,7 @@ function ajustarEdificio(it, fs){
   it.lat=r.lat0+r.cy/r.my; it.lon=r.lon0+r.cx/r.mx; it.rot=r.ang*180/Math.PI;
   const k=Math.sqrt((r.L*r.W)/(hL*hW)); it.esc=(k>0.75&&k<1.3)?k:1;
   it.ajustado=true; colocar(it);
-  ocultarBase(it,fs,mej.f);
+  ocultarBase(it);
   return true;
 }
 /* --- Superchargers: se reutilizan los datos de Open Charge Map que ya baja la app (OperatorID 23 = Tesla Supercharger) --- */
@@ -3553,8 +3559,7 @@ const SC_CFG = { ARCHIVO:'supercargador.glb', ESC:6, ALTO_M:2.4, SEP_M:3.0, MAXP
 let scBase=null, scCargando=false; const scHechos={};
 async function scCargarBase(){
   if(scBase) return scBase;
-  const { GLTFLoader } = await import(THREE_BASE+'/examples/jsm/loaders/GLTFLoader.js');
-  const gltf = await new Promise((ok,ko)=>new GLTFLoader().load(SC_CFG.ARCHIVO,ok,undefined,ko));
+  const gltf = await cargarGLB(SC_CFG.ARCHIVO);
   const r=gltf.scene, caja=new T.Box3().setFromObject(r), sz=caja.getSize(new T.Vector3()), k=SC_CFG.ALTO_M/(sz.y||1);
   r.scale.setScalar(k); const c2=new T.Box3().setFromObject(r), ctr=c2.getCenter(new T.Vector3()); r.position.set(-ctr.x,-c2.min.y,-ctr.z);
   const g=new T.Group(); g.add(r); scBase=g; return g;
@@ -3582,7 +3587,7 @@ async function escanearSC(){
 }
 async function escanear(){
   if(cargando || typeof map==='undefined' || !map.getZoom) return;
-  if(!glbOn()){ if(clavesOcultas.size){ clavesOcultas.clear(); aplicarFiltroBase(); } return; }
+  if(!glbOn()){ if(puntosOcultos.length){ puntosOcultos.length=0; aplicarFiltroBase(); } return; }
   if(map.getZoom()<GLB_CFG.MINZOOM) return;
   const c=map.getCenter();
   const cerca=GLB_HITOS.filter(h=>dist([c.lat,c.lng],[h.lat,h.lon])<=GLB_CFG.RADIO_M);
@@ -3599,8 +3604,7 @@ async function escanear(){
     for(const it of lista){
       if(it.ajustado || !it.def.snap) continue;
       if(it.def.snap==='campo'){
-        if(ajustarCampo(it) && it.def.base && idFuenteBuildings){ if(!fs){ try{ fs=map.querySourceFeatures(idFuenteBuildings,{sourceLayer:sourceLayerBuildings})||[]; }catch(e){ fs=[]; } }
-          const fb=fs.find(f=>f.geometry && poligonoContiene(it.lon,it.lat,f.geometry)); if(fb) ocultarBase(it,fs,fb); }
+        if(ajustarCampo(it) && it.def.base) ocultarBase(it);
       }
       else if(it.def.snap==='edificio' && idFuenteBuildings){ if(!fs){ try{ fs=map.querySourceFeatures(idFuenteBuildings,{sourceLayer:sourceLayerBuildings})||[]; }catch(e){ fs=[]; } } ajustarEdificio(it,fs); }
     }
