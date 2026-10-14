@@ -354,7 +354,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v127</div>
+  <div class="seccion">Versión v128</div>
 </div>
 
 <div id="diag">
@@ -3441,6 +3441,8 @@ const GLB_HITOS = [
   { n:'Hospital de Basurto',  archivo:'basurto.glb',    lat:43.26173,  lon:-2.952926, snap:'edificio', huella:[130,20],  ancla:[0,-80], area:[1200,8000], radio:150 }
 ];
 const GLB_CFG = { MINZOOM:14.5, RADIO_M:1500, CADA_MS:2500, DIR:'modelos/' };   /* carpeta de los .glb; si un archivo no está ahí se busca en la raíz */
+/* Catálogo externo: modelos/catalogo.json (lista de entradas con los mismos campos que GLB_HITOS). Se puede editar sin tocar el HTML. */
+(function(){ try{ fetch(GLB_CFG.DIR+'catalogo.json').then(r=>r.ok?r.json():[]).then(j=>{ if(Array.isArray(j)) for(const e of j){ if(e&&e.archivo&&isFinite(e.lat)&&isFinite(e.lon)&&!GLB_HITOS.some(h=>h.archivo===e.archivo)) GLB_HITOS.push(e); } }).catch(()=>{}); }catch(e){} })();
 const glbDesactivado = /[?&]glb=0\b/.test(location.search);                    /* interruptor de emergencia: añadir ?glb=0 a la URL */
 async function cargarGLB(archivo){
   const { GLTFLoader } = await import(THREE_BASE+'/examples/jsm/loaders/GLTFLoader.js');
@@ -3521,17 +3523,18 @@ function aplicarFiltroBase(){
     if(!map.getLayer('3d-buildings')) return;
     if(!filtroGuardado){ filtroOrig = map.getFilter('3d-buildings') || null; filtroGuardado=true; }
     if(!puntosOcultos.length){ map.setFilter('3d-buildings', filtroOrig); return; }
-    const cond=puntosOcultos.map(pt=>['<=',['distance',{type:'Point',coordinates:pt}],1]);
+    const cond=puntosOcultos.map(pt=>['<=',['distance',{type:'Point',coordinates:[pt[0],pt[1]]}],pt[2]||1]);   /* pt[2]: radio (m) para atrapar también los trozos del edificio partidos por teselas */
     const nuevo=['all',['!',['any',...cond]]]; if(filtroOrig) nuevo.push(filtroOrig);
     map.setFilter('3d-buildings', nuevo);
   }catch(e){ registrarError('glb','ocultar base: '+e.message); }
 }
-function ocultarBase(it){
-  if(it.def.sc) return;
-  const k=(lo,la)=>puntosOcultos.some(q=>Math.abs(q[0]-lo)<1e-6&&Math.abs(q[1]-la)<1e-6);
-  let cambio=false;
-  for(const pt of [[it.lon,it.lat],[it.def.lon,it.def.lat]]){ if(!k(pt[0],pt[1])){ puntosOcultos.push(pt); cambio=true; } }
-  if(cambio) aplicarFiltroBase();
+function ocultarBase(it){ it.ocultar=true; }
+/* El filtro solo incluye los modelos cercanos (pocos puntos = filtro barato); se rehace solo cuando cambia el conjunto */
+let firmaBase='';
+function sincronizarBase(cercaDefs){
+  const pts=[]; for(const it of items){ if(!it.ocultar||it.def.sc||cercaDefs.indexOf(it.def)<0) continue; const rr=it.def.huella?Math.max(1,Math.min(120,0.4*Math.max(it.def.huella[0],it.def.huella[1]))):1; pts.push([it.lon,it.lat,rr],[it.def.lon,it.def.lat,rr]); }
+  const f=pts.map(q=>q[0].toFixed(6)+','+q[1].toFixed(6)+','+q[2]).join(';'); if(f===firmaBase) return; firmaBase=f;
+  puntosOcultos.length=0; puntosOcultos.push(...pts); aplicarFiltroBase();
 }
 function ajustarEdificio(it, fs){
   const d0=it.def, ra=d0.radio||60; let mej=null, mp=-1, mejC=false;
@@ -3587,7 +3590,7 @@ async function escanearSC(){
 }
 async function escanear(){
   if(cargando || typeof map==='undefined' || !map.getZoom) return;
-  if(!glbOn()){ if(puntosOcultos.length){ puntosOcultos.length=0; aplicarFiltroBase(); } return; }
+  if(!glbOn()){ if(puntosOcultos.length){ puntosOcultos.length=0; firmaBase=''; aplicarFiltroBase(); } return; }
   if(map.getZoom()<GLB_CFG.MINZOOM) return;
   const c=map.getCenter();
   const cerca=GLB_HITOS.filter(h=>dist([c.lat,c.lng],[h.lat,h.lon])<=GLB_CFG.RADIO_M);
@@ -3603,11 +3606,13 @@ async function escanear(){
     let fs=null;
     for(const it of lista){
       if(it.ajustado || !it.def.snap) continue;
+      if(dist([c.lat,c.lng],[it.def.lat,it.def.lon])>900) continue;                /* las teselas lejanas aún no están cargadas */
       if(it.def.snap==='campo'){
         if(ajustarCampo(it) && it.def.base) ocultarBase(it);
       }
       else if(it.def.snap==='edificio' && idFuenteBuildings){ if(!fs){ try{ fs=map.querySourceFeatures(idFuenteBuildings,{sourceLayer:sourceLayerBuildings})||[]; }catch(e){ fs=[]; } } ajustarEdificio(it,fs); }
     }
+    sincronizarBase(cerca);
     window.__glbHitos.estado = lista.map(i=>i.def.n+': '+(i.def.snap?(i.ajustado?'ajustado':(i.def.estricto?'sin ajustar (oculto)':'sin ajustar')):'fijo')).join(' | ');
     map.triggerRepaint();
   }catch(e){ window.__glbHitos.estado='error: '+e.message; if(typeof registrarError==='function') registrarError('glb',e.message); }
