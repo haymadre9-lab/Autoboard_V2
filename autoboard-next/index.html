@@ -3,6 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#151a20">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="AutoBoard">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>autoboard-next · Fase 11 · v78 codriver</title>
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
@@ -376,7 +383,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v131</div>
+  <div class="seccion">Versión v132</div>
 </div>
 
 <div id="diag">
@@ -3835,6 +3842,12 @@ async function escanear(){
   finally{ cargando=false; }
 }
 setInterval(()=>{ try{ escanear(); }catch(e){} }, GLB_CFG.CADA_MS);
+</script>
+<script>
+/* PWA: registra el service worker (solo en https o localhost). Si falla, la app funciona igual. */
+if('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost')){
+  window.addEventListener('load',()=>{ try{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }catch(e){} });
+}
 </script>
 </body>
 </html>
