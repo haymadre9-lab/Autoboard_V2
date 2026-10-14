@@ -1,0 +1,682 @@
+[
+ {
+  "n": "Estadio Santiago Bernabéu",
+  "archivo": "bernabeu.glb",
+  "lat": 40.45304,
+  "lon": -3.68849,
+  "snap": "edificio",
+  "huella": [
+   245,
+   200
+  ],
+  "area": [
+   14700,
+   117600
+  ],
+  "radio": 120,
+  "estricto": true
+ },
+ {
+  "n": "Estadio Metropolitano",
+  "archivo": "metropolitano.glb",
+  "lat": 40.43619,
+  "lon": -3.59944,
+  "snap": "edificio",
+  "huella": [
+   236,
+   184
+  ],
+  "area": [
+   13027,
+   104218
+  ],
+  "radio": 160,
+  "estricto": true
+ },
+ {
+  "n": "Plaza de Toros de Las Ventas",
+  "archivo": "lasventas.glb",
+  "lat": 40.43194,
+  "lon": -3.66389,
+  "snap": "edificio",
+  "huella": [
+   110,
+   110
+  ],
+  "area": [
+   3630,
+   29040
+  ],
+  "radio": 150,
+  "estricto": true
+ },
+ {
+  "n": "Torre Picasso",
+  "archivo": "torrepicasso.glb",
+  "lat": 40.45028,
+  "lon": -3.6925,
+  "snap": "edificio",
+  "huella": [
+   40,
+   40
+  ],
+  "area": [
+   480,
+   3840
+  ],
+  "radio": 90,
+  "estricto": true
+ },
+ {
+  "n": "Cuatro Torres (Torre de Cristal)",
+  "archivo": "torrecristal.glb",
+  "lat": 40.47778,
+  "lon": -3.68778,
+  "snap": "edificio",
+  "huella": [
+   38,
+   38
+  ],
+  "area": [
+   600,
+   3500
+  ],
+  "radio": 220,
+  "estricto": true
+ },
+ {
+  "n": "Palacio Real de Madrid",
+  "archivo": "palacioreal.glb",
+  "lat": 40.41806,
+  "lon": -3.71417,
+  "snap": "edificio",
+  "huella": [
+   135,
+   130
+  ],
+  "area": [
+   5265,
+   42120
+  ],
+  "radio": 120,
+  "estricto": true
+ },
+ {
+  "n": "Catedral de la Almudena",
+  "archivo": "almudena.glb",
+  "lat": 40.415586,
+  "lon": -3.714558,
+  "snap": "edificio",
+  "huella": [
+   105,
+   48
+  ],
+  "area": [
+   1512,
+   12096
+  ],
+  "radio": 90,
+  "estricto": true
+ },
+ {
+  "n": "Monasterio de El Escorial",
+  "archivo": "escorial.glb",
+  "lat": 40.5893,
+  "lon": -4.1477,
+  "snap": "edificio",
+  "huella": [
+   208,
+   162
+  ],
+  "area": [
+   10109,
+   80870
+  ],
+  "radio": 180,
+  "estricto": true
+ },
+ {
+  "n": "Edificio Metrópolis",
+  "archivo": "metropolis.glb",
+  "lat": 40.41846,
+  "lon": -3.69874,
+  "snap": "edificio",
+  "huella": [
+   38,
+   30
+  ],
+  "area": [
+   342,
+   2736
+  ],
+  "radio": 120,
+  "estricto": true
+ },
+ {
+  "n": "Palacio de Cibeles",
+  "archivo": "cibeles.glb",
+  "lat": 40.41905,
+  "lon": -3.692,
+  "snap": "edificio",
+  "huella": [
+   105,
+   74
+  ],
+  "area": [
+   2331,
+   18648
+  ],
+  "radio": 110,
+  "estricto": true
+ },
+ {
+  "n": "Camp Nou",
+  "archivo": "campnou.glb",
+  "lat": 41.3809,
+  "lon": 2.12282,
+  "snap": "edificio",
+  "huella": [
+   260,
+   230
+  ],
+  "area": [
+   17940,
+   143520
+  ],
+  "radio": 150,
+  "estricto": true
+ },
+ {
+  "n": "Sagrada Família",
+  "archivo": "sagradafamilia.glb",
+  "lat": 41.40369,
+  "lon": 2.17433,
+  "snap": "edificio",
+  "huella": [
+   90,
+   60
+  ],
+  "area": [
+   1620,
+   12960
+  ],
+  "radio": 100,
+  "estricto": true
+ },
+ {
+  "n": "Torre Glòries",
+  "archivo": "torreglories.glb",
+  "lat": 41.40333,
+  "lon": 2.18944,
+  "snap": "edificio",
+  "huella": [
+   34,
+   31
+  ],
+  "area": [
+   316,
+   2530
+  ],
+  "radio": 90,
+  "estricto": true
+ },
+ {
+  "n": "Torre de Collserola",
+  "archivo": "collserola.glb",
+  "lat": 41.41722,
+  "lon": 2.11417,
+  "snap": "edificio",
+  "huella": [
+   16,
+   16
+  ],
+  "area": [
+   50,
+   1200
+  ],
+  "radio": 100,
+  "estricto": true
+ },
+ {
+  "n": "Palau Nacional (Montjuïc)",
+  "archivo": "palaunacional.glb",
+  "lat": 41.36833,
+  "lon": 2.15333,
+  "snap": "edificio",
+  "huella": [
+   170,
+   72
+  ],
+  "area": [
+   3672,
+   29376
+  ],
+  "radio": 110,
+  "estricto": true
+ },
+ {
+  "n": "Estadio de Mestalla",
+  "archivo": "mestalla.glb",
+  "lat": 39.47472,
+  "lon": -0.35833,
+  "snap": "edificio",
+  "huella": [
+   196,
+   168
+  ],
+  "area": [
+   9878,
+   79027
+  ],
+  "radio": 120,
+  "estricto": true
+ },
+ {
+  "n": "Catedral de Valencia",
+  "archivo": "catedralvalencia.glb",
+  "lat": 39.47583,
+  "lon": -0.375,
+  "snap": "edificio",
+  "huella": [
+   95,
+   55
+  ],
+  "area": [
+   1568,
+   12540
+  ],
+  "radio": 90,
+  "estricto": true
+ },
+ {
+  "n": "Palau de les Arts Reina Sofía",
+  "archivo": "palaudelesarts.glb",
+  "lat": 39.458,
+  "lon": -0.3556,
+  "snap": "edificio",
+  "huella": [
+   230,
+   70
+  ],
+  "area": [
+   4830,
+   38640
+  ],
+  "radio": 160,
+  "estricto": true
+ },
+ {
+  "n": "Catedral de Sevilla y Giralda",
+  "archivo": "catedralsevilla.glb",
+  "lat": 37.38589,
+  "lon": -5.99306,
+  "snap": "edificio",
+  "huella": [
+   136,
+   86
+  ],
+  "area": [
+   3509,
+   28070
+  ],
+  "radio": 90,
+  "estricto": true
+ },
+ {
+  "n": "Torre del Oro",
+  "archivo": "torredeloro.glb",
+  "lat": 37.38242,
+  "lon": -5.99622,
+  "snap": "edificio",
+  "huella": [
+   16,
+   16
+  ],
+  "area": [
+   60,
+   700
+  ],
+  "radio": 80,
+  "estricto": true
+ },
+ {
+  "n": "Metropol Parasol (Las Setas)",
+  "archivo": "setas.glb",
+  "lat": 37.39325,
+  "lon": -5.99188,
+  "snap": "edificio",
+  "huella": [
+   150,
+   70
+  ],
+  "area": [
+   800,
+   20000
+  ],
+  "radio": 100,
+  "estricto": true
+ },
+ {
+  "n": "Plaza de España (Sevilla)",
+  "archivo": "plazaespana.glb",
+  "lat": 37.37716,
+  "lon": -5.98699,
+  "snap": "edificio",
+  "huella": [
+   210,
+   105
+  ],
+  "area": [
+   6615,
+   52920
+  ],
+  "radio": 130,
+  "estricto": true
+ },
+ {
+  "n": "Estadio Benito Villamarín",
+  "archivo": "villamarin.glb",
+  "lat": 37.35639,
+  "lon": -5.98139,
+  "snap": "edificio",
+  "huella": [
+   164,
+   144
+  ],
+  "area": [
+   7085,
+   56678
+  ],
+  "radio": 120,
+  "estricto": true
+ },
+ {
+  "n": "Estadio Ramón Sánchez-Pizjuán",
+  "archivo": "sanchezpizjuan.glb",
+  "lat": 37.3841,
+  "lon": -5.97058,
+  "snap": "edificio",
+  "huella": [
+   200,
+   168
+  ],
+  "area": [
+   10080,
+   80640
+  ],
+  "radio": 140,
+  "estricto": true
+ },
+ {
+  "n": "Palacio de Carlos V (Alhambra)",
+  "archivo": "carlosv.glb",
+  "lat": 37.1767,
+  "lon": -3.5897,
+  "snap": "edificio",
+  "huella": [
+   63,
+   63
+  ],
+  "area": [
+   1191,
+   9526
+  ],
+  "radio": 120,
+  "estricto": true
+ },
+ {
+  "n": "Mezquita-Catedral de Córdoba",
+  "archivo": "mezquita.glb",
+  "lat": 37.87917,
+  "lon": -4.77972,
+  "snap": "edificio",
+  "huella": [
+   180,
+   130
+  ],
+  "area": [
+   7020,
+   56160
+  ],
+  "radio": 100,
+  "estricto": true
+ },
+ {
+  "n": "Basílica del Pilar",
+  "archivo": "pilar.glb",
+  "lat": 41.65694,
+  "lon": -0.87833,
+  "snap": "edificio",
+  "huella": [
+   130,
+   67
+  ],
+  "area": [
+   2613,
+   20904
+  ],
+  "radio": 100,
+  "estricto": true
+ },
+ {
+  "n": "Catedral de Burgos",
+  "archivo": "catedralburgos.glb",
+  "lat": 42.340806,
+  "lon": -3.704472,
+  "snap": "edificio",
+  "huella": [
+   84,
+   59
+  ],
+  "area": [
+   1487,
+   11894
+  ],
+  "radio": 90,
+  "estricto": true
+ },
+ {
+  "n": "Catedral de León",
+  "archivo": "catedralleon.glb",
+  "lat": 42.59944,
+  "lon": -5.56667,
+  "snap": "edificio",
+  "huella": [
+   90,
+   50
+  ],
+  "area": [
+   1350,
+   10800
+  ],
+  "radio": 80,
+  "estricto": true
+ },
+ {
+  "n": "Catedral de Santiago de Compostela",
+  "archivo": "catedralsantiago.glb",
+  "lat": 42.88056,
+  "lon": -8.54444,
+  "snap": "edificio",
+  "huella": [
+   94,
+   68
+  ],
+  "area": [
+   1918,
+   15341
+  ],
+  "radio": 90,
+  "estricto": true
+ },
+ {
+  "n": "Alcázar de Segovia",
+  "archivo": "alcazarsegovia.glb",
+  "lat": 40.9525,
+  "lon": -4.1325,
+  "snap": "edificio",
+  "huella": [
+   125,
+   35
+  ],
+  "area": [
+   800,
+   7000
+  ],
+  "radio": 100,
+  "estricto": true
+ },
+ {
+  "n": "Catedral de Toledo",
+  "archivo": "catedraltoledo.glb",
+  "lat": 39.857083,
+  "lon": -4.02389,
+  "snap": "edificio",
+  "huella": [
+   120,
+   60
+  ],
+  "area": [
+   2160,
+   17280
+  ],
+  "radio": 90,
+  "estricto": true
+ },
+ {
+  "n": "Torre de Hércules",
+  "archivo": "torrehercules.glb",
+  "lat": 43.38583,
+  "lon": -8.40639,
+  "snap": "edificio",
+  "huella": [
+   14,
+   14
+  ],
+  "area": [
+   60,
+   600
+  ],
+  "radio": 80,
+  "estricto": true
+ },
+ {
+  "n": "Catedral de Oviedo",
+  "archivo": "catedraloviedo.glb",
+  "lat": 43.3625833,
+  "lon": -5.8430806,
+  "snap": "edificio",
+  "huella": [
+   80,
+   50
+  ],
+  "area": [
+   1200,
+   9600
+  ],
+  "radio": 90,
+  "estricto": true
+ },
+ {
+  "n": "Estadio de Anoeta",
+  "archivo": "anoeta.glb",
+  "lat": 43.30139,
+  "lon": -1.97361,
+  "snap": "edificio",
+  "huella": [
+   192,
+   156
+  ],
+  "area": [
+   8986,
+   71885
+  ],
+  "radio": 130,
+  "estricto": true
+ },
+ {
+  "n": "Estadio de Riazor",
+  "archivo": "riazor.glb",
+  "lat": 43.3687,
+  "lon": -8.4175,
+  "snap": "edificio",
+  "huella": [
+   184,
+   148
+  ],
+  "area": [
+   8170,
+   65357
+  ],
+  "radio": 120,
+  "estricto": true
+ },
+ {
+  "n": "Estadio de Balaídos",
+  "archivo": "balaidos.glb",
+  "lat": 42.21176,
+  "lon": -8.73975,
+  "snap": "edificio",
+  "huella": [
+   176,
+   140
+  ],
+  "area": [
+   7392,
+   59136
+  ],
+  "radio": 130,
+  "estricto": true
+ },
+ {
+  "n": "Catedral de Palma",
+  "archivo": "catedralpalma.glb",
+  "lat": 39.56769,
+  "lon": 2.64833,
+  "snap": "edificio",
+  "huella": [
+   121,
+   60
+  ],
+  "area": [
+   2178,
+   17424
+  ],
+  "radio": 110,
+  "estricto": true
+ },
+ {
+  "n": "Catedral de Salamanca",
+  "archivo": "catedralsalamanca.glb",
+  "lat": 40.96083,
+  "lon": -5.66639,
+  "snap": "edificio",
+  "huella": [
+   110,
+   60
+  ],
+  "area": [
+   1980,
+   15840
+  ],
+  "radio": 110,
+  "estricto": true
+ },
+ {
+  "n": "Basílica de Covadonga",
+  "archivo": "covadonga.glb",
+  "lat": 43.30832,
+  "lon": -4.99193,
+  "snap": "edificio",
+  "huella": [
+   45,
+   30
+  ],
+  "area": [
+   300,
+   3000
+  ],
+  "radio": 120,
+  "estricto": true
+ }
+]
