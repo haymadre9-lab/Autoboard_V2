@@ -384,7 +384,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v133</div>
+  <div class="seccion">Versión v135</div>
 </div>
 
 <div id="diag">
@@ -611,13 +611,14 @@ function colorPotencia(kw){if(kw>72) return '#d32f2f';if(kw>=50) return '#ff6f00
 /* ========== CONSTANTES v77 ========== */
 const ZOOM_CIUDAD = 19.2;
 const ZOOM_CARRETERA = 18.0;
-const ZOOM_MANIOBRA = 21.5;   /* zoom máximo en un giro (antes 20.5). Rango útil probado en mapa: 20.5–21.0 */
+const ZOOM_MANIOBRA = 21.2;   /* zoom máximo en un giro (antes 20.5). Rango útil probado en mapa: 20.5–21.0 */
 const ZOOM_VEL_BAJA = 25;
 const ZOOM_VEL_ALTA = 90;
 const PITCH_NAV_BASE = 74;   /* circulando por ciudad (referencia codriver.io). Con el coche al 65 %, el horizonte asoma desde ~67°; a 74° el cielo ocupa ~20 % */
 
 /* Posición del coche en pantalla (65% desde arriba) */
 const COCHE_SCREEN_Y = 0.65;
+let cocheYact = COCHE_SCREEN_Y;   /* posición vertical ACTUAL del coche en pantalla (baja hacia el borde inferior durante el zoom de maniobra) */
 
 /* ========== MOTOR DE CÁMARA v78 — PARÁMETROS AJUSTABLES ==========
    Suavizado exponencial dependiente de dt:  k = 1 - exp(-dt/tau).
@@ -631,7 +632,7 @@ const CAM = {
   TAU_BEARING_LIBRE:0.55, /* rumbo siguiendo solo el GPS (sin ruta) */
   BEARING_MAX_DEG_S:140,  /* velocidad angular máxima de la cámara */
   TAU_ZOOM_IN:0.45, TAU_ZOOM_OUT:0.90,  /* acercar rápido, alejar con calma */
-  TAU_PITCH:0.55,
+  TAU_PITCH:0.40,
   TAU_VEL:0.90,           /* velocidad suavizada (anticipación del rumbo, distancia de aproximación) */
   TAU_VEL_ZOOM:2.5,       /* velocidad MUY suavizada para el zoom de crucero: el ruido de velocidad no "respira" el zoom */
   CORR_MAX_MS:40,         /* velocidad máx. (m/s) a la que se desliza una corrección grande de posición */
@@ -651,17 +652,19 @@ const CAM = {
   HEADING_WINDOW_MS:3500, HEADING_MAX_MUESTRAS:16,
   /* --- zoom de maniobra --- */
   ZOOM_GIRO:ZOOM_MANIOBRA,  /* izquierda/derecha/cerrado/cambio de sentido */
-  ZOOM_ROTONDA:20.7,        /* menos cerrado: hay que ver la rotonda entera */
-  ZOOM_SUAVE:20.4,          /* "mantente a la izq/der", bifurcaciones */
+  ZOOM_ROTONDA:20.4,        /* menos cerrado: hay que ver la rotonda entera */
+  ZOOM_SUAVE:20.0,          /* "mantente a la izq/der", bifurcaciones */
   MAN_T_APROX_S:14,         /* empieza a acercar ~10 s antes (a velocidad actual)... */
   MAN_D_MIN:160, MAN_D_MAX:420,   /* ...acotado entre estas distancias (m) */
   MAN_EXTRA_RONDA_M:40, MAN_EXTRA_CERRADO_M:20, MAN_EXTRA_CARRILES_M:20,
-  MAN_FULL_S:2.0, MAN_FULL_MIN_M:22,  /* zoom máximo a ~2 s / mín. 22 m del punto de giro */
+  MAN_FULL_S:4.0, MAN_FULL_MIN_M:60,  /* zoom máximo a ~2 s / mín. 22 m del punto de giro */
+  COCHE_Y_MAN:0.78,         /* posición vertical del coche (0.65 = normal) con el zoom de maniobra al máximo; más alto = más cerca del borde inferior */
+  MAN_PX_FRAC:0.39,         /* el punto de giro se encuadra a esta fracción de la altura del mapa por encima del coche */
   MAN_HYST:1.3,             /* histéresis: no se desactiva hasta d > dEnter*1.3 */
   MAN_HOLD_M:25,            /* mantener zoom tras pasar la maniobra... */
   ROT_HOLD_M:55,            /* ...(rotondas: más) */
   MAN_RELEASE_M:70,         /* ...y soltarlo durante estos metros */
-  PITCH_MAN_DELTA:-30,        /* maniobra: pitch 74 → ~44° (más vertical) para ver el cruce; negativo = menos inclinado */
+  PITCH_MAN_DELTA:-26,        /* maniobra: pitch 74 → 48° (más vertical) para ver el cruce; negativo = menos inclinado */
   /* --- modo "perspectiva" (autopista / carretera general con la próxima maniobra lejos) --- */
   PITCH_AUTOPISTA:50,       /* menos inclinado: se ve más ruta por delante */
   ZOOM_AUTOPISTA_EXTRA:-1.6,/* y más alejado (zoom restado al de crucero) */
@@ -829,10 +832,20 @@ function actualizarPadding(){
   /* medidas del CONTENEDOR del mapa (no de la ventana): la flecha/coche se colocan en px exactamente sobre el punto central del mapa */
   const cont = map.getContainer(), r = (cont&&cont.getBoundingClientRect) ? cont.getBoundingClientRect() : {};
   const h = r.height || window.innerHeight, w = r.width || window.innerWidth;
-  const padTop = Math.round(h * (COCHE_SCREEN_Y*2 - 1));
+  const padTop = Math.round(h * (cocheYact*2 - 1));
   try{ map.setPadding({top: padTop, bottom:0, left:0, right:0}); }catch(e){}
   const px = (r.left||0) + w/2, py = (r.top||0) + padTop + (h - padTop)/2;
   ['cocheFijo','coche3D','luzCoche'].forEach(id=>{ const el=document.getElementById(id); if(el){ el.style.left=px.toFixed(1)+'px'; el.style.top=py.toFixed(1)+'px'; } });
+}
+/* Mueve el coche en pantalla (y el centro lógico del mapa) a la altura y∈[0.5,0.9]; devuelve el padding-top para pasarlo en el mismo jumpTo */
+function fijarCocheY(y){
+  cocheYact=y;
+  const cont=map.getContainer(), r=(cont&&cont.getBoundingClientRect)?cont.getBoundingClientRect():{};
+  const h=r.height||window.innerHeight, w=r.width||window.innerWidth;
+  const padTop=Math.round(h*(y*2-1));
+  const px=(r.left||0)+w/2, py=(r.top||0)+padTop+(h-padTop)/2;
+  ['cocheFijo','coche3D','luzCoche'].forEach(id=>{ const el=document.getElementById(id); if(el){ el.style.left=px.toFixed(1)+'px'; el.style.top=py.toFixed(1)+'px'; } });
+  return padTop;
 }
 let __paddingListener = false;
 
@@ -1944,7 +1957,8 @@ const est = { fixOk:false, fixT:0, frameT:0, lon:0, lat:0, v:0, hdg:0, s:null, o
               offLon:0, offLat:0, retorno:false, cur:[0,0,0,0,0], latTe:0, latTn:0, latE:0, latN:0 };
 let vSuave = 0, vZoom = 0;
 const man = { aprox:null, salida:null, estado:'CRUCERO' };
-const camAplicada = { lon:NaN, lat:NaN, b:NaN, z:NaN, p:NaN };
+let camCocheY = COCHE_SCREEN_Y;
+const camAplicada = { lon:NaN, lat:NaN, b:NaN, z:NaN, p:NaN, cy:NaN };
 const camDiag = { frames:0, lentos:0, muyLentos:0, maxDt:0, sumDt:0, jumps:0, t0:0, el:null, timer:null };
 
 function camClamp(x,a,b){ return x<a ? a : (x>b ? b : x); }
@@ -2119,7 +2133,11 @@ function actualizarManiobra(s,vms,zBase){
   if(man.aprox){
     const prm=man.aprox.prm, d=(st.metro||0)-s;
     const e=camSmooth(camClamp((prm.dEnter-d)/(prm.dEnter-prm.dFull),0,1));
-    extraA=Math.max(0,prm.zoomMax-zBase)*e; pesoA=e;
+    /* zoom DINÁMICO: el que deja el punto de giro en el tercio superior de la pantalla (así se ve el cruce desde lejos y el zoom
+       sube a medida que te acercas). Con zoom fijo alto el giro no aparecía hasta estar a ~15 m. Tope = zoomMax. */
+    const hPx=(map.getContainer().clientHeight||460)*CAM.MAN_PX_FRAC, pit=(PITCH_NAV_BASE+CAM.PITCH_MAN_DELTA)*Math.PI/180;
+    const zDin=Math.log2(156543.03*Math.cos(map.getCenter().lat*Math.PI/180)*hPx/(Math.max(d,6)*Math.cos(pit)));
+    extraA=Math.max(0,Math.min(prm.zoomMax,zDin)-zBase)*(0.35+0.65*e); pesoA=e;
     man.aprox.ultExtra=extraA; man.aprox.ultPeso=pesoA;
   }
   let extraS=0, pesoS=0;
@@ -2134,12 +2152,14 @@ function actualizarManiobra(s,vms,zBase){
 }
 
 /* ---- aplicar cámara: UN jumpTo por frame (coordinado), omitido si nada cambió ---- */
-function aplicarCamara(lon,lat,b,z,p){
+function aplicarCamara(lon,lat,b,z,p,cy){
+  if(cy===undefined) cy=cocheYact;
   const bw = b>180 ? b-360 : b;   /* MapLibre guarda el rumbo en [-180,180]: evita un "cambio" falso en cada frame */
   if(Math.abs(lon-camAplicada.lon)*111320*Math.cos(lat*Math.PI/180)<0.01 && Math.abs(lat-camAplicada.lat)*110540<0.01 &&
-     Math.abs(bw-camAplicada.b)<0.02 && Math.abs(z-camAplicada.z)<0.0005 && Math.abs(p-camAplicada.p)<0.02) return false;
-  camAplicada.lon=lon; camAplicada.lat=lat; camAplicada.b=bw; camAplicada.z=z; camAplicada.p=p;
-  map.jumpTo({ center:[lon,lat], bearing:bw, zoom:z, pitch:p });
+     Math.abs(bw-camAplicada.b)<0.02 && Math.abs(z-camAplicada.z)<0.0005 && Math.abs(p-camAplicada.p)<0.02 && Math.abs(cy-camAplicada.cy)<0.0005) return false;
+  camAplicada.lon=lon; camAplicada.lat=lat; camAplicada.b=bw; camAplicada.z=z; camAplicada.p=p; camAplicada.cy=cy;
+  const padTop=fijarCocheY(cy);
+  map.jumpTo({ center:[lon,lat], bearing:bw, zoom:z, pitch:p, padding:{top:padTop,bottom:0,left:0,right:0} });
   camDiag.jumps++;
   return true;
 }
@@ -2212,11 +2232,14 @@ function bucleSeguimiento(ts){
   camDiag.fAut=fAut;
   camActual.zoom  += (zObj-camActual.zoom)*camK(zObj<camActual.zoom ? CAM.TAU_ZOOM_OUT : CAM.TAU_ZOOM_IN, dt);
   camActual.pitch += (pObj-camActual.pitch)*camK(CAM.TAU_PITCH, dt);
+  /* coche más abajo mientras entra el zoom de maniobra (peso = zoom extra / 1,5, tope 1): deja más calle por delante tras el giro */
+  const yObj=COCHE_SCREEN_Y+(CAM.COCHE_Y_MAN-COCHE_SCREEN_Y)*camClamp(mn.extra/1.5,0,1);
+  camCocheY += (yObj-camCocheY)*camK(0.5,dt);
   camActual.center[0]=cx; camActual.center[1]=cy;
   camObjetivo.center[0]=pred.lon; camObjetivo.center[1]=pred.lat;
   camObjetivo.bearing=rumboObj; camObjetivo.zoom=zObj; camObjetivo.pitch=pObj;
 
-  aplicarCamara(cx,cy,camActual.bearing,camActual.zoom,camActual.pitch);
+  aplicarCamara(cx,cy,camActual.bearing,camActual.zoom,camActual.pitch,camCocheY);
 }
 iniciarBucleSeguimiento();
 
