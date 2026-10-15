@@ -58,6 +58,7 @@ html.noche0 #map,body.noche #map{background:#1b2128}
 #cartelAlt .alMotivo{font:600 14px/1.2 system-ui,sans-serif;color:#111111;margin-top:2px}
 #cartelAlt .alBtn{display:block;width:100%;margin-top:10px;border:0;border-radius:12px;background:#2e9b5f;color:#ffffff;font:800 16px system-ui,sans-serif;padding:12px;cursor:pointer}
 #cartelAlt .alBtn:active{filter:brightness(.92)}
+.xsvg{display:block;margin:auto;pointer-events:none}
 #cartelAlt .alX{position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;border:0;background:#e9ecef;color:#6b7580;font-size:14px;font-weight:800;cursor:pointer;padding:0}
 #navbanner #btnPararRuta{position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;border:0;background:#e9ecef;color:#6b7580;font-size:14px;font-weight:800;cursor:pointer;display:none;align-items:center;justify-content:center;padding:0}
 #navbanner #btnPararRuta.on{display:flex}
@@ -351,14 +352,14 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
 <div id="listaCargadores">
   <div class="cabecera">
     <h2>⚡ Cargadores</h2>
-    <button class="cerrarLista" id="btnCerrarListaCargadores">✕</button>
+    <button class="cerrarLista" id="btnCerrarListaCargadores"><svg class="xsvg" viewBox="0 0 12 12" width="1em" height="1em" aria-hidden="true"><path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></button>
   </div>
   <div id="listaCargadoresItems"></div>
 </div>
 <div id="celebracion"></div>
 
 <div id="panelAjustes">
-  <button class="cerrarPanel" id="btnCerrarAjustes">✕</button>
+  <button class="cerrarPanel" id="btnCerrarAjustes"><svg class="xsvg" viewBox="0 0 12 12" width="1em" height="1em" aria-hidden="true"><path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></button>
   <h2>⚙️ Ajustes</h2>
   <div class="seccion">Visualización</div>
   <button class="ajuste on" id="btnEdificios">🏢 Edificios: ON</button>
@@ -383,7 +384,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v132</div>
+  <div class="seccion">Versión v133</div>
 </div>
 
 <div id="diag">
@@ -426,7 +427,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
 <div id="grupoArribaDer">
   <div id="barraBusqueda">
     <input id="inputBusqueda" type="text" placeholder="Buscar destino" autocomplete="off">
-    <button id="btnCerrarBusqueda">✕</button>
+    <button id="btnCerrarBusqueda"><svg class="xsvg" viewBox="0 0 12 12" width="1em" height="1em" aria-hidden="true"><path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></button>
   </div>
   <button class="botonMapa" id="btnCasa" title="Ir a casa">🏠</button>
   <button class="botonMapa" id="btnLupa" title="Buscar destino">🔍</button>
@@ -436,13 +437,13 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
 
 <div id="colIzq">
 <div id="navbanner">
-  <button id="btnPararRuta" title="Detener ruta">✕</button>
+  <button id="btnPararRuta" title="Detener ruta"><svg class="xsvg" viewBox="0 0 12 12" width="1em" height="1em" aria-hidden="true"><path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></button>
   <div id="navprincipal"><div id="navarrow"></div><div class="nbTxt"><div id="navd">-</div><div id="navsub"></div></div></div>
   <div id="navsep" style="display:none"></div>
   <div id="navFila2" style="display:none"><div id="navarrow2"></div><div class="nbTxt"><div id="navd2">-</div><div id="navsub2"></div></div></div>
 </div>
 <div id="cartelAlt">
-  <button class="alX" id="alCerrar" title="Descartar">✕</button>
+  <button class="alX" id="alCerrar" title="Descartar"><svg class="xsvg" viewBox="0 0 12 12" width="1em" height="1em" aria-hidden="true"><path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></button>
   <div class="alFila"><span class="alTit" id="alTit">Alternativa</span><span class="alSep" id="alSep"></span></div>
   <div class="alAhorro" id="alAhorro">Ahorra 0 min</div>
   <div class="alMotivo" id="alMotivo"></div>
@@ -610,7 +611,7 @@ function colorPotencia(kw){if(kw>72) return '#d32f2f';if(kw>=50) return '#ff6f00
 /* ========== CONSTANTES v77 ========== */
 const ZOOM_CIUDAD = 19.2;
 const ZOOM_CARRETERA = 18.0;
-const ZOOM_MANIOBRA = 20.8;   /* zoom máximo en un giro (antes 20.5). Rango útil probado en mapa: 20.5–21.0 */
+const ZOOM_MANIOBRA = 21.5;   /* zoom máximo en un giro (antes 20.5). Rango útil probado en mapa: 20.5–21.0 */
 const ZOOM_VEL_BAJA = 25;
 const ZOOM_VEL_ALTA = 90;
 const PITCH_NAV_BASE = 74;   /* circulando por ciudad (referencia codriver.io). Con el coche al 65 %, el horizonte asoma desde ~67°; a 74° el cielo ocupa ~20 % */
@@ -650,17 +651,17 @@ const CAM = {
   HEADING_WINDOW_MS:3500, HEADING_MAX_MUESTRAS:16,
   /* --- zoom de maniobra --- */
   ZOOM_GIRO:ZOOM_MANIOBRA,  /* izquierda/derecha/cerrado/cambio de sentido */
-  ZOOM_ROTONDA:20.3,        /* menos cerrado: hay que ver la rotonda entera */
-  ZOOM_SUAVE:19.9,          /* "mantente a la izq/der", bifurcaciones */
-  MAN_T_APROX_S:10,         /* empieza a acercar ~10 s antes (a velocidad actual)... */
-  MAN_D_MIN:120, MAN_D_MAX:320,   /* ...acotado entre estas distancias (m) */
+  ZOOM_ROTONDA:20.7,        /* menos cerrado: hay que ver la rotonda entera */
+  ZOOM_SUAVE:20.4,          /* "mantente a la izq/der", bifurcaciones */
+  MAN_T_APROX_S:14,         /* empieza a acercar ~10 s antes (a velocidad actual)... */
+  MAN_D_MIN:160, MAN_D_MAX:420,   /* ...acotado entre estas distancias (m) */
   MAN_EXTRA_RONDA_M:40, MAN_EXTRA_CERRADO_M:20, MAN_EXTRA_CARRILES_M:20,
   MAN_FULL_S:2.0, MAN_FULL_MIN_M:22,  /* zoom máximo a ~2 s / mín. 22 m del punto de giro */
   MAN_HYST:1.3,             /* histéresis: no se desactiva hasta d > dEnter*1.3 */
   MAN_HOLD_M:25,            /* mantener zoom tras pasar la maniobra... */
   ROT_HOLD_M:55,            /* ...(rotondas: más) */
   MAN_RELEASE_M:70,         /* ...y soltarlo durante estos metros */
-  PITCH_MAN_DELTA:2,        /* maniobra: algo MÁS inclinado y muy cerca (referencia codriver.io); negativo = menos inclinado */
+  PITCH_MAN_DELTA:-30,        /* maniobra: pitch 74 → ~44° (más vertical) para ver el cruce; negativo = menos inclinado */
   /* --- modo "perspectiva" (autopista / carretera general con la próxima maniobra lejos) --- */
   PITCH_AUTOPISTA:50,       /* menos inclinado: se ve más ruta por delante */
   ZOOM_AUTOPISTA_EXTRA:-1.6,/* y más alejado (zoom restado al de crucero) */
@@ -1204,7 +1205,7 @@ function pintarPopupCargador(cp, cpVerbose){
     +'<div class="conectores">'+conectoresHTML+'</div>'
     +'<div class="acciones">'
     +'  <button id="btnNavCargador">🏁 Iniciar ruta</button>'
-    +'  <button class="cerrar" id="btnCerrarPopup">✕</button>'
+    +'  <button class="cerrar" id="btnCerrarPopup"><svg class="xsvg" viewBox="0 0 12 12" width="1em" height="1em" aria-hidden="true"><path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></button>'
     +'</div>';
   document.getElementById('btnCerrarPopup').onclick=()=>pop.classList.remove('on');
   document.getElementById('btnNavCargador').onclick=()=>{pop.classList.remove('on');navegarA(ai.Latitude,ai.Longitude);};
@@ -1408,7 +1409,7 @@ function pintarFavoritos(){
     return '<div class="sug sugFav" data-idx="'+i+'" style="display:flex;justify-content:space-between;align-items:center;gap:10px">'
       +'<div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">⭐ '+escapeHTML(f.nombre)+'</div>'
       +(dir?'<div class="sub" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHTML(dir)+'</div>':'')+'</div>'
-      +'<button class="quitarFav" data-idx="'+i+'" title="Quitar de favoritos" style="background:transparent;border:0;color:#ffd166;font-size:20px;cursor:pointer;padding:6px 10px;flex:0 0 auto">✕</button>'
+      +'<button class="quitarFav" data-idx="'+i+'" title="Quitar de favoritos" style="background:transparent;border:0;color:#ffd166;font-size:20px;cursor:pointer;padding:6px 10px;flex:0 0 auto"><svg class="xsvg" viewBox="0 0 12 12" width="1em" height="1em" aria-hidden="true"><path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></button>'
       +'</div>';
   }).join('');
   sugs.classList.add('on');
@@ -2875,7 +2876,7 @@ async function buscarAlternativas(){
 }
 function pintarPanelAlt(error){
   const p=$id('panelAlt'); if(!p) return;
-  let h='<div class="cab"><span>Rutas</span><button id="altCerrar">✕</button></div>';
+  let h='<div class="cab"><span>Rutas</span><button id="altCerrar"><svg class="xsvg" viewBox="0 0 12 12" width="1em" height="1em" aria-hidden="true"><path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></button></div>';
   if(altBuscando && !alts.length){ h+='<div class="vacio">Buscando alternativas…</div>'; }
   else if(error){ h+='<div class="vacio">'+error+'</div>'; }
   else{
