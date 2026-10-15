@@ -377,6 +377,8 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Mapa</div>
   <button class="ajuste" id="btnModoMapa">🌙 Mapa: Auto</button>
   <button class="ajuste on" id="btnLuces">💡 Luces de noche: ON</button>
+  <button class="ajuste on" id="btnVoz">🔊 Voz y avisos: ON</button>
+  <button class="ajuste" id="btnVozVol">🔉 Volumen avisos: 100 %</button>
   <div class="seccion">Coche</div>
   <button class="ajuste" id="btnCoche">🚗 Coche: Flecha</button>
   <div id="filaColorCoche"></div>
@@ -384,7 +386,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v135</div>
+  <div class="seccion">Versión v136</div>
 </div>
 
 <div id="diag">
@@ -1162,6 +1164,7 @@ function comprobarRadaresCercanos(lat,lon,velocidadActualKmh){
   }
 }
 function activarAlertaRadar(distancia, limite, porEncima){
+  if(window.__voz){ try{ __voz.radar(distancia,limite,porEncima,alertaRadarActiva); }catch(e){} }
   document.getElementById('radarInfo').classList.add('on');
   document.getElementById('senalRadar').textContent=limite;
   document.getElementById('radarDist').textContent=Math.round(distancia)+' m';
@@ -1686,6 +1689,7 @@ function renderStep(){
   const ref=lastFix?[lastFix.lat,lastFix.lon]:(routeCoordsLL[routeProgIdx]||[0,0]);
   const rec=recorridoAhora(ref);
   const d=Math.max(0,(s.metro||0)-rec);
+  if(window.__voz){ try{ __voz.paso(s,d,stepIdx); }catch(e){} }
   const s2=steps[stepIdx+1];
   const hw=!!s.hw, hw2=!!(s2&&s2.hw), clave=stepIdx+'|'+hw+'|'+(s2?(hw2?2:1):0);
   if(clave!==ultimoStepPintado){
@@ -1794,6 +1798,7 @@ async function calcularRuta(origen,destino,modo='normal',rutaPre=null){
     });
     stepIdx=0;routeProgIdx=0;ultimoStepPintado='';
     resetCamRuta();
+    if(window.__voz){ try{ __voz.nuevaRuta(modo); }catch(e){} }
     renderStep();actualizarTrimRuta();
     const km=(ruta.summary.lengthInMeters/1000).toFixed(1);
     const min=Math.round(ruta.summary.travelTimeInSeconds/60);
@@ -3024,6 +3029,7 @@ async function enviarATesla(){
 }
 $id('btnEnviar').onclick=enviarATesla;
 function detenerRuta(){
+  if(window.__voz){ try{ __voz.parar(); }catch(e){} }
   steps=[];stepIdx=0;routeCoordsLL=[];routeCumDist=[];routeProgIdx=0;
   ultimaRutaDestino=null;destinoNombre='';limiteVelocidadVia=0;routeLimites=[];ultimoStepPintado='';
   resetCamRuta();
@@ -3872,6 +3878,110 @@ setInterval(()=>{ try{ escanear(); }catch(e){} }, GLB_CFG.CADA_MS);
 if('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost')){
   window.addEventListener('load',()=>{ try{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }catch(e){} });
 }
+</script>
+<script>
+/* ============ VOZ Y AVISOS ============
+   · Indicaciones de ruta ("En 300 metros, gire a la derecha por …", "Tome la 2.ª salida…", "Ha llegado a su destino") y aviso de radar con la voz del
+     navegador (speechSynthesis, español). Si el navegador no tiene voz, suenan solo los tonos (WebAudio).
+   · Los navegadores exigen un toque del usuario antes de dar sonido: el primer toque en la pantalla lo desbloquea (o el botón de Ajustes).
+   · Botones: "Voz y avisos" (ON/OFF) y "Volumen avisos" (100/70/40 %). Interruptor de emergencia: ?voz=0 */
+(function(){
+  let on = !/[?&]voz=0\b/.test(location.search);
+  try{ if(localStorage.getItem('voz_on')==='0') on=false; }catch(e){}
+  const VOLS=[1,0.7,0.4]; let vi=0; try{ const v=parseInt(localStorage.getItem('voz_vol'),10); if(v>=0&&v<VOLS.length) vi=v; }catch(e){}
+  const synth = ('speechSynthesis' in window && 'SpeechSynthesisUtterance' in window) ? window.speechSynthesis : null;
+  let voz=null, ctx=null, hechos=Object.create(null), ultRadarEnc=0, usadas=[], desbloqueado=false;
+  const ORD=['primera','segunda','tercera','cuarta','quinta','sexta','séptima'];
+  function elegirVoz(){
+    if(!synth) return; const vs=synth.getVoices()||[];
+    voz = vs.find(v=>/^es[-_]ES/i.test(v.lang)) || vs.find(v=>/^es/i.test(v.lang)) || null;
+  }
+  if(synth){ elegirVoz(); try{ synth.addEventListener('voiceschanged',elegirVoz); }catch(e){} }
+  function audio(){ if(!ctx){ try{ ctx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if(ctx&&ctx.state==='suspended'){ try{ ctx.resume(); }catch(e){} } return ctx; }
+  function tono(f,t0,dur,vol){
+    const c=audio(); if(!c) return;
+    const o=c.createOscillator(), g=c.createGain(); o.type='sine'; o.frequency.value=f;
+    const t=c.currentTime+t0, v=0.25*VOLS[vi]*(vol||1);
+    g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(v,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g); g.connect(c.destination); o.start(t); o.stop(t+dur+0.05);
+  }
+  function pitidoRadar(){ tono(880,0,0.16); tono(1175,0.2,0.16); tono(880,0.4,0.16); }
+  function pitidoAviso(){ tono(660,0,0.12,0.8); tono(880,0.14,0.14,0.8); }
+  function decir(texto,urgente){
+    if(!on) return;
+    if(!synth || !voz){ pitidoAviso(); return; }        /* sin voz española: al menos el tono */
+    try{
+      if(urgente) synth.cancel();
+      const u=new SpeechSynthesisUtterance(texto); u.lang=voz.lang||'es-ES'; u.voice=voz; u.rate=1.0; u.volume=VOLS[vi];
+      usadas.push(u); if(usadas.length>6) usadas.shift();   /* referencia viva: Chrome borra el evento si se recoge el objeto */
+      synth.speak(u);
+    }catch(e){}
+  }
+  function redondeo(d){ return d>=1000 ? Math.round(d/100)*100 : (d>=500 ? Math.round(d/100)*100 : Math.max(50,Math.round(d/50)*50)); }
+  function distTxt(d){
+    const r=redondeo(d);
+    if(r>=1000){ const km=r/1000; return (km===1?'un kilómetro':String(km).replace('.',',')+' kilómetros'); }
+    return r+' metros';
+  }
+  function accion(s){
+    const m=(s&&s.maneuver)||{}, mod=m.modifier||'straight', calle=(s&&s.calle)||'';
+    if(m.type==='arrive') return null;
+    let a;
+    if(m.type==='roundabout'||m.type==='rotary'){
+      const n=Math.max(1,parseInt(m.exit,10)||1);
+      a = mod==='uturn' ? 'en la rotonda, dé la vuelta completa' : 'en la rotonda, tome la '+(ORD[n-1]||n+'.ª')+' salida';
+    }else{
+      const t={'left':'Gire a la izquierda','right':'Gire a la derecha','slight left':'Mantenga la izquierda','slight right':'Mantenga la derecha',
+               'sharp left':'Gire cerrado a la izquierda','sharp right':'Gire cerrado a la derecha','uturn':'Dé la vuelta','straight':'Continúe recto'}[mod]||'Continúe';
+      a=t;
+    }
+    if(calle && m.type!=='roundabout' && m.type!=='rotary') a+=' por '+calle;
+    return a;
+  }
+  const cap=t=>t.charAt(0).toUpperCase()+t.slice(1);
+  function paso(s,d,idx){
+    if(!on || !s) return;
+    const kmh=(typeof velocidadActualKmh!=='undefined' && isFinite(velocidadActualKmh)) ? velocidadActualKmh : 0;
+    const m=s.maneuver||{};
+    if(m.type==='arrive'){
+      if(d<=40){ if(!hechos[idx+'|fin']){ hechos[idx+'|fin']=1; decir('Ha llegado a su destino',true); } }
+      else if(d<=150){ if(!hechos[idx+'|150']){ hechos[idx+'|150']=1; decir('Su destino está a '+distTxt(d),false); } }
+      return;
+    }
+    const ac=accion(s); if(!ac) return;
+    const T=[ (s.hw||kmh>=70)?800:0, 300, 60 ].filter(x=>x>0);
+    const sat=T.filter(t=>d<=t); if(!sat.length) return;
+    const tmin=Math.min.apply(null,sat), k=idx+'|'+tmin;
+    if(hechos[k]) return;
+    for(const t of sat) hechos[idx+'|'+t]=1;                 /* los umbrales mayores ya no tienen sentido */
+    if(tmin<=60) decir(cap(ac),false);
+    else decir('En '+distTxt(d)+', '+(ac.charAt(0)==='e'?ac:ac.charAt(0).toLowerCase()+ac.slice(1)),false);
+  }
+  function radar(d,lim,porEncima,yaActiva){
+    if(!on) return;
+    const ahora=Date.now();
+    if(!yaActiva){ pitidoRadar(); decir('Radar a '+distTxt(d)+'. Límite '+lim,true); ultRadarEnc=ahora; }
+    else if(porEncima && ahora-ultRadarEnc>10000){ ultRadarEnc=ahora; pitidoRadar(); decir('Reduzca la velocidad',true); }
+  }
+  function nuevaRuta(modo){ hechos=Object.create(null); decir(modo==='recalculo'?'Ruta recalculada':'Ruta iniciada',true); }
+  function parar(){ hechos=Object.create(null); if(synth){ try{ synth.cancel(); }catch(e){} } }
+  function desbloquear(){
+    if(desbloqueado) return; desbloqueado=true; audio();
+    if(synth){ try{ const u=new SpeechSynthesisUtterance(' '); u.volume=0; synth.speak(u); }catch(e){} elegirVoz(); }
+  }
+  ['pointerdown','touchstart','keydown'].forEach(ev=>document.addEventListener(ev,desbloquear,{once:true,passive:true}));
+  function ui(){
+    const b=document.getElementById('btnVoz'), v=document.getElementById('btnVozVol');
+    const extra = !synth ? ' (sin voz: solo tonos)' : (!voz ? ' (sin voz española: solo tonos)' : '');
+    if(b){ b.textContent='🔊 Voz y avisos: '+(on?'ON':'OFF')+(on?extra:''); b.classList.toggle('on',on); }
+    if(v) v.textContent='🔉 Volumen avisos: '+Math.round(VOLS[vi]*100)+' %';
+  }
+  window.__voz={ paso, radar, nuevaRuta, parar, decir, estado:()=>({on,voz:voz&&voz.name,synth:!!synth}), _desbloquear:desbloquear };
+  const b=document.getElementById('btnVoz'), v=document.getElementById('btnVozVol');
+  if(b) b.onclick=()=>{ on=!on; try{ localStorage.setItem('voz_on',on?'1':'0'); }catch(e){} desbloquear(); elegirVoz(); ui(); if(on){ pitidoAviso(); decir('Voz activada',true); } else parar(); };
+  if(v) v.onclick=()=>{ vi=(vi+1)%VOLS.length; try{ localStorage.setItem('voz_vol',String(vi)); }catch(e){} desbloquear(); ui(); pitidoAviso(); decir('Volumen',true); };
+  ui(); setTimeout(ui,1500);
+})();
 </script>
 </body>
 </html>
