@@ -377,7 +377,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Mapa</div>
   <button class="ajuste" id="btnModoMapa">🌙 Mapa: Auto</button>
   <button class="ajuste on" id="btnLuces">💡 Luces de noche: ON</button>
-  <button class="ajuste on" id="btnVoz">🔊 Voz y avisos: ON</button>
+  <button class="ajuste on" id="btnVoz">🔊 Sonido: Solo radares</button>
   <button class="ajuste" id="btnVozVol">🔉 Volumen avisos: 100 %</button>
   <div class="seccion">Coche</div>
   <button class="ajuste" id="btnCoche">🚗 Coche: Flecha</button>
@@ -386,7 +386,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v139</div>
+  <div class="seccion">Versión v140</div>
 </div>
 
 <div id="diag">
@@ -3897,8 +3897,12 @@ window.__CLIPS_VOZ={"en50":"SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAA
    · Los navegadores exigen un toque del usuario antes de dar sonido: el primer toque en la pantalla lo desbloquea (o el botón de Ajustes).
    · Botones: "Voz y avisos" (ON/OFF) y "Volumen avisos" (100/70/40 %). Interruptor de emergencia: ?voz=0 */
 (function(){
-  let on = !/[?&]voz=0\b/.test(location.search);
-  try{ if(localStorage.getItem('voz_on')==='0') on=false; }catch(e){}
+  /* Modo de sonido: 0 = sin sonido · 1 = solo radares (por defecto) · 2 = todo (radares + indicaciones de ruta) */
+  let modo=1;
+  try{ const m=localStorage.getItem('voz_modo'); if(m==='0'||m==='1'||m==='2') modo=parseInt(m,10); }catch(e){}
+  if(/[?&]voz=0\b/.test(location.search)) modo=0;
+  let on = modo>0;
+  const NOMBRES=['Sin sonido','Solo radares','Todo (radares + ruta)'];
   const VOLS=[1,0.7,0.4]; let vi=0; try{ const v=parseInt(localStorage.getItem('voz_vol'),10); if(v>=0&&v<VOLS.length) vi=v; }catch(e){}
   const synth = ('speechSynthesis' in window && 'SpeechSynthesisUtterance' in window) ? window.speechSynthesis : null;
   let voz=null, ctx=null, hechos=Object.create(null), ultRadarEnc=0, usadas=[], desbloqueado=false;
@@ -3988,7 +3992,7 @@ window.__CLIPS_VOZ={"en50":"SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAA
   }
   const cap=t=>t.charAt(0).toUpperCase()+t.slice(1);
   function paso(s,d,idx){
-    if(!on || !s) return;
+    if(!on || modo<2 || !s) return;
     const kmh=(typeof velocidadActualKmh!=='undefined' && isFinite(velocidadActualKmh)) ? velocidadActualKmh : 0;
     const m=s.maneuver||{};
     if(m.type==='arrive'){
@@ -4012,23 +4016,23 @@ window.__CLIPS_VOZ={"en50":"SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAA
     if(!yaActiva){ pitidoRadar(); const kl=Math.round(lim/10)*10; decir('Radar a '+distTxt(d)+'. Límite '+lim,true,['rad'+Math.max(50,Math.min(500,Math.round(d/50)*50))].concat(window.__CLIPS_VOZ&&window.__CLIPS_VOZ['lim'+kl]?['lim'+kl]:[])); ultRadarEnc=ahora; }
     else if(porEncima && ahora-ultRadarEnc>10000){ ultRadarEnc=ahora; pitidoRadar(); decir('Reduzca la velocidad',true,['reduzca']); }
   }
-  function nuevaRuta(modo){ hechos=Object.create(null); decir(modo==='recalculo'?'Ruta recalculada':'Ruta iniciada',true,[modo==='recalculo'?'recalc':'iniciada']); }
+  function nuevaRuta(tipo){ hechos=Object.create(null); if(modo<2) return; decir(tipo==='recalculo'?'Ruta recalculada':'Ruta iniciada',true,[tipo==='recalculo'?'recalc':'iniciada']); }
   function parar(){ hechos=Object.create(null); cola.length=0; if(fuente){ try{ fuente.onended=null; fuente.stop(); }catch(e){} fuente=null; } tocando=false; if(synth){ try{ synth.cancel(); }catch(e){} } }
   function desbloquear(){
     if(desbloqueado) return; desbloqueado=true; audio();
     if(synth){ try{ const u=new SpeechSynthesisUtterance(' '); u.volume=0; synth.speak(u); }catch(e){} elegirVoz(); }
-    setTimeout(()=>{ if(sinVoz()&&window.__CLIPS_VOZ) Object.keys(window.__CLIPS_VOZ).forEach(k=>decodificar(k)); },800);
+    setTimeout(()=>{ if(!on||!sinVoz()||!window.__CLIPS_VOZ) return; const ks=Object.keys(window.__CLIPS_VOZ).filter(k=>modo>=2||/^(rad|lim|reduzca)/.test(k)); let i=0; (function sig(){ if(i<ks.length){ decodificar(ks[i++]); setTimeout(sig,150); } })(); },6000);
   }
   ['pointerdown','touchstart','keydown'].forEach(ev=>document.addEventListener(ev,desbloquear,{once:true,passive:true}));
   function ui(){
     const b=document.getElementById('btnVoz'), v=document.getElementById('btnVozVol');
     const extra = sinVoz() ? (window.__CLIPS_VOZ ? ' (voz grabada, sin nombres de calle)' : ' (sin voz española: solo tonos)') : '';
-    if(b){ b.textContent='🔊 Voz y avisos: '+(on?'ON':'OFF')+(on?extra:''); b.classList.toggle('on',on); }
+    if(b){ b.textContent='🔊 Sonido: '+NOMBRES[modo]+(on?extra:''); b.classList.toggle('on',on); }
     if(v) v.textContent='🔉 Volumen avisos: '+Math.round(VOLS[vi]*100)+' %';
   }
-  window.__voz={ paso, radar, nuevaRuta, parar, decir, estado:()=>({on,voz:voz&&voz.name,synth:!!synth}), _desbloquear:desbloquear };
+  window.__voz={ paso, radar, nuevaRuta, parar, decir, estado:()=>({on,modo,voz:voz&&voz.name,synth:!!synth}), _desbloquear:desbloquear };
   const b=document.getElementById('btnVoz'), v=document.getElementById('btnVozVol');
-  if(b) b.onclick=()=>{ on=!on; try{ localStorage.setItem('voz_on',on?'1':'0'); }catch(e){} desbloquear(); elegirVoz(); ui(); if(on){ pitidoAviso(); decir('Voz activada',true,['vozon']); } else parar(); };
+  if(b) b.onclick=()=>{ modo=(modo+1)%3; on=modo>0; try{ localStorage.setItem('voz_modo',String(modo)); }catch(e){} desbloquear(); elegirVoz(); ui(); if(on){ pitidoAviso(); if(modo===2) decir('Voz activada',true,['vozon']); } else parar(); };
   if(v) v.onclick=()=>{ vi=(vi+1)%VOLS.length; try{ localStorage.setItem('voz_vol',String(vi)); }catch(e){} desbloquear(); ui(); pitidoAviso(); decir('Volumen',true,['vol']); };
   ui(); setTimeout(ui,1500);
 })();
