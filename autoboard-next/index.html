@@ -387,7 +387,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v144</div>
+  <div class="seccion">Versión v145</div>
 </div>
 
 <div id="diag">
@@ -3532,7 +3532,7 @@ function aplicarModoMapa(forzar){
 /* ============ CARRILES DE AUTOPISTA ============
    · Solo autopistas/autovías (highway=motorway|trunk con oneway). En ciudad no se dibuja nada.
    · Datos: archivos estáticos por zonas autopistas/X_Y.json (de OpenStreetMap, generados con generar_autopistas.html; sin él, consulta a Overpass, que en pruebas tarda 30-50 s y a veces da 502). Si falta el tag lanes se supone 2.
-   · Se dibujan las rayas discontinuas que separan carriles, desplazando el eje de la vía en metros (3,5 m por carril), por ENCIMA de la línea de ruta.
+   · Se dibujan las rayas discontinuas que separan carriles repartiendo el ancho dibujado de la vía (line-offset en px, igual curva que el estilo), por ENCIMA de la línea de ruta.
    · Botón en Ajustes y interruptor de emergencia ?carriles=0. Si Overpass falla o tarda, simplemente no aparecen (reintenta cada 60 s). */
 (function(){
   let on = !/[?&]carriles=0\b/.test(location.search);
@@ -3566,7 +3566,7 @@ function aplicarModoMapa(forzar){
       let L=parseInt(t.lanes,10); if(!(L>=1)) L=2; L=Math.min(L,6);
       if(L<2) continue;
       const pts=e.geometry.map(g=>[g.lon,g.lat]); n++;
-      for(let i=1;i<L;i++) fs.push({type:'Feature',properties:{},geometry:{type:'LineString',coordinates:desplazar(pts,(i-L/2)*ANCHO)}});
+      for(let i=1;i<L;i++) fs.push({type:'Feature',properties:{f:(i-L/2)/L},geometry:{type:'LineString',coordinates:pts}});
     }
     nVias=n; return {type:'FeatureCollection',features:fs};
   }
@@ -3576,7 +3576,7 @@ function aplicarModoMapa(forzar){
       if(v[2]){ if(IDS.has(v[2])) continue; IDS.add(v[2]); }
       const L=Math.min(6, v[0]>=1?v[0]:2), pts=v[1]; if(L<2||!pts||pts.length<2) continue;
       let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9; for(const q of pts){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
-      for(let i=1;i<L;i++) fs.push({type:'Feature',properties:{},geometry:{type:'LineString',coordinates:desplazar(pts,(i-L/2)*ANCHO)},bb:[x0,y0,x1,y1]});
+      for(let i=1;i<L;i++) fs.push({type:'Feature',properties:{f:(i-L/2)/L},geometry:{type:'LineString',coordinates:pts},bb:[x0,y0,x1,y1]});
     }
     return fs;
   }
@@ -3593,7 +3593,9 @@ function aplicarModoMapa(forzar){
       if(!map.getLayer('carriles-raya')) map.addLayer({id:'carriles-raya',type:'line',source:'carriles',minzoom:MINZ,
         layout:{'line-cap':'butt','line-join':'round','visibility':on?'visible':'none'},
         paint:{'line-color':'#ffffff','line-opacity':['interpolate',['linear'],['zoom'],MINZ,0,16.5,0.55,19,0.8],
-          'line-width':['interpolate',['linear'],['zoom'],15.2,0.5,17,0.9,18.5,1.8,20,4,21.5,9],'line-dasharray':[3,4]}},antes);
+          'line-width':['interpolate',['linear'],['zoom'],15.2,0.5,17,0.9,18.5,1.8,20,3,22,3],'line-dasharray':[3,4],
+          /* El desplazamiento va en PÍXELES con la misma curva que el ancho de la capa "Road network" del estilo (autopista: z14=6, z16=8, z20=28 px, base 2): así las rayas reparten el ancho DIBUJADO de la vía entre sus carriles a cualquier zoom. En metros reales se salían de la carretera al ampliar. */
+          'line-offset':['interpolate',['exponential',2],['zoom'],14,['*',['get','f'],6],16,['*',['get','f'],8],20,['*',['get','f'],28]]}},antes);
       creado=true; return true;
     }catch(e){ return false; }
   }
