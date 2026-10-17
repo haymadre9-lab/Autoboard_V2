@@ -386,7 +386,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v138</div>
+  <div class="seccion">Versión v139</div>
 </div>
 
 <div id="diag">
@@ -1192,10 +1192,16 @@ async function cargarCargadores(lat,lon){
   try{
     const r=await fetch(url);
     const datos=await r.json();
+    /* Superchargers: petición aparte por operador (23 = Tesla), sin filtrar por tipo de conector, porque el filtro de arriba puede dejarlos fuera */
+    try{
+      const ru=await fetch('https://api.openchargemap.io/v3/poi/?key='+OCM_API_KEY+'&boundingbox='+encodeURIComponent(bbox)+'&maxresults=100&compact=true&verbose=false&operatorid=23');
+      const sc=await ru.json(); const ids=new Set(datos.map(c=>c.ID));
+      if(Array.isArray(sc)) for(const c of sc){ if(!ids.has(c.ID)){ c.OperatorID=23; datos.push(c); } else { const o=datos.find(x=>x.ID===c.ID); if(o) o.OperatorID=23; } }
+    }catch(e){ window.__scErr='op23: '+e.message; }
     cargadoresData=datos;
     ultimoCentroCargadores=[lat,lon];
     const nSC=datos.filter(c=>c.OperatorID===23).length;
-    document.getElementById('rCargadores').innerHTML='<b>'+datos.length+'</b> ('+nSC+' SC) — solo lista';
+    document.getElementById('rCargadores').innerHTML='<b>'+datos.length+'</b> ('+nSC+' SC) — solo lista'+(window.__scErr?' <span class="mal">'+window.__scErr+'</span>':'')+' <span id="rSC"></span>';
   }catch(e){
     document.getElementById('rCargadores').innerHTML='<span class="mal">error: '+e.message+'</span>';
   }
@@ -3832,6 +3838,7 @@ async function escanearSC(){
   const c=map.getCenter();
   if(!cargadoresData.length){ if(typeof cargarCargadores==='function'){ try{ cargarCargadores(c.lat,c.lng); }catch(e){} } return; }
   const cerca=cargadoresData.filter(cp=>cp.OperatorID===23 && cp.AddressInfo && !scHechos[cp.ID] && dist([c.lat,c.lng],[cp.AddressInfo.Latitude,cp.AddressInfo.Longitude])<=SC_CFG.RADIO_M);
+  { const e=document.getElementById('rSC'); if(e) e.textContent=' · SC en 1,5 km: '+cerca.length+' · colocados: '+items.filter(i=>i.def.sc).length; }
   if(!cerca.length) return;
   scCargando=true;
   try{
