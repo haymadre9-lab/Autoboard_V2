@@ -386,7 +386,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v136</div>
+  <div class="seccion">Versión v137</div>
 </div>
 
 <div id="diag">
@@ -3898,15 +3898,22 @@ if('serviceWorker' in navigator && (location.protocol==='https:'||location.hostn
   }
   if(synth){ elegirVoz(); try{ synth.addEventListener('voiceschanged',elegirVoz); }catch(e){} }
   function audio(){ if(!ctx){ try{ ctx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if(ctx&&ctx.state==='suspended'){ try{ ctx.resume(); }catch(e){} } return ctx; }
-  function tono(f,t0,dur,vol){
-    const c=audio(); if(!c) return;
-    const o=c.createOscillator(), g=c.createGain(); o.type='sine'; o.frequency.value=f;
-    const t=c.currentTime+t0, v=0.25*VOLS[vi]*(vol||1);
-    g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(v,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-    o.connect(g); g.connect(c.destination); o.start(t); o.stop(t+dur+0.05);
+  /* Tonos fuertes: onda cuadrada/triangular (suena mucho más que una senoidal) + compresor para que no distorsione al subir */
+  let master=null;
+  function salida(){
+    const c=audio(); if(!c) return null;
+    if(!master){ try{ const comp=c.createDynamicsCompressor(); comp.threshold.value=-12; comp.ratio.value=8; const g=c.createGain(); g.gain.value=1; g.connect(comp); comp.connect(c.destination); master=g; }catch(e){ return c.destination; } }
+    return master;
   }
-  function pitidoRadar(){ tono(880,0,0.16); tono(1175,0.2,0.16); tono(880,0.4,0.16); }
-  function pitidoAviso(){ tono(660,0,0.12,0.8); tono(880,0.14,0.14,0.8); }
+  function tono(f,t0,dur,vol,tipo){
+    const c=audio(), out=salida(); if(!c||!out) return;
+    const o=c.createOscillator(), g=c.createGain(); o.type=tipo||'square'; o.frequency.value=f;
+    const t=c.currentTime+t0, v=0.9*VOLS[vi]*(vol||1);
+    g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(Math.max(v,0.0002),t+0.015); g.gain.setValueAtTime(Math.max(v,0.0002),t+dur-0.04); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g); g.connect(out); o.start(t); o.stop(t+dur+0.05);
+  }
+  function pitidoRadar(){ tono(1000,0,0.22); tono(1000,0.3,0.22); tono(1400,0.6,0.30); }
+  function pitidoAviso(){ tono(700,0,0.16,0.9,'triangle'); tono(1000,0.2,0.22,0.9,'triangle'); }
   function decir(texto,urgente){
     if(!on) return;
     if(!synth || !voz){ pitidoAviso(); return; }        /* sin voz española: al menos el tono */
