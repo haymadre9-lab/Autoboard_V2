@@ -386,7 +386,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v140</div>
+  <div class="seccion">Versión v141</div>
 </div>
 
 <div id="diag">
@@ -1739,7 +1739,7 @@ function filtrarHeading(h){
 }
 
 let distanciaFueraRuta=0,fueraDesde=0,recalculando=false,ultimoRecalculo=0;
-const DESVIO_M=45,CONFIRMACION_MS=2500,COOLDOWN_MS=10000;
+const DESVIO_M=32,CONFIRMACION_MS=1200,COOLDOWN_MS=5000;   /* antes 45 m / 2,5 s / 10 s: el coche seguía pegado a la ruta vieja y tardaba en recalcular */
 function distanciaRutaActual(ll){
   if(!routeCoordsLL.length) return Infinity;
   const i0=Math.max(0,routeProgIdx-20),i1=Math.min(routeCoordsLL.length-1,routeProgIdx+500);
@@ -1893,7 +1893,7 @@ function onFix(pos){
   let snapRuta = false;
   if(routeCoordsLL.length){
     const proj = proyectarSobreRuta(now.lat, now.lon);
-    if(proj && proj.dist < (est.onRoute ? DESVIO_M : SNAP_MAX_DIST_M)){   /* histéresis: una vez sobre la ruta, no se suelta por 30 m de ruido GPS */
+    if(proj && !fueraDesde && !recalculando && proj.dist < (est.onRoute ? DESVIO_M : SNAP_MAX_DIST_M)){   /* histéresis: una vez sobre la ruta, no se suelta por 30 m de ruido GPS */
       posCoche = [proj.lon, proj.lat];
       snapRuta = true;
       /* desviación lateral GPS−ruta (m): si el GPS es bueno, el coche se dibuja donde está la calle de verdad */
