@@ -377,6 +377,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Mapa</div>
   <button class="ajuste" id="btnModoMapa">🌙 Mapa: Auto</button>
   <button class="ajuste on" id="btnLuces">💡 Luces de noche: ON</button>
+  <button class="ajuste on" id="btnCarriles">🛣️ Carriles autopista: ON</button>
   <button class="ajuste on" id="btnVoz">🔊 Sonido: Solo radares</button>
   <button class="ajuste" id="btnVozVol">🔉 Volumen avisos: 100 %</button>
   <div class="seccion">Coche</div>
@@ -386,7 +387,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v141</div>
+  <div class="seccion">Versión v144</div>
 </div>
 
 <div id="diag">
@@ -3524,6 +3525,139 @@ function aplicarModoMapa(forzar){
   doc();
   setInterval(tick,1000);
   setInterval(pintarCoche,400);
+})();
+</script>
+
+<script>
+/* ============ CARRILES DE AUTOPISTA ============
+   · Solo autopistas/autovías (highway=motorway|trunk con oneway). En ciudad no se dibuja nada.
+   · Datos: archivos estáticos por zonas autopistas/X_Y.json (de OpenStreetMap, generados con generar_autopistas.html; sin él, consulta a Overpass, que en pruebas tarda 30-50 s y a veces da 502). Si falta el tag lanes se supone 2.
+   · Se dibujan las rayas discontinuas que separan carriles, desplazando el eje de la vía en metros (3,5 m por carril), por ENCIMA de la línea de ruta.
+   · Botón en Ajustes y interruptor de emergencia ?carriles=0. Si Overpass falla o tarda, simplemente no aparecen (reintenta cada 60 s). */
+(function(){
+  let on = !/[?&]carriles=0\b/.test(location.search);
+  try{ if(localStorage.getItem('carriles_on')==='0') on=false; }catch(e){}
+  const ANCHO=3.5, MINZ=15.2, ENDPOINTS=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
+  /* Datos precalculados por zonas: autopistas/X_Y.json (X=⌊lon·2⌋, Y=⌊lat·2⌋, cuadros de 0,5°), formato [[carriles,[[lon,lat],…],idOSM],…].
+     Solo se descargan los cuadros cercanos al mapa. Si no existe la carpeta, se prueba el antiguo autopistas.json único. */
+  const TILES=new Map(), IDS=new Set(); let estatico=null, legacyProbado=false, tilesPend=0, sucio=false;
+  let creado=false, ult=null, pidiendo=false, tFallo=0, datos={type:'FeatureCollection',features:[]}, nVias=0;
+  function desplazar(pts,off){      /* pts: [[lon,lat],...]; off en metros (+ = izquierda según sentido de la vía) */
+    const lat0=pts[0][1], mx=111320*Math.cos(lat0*Math.PI/180), my=110540;
+    const P=pts.map(p=>[p[0]*mx,p[1]*my]), out=[];
+    for(let i=0;i<P.length;i++){
+      let nx=0, ny=0;
+      for(const [a,b] of [[i-1,i],[i,i+1]]){
+        if(a<0||b>=P.length) continue;
+        const dx=P[b][0]-P[a][0], dy=P[b][1]-P[a][1], L=Math.hypot(dx,dy)||1; nx+=-dy/L; ny+=dx/L;
+      }
+      const m=Math.hypot(nx,ny)||1; nx/=m; ny/=m;
+      out.push([(P[i][0]+nx*off)/mx,(P[i][1]+ny*off)/my]);
+    }
+    return out;
+  }
+  function generar(elementos){
+    const fs=[]; let n=0;
+    for(const e of elementos||[]){
+      if(e.type!=='way'||!e.geometry||e.geometry.length<2||!e.tags) continue;
+      const t=e.tags, hw=t.highway;
+      if(hw!=='motorway' && !(hw==='trunk' && t.oneway==='yes')) continue;
+      if(t.oneway==='no'||t.tunnel==='yes'||t.tunnel==='building_passage'||t.covered==='yes') continue;
+      let L=parseInt(t.lanes,10); if(!(L>=1)) L=2; L=Math.min(L,6);
+      if(L<2) continue;
+      const pts=e.geometry.map(g=>[g.lon,g.lat]); n++;
+      for(let i=1;i<L;i++) fs.push({type:'Feature',properties:{},geometry:{type:'LineString',coordinates:desplazar(pts,(i-L/2)*ANCHO)}});
+    }
+    nVias=n; return {type:'FeatureCollection',features:fs};
+  }
+  function desdeEstatico(arr){
+    const fs=[];
+    for(const v of arr){
+      if(v[2]){ if(IDS.has(v[2])) continue; IDS.add(v[2]); }
+      const L=Math.min(6, v[0]>=1?v[0]:2), pts=v[1]; if(L<2||!pts||pts.length<2) continue;
+      let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9; for(const q of pts){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
+      for(let i=1;i<L;i++) fs.push({type:'Feature',properties:{},geometry:{type:'LineString',coordinates:desplazar(pts,(i-L/2)*ANCHO)},bb:[x0,y0,x1,y1]});
+    }
+    return fs;
+  }
+  function recorte(c){
+    const dLat=0.04, dLon=0.055, a=c.lng-dLon, b=c.lng+dLon, d=c.lat-dLat, e=c.lat+dLat;
+    return {type:'FeatureCollection',features:estatico.filter(f=>f.bb[2]>=a&&f.bb[0]<=b&&f.bb[3]>=d&&f.bb[1]<=e)};
+  }
+  function crear(){
+    if(creado && map.getSource('carriles')) return true;
+    if(!map.isStyleLoaded() || !map.getLayer('ruta-base')) return false;
+    try{
+      if(!map.getSource('carriles')) map.addSource('carriles',{type:'geojson',data:datos});
+      let antes; try{ for(const l of map.getStyle().layers) if(l.type==='symbol'){ antes=l.id; break; } }catch(e){}
+      if(!map.getLayer('carriles-raya')) map.addLayer({id:'carriles-raya',type:'line',source:'carriles',minzoom:MINZ,
+        layout:{'line-cap':'butt','line-join':'round','visibility':on?'visible':'none'},
+        paint:{'line-color':'#ffffff','line-opacity':['interpolate',['linear'],['zoom'],MINZ,0,16.5,0.55,19,0.8],
+          'line-width':['interpolate',['linear'],['zoom'],15.2,0.5,17,0.9,18.5,1.8,20,4,21.5,9],'line-dasharray':[3,4]}},antes);
+      creado=true; return true;
+    }catch(e){ return false; }
+  }
+  async function pedir(c){
+    pidiendo=true;
+    const dLat=0.012, dLon=0.016, bb=(c.lat-dLat)+','+(c.lng-dLon)+','+(c.lat+dLat)+','+(c.lng+dLon);
+    const q='[out:json][timeout:40];way["highway"~"^(motorway|trunk)$"]['+'"oneway"!="no"]('+bb+');out geom tags;';
+    let ok=false;
+    for(const ep of ENDPOINTS){
+      try{
+        const ac=new AbortController(), to=setTimeout(()=>ac.abort(),45000);
+        const r=await fetch(ep+'?data='+encodeURIComponent(q),{signal:ac.signal}); clearTimeout(to);
+        if(!r.ok) throw new Error('HTTP '+r.status);
+        const j=await r.json();
+        datos=generar(j.elements); ult={lat:c.lat,lon:c.lng};
+        if(map.getSource('carriles')) map.getSource('carriles').setData(datos);
+        ok=true; break;
+      }catch(e){ window.__carriles.error=ep.split('/')[2]+': '+e.message; }
+    }
+    if(!ok) tFallo=performance.now();
+    pidiendo=false; window.__carriles.estado={vias:nVias,rayas:datos.features.length,ok};
+  }
+  function tick(){
+    try{
+      if(!on || typeof map==='undefined' || !map.getZoom) return;
+      if(!crear()) return;
+      if(pidiendo || map.getZoom()<MINZ) return;
+      const c=map.getCenter();
+      {
+        const x0=Math.floor((c.lng-0.08)*2), x1=Math.floor((c.lng+0.08)*2), y0=Math.floor((c.lat-0.08)*2), y1=Math.floor((c.lat+0.08)*2);
+        for(let x=x0;x<=x1;x++) for(let y=y0;y<=y1;y++){
+          const k=x+'_'+y; if(TILES.has(k)||tilesPend>=2) continue;
+          TILES.set(k,'cargando'); tilesPend++;
+          fetch('autopistas/'+k+'.json').then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+            .then(a=>{ estatico=(estatico||[]).concat(desdeEstatico(a)); TILES.set(k,'ok'); sucio=true; })
+            .catch(e=>{ TILES.set(k,'no'); })
+            .finally(()=>{ tilesPend--; });
+        }
+        if(!estatico && !legacyProbado && tilesPend===0 && TILES.size>0 && [...TILES.values()].every(v=>v==='no')){
+          legacyProbado=true; tilesPend++;
+          fetch('autopistas.json').then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+            .then(a=>{ estatico=desdeEstatico(a); sucio=true; }).catch(e=>{ window.__carriles.error='sin datos locales ('+e.message+')'; }).finally(()=>{ tilesPend--; });
+        }
+      }
+      if(estatico){
+        if(!sucio && ult && dist([ult.lat,ult.lon],[c.lat,c.lng])<1500) return;
+        sucio=false; datos=recorte(c); ult={lat:c.lat,lon:c.lng};
+        if(map.getSource('carriles')) map.getSource('carriles').setData(datos);
+        window.__carriles.estado={total:estatico.length,visibles:datos.features.length,cuadros:[...TILES.entries()].filter(v=>v[1]==='ok').length};
+        return;
+      }
+      if(TILES.size && [...TILES.values()].some(v=>v==='cargando')) return;
+      if(performance.now()-tFallo<60000 && tFallo) return;
+      if(ult && dist([ult.lat,ult.lon],[c.lat,c.lng])<700) return;
+      pedir(c);
+    }catch(e){ if(typeof registrarError==='function') registrarError('carriles',e.message); }
+  }
+  function doc(){
+    const b=document.getElementById('btnCarriles'); if(b){ b.textContent='🛣️ Carriles autopista: '+(on?'ON':'OFF'); b.classList.toggle('on',on); }
+    try{ if(typeof map!=='undefined' && map.getLayer && map.getLayer('carriles-raya')) map.setLayoutProperty('carriles-raya','visibility',on?'visible':'none'); }catch(e){}
+  }
+  window.__carriles={ generar, desplazar, tick, estado:null, error:null, set(v){ on=!!v; try{ localStorage.setItem('carriles_on',on?'1':'0'); }catch(e){} if(!on){ estatico=null; TILES.clear(); IDS.clear(); ult=null; sucio=false; datos={type:'FeatureCollection',features:[]}; try{ map.getSource('carriles').setData(datos); }catch(e){} } doc(); tick(); } };
+  const b=document.getElementById('btnCarriles'); if(b) b.onclick=()=>window.__carriles.set(!on);
+  doc(); setInterval(tick,2000);
 })();
 </script>
 
