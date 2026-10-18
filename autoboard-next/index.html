@@ -378,6 +378,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="btnModoMapa">🌙 Mapa: Auto</button>
   <button class="ajuste on" id="btnLuces">💡 Luces de noche: ON</button>
   <button class="ajuste on" id="btnCarriles">🛣️ Carriles autopista: ON</button>
+  <button class="ajuste" id="btnCarrilesIr">📍 Ver una autopista con carriles (prueba)</button>
   <button class="ajuste on" id="btnVoz">🔊 Sonido: Solo radares</button>
   <button class="ajuste" id="btnVozVol">🔉 Volumen avisos: 100 %</button>
   <button class="ajuste on" id="btnVozRadar">📡 Aviso de radar: Campana + voz</button>
@@ -388,7 +389,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v150</div>
+  <div class="seccion">Versión v151</div>
 </div>
 
 <div id="diag">
@@ -3644,7 +3645,8 @@ try{ window.__map=map; }catch(e){ registrarError('mapa',e.message); }
       if(!map.getSource('carriles')) map.addSource('carriles',{type:'geojson',data:datos});
       const vis={'visibility':on?'visible':'none'};
       const bajoRuta=map.getLayer('ruta-hecha')?'ruta-hecha':'ruta-base';
-      let sim; try{ for(const l of map.getStyle().layers) if(l.type==='symbol'){ sim=l.id; break; } }catch(e){}
+      let sim; try{ /* las rayas van ENCIMA del asfalto y de la ruta: justo después de la última capa 'ruta-*' (antes, "primer símbolo" las dejaba por debajo del asfalto) */
+        const ls=map.getStyle().layers; let u=-1; for(let i=0;i<ls.length;i++) if(/^ruta-/.test(ls[i].id)) u=i; if(u>=0 && ls[u+1]) sim=ls[u+1].id; }catch(e){}
       const ancho=(extra)=>{ const e=['interpolate',['linear'],['zoom']]; for(const [z,w] of PXC) e.push(z,['+',['*',['get','n'],w],extra]); return e; };
       if(!map.getLayer('carriles-borde')) map.addLayer({id:'carriles-borde',type:'line',source:'carriles',minzoom:MINZ,filter:['==',['get','t'],'via'],
         layout:{'line-cap':'butt','line-join':'round',...vis},paint:{'line-color':'#c3cad3','line-width':ancho(2.4),'line-opacity':['interpolate',['linear'],['zoom'],MINZ,0,MINZ+0.5,1]}},bajoRuta);
@@ -3662,8 +3664,9 @@ try{ window.__map=map; }catch(e){ registrarError('mapa',e.message); }
     if(!on) return '';
     const ok=[...TILES.values()].filter(v=>v==='ok').length, no=[...TILES.values()].filter(v=>v==='no').length;
     if(!TILES.size) return '';
+    let zt=''; try{ const z=map.getZoom(); if(z<MINZ-0.5) zt=' · acércate: zoom '+z.toFixed(1).replace('.',',')+' (mín. '+String(MINZ).replace('.',',')+')'; }catch(e){}
     if(!ok) return ' · sin archivos de esta zona ('+no+')';
-    return ' · '+ok+' cuadro'+(ok>1?'s':'')+', '+(datos.features.filter(f=>f.properties.t==='via').length)+' vías';
+    return ' · '+ok+' cuadro'+(ok>1?'s':'')+', '+(datos.features.filter(f=>f.properties.t==='via').length)+' vías'+zt;
   }
   function doc(){
     const b=document.getElementById('btnCarriles'); if(b){ b.textContent='🛣️ Carriles autopista: '+(on?'ON':'OFF')+estadoTxt(); b.classList.toggle('on',on); }
@@ -3693,7 +3696,19 @@ try{ window.__map=map; }catch(e){ registrarError('mapa',e.message); }
       doc();
     }catch(e){ errUlt='tick: '+e.message; if(typeof registrarError==='function') registrarError('carriles',e.message); }
   }
-  window.__carriles={ tick, estado:null, desdeEstatico,
+  /* Prueba: salta a una autopista con datos (la más larga con más carriles cerca del centro) a zoom de conducción */
+  function irA(){
+    if(!hallarMapa()||!estatico||!estatico.length){ alert('Aún no hay datos de autopistas cargados: espera unos segundos con el mapa en tu zona.'); return; }
+    const c=map.getCenter(); let mejor=null, md=1e9;
+    for(const f of estatico){ if(f.properties.t!=='via'||f.properties.n<2) continue; const g=f.geometry.coordinates; if(g.length<12) continue;
+      const m=g[g.length>>1], d=Math.hypot((m[0]-c.lng)*0.73,(m[1]-c.lat)); const sc=d-0.002*f.properties.n; if(sc<md){ md=sc; mejor=f; } }
+    if(!mejor){ alert('No hay autopistas con carriles cerca.'); return; }
+    const g=mejor.geometry.coordinates, i=g.length>>1, a=g[i], b=g[Math.min(i+3,g.length-1)];
+    const rumbo=(Math.atan2((b[0]-a[0])*0.73,(b[1]-a[1]))*180/Math.PI+360)%360;
+    map.jumpTo({center:a,zoom:16.6,pitch:55,bearing:rumbo}); setTimeout(tick,300);
+  }
+  const bIr=document.getElementById('btnCarrilesIr'); if(bIr) bIr.onclick=irA;
+  window.__carriles={ tick, estado:null, desdeEstatico, irA,
     set(v){ on=!!v; try{ localStorage.setItem('carriles_on',on?'1':'0'); }catch(e){}
       if(!on){ estatico=null; TILES.clear(); IDS.clear(); ult=null; sucio=false; datos={type:'FeatureCollection',features:[]}; try{ map.getSource('carriles').setData(datos); }catch(e){} }
       doc(); tick(); } };
