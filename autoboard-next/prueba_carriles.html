@@ -8,7 +8,7 @@ html,body{margin:0;height:100%;background:#eef1f4;font:14px system-ui,sans-serif
 #bar{position:absolute;left:0;right:0;bottom:0;padding:8px 8px calc(8px + env(safe-area-inset-bottom));background:rgba(255,255,255,.94);display:flex;flex-wrap:wrap;gap:6px;z-index:5}
 #bar button{flex:1 1 30%;padding:11px 6px;border:0;border-radius:10px;background:#e2e6eb;font:inherit;color:#1f2937}
 #bar button.on{background:#2563eb;color:#fff}
-#coche3D{position:fixed;left:50%;top:65%;width:220px;height:220px;transform:translate(-50%,-50%);z-index:4;pointer-events:none;display:none}
+#coche3D{position:fixed;left:50%;top:65%;width:220px;height:220px;transform:translate(-50%,-50%);transition:transform .25s linear;z-index:4;pointer-events:none;display:none}
 #info{position:absolute;left:8px;top:8px;right:8px;background:rgba(255,255,255,.9);border-radius:8px;padding:6px 10px;z-index:5;font-size:12px}
 </style>
 <div id="m"></div><canvas id="coche3D" width="220" height="220"></canvas><div id="info">Cargando…</div>
@@ -104,11 +104,12 @@ function ajustarCoche(){
   const c=$('coche3D'); if(!map) return;
   c.style.display=(cocheOn&&actual)?'block':'none';
   const z=map.getZoom(), pc=pxCarril(z);
-  const largoPx = cocheTam==='ruta' ? anchoRutaPx(z)*(4.8/1.9) : pc*(4.8/3.5);   /* "a escala": carril 3,5 m, coche 1,9 × 4,8 m */
+  const t0=Math.min(1,Math.max(0,(z-19.4)/(21.2-19.4))), enc=1-0.45*t0*t0*(3-2*t0);   /* como en la app: al hacer zoom de maniobra el coche encoge hasta caber en el carril */
+  const largoPx = cocheTam==='ruta' ? anchoRutaPx(z)*(4.8/1.9)*enc : pc*(4.8/3.5);   /* "a escala": carril 3,5 m, coche 1,9 × 4,8 m */
   const esc=Math.max(0.15,largoPx/LARGO_PX), dx=(carrilCoche-(nCarriles-1)/2)*pc;
   c.style.top=yCoche().toFixed(0)+'px'; c.style.left='calc(50% + '+dx.toFixed(1)+'px)'; c.style.transform='translate(-50%,-50%) scale('+esc.toFixed(3)+')';
   const anchoCochePx=largoPx*1.9/4.8;
-  info((vias[idx]?('Vía '+(idx+1)+' de '+vias.length+' · '+nCarriles+' carriles'):'')+' · zoom '+z.toFixed(1)+' · carril del coche '+(carrilCoche+1)+'/'+nCarriles+' · carril ≈ '+pc.toFixed(0)+' px, coche ≈ '+anchoCochePx.toFixed(0)+' px de ancho'+(cocheTam==='ruta'?' (= ancho de la línea de ruta)':' (proporcional al carril dibujado)'));
+  info((vias[idx]?('Vía '+(idx+1)+' de '+vias.length+' · '+nCarriles+' carriles'):'')+' · zoom '+z.toFixed(1)+' · carril del coche '+(carrilCoche+1)+'/'+nCarriles+' · carril ≈ '+pc.toFixed(0)+' px, coche ≈ '+anchoCochePx.toFixed(0)+' px de ancho'+(cocheTam==='ruta'?' (= ancho de la línea de ruta'+(enc<0.99?' × '+enc.toFixed(2)+' por la maniobra':'')+')':' (proporcional al carril dibujado)'));
 }
 function renderCoche(){ if(renderer) renderer.render(scene,camera); }
 async function cargarCoche(){
