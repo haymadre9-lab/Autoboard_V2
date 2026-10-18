@@ -1,18 +1,21 @@
 <!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Prueba de carriles</title>
 <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
 <style>
 html,body{margin:0;height:100%;background:#eef1f4;font:14px system-ui,sans-serif;overflow:hidden}
 #m{position:absolute;inset:0}
 #bar{position:absolute;left:0;right:0;bottom:0;padding:8px 8px calc(8px + env(safe-area-inset-bottom));background:rgba(255,255,255,.94);display:flex;flex-wrap:wrap;gap:6px;z-index:5}
 #bar button{flex:1 1 30%;padding:11px 6px;border:0;border-radius:10px;background:#e2e6eb;font:inherit;color:#1f2937}
 #bar button.on{background:#2563eb;color:#fff}
+#coche3D{position:fixed;left:50%;top:65%;width:220px;height:220px;transform:translate(-50%,-50%);z-index:4;pointer-events:none;display:none}
 #info{position:absolute;left:8px;top:8px;right:8px;background:rgba(255,255,255,.9);border-radius:8px;padding:6px 10px;z-index:5;font-size:12px}
 </style>
-<div id="m"></div><div id="info">Cargando…</div>
+<div id="m"></div><canvas id="coche3D" width="220" height="220"></canvas><div id="info">Cargando…</div>
 <div id="bar">
  <button id="bRuta" class="on">Con ruta</button><button id="bNoche">Día</button><button id="bSig">Otra autopista ▶</button>
  <button data-z="16.4" class="z on">Zoom 16,4<br><small>autopista (coche)</small></button><button data-z="17.5" class="z">Zoom 17,5</button><button data-z="19" class="z">Zoom 19</button><button data-z="20.2" class="z">Zoom 20,2</button><button data-z="21.2" class="z">Zoom 21,2<br><small>maniobra (giro)</small></button><button data-z="22" class="z">Zoom 22<br><small>máx.</small></button>
+ <button id="bCoche" class="on">🚗 Coche: Sí</button><button id="bModelo">Modelo: Deportivo ▶</button><button id="bTam">Tamaño: como la ruta</button><button id="bCL">◀ Carril</button><button id="bCR">Carril ▶</button>
  <button data-p="48" class="p on">Inclinación 48°</button><button data-p="0" class="p">Plano 0°</button>
 </div>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
@@ -23,6 +26,7 @@ const $=id=>document.getElementById(id), info=t=>$('info').textContent=t;
 const PXC=[[14,2.6],[15,3.2],[16,4.6],[17,6],[18,8],[19,11],[20,15],[22,15]];
 const porCarril=p=>{const e=['interpolate',['linear'],['zoom']];for(const [z,w] of PXC)e.push(z,['*',['get',p],w]);return e;};
 const ancho=x=>{const e=['interpolate',['linear'],['zoom']];for(const [z,w] of PXC)e.push(z,['+',['*',['get','n'],w],x]);return e;};
+let carrilCoche=0, nCarriles=2, cocheOn=true, cocheTam='ruta', cocheIdx=0;
 let map, vias=[], idx=0, noche=false, ruta=true, zoom=16.4, pitch=48;
 function clavePrueba(){ return fetch('index.html',{cache:'no-store'}).then(r=>r.text()).then(t=>{const m=t.match(/MAPTILER_KEY\s*=\s*['"]([^'"]+)['"]/); if(!m) throw new Error('no encuentro la clave en index.html (¿está esta página junto a index.html?)'); return m[1];}); }
 async function cargarVias(lon,lat){
@@ -60,8 +64,9 @@ function mostrarVia(){
   for(let i=1;i<L;i++) fs.push({type:'Feature',properties:{t:'raya',k:i-L/2},geometry:{type:'LineString',coordinates:p}});
   map.getSource('carriles').setData({type:'FeatureCollection',features:fs});
   map.getSource('ruta').setData({type:'Feature',geometry:{type:'LineString',coordinates:p}});
-  map.jumpTo({center:mid,zoom,pitch,bearing:rumbo});
+  carrilCoche=Math.floor((L-1)/2); nCarriles=L; map.jumpTo({center:mid,zoom,pitch,bearing:rumbo,padding:{top:0,bottom:Math.round(innerHeight-2*yCoche()),left:0,right:0}});
   info('Vía '+(idx+1)+' de '+vias.length+' · '+(v[0]?v[0]+' carriles (dato OSM)':'sin dato de carriles → 2')+' · zoom '+zoom+' · '+(ruta?'con ruta':'sin ruta')+' · '+(noche?'noche':'día'));
+  ajustarCoche();
 }
 async function iniciar(){
   let estilo;
@@ -88,5 +93,50 @@ $('bNoche').onclick=function(){ noche=!noche; this.textContent=noche?'Noche':'D�
 $('bSig').onclick=()=>{ idx=(idx+1)%Math.max(1,vias.length); mostrarVia(); };
 document.querySelectorAll('.z').forEach(b=>b.onclick=()=>{ zoom=+b.dataset.z; document.querySelectorAll('.z').forEach(x=>x.classList.toggle('on',x===b)); if(map) map.setZoom(zoom); mostrarVia(); });
 document.querySelectorAll('.p').forEach(b=>b.onclick=()=>{ pitch=+b.dataset.p; document.querySelectorAll('.p').forEach(x=>x.classList.toggle('on',x===b)); if(map) map.setPitch(pitch); mostrarVia(); });
-iniciar();
+/* ---- Coche 3D (mismo modelo, tamaño y posición que en la app: punto al 65 % de la pantalla) ---- */
+const THREE_BASE='https://cdn.jsdelivr.net/npm/three@0.160.0';
+const COCHES=[{n:'Deportivo',a:'car.glb',mat:['Body']},{n:'Model 3',a:'modelo3.glb',mat:['CAR_PAINT']},{n:'Cybertruck',a:'cybertruck.glb',mat:['Main','TrunkMain','Glass'],base:'#9aa1a9'}];
+const LARGO_PX=110, FOV=28; let THREE, renderer, scene, camera, actual=null; const cache={};
+function pxCarril(z){ if(z<=PXC[0][0]) return PXC[0][1]; for(let i=1;i<PXC.length;i++){ if(z<=PXC[i][0]){ const t=(z-PXC[i-1][0])/(PXC[i][0]-PXC[i-1][0]); return PXC[i-1][1]+t*(PXC[i][1]-PXC[i-1][1]); } } return PXC[PXC.length-1][1]; }
+function anchoRutaPx(z){ const P=[[14,10],[16,16],[18,22],[20,30]]; if(z<=P[0][0]) return P[0][1]; for(let i=1;i<P.length;i++){ if(z<=P[i][0]){ const t=(z-P[i-1][0])/(P[i][0]-P[i-1][0]); return P[i-1][1]+t*(P[i][1]-P[i-1][1]); } } return P[P.length-1][1]; }
+function yCoche(){ const barH=($('bar')||{}).offsetHeight||0; return Math.max(120,(innerHeight-barH)*0.6); }   /* el coche va en la zona visible, por encima de los botones */
+function ajustarCoche(){
+  const c=$('coche3D'); if(!map) return;
+  c.style.display=(cocheOn&&actual)?'block':'none';
+  const z=map.getZoom(), pc=pxCarril(z);
+  const largoPx = cocheTam==='ruta' ? anchoRutaPx(z)*(4.8/1.9) : pc*(4.8/3.5);   /* "a escala": carril 3,5 m, coche 1,9 × 4,8 m */
+  const esc=Math.max(0.15,largoPx/LARGO_PX), dx=(carrilCoche-(nCarriles-1)/2)*pc;
+  c.style.top=yCoche().toFixed(0)+'px'; c.style.left='calc(50% + '+dx.toFixed(1)+'px)'; c.style.transform='translate(-50%,-50%) scale('+esc.toFixed(3)+')';
+  const anchoCochePx=largoPx*1.9/4.8;
+  info((vias[idx]?('Vía '+(idx+1)+' de '+vias.length+' · '+nCarriles+' carriles'):'')+' · zoom '+z.toFixed(1)+' · carril del coche '+(carrilCoche+1)+'/'+nCarriles+' · carril ≈ '+pc.toFixed(0)+' px, coche ≈ '+anchoCochePx.toFixed(0)+' px de ancho'+(cocheTam==='ruta'?' (= ancho de la línea de ruta)':' (proporcional al carril dibujado)'));
+}
+function renderCoche(){ if(renderer) renderer.render(scene,camera); }
+async function cargarCoche(){
+  try{
+    if(!renderer){
+      THREE=await import(THREE_BASE+'/build/three.module.js');
+      renderer=new THREE.WebGLRenderer({canvas:$('coche3D'),antialias:true,alpha:true}); renderer.setPixelRatio(Math.min(devicePixelRatio||1,2)); renderer.setSize(220,220,false); renderer.setClearColor(0,0);
+      scene=new THREE.Scene(); scene.add(new THREE.HemisphereLight(0xffffff,0xb8c0c8,1.7)); const dl=new THREE.DirectionalLight(0xffffff,1.5); dl.position.set(-8,14,6); scene.add(dl);
+      camera=new THREE.PerspectiveCamera(FOV,1,1,100); const el=(90-60)*Math.PI/180, dist=(4.8*220/LARGO_PX)/(2*Math.tan(FOV/2*Math.PI/180)); camera.position.set(0,Math.sin(el)*dist,Math.cos(el)*dist); camera.lookAt(0,0.3,0);
+    }
+    if(!cache[cocheIdx]){
+      const {GLTFLoader}=await import(THREE_BASE+'/examples/jsm/loaders/GLTFLoader.js'); const def=COCHES[cocheIdx];
+      const gltf=await new Promise((ok,ko)=>new GLTFLoader().load(def.a,ok,undefined,ko)); const coche=gltf.scene;
+      const caja=new THREE.Box3().setFromObject(coche), sz=caja.getSize(new THREE.Vector3()); coche.scale.setScalar(4.8/Math.max(sz.x,sz.z));
+      const c2=new THREE.Box3().setFromObject(coche), ctr=c2.getCenter(new THREE.Vector3()); coche.position.set(-ctr.x,-c2.min.y,-ctr.z);
+      const orient=new THREE.Group(); orient.add(coche); orient.rotation.y=(sz.x>sz.z?Math.PI/2:0)+Math.PI;
+      const g=new THREE.Group(); g.add(orient);
+      const so=new THREE.Mesh(new THREE.CircleGeometry(1,32),new THREE.MeshBasicMaterial({color:0,transparent:true,opacity:.14,depthWrite:false})); so.rotation.x=-Math.PI/2; so.scale.set(1.15,2.5,1); so.position.y=0.01; g.add(so);
+      if(def.base) coche.traverse(o=>{ if(o.isMesh){ (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{ if(m&&def.mat.indexOf(m.name)>=0&&m.color) m.color.set(def.base); }); } });
+      cache[cocheIdx]=g;
+    }
+    if(actual) scene.remove(actual); actual=cache[cocheIdx]; scene.add(actual); renderCoche(); ajustarCoche();
+  }catch(e){ info('No se pudo cargar el coche ('+COCHES[cocheIdx].a+'): '+(e&&e.message||e)+' · ¿está el .glb junto a esta página?'); }
+}
+$('bCoche').onclick=function(){ cocheOn=!cocheOn; this.classList.toggle('on',cocheOn); this.textContent='🚗 Coche: '+(cocheOn?'Sí':'No'); ajustarCoche(); };
+$('bModelo').onclick=function(){ cocheIdx=(cocheIdx+1)%COCHES.length; this.textContent='Modelo: '+COCHES[cocheIdx].n+' ▶'; cargarCoche(); };
+$('bTam').onclick=function(){ cocheTam=cocheTam==='ruta'?'real':'ruta'; this.textContent=cocheTam==='ruta'?'Tamaño: como la ruta':'Tamaño: a escala del carril'; ajustarCoche(); };
+$('bCL').onclick=()=>{ carrilCoche=Math.max(0,carrilCoche-1); ajustarCoche(); };
+$('bCR').onclick=()=>{ carrilCoche=Math.min(nCarriles-1,carrilCoche+1); ajustarCoche(); };
+iniciar().then(()=>{ cargarCoche(); if(map) map.on('zoom',ajustarCoche); });
 </script></html>
