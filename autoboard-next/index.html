@@ -185,6 +185,22 @@ body.modo-solomapa #luzCoche{display:none !important}
 #popupCargador .acciones button.cerrar{flex:0 0 auto;min-width:auto;background:#2a1a1a;border-color:#5a2020;color:#ff8a8a}
 #listaCargadores{position:fixed;top:76px;left:10px;z-index:35;width:220px;max-height:calc(100vh - 100px);background:rgba(10,13,16,.94);border:2px solid #2e6b4a;border-radius:12px;display:none;flex-direction:column;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.6)}
 #listaCargadores.on{display:flex}
+#listaCampos{font-family:system-ui,sans-serif;position:fixed;top:76px;left:10px;z-index:35;width:240px;max-height:calc(100vh - 100px);background:rgba(10,13,16,.94);border:2px solid #2e6b4a;border-radius:12px;display:none;flex-direction:column;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.6)}
+#listaCampos.on{display:flex}
+#listaCampos .cabecera{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#0f1318;border-bottom:1px solid #232c33;flex:0 0 auto}
+#listaCampos h2{color:#9ae6b4;margin:0;font-size:12px;font-weight:800;letter-spacing:.5px;text-transform:uppercase}
+#listaCampos .cerrarLista{background:transparent;border:0;color:#ff8a8a;font-size:16px;font-weight:900;cursor:pointer;padding:2px 6px;line-height:1}
+#listaCamposItems{overflow-y:auto;padding:6px;flex:1 1 auto}
+#listaCampos .campoItem{background:#12161c;border-radius:8px;padding:7px 8px;margin-bottom:6px;cursor:pointer;border-left:4px solid #3f9b64}
+#listaCampos .campoItem:active{background:#1d262f}
+#listaCampos .campoItem .fila1{display:flex;align-items:center;gap:6px}
+#listaCampos .campoItem .titulo{font-weight:800;color:#e8eef2;font-size:12px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+#listaCampos .campoItem .dist{color:#ffd166;font-weight:800;font-size:10px;margin-top:3px}
+#listaCampos .campoItem button{background:#232c33;border:0;color:#d5dce3;border-radius:6px;font-size:13px;padding:5px 8px;cursor:pointer;flex:0 0 auto}
+#listaCampos .campoItem input{width:100%;box-sizing:border-box;border:1px solid #3a434c;border-radius:6px;background:#0b0e12;color:#fff;font:700 14px system-ui,sans-serif;padding:8px;margin:2px 0 6px}
+#listaCampos .campoItem .acc{display:flex;gap:6px}
+#listaCampos .campoItem .acc button{flex:1;padding:8px}
+#listaCampos .campoItem .acc .ok{background:#1e88e5;color:#fff}
 #listaCargadores .cabecera{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#0f1318;border-bottom:1px solid #232c33;flex:0 0 auto}
 #listaCargadores h2{color:#9ae6b4;margin:0;font-size:12px;font-weight:800;letter-spacing:.5px;text-transform:uppercase}
 #listaCargadores .cerrarLista{background:transparent;border:0;color:#ff8a8a;font-size:16px;font-weight:900;cursor:pointer;padding:2px 6px;line-height:1}
@@ -349,6 +365,13 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
 <div id="panelAlt"></div>
 <div id="popupCampo"></div>
 <div id="popupCargador"></div>
+<div id="listaCampos">
+  <div class="cabecera">
+    <h2>⚽ Campos favoritos</h2>
+    <button class="cerrarLista" id="btnCerrarListaCampos"><svg class="xsvg" viewBox="0 0 12 12" width="1em" height="1em" aria-hidden="true"><path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></button>
+  </div>
+  <div id="listaCamposItems"></div>
+</div>
 <div id="listaCargadores">
   <div class="cabecera">
     <h2>⚡ Cargadores</h2>
@@ -374,20 +397,14 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste on" id="btnAvisosRadares">📸 Avisos radares: ON</button>
   <div class="seccion">Cargadores</div>
   <button class="ajuste" id="btnListaCargadores">⚡ Ver 10 más cercanos</button>
+  <div class="seccion">Fútbol</div>
+  <button class="ajuste" id="btnListaCampos">⚽ Mis campos favoritos (máx. 10)</button>
   <div class="seccion">Mapa</div>
   <button class="ajuste" id="btnModoMapa">🌙 Mapa: Auto</button>
   <button class="ajuste on" id="btnLuces">💡 Luces de noche: ON</button>
   <button class="ajuste on" id="btnCarriles">🛣️ Carriles autopista: ON</button>
-  <button class="ajuste" id="btnCarrilesIr">📍 Ver una autopista con carriles (prueba)</button>
   <button class="ajuste on" id="btnVoz">🔊 Sonido: Solo radares</button>
   <button class="ajuste" id="btnVozVol">🔉 Volumen avisos: 100 %</button>
-  <button class="ajuste on" id="btnVozRadar">📡 Aviso de radar: Campana + voz</button>
-  <div class="seccion">Simulación (prueba en casa)</div>
-  <button class="ajuste" id="btnSimCastro">▶ Simular A-8: Bilbao → Castro Urdiales</button>
-  <button class="ajuste" id="btnSimDurango">▶ Simular A-8/AP-8: Bilbao → Durango</button>
-  <button class="ajuste" id="btnSimPrueba">▶ Simular con maniobras cada 1,5 km (prueba de zoom)</button>
-  <button class="ajuste" id="btnSimVel">⏱ Velocidad simulación: 100 km/h</button>
-  <button class="ajuste peligro" id="btnSimStop">⏹ Detener simulación</button>
   <div class="seccion">Coche</div>
   <button class="ajuste" id="btnCoche">🚗 Coche: Flecha</button>
   <div id="filaColorCoche"></div>
@@ -395,7 +412,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v156</div>
+  <div class="seccion">Versión v157</div>
 </div>
 
 <div id="diag">
@@ -1435,6 +1452,34 @@ document.getElementById('btnListaCargadores').onclick = async ()=>{
     el.onclick = ()=>{const lat = Number(el.dataset.lat);const lon = Number(el.dataset.lon);panel.classList.remove('on');navegarA(lat,lon);};
   });
 };
+/* ---- Lista de campos de fútbol favoritos (como la de cargadores): ir, renombrar, quitar ---- */
+(function(){
+  const panel=document.getElementById('listaCampos'), cont=document.getElementById('listaCamposItems'); let editando=-1;
+  const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  function pintar(){
+    if(!camposFavs.length){ cont.innerHTML='<div style="color:#8d99a5;padding:14px;text-align:center;font-size:11px;line-height:1.5">Sin campos favoritos.<br>Toca un campo de fútbol en el mapa y pulsa ☆ Favorito (máx. '+MAX_CAMPOS_FAV+').</div>'; return; }
+    cont.innerHTML=camposFavs.map((c,i)=>{
+      if(i===editando) return '<div class="campoItem" data-i="'+i+'" style="cursor:default"><div class="titulo">✏️ Nombre del campo</div><input type="text" maxlength="40" value="'+esc(c.nombre||'')+'" placeholder="Ej.: Campo de Juan"><div class="acc"><button data-a="cancel">Cancelar</button><button class="ok" data-a="ok">Guardar</button></div></div>';
+      const d=(typeof lastFix!=='undefined'&&lastFix)?dist([lastFix.lat,lastFix.lon],[c.lat,c.lon]):null;
+      const dt=d===null?'':(d>=1000?(d/1000).toFixed(1).replace('.',',')+' km':Math.round(d)+' m');
+      return '<div class="campoItem" data-i="'+i+'"><div class="fila1"><div class="titulo">⭐ '+esc(c.nombre||'Campo de fútbol')+'</div><button data-a="ren" title="Renombrar">✏️</button><button data-a="del" title="Quitar">✕</button></div>'+(dt?'<div class="dist">📍 '+dt+'</div>':'')+'</div>';
+    }).join('');
+    if(editando>=0){ const inp=cont.querySelector('input'); if(inp){ inp.focus(); inp.select(); } }
+  }
+  document.getElementById('btnListaCampos').onclick=()=>{ editando=-1; pintar(); panel.classList.add('on'); document.getElementById('panelAjustes').classList.remove('on'); };
+  document.getElementById('btnCerrarListaCampos').onclick=()=>{ panel.classList.remove('on'); editando=-1; };
+  cont.onclick=(ev)=>{
+    const it=ev.target.closest('.campoItem'); if(!it) return; const i=+it.dataset.i, c=camposFavs[i]; if(!c) return;
+    const a=ev.target.closest('button'); const acc=a&&a.dataset.a;
+    if(acc==='del'){ camposFavs.splice(i,1); guardarCamposFavs(); try{ aplicarNombresCamposFavs(true); }catch(e){} editando=-1; pintar(); return; }
+    if(acc==='ren'){ editando=i; pintar(); return; }
+    if(acc==='cancel'){ editando=-1; pintar(); return; }
+    if(acc==='ok'){ const n=(it.querySelector('input').value||'').trim().slice(0,40); c.nombre=n; guardarCamposFavs(); try{ aplicarNombresCamposFavs(false); volcarFutbol(); }catch(e){} editando=-1; pintar(); return; }
+    if(i===editando) return;
+    panel.classList.remove('on'); navegarA(c.lat,c.lon,c.nombre||'Campo de fútbol');
+  };
+  cont.addEventListener('keydown',(ev)=>{ if(ev.key==='Enter'){ const b=cont.querySelector('[data-a="ok"]'); if(b) b.click(); } });
+})();
 document.getElementById('btnCerrarListaCargadores').onclick = ()=>{document.getElementById('listaCargadores').classList.remove('on');};
 
 let favsDir = JSON.parse(localStorage.getItem('dirs_favs') || '[]');
@@ -2816,12 +2861,15 @@ function abrirPopupCampo(f,editar){
     +'<div class="acc"><button id="campoCerrar">Cerrar</button><button class="ir" id="campoIr">Ir aquí</button></div>';
   p.classList.add('on');
 }
+const MAX_CAMPOS_FAV=10;
 function guardarCampoFav(f,nombre){
   const i=idxCampoFav(f.lat,f.lon);
-  if(i>=0) camposFavs[i].nombre=nombre; else { camposFavs.unshift({lat:f.lat,lon:f.lon,nombre:nombre}); if(camposFavs.length>40) camposFavs.length=40; }
+  if(i>=0) camposFavs[i].nombre=nombre;
+  else { if(camposFavs.length>=MAX_CAMPOS_FAV){ alert('Ya tienes '+MAX_CAMPOS_FAV+' campos favoritos. Quita alguno (Ajustes → Mis campos favoritos) para añadir otro.'); return false; } camposFavs.unshift({lat:f.lat,lon:f.lon,nombre:nombre}); }
   guardarCamposFavs();
   if(nombre){ f.nombre=nombre; f.propio=true; }
   aplicarNombresCamposFavs(false); volcarFutbol();
+  return true;
 }
 document.getElementById('popupCampo').onclick=async (ev)=>{
   const t=ev.target, f=__campoSel;
@@ -2837,7 +2885,7 @@ document.getElementById('popupCampo').onclick=async (ev)=>{
   if(t.closest('#campoRen')){ abrirPopupCampo(f,true); return; }
   if(t.closest('#campoGuardar')){
     const inp=document.getElementById('campoNombre'); const n=(inp&&inp.value||'').trim().slice(0,40);
-    if(n){ guardarCampoFav(f,n); } else { /* nombre vacío: vuelve al automático */
+    if(n){ if(!guardarCampoFav(f,n)){ abrirPopupCampo(f); return; } } else { /* nombre vacío: vuelve al automático */
       const i=idxCampoFav(f.lat,f.lon); if(i>=0){ camposFavs[i].nombre=''; guardarCamposFavs(); } f.nombre=''; f.propio=false; aplicarNombresCamposFavs(false); volcarFutbol(); }
     abrirPopupCampo(f); return;
   }
@@ -3802,11 +3850,7 @@ function anchoRutaPx(z){ const P=[[14,10],[16,16],[18,22],[20,30]]; if(z<=P[0][0
 /* Al acercarse la cámara para una maniobra (zoom 19,4 → 21,2) el coche se va haciendo más pequeño hasta caber dentro del carril / de la línea de ruta (55 % del ancho);
    al terminar la maniobra el zoom vuelve a bajar y el coche recupera su tamaño. Así la maniobra parece aún más ampliada. */
 const COCHE_ENCOGE={ Z0:19.4, Z1:21.2, MIN:0.55 };
-function encogeManiobra(z){
-  /* el encogimiento sigue el "peso" de la maniobra de la cámara (0 → 1), no el zoom absoluto: así también encoge en autopista, donde el zoom está limitado por la velocidad */
-  const t=(typeof window.__manPeso==='number') ? Math.min(1,Math.max(0,window.__manPeso)) : Math.min(1,Math.max(0,(z-COCHE_ENCOGE.Z0)/(COCHE_ENCOGE.Z1-COCHE_ENCOGE.Z0))), e=t*t*(3-2*t);
-  return 1-(1-COCHE_ENCOGE.MIN)*e;
-}
+function encogeManiobra(z){ return 1; }   /* el coche mantiene siempre el mismo tamaño (el encogimiento en maniobras se quitó) */
 let escalaAplicada=0;
 function ajustarTamano(){
   if(!api.activo||typeof map==='undefined'||!map.getZoom) return;
@@ -4150,8 +4194,7 @@ window.__CLIPS_VOZ.radar='SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAA
   let on = modo>0;
   const NOMBRES=['Sin sonido','Solo radares','Todo (radares + ruta)'];
   /* Aviso de radar: 0 = solo voz · 1 = sonido de radar del usuario (por defecto) · 2 = campana · 3 = grave · 4 = pitido agudo (el de antes). Siempre seguido de la voz. */
-  const RADAR_TXT=['Solo voz','Tu sonido de radar + voz','Campana + voz','Tono grave + voz','Pitido agudo + voz']; let rmodo=1;
-  try{ const m=localStorage.getItem('voz_radar3'); if(m!==null&&/^[0-4]$/.test(m)) rmodo=parseInt(m,10); }catch(e){}
+  const RADAR_TXT=['Solo voz','Tu sonido de radar + voz','Campana + voz','Tono grave + voz','Pitido agudo + voz']; let rmodo=1;   /* tu sonido de radar + voz, fijo (sin selector en Ajustes) */
   const VOLS=[1,0.7,0.4]; let vi=0; try{ const v=parseInt(localStorage.getItem('voz_vol'),10); if(v>=0&&v<VOLS.length) vi=v; }catch(e){}
   const synth = ('speechSynthesis' in window && 'SpeechSynthesisUtterance' in window) ? window.speechSynthesis : null;
   let voz=null, ctx=null, hechos=Object.create(null), ultRadarEnc=0, usadas=[], desbloqueado=false;
