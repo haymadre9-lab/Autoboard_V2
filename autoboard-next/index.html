@@ -243,7 +243,7 @@ body.modo-solomapa #diag,body.modo-solomapa #diag2,body.modo-solomapa #navbanner
 #listaCargadores .cargadorItem.tesla .kw{text-shadow:none}
 
 /* ---- v105: coche 3D opcional (canvas fijo sobre el mismo punto que la flecha) ---- */
-#coche3D{position:fixed;left:50%;top:65%;width:220px;height:220px;transform:translate(-50%,-50%);z-index:14;pointer-events:none;display:none}
+#coche3D{position:fixed;left:50%;top:65%;width:220px;height:220px;transform:translate(-50%,-50%);transition:transform .3s linear;z-index:14;pointer-events:none;display:none}
 body.modo-navegacion.coche3d-on #coche3D{display:block}
 body.coche3d-on #cocheFijo{display:none !important}
 body.modo-solomapa #coche3D{display:none !important}
@@ -389,7 +389,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v151</div>
+  <div class="seccion">Versión v152</div>
 </div>
 
 <div id="diag">
@@ -3752,10 +3752,17 @@ api.color = hex => {
 };
 /* tamaño: el coche mide de ancho lo mismo que la línea azul de la ruta (1,9 m de coche -> largo = ancho_ruta × 4,8/1,9) */
 function anchoRutaPx(z){ const P=[[14,10],[16,16],[18,22],[20,30]]; if(z<=P[0][0]) return P[0][1]; for(let i=1;i<P.length;i++){ if(z<=P[i][0]){ const t=(z-P[i-1][0])/(P[i][0]-P[i-1][0]); return P[i-1][1]+t*(P[i][1]-P[i-1][1]); } } return P[P.length-1][1]; }
+/* Al acercarse la cámara para una maniobra (zoom 19,4 → 21,2) el coche se va haciendo más pequeño hasta caber dentro del carril / de la línea de ruta (55 % del ancho);
+   al terminar la maniobra el zoom vuelve a bajar y el coche recupera su tamaño. Así la maniobra parece aún más ampliada. */
+const COCHE_ENCOGE={ Z0:19.4, Z1:21.2, MIN:0.55 };
+function encogeManiobra(z){
+  const t=Math.min(1,Math.max(0,(z-COCHE_ENCOGE.Z0)/(COCHE_ENCOGE.Z1-COCHE_ENCOGE.Z0))), e=t*t*(3-2*t);
+  return 1-(1-COCHE_ENCOGE.MIN)*e;
+}
 let escalaAplicada=0;
 function ajustarTamano(){
   if(!api.activo||typeof map==='undefined'||!map.getZoom) return;
-  const px=anchoRutaPx(map.getZoom())*(4.8/1.9), esc=Math.max(0.3,px/LARGO_PX);
+  const z=map.getZoom(), px=anchoRutaPx(z)*(4.8/1.9)*encogeManiobra(z), esc=Math.max(0.2,px/LARGO_PX);
   if(Math.abs(esc-escalaAplicada)<0.01) return;
   escalaAplicada=esc; $('coche3D').style.transform='translate(-50%,-50%) scale('+esc.toFixed(3)+')';
 }
