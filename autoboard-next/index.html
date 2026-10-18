@@ -388,7 +388,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v148</div>
+  <div class="seccion">Versión v150</div>
 </div>
 
 <div id="diag">
@@ -1415,6 +1415,9 @@ document.getElementById('btnCerrarListaCargadores').onclick = ()=>{document.getE
 let favsDir = JSON.parse(localStorage.getItem('dirs_favs') || '[]');
 function guardarFavsDir(){ localStorage.setItem('dirs_favs', JSON.stringify(favsDir)); }
 function esFavDir(lat,lon){return favsDir.findIndex(f => Math.abs(f.lat-lat) < 1e-6 && Math.abs(f.lon-lon) < 1e-6);}
+let camposFavs = (()=>{ try{ return JSON.parse(localStorage.getItem('campos_favs')||'[]')||[]; }catch(e){ return []; } })();
+function guardarCamposFavs(){ try{ localStorage.setItem('campos_favs', JSON.stringify(camposFavs)); }catch(e){} }
+function idxCampoFav(lat,lon){ return camposFavs.findIndex(c=>dist([c.lat,c.lon],[lat,lon])<30); }
 function toggleFavDir(item){const i = esFavDir(item.lat, item.lon);if(i >= 0){ favsDir.splice(i,1); }else {favsDir.unshift(item);if(favsDir.length > 8) favsDir.length = 8;}guardarFavsDir();}
 
 const barraB=document.getElementById('barraBusqueda');
@@ -1423,7 +1426,7 @@ const sugs=document.getElementById('sugerencias');
 let debounceTimer=null;
 
 function pintarFavoritos(){
-  if(!favsDir.length){
+  if(!favsDir.length && !camposFavs.length){
     sugs.innerHTML = '<div class="sug" style="color:#8d99a5;cursor:default">Sin favoritos guardados.<br>Busca una dirección y pulsa ☆ para guardarla.</div>';
     sugs.classList.add('on');return;
   }
@@ -1435,8 +1438,19 @@ function pintarFavoritos(){
       +(dir?'<div class="sub" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHTML(dir)+'</div>':'')+'</div>'
       +'<button class="quitarFav" data-idx="'+i+'" title="Quitar de favoritos" style="background:transparent;border:0;color:#ffd166;font-size:20px;cursor:pointer;padding:6px 10px;flex:0 0 auto"><svg class="xsvg" viewBox="0 0 12 12" width="1em" height="1em" aria-hidden="true"><path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></button>'
       +'</div>';
-  }).join('');
+  }).join('') + camposFavs.map((c,i)=>
+    '<div class="sug sugCampo" data-idx="'+i+'" style="display:flex;justify-content:space-between;align-items:center;gap:10px">'
+      +'<div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">⚽ '+escapeHTML(c.nombre||'Campo de fútbol')+'</div>'
+      +'<div class="sub">Campo de fútbol favorito</div></div>'
+      +'<button class="quitarCampo" data-idx="'+i+'" title="Quitar de favoritos" style="background:transparent;border:0;color:#ffd166;font-size:20px;cursor:pointer;padding:6px 10px;flex:0 0 auto"><svg class="xsvg" viewBox="0 0 12 12" width="1em" height="1em" aria-hidden="true"><path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></button>'
+      +'</div>').join('');
   sugs.classList.add('on');
+  sugs.querySelectorAll('.sugCampo').forEach(el=>{
+    el.onclick = ()=>{ const c=camposFavs[Number(el.dataset.idx)]; if(!c) return; barraB.classList.remove('on');sugs.classList.remove('on');inputB.value='';navegarA(c.lat, c.lon, c.nombre||'Campo de fútbol'); };
+  });
+  sugs.querySelectorAll('.quitarCampo').forEach(btn=>{
+    btn.onclick = (ev)=>{ ev.stopPropagation(); camposFavs.splice(Number(btn.dataset.idx),1); guardarCamposFavs(); try{ aplicarNombresCamposFavs(true); }catch(e){} pintarFavoritos(); };
+  });
   sugs.querySelectorAll('.sugFav').forEach(el=>{
     el.onclick = (ev)=>{
       if(ev.target.classList.contains('quitarFav')) return;
@@ -2582,13 +2596,28 @@ function escanearFutbol(){
     if(igual>=0){ if(r.areaPoli<=__fut.lista[igual].area*1.15) continue; __fut.lista.splice(igual,1); }   /* mismo campo cortado por teselas: se queda el trozo mayor */
     __fut.lista.push({lat:cLat,lon:cLon,area:r.areaPoli,feats:dibujoFutbol(r),r:r,nombre:''}); cambios++;
   }
+  if(aplicarNombresCamposFavs(false)) cambios++;
   if(ponerNombresFutbol()) cambios++;
   if(!cambios) return 0;
   if(__fut.lista.length>FUTBOL.MAX) __fut.lista.splice(0,__fut.lista.length-FUTBOL.MAX);
+  volcarFutbol();
+  return cambios;
+}
+function volcarFutbol(){
   const a=map.getSource('futbol'), b=map.getSource('futbol-pt');
   if(a) a.setData({type:'FeatureCollection',features:[].concat(...__fut.lista.map(e=>e.feats))});
-  if(b) b.setData({type:'FeatureCollection',features:__fut.lista.map(e=>({type:'Feature',properties:(e.nombre?{n:e.nombre}:{}),geometry:{type:'Point',coordinates:[e.lon,e.lat]}}))});
-  return cambios;
+  if(b) b.setData({type:'FeatureCollection',features:__fut.lista.map(e=>({type:'Feature',properties:(e.nombre?{n:(e.fav?'⭐ ':'')+e.nombre}:(e.fav?{n:'⭐'}:{})),geometry:{type:'Point',coordinates:[e.lon,e.lat]}}))});
+}
+/* Nombre propio y estrella de los campos favoritos (se casan por posición, a menos de 30 m). reset=true limpia los que ya no son favoritos */
+function aplicarNombresCamposFavs(reset){
+  let hubo=false;
+  for(const e of __fut.lista){
+    const i=idxCampoFav(e.lat,e.lon);
+    if(i>=0){ const n=camposFavs[i].nombre||''; if(!e.fav || (n && e.nombre!==n)){ if(n){ e.nombre=n; e.propio=true; } e.fav=true; hubo=true; } }
+    else if(e.fav){ e.fav=false; if(e.propio){ e.nombre=''; e.propio=false; } hubo=true; }
+  }
+  if(reset && hubo) volcarFutbol();
+  return hubo;
 }
 setInterval(()=>{ try{ escanearFutbol(); }catch(e){ registrarError('futbol',e.message); } },FUTBOL.CADA_MS);
 
@@ -2719,20 +2748,53 @@ function campoEnPunto(e){
 }
 let __campoSel=null;
 function cerrarPopupCampo(){ const p=document.getElementById('popupCampo'); if(p) p.classList.remove('on'); __campoSel=null; }
-function abrirPopupCampo(f){
+function abrirPopupCampo(f,editar){
   __campoSel=f;
   const p=document.getElementById('popupCampo'); if(!p) return;
-  const esc=t=>String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const d=lastFix?dist([lastFix.lat,lastFix.lon],[f.lat,f.lon]):null;
-  p.innerHTML='<h3>⚽ '+esc(f.nombre||'Campo de fútbol')+'</h3><div class="sub">'+(f.nombre?'Campo de fútbol · ':'')+(d!==null?(d>=1000?(d/1000).toFixed(1).replace('.',',')+' km':Math.round(d)+' m')+' en línea recta':'activa el GPS para ver la distancia')+'</div>'
+  const fav=idxCampoFav(f.lat,f.lon)>=0;
+  const dtxt=(d!==null?(d>=1000?(d/1000).toFixed(1).replace('.',',')+' km':Math.round(d)+' m')+' en línea recta':'activa el GPS para ver la distancia');
+  if(editar){
+    p.innerHTML='<h3>✏️ Nombre del campo</h3><div class="sub">Se guarda en favoritos con este nombre</div>'
+      +'<input id="campoNombre" type="text" maxlength="40" value="'+esc(f.nombre||'')+'" placeholder="Ej.: Campo de Juan" style="width:100%;box-sizing:border-box;border:1px solid #c5ccd3;border-radius:10px;padding:12px;font:600 16px system-ui,sans-serif;margin-bottom:10px;background:#fff;color:#2f353b">'
+      +'<div class="acc"><button id="campoCancelar">Cancelar</button><button class="ir" id="campoGuardar">Guardar</button></div>';
+    p.classList.add('on');
+    setTimeout(()=>{ const i=document.getElementById('campoNombre'); if(i){ i.focus(); i.select(); } },80);
+    return;
+  }
+  p.innerHTML='<h3>⚽ '+esc(f.nombre||'Campo de fútbol')+'</h3><div class="sub">'+(f.nombre?'Campo de fútbol · ':'')+dtxt+'</div>'
+    +'<div class="acc" style="margin-bottom:8px"><button id="campoFav">'+(fav?'⭐ Favorito':'☆ Favorito')+'</button><button id="campoRen">✏️ Renombrar</button></div>'
     +'<div class="acc"><button id="campoCerrar">Cerrar</button><button class="ir" id="campoIr">Ir aquí</button></div>';
   p.classList.add('on');
 }
+function guardarCampoFav(f,nombre){
+  const i=idxCampoFav(f.lat,f.lon);
+  if(i>=0) camposFavs[i].nombre=nombre; else { camposFavs.unshift({lat:f.lat,lon:f.lon,nombre:nombre}); if(camposFavs.length>40) camposFavs.length=40; }
+  guardarCamposFavs();
+  if(nombre){ f.nombre=nombre; f.propio=true; }
+  aplicarNombresCamposFavs(false); volcarFutbol();
+}
 document.getElementById('popupCampo').onclick=async (ev)=>{
-  const t=ev.target;
-  if(t.closest('#campoCerrar')){ cerrarPopupCampo(); return; }
-  if(t.closest('#campoIr')){ const f=__campoSel; cerrarPopupCampo(); if(f) await navegarA(f.lat,f.lon); }
+  const t=ev.target, f=__campoSel;
+  if(t.closest('#campoCerrar')||t.closest('#campoCancelar')){ cerrarPopupCampo(); return; }
+  if(!f) return;
+  if(t.closest('#campoIr')){ cerrarPopupCampo(); await navegarA(f.lat,f.lon,f.nombre||undefined); return; }
+  if(t.closest('#campoFav')){
+    const i=idxCampoFav(f.lat,f.lon);
+    if(i>=0){ camposFavs.splice(i,1); guardarCamposFavs(); aplicarNombresCamposFavs(true); }
+    else guardarCampoFav(f,f.nombre||'');
+    abrirPopupCampo(f); return;
+  }
+  if(t.closest('#campoRen')){ abrirPopupCampo(f,true); return; }
+  if(t.closest('#campoGuardar')){
+    const inp=document.getElementById('campoNombre'); const n=(inp&&inp.value||'').trim().slice(0,40);
+    if(n){ guardarCampoFav(f,n); } else { /* nombre vacío: vuelve al automático */
+      const i=idxCampoFav(f.lat,f.lon); if(i>=0){ camposFavs[i].nombre=''; guardarCamposFavs(); } f.nombre=''; f.propio=false; aplicarNombresCamposFavs(false); volcarFutbol(); }
+    abrirPopupCampo(f); return;
+  }
 };
+document.getElementById('popupCampo').addEventListener('keydown',(ev)=>{ if(ev.key==='Enter'){ const b=document.getElementById('campoGuardar'); if(b) b.click(); } });
 map.on('click',(e)=>{
   try{ const f=campoEnPunto(e); if(f) abrirPopupCampo(f); else if(__campoSel) cerrarPopupCampo(); }catch(err){ registrarError('campo-click',err.message); }
 });
@@ -3527,6 +3589,7 @@ function aplicarModoMapa(forzar){
   setInterval(tick,1000);
   setInterval(pintarCoche,400);
 })();
+try{ window.__map=map; }catch(e){ registrarError('mapa',e.message); }
 </script>
 
 <script>
@@ -3538,6 +3601,9 @@ function aplicarModoMapa(forzar){
      un asfalto algo más ancho (ancho = nº de carriles × px por carril, creciente con el zoom) con su borde, por DEBAJO de la línea de ruta, y las rayas discontinuas por ENCIMA.
    · Botón en Ajustes (muestra el estado: cuadros cargados / sin archivo) e interruptor de emergencia ?carriles=0. */
 (function(){
+  /* El mapa se obtiene de window.__map (lo publica el script principal) y NO de la constante global map: así el módulo no depende del ámbito entre scripts */
+  let map=null;
+  function hallarMapa(){ if(!map){ try{ map=window.__map||null; }catch(e){} } return map; }
   let on = !/[?&]carriles=0\b/.test(location.search);
   try{ if(localStorage.getItem('carriles_on')==='0') on=false; }catch(e){}
   const MINZ=14.8;
@@ -3601,11 +3667,11 @@ function aplicarModoMapa(forzar){
   }
   function doc(){
     const b=document.getElementById('btnCarriles'); if(b){ b.textContent='🛣️ Carriles autopista: '+(on?'ON':'OFF')+estadoTxt(); b.classList.toggle('on',on); }
-    try{ if(typeof map!=='undefined' && map.getLayer){ for(const id of ['carriles-borde','carriles-asfalto','carriles-raya']) if(map.getLayer(id)) map.setLayoutProperty(id,'visibility',on?'visible':'none'); } }catch(e){}
+    try{ if(hallarMapa() && map.getLayer){ for(const id of ['carriles-borde','carriles-asfalto','carriles-raya']) if(map.getLayer(id)) map.setLayoutProperty(id,'visibility',on?'visible':'none'); } }catch(e){}
   }
   function tick(){
     try{
-      if(!on || typeof map==='undefined' || !map.getZoom) return;
+      if(!on || !hallarMapa() || !map.getZoom) return;
       if(!crear()) return;
       pintarColores();
       if(map.getZoom()<MINZ-0.5) return;
