@@ -1,0 +1,92 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Prueba de carriles</title>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<style>
+html,body{margin:0;height:100%;background:#eef1f4;font:14px system-ui,sans-serif;overflow:hidden}
+#m{position:absolute;inset:0}
+#bar{position:absolute;left:0;right:0;bottom:0;padding:8px 8px calc(8px + env(safe-area-inset-bottom));background:rgba(255,255,255,.94);display:flex;flex-wrap:wrap;gap:6px;z-index:5}
+#bar button{flex:1 1 30%;padding:11px 6px;border:0;border-radius:10px;background:#e2e6eb;font:inherit;color:#1f2937}
+#bar button.on{background:#2563eb;color:#fff}
+#info{position:absolute;left:8px;top:8px;right:8px;background:rgba(255,255,255,.9);border-radius:8px;padding:6px 10px;z-index:5;font-size:12px}
+</style>
+<div id="m"></div><div id="info">Cargando…</div>
+<div id="bar">
+ <button id="bRuta" class="on">Con ruta</button><button id="bNoche">Día</button><button id="bSig">Otra autopista ▶</button>
+ <button data-z="16.4" class="z on">Zoom 16,4<br><small>autopista (coche)</small></button><button data-z="17.5" class="z">Zoom 17,5</button><button data-z="19" class="z">Zoom 19</button>
+ <button data-p="48" class="p on">Inclinación 48°</button><button data-p="0" class="p">Plano 0°</button>
+</div>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script>
+/* Prueba visual de los carriles de autopista, sin salir del móvil. Va en la misma carpeta que index.html (de él saca la clave de MapTiler)
+   y usa la carpeta autopistas/. Pensada para el móvil: botones para ruta sí/no, día/noche, zoom y vista. */
+const $=id=>document.getElementById(id), info=t=>$('info').textContent=t;
+const PXC=[[14,2.6],[15,3.2],[16,4.6],[17,6],[18,8],[19,11],[20,15],[22,15]];
+const porCarril=p=>{const e=['interpolate',['linear'],['zoom']];for(const [z,w] of PXC)e.push(z,['*',['get',p],w]);return e;};
+const ancho=x=>{const e=['interpolate',['linear'],['zoom']];for(const [z,w] of PXC)e.push(z,['+',['*',['get','n'],w],x]);return e;};
+let map, vias=[], idx=0, noche=false, ruta=true, zoom=16.4, pitch=48;
+function clavePrueba(){ return fetch('index.html',{cache:'no-store'}).then(r=>r.text()).then(t=>{const m=t.match(/MAPTILER_KEY\s*=\s*['"]([^'"]+)['"]/); if(!m) throw new Error('no encuentro la clave en index.html (¿está esta página junto a index.html?)'); return m[1];}); }
+async function cargarVias(lon,lat){
+  const x0=Math.floor((lon-0.15)*2),x1=Math.floor((lon+0.15)*2),y0=Math.floor((lat-0.15)*2),y1=Math.floor((lat+0.15)*2), L=[];
+  for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++){ try{ const r=await fetch('autopistas/'+x+'_'+y+'.json'); if(r.ok) L.push(...await r.json()); }catch(e){} }
+  return L;
+}
+function largo(p){let d=0;for(let i=1;i<p.length;i++)d+=Math.hypot((p[i][0]-p[i-1][0])*81000,(p[i][1]-p[i-1][1])*111000);return d;}
+function elegirVias(L,lon,lat){
+  const c=L.filter(v=>v[1].length>=4&&largo(v[1])>350).map(v=>({v,d:Math.hypot((v[1][0][0]-lon)*81000,(v[1][0][1]-lat)*111000)}));
+  c.sort((a,b)=>b.v[0]-a.v[0]||a.d-b.d);       /* primero las de más carriles, y las más cercanas a Bilbao */
+  const top=c.filter(o=>o.d<12000).sort((a,b)=>(b.v[0]-a.v[0])||(a.d-b.d)).slice(0,25);
+  return top.map(o=>o.v);
+}
+function aplicarColores(){
+  if(!map||!map.getLayer('carriles-raya')) return;
+  const n=noche;
+  try{
+    map.setPaintProperty('carriles-asfalto','line-color',n?'#38414b':'#c6ced7');
+    map.setPaintProperty('carriles-borde','line-color',n?'#232a31':'#a3aebb');
+    map.setPaintProperty('carriles-raya','line-color',n?'#e6ebf1':'#ffffff');
+    map.setPaintProperty('ruta-halo','line-color',n?'#0c1015':'#ffffff');
+    for(const l of map.getStyle().layers){
+      if(l.type==='background') map.setPaintProperty(l.id,'background-color',n?'#151a20':'#eef1f4');
+      if(l.id==='Road network') map.setPaintProperty(l.id,'line-color',n?'#313943':'#ffffff');
+    }
+  }catch(e){}
+}
+function mostrarVia(){
+  if(!map||!map.getSource('carriles')) return;
+  const v=vias[idx]; if(!v) return info('No hay autopistas cargadas: ¿está subida la carpeta autopistas?');
+  const p=v[1], mid=p[Math.floor(p.length/2)], a=p[Math.max(0,Math.floor(p.length/2)-1)], b=p[Math.min(p.length-1,Math.floor(p.length/2)+1)];
+  const rumbo=(Math.atan2((b[0]-a[0])*Math.cos(mid[1]*Math.PI/180),b[1]-a[1])*180/Math.PI+360)%360;
+  const L=Math.min(6,v[0]>=1?v[0]:2), fs=[{type:'Feature',properties:{t:'via',n:L},geometry:{type:'LineString',coordinates:p}}];
+  for(let i=1;i<L;i++) fs.push({type:'Feature',properties:{t:'raya',k:i-L/2},geometry:{type:'LineString',coordinates:p}});
+  map.getSource('carriles').setData({type:'FeatureCollection',features:fs});
+  map.getSource('ruta').setData({type:'Feature',geometry:{type:'LineString',coordinates:p}});
+  map.jumpTo({center:mid,zoom,pitch,bearing:rumbo});
+  info('Vía '+(idx+1)+' de '+vias.length+' · '+(v[0]?v[0]+' carriles (dato OSM)':'sin dato de carriles → 2')+' · zoom '+zoom+' · '+(ruta?'con ruta':'sin ruta')+' · '+(noche?'noche':'día'));
+}
+async function iniciar(){
+  let estilo;
+  try{ const k=await clavePrueba(); estilo='https://api.maptiler.com/maps/basic-v2/style.json?key='+k; }catch(e){ return info('Error: '+e.message); }
+  const centro=[-2.935,43.263];
+  vias=elegirVias(await cargarVias(centro[0],centro[1]),centro[0],centro[1]);
+  map=new maplibregl.Map({container:'m',style:estilo,center:centro,zoom:15,pitch:48,attributionControl:false});
+  map.on('load',()=>{
+    map.addSource('ruta',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+    map.addSource('carriles',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+    const base={'line-cap':'round','line-join':'round'}, bt={'line-cap':'butt','line-join':'round'};
+    map.addLayer({id:'carriles-borde',type:'line',source:'carriles',filter:['==',['get','t'],'via'],layout:bt,paint:{'line-color':'#a3aebb','line-width':ancho(2.4)}});
+    map.addLayer({id:'carriles-asfalto',type:'line',source:'carriles',filter:['==',['get','t'],'via'],layout:bt,paint:{'line-color':'#c6ced7','line-width':ancho(0)}});
+    map.addLayer({id:'ruta-halo',type:'line',source:'ruta',layout:base,paint:{'line-color':'#fff','line-width':['interpolate',['linear'],['zoom'],14,18,16,26,18,34,20,44]}});
+    map.addLayer({id:'ruta-base',type:'line',source:'ruta',layout:base,paint:{'line-color':'#1e88e5','line-width':['interpolate',['linear'],['zoom'],14,10,16,16,18,22,20,30]}});
+    map.addLayer({id:'carriles-raya',type:'line',source:'carriles',filter:['==',['get','t'],'raya'],layout:bt,paint:{'line-color':'#fff','line-dasharray':[3,4],
+      'line-width':['interpolate',['linear'],['zoom'],15,1.2,16,1.5,17,1.8,18.5,2.2,20,3,22,3],'line-offset':porCarril('k')}});
+    aplicarColores(); mostrarVia();
+  });
+}
+function vis(){ if(!map||!map.getLayer('ruta-base')) return; for(const id of ['ruta-halo','ruta-base']) map.setLayoutProperty(id,'visibility',ruta?'visible':'none'); }
+$('bRuta').onclick=function(){ ruta=!ruta; this.classList.toggle('on',ruta); this.textContent=ruta?'Con ruta':'Sin ruta'; vis(); mostrarVia(); };
+$('bNoche').onclick=function(){ noche=!noche; this.textContent=noche?'Noche':'Día'; aplicarColores(); mostrarVia(); };
+$('bSig').onclick=()=>{ idx=(idx+1)%Math.max(1,vias.length); mostrarVia(); };
+document.querySelectorAll('.z').forEach(b=>b.onclick=()=>{ zoom=+b.dataset.z; document.querySelectorAll('.z').forEach(x=>x.classList.toggle('on',x===b)); if(map) map.setZoom(zoom); mostrarVia(); });
+document.querySelectorAll('.p').forEach(b=>b.onclick=()=>{ pitch=+b.dataset.p; document.querySelectorAll('.p').forEach(x=>x.classList.toggle('on',x===b)); if(map) map.setPitch(pitch); mostrarVia(); });
+iniciar();
+</script></html>
