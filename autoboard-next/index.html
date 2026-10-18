@@ -394,7 +394,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v153</div>
+  <div class="seccion">Versión v154</div>
 </div>
 
 <div id="diag">
@@ -1287,13 +1287,21 @@ let simEsBucle=true;
 const SIM_ORIGEN_DEFECTO=[43.2630,-2.9350];
 const SIM_DESTINO_DEFECTO=[43.3010,-2.9105];
 function mostrarEstadoSim(txt){const el=document.getElementById('rSim');if(el) el.innerHTML = txt;}
+let simArrancando=false;
+/* Durante la simulación el GPS real se apaga y se ignoran sus fixes: si no, mezclaba tu posición real (casa) con la simulada y el coche, el mapa y la velocidad saltaban. */
 async function iniciarSimulacion(preset){
+  if(simArrancando) return;
+  simArrancando=true;
+  try{ await iniciarSimulacionInt(preset); } finally { simArrancando=false; }
+}
+async function iniciarSimulacionInt(preset){
   if(simulando){ alert('Simulación ya en marcha. Detén primero.'); return; }
   if(!preset){
     const kmhStr = prompt('Velocidad de simulación en km/h:', String(simVelocidad));
     if(kmhStr === null) return;
     simVelocidad = Math.max(10, Math.min(180, parseInt(kmhStr,10) || 60));
   }
+  if(watchId!==null){ try{ navigator.geolocation.clearWatch(watchId); }catch(e){} watchId=null; }
   const SIM_O = preset ? preset.o : SIM_ORIGEN_DEFECTO, SIM_D = preset ? preset.d : SIM_DESTINO_DEFECTO;
   mostrarEstadoSim('<span class="aviso">calculando ruta…</span>');
   const url = 'https://api.tomtom.com/routing/1/calculateRoute/'+SIM_O[0]+','+SIM_O[1]+':'+SIM_D[0]+','+SIM_D[1]+'/json?key='+TT+'&routeType=fastest&traffic=false&travelMode=car&instructionsType=text&language=es-ES';
@@ -2381,7 +2389,7 @@ document.getElementById('btnGPS').onclick=function(){
       err=>{ cargarCargadores(43.2678,-2.9387); },
       {enableHighAccuracy:true,maximumAge:0,timeout:10000}
     );
-    watchId=navigator.geolocation.watchPosition(onFix,e=>{
+    watchId=navigator.geolocation.watchPosition(p=>{ if(!simulando && !simArrancando) onFix(p); },e=>{
       document.getElementById('g1').innerHTML='<span class="mal">error: '+e.message+'</span>';
       registrarError('gps',e.message);
     },{enableHighAccuracy:true,maximumAge:0,timeout:15000});
