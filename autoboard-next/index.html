@@ -395,7 +395,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v155</div>
+  <div class="seccion">Versión v156</div>
 </div>
 
 <div id="diag">
@@ -679,6 +679,7 @@ const CAM = {
   /* --- modo "perspectiva" (autopista / carretera general con la próxima maniobra lejos) --- */
   PITCH_AUTOPISTA:50,       /* menos inclinado: se ve más ruta por delante */
   ZOOM_AUTOPISTA_EXTRA:-1.6,/* y más alejado (zoom restado al de crucero) */
+  PX_S_MAX:480,             /* velocidad máxima con que el mapa puede pasar por la pantalla (px/s): limita el zoom de maniobra a velocidad alta */
   AUT_V_MIN_KMH:55, AUT_V_MAX_KMH:90,       /* el modo entra gradualmente entre estas velocidades */
   AUT_D_MIN_M:600, AUT_D_MAX_M:2200,        /* ...y entre estas distancias a la próxima maniobra (cerca = no) */
   /* --- diagnóstico: abrir con ?diag=1 --- */
@@ -2295,7 +2296,12 @@ function bucleSeguimiento(ts){
   const fVel=camSmooth(camClamp((vZoom*3.6-CAM.AUT_V_MIN_KMH)/(CAM.AUT_V_MAX_KMH-CAM.AUT_V_MIN_KMH),0,1));
   const fDis=camSmooth(camClamp((dNext-CAM.AUT_D_MIN_M)/(CAM.AUT_D_MAX_M-CAM.AUT_D_MIN_M),0,1));
   const fAut=fVel*fDis*(1-mn.peso);
-  const zObj=zBase+mn.extra+CAM.ZOOM_AUTOPISTA_EXTRA*fAut;
+  let zObj=zBase+mn.extra+CAM.ZOOM_AUTOPISTA_EXTRA*fAut;
+  /* tope por velocidad: acercar el mapa multiplica la velocidad con que pasa por la pantalla (px/s = m/s × 2^zoom / (78271·cos(lat))). A 100 km/h el zoom 21,2
+     de una maniobra daba ~1.200 px/s (parece que la cámara se dispara); se limita a CAM.PX_S_MAX px/s. En ciudad (≤ ~45 km/h) no cambia nada. */
+  const zTope=Math.log2(CAM.PX_S_MAX*78271.5*Math.cos(pred.lat*Math.PI/180)/Math.max(vSuave,4));
+  if(zObj>zTope) zObj=Math.max(zBase+CAM.ZOOM_AUTOPISTA_EXTRA*fAut, zTope);
+  window.__manPeso=mn.peso;
   const pCiudad=PITCH_NAV_BASE+CAM.PITCH_MAN_DELTA*mn.peso;
   const pObj=pitchOn ? pCiudad+(CAM.PITCH_AUTOPISTA-pCiudad)*fAut : 0;   /* respeta el botón 📐 Pitch de Ajustes */
   camDiag.fAut=fAut;
@@ -3797,7 +3803,8 @@ function anchoRutaPx(z){ const P=[[14,10],[16,16],[18,22],[20,30]]; if(z<=P[0][0
    al terminar la maniobra el zoom vuelve a bajar y el coche recupera su tamaño. Así la maniobra parece aún más ampliada. */
 const COCHE_ENCOGE={ Z0:19.4, Z1:21.2, MIN:0.55 };
 function encogeManiobra(z){
-  const t=Math.min(1,Math.max(0,(z-COCHE_ENCOGE.Z0)/(COCHE_ENCOGE.Z1-COCHE_ENCOGE.Z0))), e=t*t*(3-2*t);
+  /* el encogimiento sigue el "peso" de la maniobra de la cámara (0 → 1), no el zoom absoluto: así también encoge en autopista, donde el zoom está limitado por la velocidad */
+  const t=(typeof window.__manPeso==='number') ? Math.min(1,Math.max(0,window.__manPeso)) : Math.min(1,Math.max(0,(z-COCHE_ENCOGE.Z0)/(COCHE_ENCOGE.Z1-COCHE_ENCOGE.Z0))), e=t*t*(3-2*t);
   return 1-(1-COCHE_ENCOGE.MIN)*e;
 }
 let escalaAplicada=0;
