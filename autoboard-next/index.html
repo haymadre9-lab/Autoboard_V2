@@ -382,6 +382,11 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste on" id="btnVoz">🔊 Sonido: Solo radares</button>
   <button class="ajuste" id="btnVozVol">🔉 Volumen avisos: 100 %</button>
   <button class="ajuste on" id="btnVozRadar">📡 Aviso de radar: Campana + voz</button>
+  <div class="seccion">Simulación (prueba en casa)</div>
+  <button class="ajuste" id="btnSimCastro">▶ Simular A-8: Bilbao → Castro Urdiales</button>
+  <button class="ajuste" id="btnSimDurango">▶ Simular A-8/AP-8: Bilbao → Durango</button>
+  <button class="ajuste" id="btnSimVel">⏱ Velocidad simulación: 100 km/h</button>
+  <button class="ajuste peligro" id="btnSimStop">⏹ Detener simulación</button>
   <div class="seccion">Coche</div>
   <button class="ajuste" id="btnCoche">🚗 Coche: Flecha</button>
   <div id="filaColorCoche"></div>
@@ -389,7 +394,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v152</div>
+  <div class="seccion">Versión v153</div>
 </div>
 
 <div id="diag">
@@ -1282,13 +1287,16 @@ let simEsBucle=true;
 const SIM_ORIGEN_DEFECTO=[43.2630,-2.9350];
 const SIM_DESTINO_DEFECTO=[43.3010,-2.9105];
 function mostrarEstadoSim(txt){const el=document.getElementById('rSim');if(el) el.innerHTML = txt;}
-async function iniciarSimulacion(){
+async function iniciarSimulacion(preset){
   if(simulando){ alert('Simulación ya en marcha. Detén primero.'); return; }
-  const kmhStr = prompt('Velocidad de simulación en km/h:', String(simVelocidad));
-  if(kmhStr === null) return;
-  simVelocidad = Math.max(10, Math.min(180, parseInt(kmhStr,10) || 60));
+  if(!preset){
+    const kmhStr = prompt('Velocidad de simulación en km/h:', String(simVelocidad));
+    if(kmhStr === null) return;
+    simVelocidad = Math.max(10, Math.min(180, parseInt(kmhStr,10) || 60));
+  }
+  const SIM_O = preset ? preset.o : SIM_ORIGEN_DEFECTO, SIM_D = preset ? preset.d : SIM_DESTINO_DEFECTO;
   mostrarEstadoSim('<span class="aviso">calculando ruta…</span>');
-  const url = 'https://api.tomtom.com/routing/1/calculateRoute/'+SIM_ORIGEN_DEFECTO[0]+','+SIM_ORIGEN_DEFECTO[1]+':'+SIM_DESTINO_DEFECTO[0]+','+SIM_DESTINO_DEFECTO[1]+'/json?key='+TT+'&routeType=fastest&traffic=false&travelMode=car&instructionsType=text&language=es-ES';
+  const url = 'https://api.tomtom.com/routing/1/calculateRoute/'+SIM_O[0]+','+SIM_O[1]+':'+SIM_D[0]+','+SIM_D[1]+'/json?key='+TT+'&routeType=fastest&traffic=false&travelMode=car&instructionsType=text&language=es-ES';
   try{
     const r = await fetch(url);
     const j = await r.json();
@@ -1420,6 +1428,23 @@ let camposFavs = (()=>{ try{ return JSON.parse(localStorage.getItem('campos_favs
 function guardarCamposFavs(){ try{ localStorage.setItem('campos_favs', JSON.stringify(camposFavs)); }catch(e){} }
 function idxCampoFav(lat,lon){ return camposFavs.findIndex(c=>dist([c.lat,c.lon],[lat,lon])<30); }
 function toggleFavDir(item){const i = esFavDir(item.lat, item.lon);if(i >= 0){ favsDir.splice(i,1); }else {favsDir.unshift(item);if(favsDir.length > 8) favsDir.length = 8;}guardarFavsDir();}
+
+/* ---- Simulación desde Ajustes: rutas por autopista (la ruta la calcula TomTom, así que lleva sus maniobras reales: incorporaciones, salidas, rotondas) ---- */
+const SIM_PRESETS={
+  castro:{ o:[43.2630,-2.9350], d:[43.3846,-3.2205] },     /* Bilbao -> Castro Urdiales por la A-8 (3 carriles) */
+  durango:{ o:[43.2630,-2.9350], d:[43.1714,-2.6331] }     /* Bilbao -> Durango por A-8/AP-8 */
+};
+const SIM_VELS=[40,60,90,100,120,150];
+(function(){
+  const bv=document.getElementById('btnSimVel'); let iv=3;
+  try{ const g=parseInt(localStorage.getItem('sim_vel'),10); if(SIM_VELS.indexOf(g)>=0) iv=SIM_VELS.indexOf(g); }catch(e){}
+  const pintar=()=>{ if(bv) bv.textContent='⏱ Velocidad simulación: '+SIM_VELS[iv]+' km/h'; };
+  pintar(); if(bv) bv.onclick=()=>{ iv=(iv+1)%SIM_VELS.length; try{ localStorage.setItem('sim_vel',String(SIM_VELS[iv])); }catch(e){} pintar(); };
+  const lanzar=(k)=>()=>{ if(simulando){ alert('Simulación ya en marcha. Pulsa "Detener simulación" primero.'); return; } simVelocidad=SIM_VELS[iv]; panelA.classList.remove('on'); iniciarSimulacion(SIM_PRESETS[k]); };
+  const b1=document.getElementById('btnSimCastro'), b2=document.getElementById('btnSimDurango'), b3=document.getElementById('btnSimStop');
+  if(b1) b1.onclick=lanzar('castro'); if(b2) b2.onclick=lanzar('durango');
+  if(b3) b3.onclick=()=>{ if(simulando) detenerSimulacion(); panelA.classList.remove('on'); };
+})();
 
 const barraB=document.getElementById('barraBusqueda');
 const inputB=document.getElementById('inputBusqueda');
