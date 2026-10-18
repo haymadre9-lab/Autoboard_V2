@@ -385,6 +385,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Simulación (prueba en casa)</div>
   <button class="ajuste" id="btnSimCastro">▶ Simular A-8: Bilbao → Castro Urdiales</button>
   <button class="ajuste" id="btnSimDurango">▶ Simular A-8/AP-8: Bilbao → Durango</button>
+  <button class="ajuste" id="btnSimPrueba">▶ Simular con maniobras cada 1,5 km (prueba de zoom)</button>
   <button class="ajuste" id="btnSimVel">⏱ Velocidad simulación: 100 km/h</button>
   <button class="ajuste peligro" id="btnSimStop">⏹ Detener simulación</button>
   <div class="seccion">Coche</div>
@@ -394,7 +395,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v154</div>
+  <div class="seccion">Versión v155</div>
 </div>
 
 <div id="diag">
@@ -1327,6 +1328,12 @@ async function iniciarSimulacionInt(preset){
       return {metro:metroFinal,calle:it.street||'',msg:it.message||'',maneuver:ttMan(it),
               hw:/autopista|autov[ií]a|\b(a|ap)-?\d/i.test(it.street||''),limiteKmh:limiteKmh,lanes:lanes};
     });
+    if(preset && preset.fake){   /* prueba de zoom: maniobras ficticias cada 1,5 km sobre la misma ruta (giro, mantente, rotonda, giro) */
+      const tot=routeCumDist[routeCumDist.length-1], tipos=[['Gira a la derecha','TURN_RIGHT'],['Mantente a la derecha','KEEP_RIGHT'],['Toma la rotonda','ROUNDABOUT_CROSS'],['Gira a la izquierda','TURN_LEFT']], extra=[];
+      for(let m=1500,k=0;m<tot-300;m+=1500,k++){ const t=tipos[k%4]; extra.push({metro:m,calle:'A-8',msg:t[0],maneuver:ttMan({maneuver:t[1]}),hw:true,limiteKmh:120,lanes:[]}); }
+      const ult=steps.length?[steps[steps.length-1]]:[];
+      steps=(steps.length?[steps[0]]:[]).concat(extra,ult);
+    }
     stepIdx=0; routeProgIdx=0; ultimoStepPintado='';
     resetCamRuta();
 
@@ -1440,7 +1447,8 @@ function toggleFavDir(item){const i = esFavDir(item.lat, item.lon);if(i >= 0){ f
 /* ---- Simulación desde Ajustes: rutas por autopista (la ruta la calcula TomTom, así que lleva sus maniobras reales: incorporaciones, salidas, rotondas) ---- */
 const SIM_PRESETS={
   castro:{ o:[43.2630,-2.9350], d:[43.3846,-3.2205] },     /* Bilbao -> Castro Urdiales por la A-8 (3 carriles) */
-  durango:{ o:[43.2630,-2.9350], d:[43.1714,-2.6331] }     /* Bilbao -> Durango por A-8/AP-8 */
+  durango:{ o:[43.2630,-2.9350], d:[43.1714,-2.6331] },    /* Bilbao -> Durango por A-8/AP-8 */
+  prueba:{ o:[43.2630,-2.9350], d:[43.3846,-3.2205], fake:true }   /* igual que Castro, con maniobras ficticias cada 1,5 km para ver el zoom */
 };
 const SIM_VELS=[40,60,90,100,120,150];
 (function(){
@@ -1449,8 +1457,8 @@ const SIM_VELS=[40,60,90,100,120,150];
   const pintar=()=>{ if(bv) bv.textContent='⏱ Velocidad simulación: '+SIM_VELS[iv]+' km/h'; };
   pintar(); if(bv) bv.onclick=()=>{ iv=(iv+1)%SIM_VELS.length; try{ localStorage.setItem('sim_vel',String(SIM_VELS[iv])); }catch(e){} pintar(); };
   const lanzar=(k)=>()=>{ if(simulando){ alert('Simulación ya en marcha. Pulsa "Detener simulación" primero.'); return; } simVelocidad=SIM_VELS[iv]; panelA.classList.remove('on'); iniciarSimulacion(SIM_PRESETS[k]); };
-  const b1=document.getElementById('btnSimCastro'), b2=document.getElementById('btnSimDurango'), b3=document.getElementById('btnSimStop');
-  if(b1) b1.onclick=lanzar('castro'); if(b2) b2.onclick=lanzar('durango');
+  const b1=document.getElementById('btnSimCastro'), b2=document.getElementById('btnSimDurango'), b3=document.getElementById('btnSimStop'), b4=document.getElementById('btnSimPrueba');
+  if(b4) b4.onclick=lanzar('prueba'); if(b1) b1.onclick=lanzar('castro'); if(b2) b2.onclick=lanzar('durango');
   if(b3) b3.onclick=()=>{ if(simulando) detenerSimulacion(); panelA.classList.remove('on'); };
 })();
 
