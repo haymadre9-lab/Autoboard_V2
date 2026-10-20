@@ -412,7 +412,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v158</div>
+  <div class="seccion">Versión v159</div>
 </div>
 
 <div id="diag">
@@ -656,9 +656,9 @@ const CAM = {
   /* --- suavizado (segundos) --- */
   TAU_CENTER:0.45,        /* absorbe la CORRECCIÓN de cada fix GPS (la posición ya se extrapola, así no añade retraso) */
   TAU_RETORNO:0.70,       /* vuelta suave a seguir tras tocar el mapa / pulsar 🎯 */
-  TAU_BEARING:0.40,       /* rumbo de la CÁMARA (mapa): más lento que la flecha, así la flecha se ve girar */
-  TAU_BEARING_LIBRE:0.55, /* rumbo siguiendo solo el GPS (sin ruta) */
-  BEARING_MAX_DEG_S:140,  /* velocidad angular máxima de la cámara */
+  TAU_BEARING:0.65,       /* rumbo de la CÁMARA (mapa): más lento que la flecha, así la flecha se ve girar */
+  TAU_BEARING_LIBRE:0.85, /* rumbo siguiendo solo el GPS (sin ruta) */
+  BEARING_MAX_DEG_S:105,  /* velocidad angular máxima de la cámara */
   TAU_ZOOM_IN:0.45, TAU_ZOOM_OUT:0.90,  /* acercar rápido, alejar con calma */
   TAU_PITCH:0.40,
   TAU_VEL:0.90,           /* velocidad suavizada (anticipación del rumbo, distancia de aproximación) */
@@ -674,7 +674,7 @@ const CAM = {
   /* --- el coche se dibuja en la calle real aunque la polilínea de TomTom vaya por fuera --- */
   LATERAL_GPS:true, LATERAL_MAX_M:6, LATERAL_PESO:0, LATERAL_ACC_M:9, TAU_LATERAL:2.5,   /* v107: casi centrado en la ruta (antes 14 m × 0,8). v109: 0 = sobre la ruta, exacto */
   LOOKAHEAD_S:0, LOOKAHEAD_MIN_M:4, LOOKAHEAD_MAX_M:4,   /* mirada corta: la ruta no se desvía del coche en las curvas */
-  TAU_FLECHA:0.15, FLECHA_MAX_DEG:55, FLECHA_TILT:52, TANGENTE_M:4,       /* flecha del coche: sigue la tangente de la ruta bajo el coche */
+  TAU_FLECHA:0.25, FLECHA_MAX_DEG:55, FLECHA_TILT:52, TANGENTE_M:4,       /* flecha del coche: sigue la tangente de la ruta bajo el coche */
   RUTA_COLA_M:4, RUTA_HORIZONTE_M:5000, TRIM_MS:120,      /* azul: empieza justo bajo la flecha, se recorta cada ~120 ms */
   /* --- rumbo GPS filtrado: ventana por TIEMPO, no por nº de fixes --- */
   HEADING_WINDOW_MS:3500, HEADING_MAX_MUESTRAS:16,
