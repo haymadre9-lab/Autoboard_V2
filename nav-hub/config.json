@@ -1,6 +1,6 @@
 {
  "v": 1,
- "t": 1792246006509,
+ "t": 1792564442477,
  "tabs": [
   {
    "n": "AutoBoard",
@@ -31,6 +31,12 @@
    "u": "https://codriver.io",
    "c": "#34a853",
    "i": "🗺️"
+  },
+  {
+   "n": "Teslaunch",
+   "u": "https://apkapp-driver.github.io/Teslalaunch/",
+   "c": "#1f6feb",
+   "i": "📡"
   }
  ]
 }
