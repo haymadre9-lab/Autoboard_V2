@@ -1,6 +1,6 @@
 {
  "v": 1,
- "t": 1792564442477,
+ "t": 1792884741516,
  "tabs": [
   {
    "n": "AutoBoard",
@@ -37,6 +37,12 @@
    "u": "https://apkapp-driver.github.io/Teslalaunch/",
    "c": "#1f6feb",
    "i": "📡"
+  },
+  {
+   "n": "HudMap3D",
+   "u": "https://haymadre9-lab.github.io/hudMapa3D/",
+   "c": "#00afaa",
+   "i": "⚡"
   }
  ]
 }
