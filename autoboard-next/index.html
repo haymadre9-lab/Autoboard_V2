@@ -141,12 +141,19 @@ body.modo-solomapa #luzCoche{display:none !important}
 #radarInfo .dist{font:800 18px/1.2 system-ui,sans-serif;color:#4a525b;background:rgba(236,239,242,.94);border-radius:8px;padding:8px 14px;border:2px solid #b4bcc5}
 #radarInfo .lim{display:none}
 #popupCampo{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;z-index:23;display:none;min-width:260px;max-width:90vw;background:rgba(255,255,255,.97);border:1px solid #d5dae0;border-radius:16px;padding:14px 16px;box-shadow:0 6px 24px rgba(90,98,108,.3);color:#4a525b;font:600 14px/1.35 system-ui,sans-serif}
+#popupDestino{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;z-index:23;display:none;min-width:260px;max-width:90vw;background:rgba(255,255,255,.97);border:1px solid #d5dae0;border-radius:16px;padding:14px 16px;box-shadow:0 6px 24px rgba(90,98,108,.3);color:#4a525b;font:600 14px/1.35 system-ui,sans-serif}
 #popupCampo.on{display:block}
+#popupDestino.on{display:block}
 #popupCampo h3{margin:0 0 2px;font:800 18px/1.2 system-ui,sans-serif;color:#3f474f}
+#popupDestino h3{margin:0 0 2px;font:800 18px/1.2 system-ui,sans-serif;color:#3f474f}
 #popupCampo .sub{color:#8b949e;font-size:13px;margin-bottom:10px}
+#popupDestino .sub{color:#8b949e;font-size:13px;margin-bottom:10px}
 #popupCampo .acc{display:flex;gap:8px}
+#popupDestino .acc{display:flex;gap:8px}
 #popupCampo .acc button{flex:1;border-radius:12px;border:1px solid #d5dae0;background:#f4f6f8;color:#4a525b;font:800 15px system-ui,sans-serif;padding:12px;cursor:pointer}
+#popupDestino .acc button{flex:1;border-radius:12px;border:1px solid #d5dae0;background:#f4f6f8;color:#4a525b;font:800 15px system-ui,sans-serif;padding:12px;cursor:pointer}
 #popupCampo .acc button.ir{background:#1e88e5;border-color:#1e88e5;color:#fff}
+#popupDestino .acc button.ir{background:#1e88e5;border-color:#1e88e5;color:#fff}
 #barraRuta{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:21;display:none;align-items:center;gap:14px;background:rgba(255,255,255,.86);border:1px solid rgba(180,188,197,.7);border-radius:16px;padding:7px 8px 7px 16px;box-shadow:0 3px 14px rgba(90,98,108,.22);color:#4a525b;font:700 15px/1.1 system-ui,sans-serif;white-space:nowrap;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
 #barraRuta.on{display:flex}
 #barraRuta .d{display:flex;flex-direction:column;gap:2px;align-items:flex-start}
@@ -290,7 +297,7 @@ body.noche #barraRuta .sep{background:#3a434c}
 body.noche #barraRuta .d small{color:#9aa5b1}
 body.noche #btnAlt,body.noche #btnEnviar{background:#2d353d;border-color:#3a434c;color:#9aa5b1}
 body.noche #btnAlt.alerta{background:#1d3550;border-color:#2f6aa6;color:#6db3f2}
-body.noche #panelAlt,body.noche #popupCampo{background:rgba(35,42,49,.97);border-color:#3a434c;color:#d5dce3;box-shadow:0 6px 24px rgba(0,0,0,.5)}
+body.noche #panelAlt,body.noche #popupCampo,body.noche #popupDestino{background:rgba(35,42,49,.97);border-color:#3a434c;color:#d5dce3;box-shadow:0 6px 24px rgba(0,0,0,.5)}
 body.noche #popupCampo h3{color:#e8edf2}
 body.noche #panelAlt .alt{background:#2d353d}
 body.noche #panelAlt .alt.sel{background:#1f3550}
@@ -397,8 +404,15 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste on" id="btnAvisosRadares">📸 Avisos radares: ON</button>
   <div class="seccion">Cargadores</div>
   <button class="ajuste" id="btnListaCargadores">⚡ Ver 10 más cercanos</button>
+  <div class="seccion">Enlace entre dispositivos</div>
+  <input id="enlaceCodigo" type="text" maxlength="24" placeholder="Código (mín. 6 letras o números, igual en todas las apps)" autocomplete="off" autocapitalize="off" style="width:100%;box-sizing:border-box;border:1px solid #c5ccd3;border-radius:10px;padding:11px;font:600 15px system-ui,sans-serif;margin:2px 0 6px;background:#fff;color:#2f353b">
+  <button class="ajuste" id="enlaceGenerar">🎲 Generar código nuevo</button>
+  <button class="ajuste" id="enlaceCopiar">📋 Copiar código</button>
+  <div id="enlaceEstado" style="font-size:12px;color:#8d99a5;padding:2px 4px 8px">Sin código: no enlazado</div>
   <div class="seccion">Fútbol</div>
   <button class="ajuste" id="btnListaCampos">⚽ Mis campos favoritos (máx. 10)</button>
+  <div class="seccion">GPS</div>
+  <button class="ajuste on" id="btnGpsAuto">📍 GPS al abrir: ON</button>
   <div class="seccion">Mapa</div>
   <button class="ajuste" id="btnModoMapa">🌙 Mapa: Auto</button>
   <button class="ajuste on" id="btnLuces">💡 Luces de noche: ON</button>
@@ -419,7 +433,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v161</div>
+  <div class="seccion">Versión v164</div>
 </div>
 
 <div id="diag">
@@ -1495,7 +1509,7 @@ function esFavDir(lat,lon){return favsDir.findIndex(f => Math.abs(f.lat-lat) < 1
 let camposFavs = (()=>{ try{ return JSON.parse(localStorage.getItem('campos_favs')||'[]')||[]; }catch(e){ return []; } })();
 function guardarCamposFavs(){ try{ localStorage.setItem('campos_favs', JSON.stringify(camposFavs)); }catch(e){} }
 function idxCampoFav(lat,lon){ return camposFavs.findIndex(c=>dist([c.lat,c.lon],[lat,lon])<30); }
-function toggleFavDir(item){const i = esFavDir(item.lat, item.lon);if(i >= 0){ favsDir.splice(i,1); }else {favsDir.unshift(item);if(favsDir.length > 8) favsDir.length = 8;}guardarFavsDir();}
+function toggleFavDir(item){const i = esFavDir(item.lat, item.lon);if(i >= 0){ favsDir.splice(i,1); }else {favsDir.unshift(item);if(favsDir.length > 12) favsDir.length = 12;}guardarFavsDir();}
 
 /* ---- Simulación desde Ajustes: rutas por autopista (la ruta la calcula TomTom, así que lleva sus maniobras reales: incorporaciones, salidas, rotondas) ---- */
 const SIM_PRESETS={
@@ -1525,12 +1539,13 @@ function pintarFavoritos(){
     sugs.innerHTML = '<div class="sug" style="color:#8d99a5;cursor:default">Sin favoritos guardados.<br>Busca una dirección y pulsa ☆ para guardarla.</div>';
     sugs.classList.add('on');return;
   }
-  const cinco = favsDir.slice(0,5);
+  const cinco = favsDir.slice(0,12);
   sugs.innerHTML = cinco.map((f,i)=>{
     const dir = f.dir || '';
     return '<div class="sug sugFav" data-idx="'+i+'" style="display:flex;justify-content:space-between;align-items:center;gap:10px">'
       +'<div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">⭐ '+escapeHTML(f.nombre)+'</div>'
       +(dir?'<div class="sub" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHTML(dir)+'</div>':'')+'</div>'
+      +'<button class="editFav" data-idx="'+i+'" title="Editar" style="background:transparent;border:0;color:#8d99a5;font-size:18px;cursor:pointer;padding:6px 8px;flex:0 0 auto">✏️</button>'
       +'<button class="quitarFav" data-idx="'+i+'" title="Quitar de favoritos" style="background:transparent;border:0;color:#ffd166;font-size:20px;cursor:pointer;padding:6px 10px;flex:0 0 auto"><svg class="xsvg" viewBox="0 0 12 12" width="1em" height="1em" aria-hidden="true"><path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></button>'
       +'</div>';
   }).join('') + camposFavs.map((c,i)=>
@@ -1548,10 +1563,13 @@ function pintarFavoritos(){
   });
   sugs.querySelectorAll('.sugFav').forEach(el=>{
     el.onclick = (ev)=>{
-      if(ev.target.classList.contains('quitarFav')) return;
+      if(ev.target.closest('.quitarFav')||ev.target.closest('.editFav')) return;
       const f = cinco[Number(el.dataset.idx)];
       barraB.classList.remove('on');sugs.classList.remove('on');inputB.value='';navegarA(f.lat, f.lon, f.dir||f.nombre);
     };
+  });
+  sugs.querySelectorAll('.editFav').forEach(btn=>{
+    btn.onclick = (ev)=>{ ev.stopPropagation(); const i=Number(btn.dataset.idx), f=cinco[i]; if(f) Enlace.popup({nombre:f.nombre,dir:f.dir||'',lat:f.lat,lon:f.lon},'fav',i); };
   });
   sugs.querySelectorAll('.quitarFav').forEach(btn=>{
     btn.onclick = (ev)=>{
@@ -2480,6 +2498,169 @@ document.getElementById('btnGPS').onclick=function(){
     if(aviso) aviso.classList.remove('oculto');
   }
 };
+/* ============ Enlace entre dispositivos + destinos compartidos (Maps / Waze) ============
+   · Mismo protocolo y mismo código que hudMapa3D: un tema público de ntfy.sh llamado "d3dclone-<código>". Solo viaja el destino (nombre + coordenadas).
+     Lo que aceptas en un dispositivo (buscador, favorito, casa…) aparece en los demás con el mismo código y arranca la ruta.
+   · Compartir desde Google Maps / Waze: con la app instalada (PWA) sale en el menú "Compartir"; también vale pegar el enlace en el buscador.
+   · Antes de ir (o guardar) se puede editar nombre y dirección; la dirección editada se vuelve a buscar. */
+const Enlace=(function(){
+  const BASE='https://ntfy.sh/', NUM='(-?\\d{1,3}\\.\\d+)';
+  const rd=(k,d)=>{ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } };
+  const wr=(k,v)=>{ try{ localStorage.setItem(k,v); }catch(e){} };
+  const E={ code:rd('d3d.linkcode',''), device:rd('d3d.linkdev','')||(()=>{ const d=Math.random().toString(36).slice(2,10); wr('d3d.linkdev',d); return d; })(), es:null, gen:0, estado:'', pendiente:null };
+  E.topic=()=>'d3dclone-'+E.code.toLowerCase().replace(/[^a-z0-9]/g,'');
+  E.valido=()=>E.code.replace(/[^a-zA-Z0-9]/g,'').length>=6;
+  E.codigoAzar=()=>{ const a='abcdefghjkmnpqrstuvwxyz23456789'; let s=''; for(let i=0;i<10;i++) s+=a[Math.floor(Math.random()*a.length)]; return s; };
+  E.setCodigo=(c)=>{ E.code=(c||'').trim(); wr('d3d.linkcode',E.code); E.iniciar(); };
+  E.publicar=(p)=>{
+    if(!E.valido()||!p||!Number.isFinite(p.lat)||!Number.isFinite(p.lon)) return;
+    const body=JSON.stringify({d:E.device,n:p.nombre||'Destino',la:p.lat,lo:p.lon});
+    fetch(BASE+E.topic(),{method:'POST',body,headers:{'Content-Type':'text/plain'}}).catch(()=>{});
+  };
+  /* un destino recibido de otro dispositivo: ruta directa (si aún no hay GPS, en cuanto lo haya) */
+  E.alRecibir=(p)=>{
+    avisoEnvio('📲 Destino recibido: '+String(p.nombre).split(',')[0]);
+    E.pendiente={p,t:Date.now()};
+    E.intentar();
+  };
+  E.intentar=()=>{
+    const q=E.pendiente; if(!q) return;
+    if(Date.now()-q.t>600000){ E.pendiente=null; return; }
+    if(typeof lastFix!=='undefined' && lastFix){ E.pendiente=null; navegarA(q.p.lat,q.p.lon,q.p.nombre,'enlace'); }
+  };
+  setInterval(()=>E.intentar(),1500);
+  E.iniciar=()=>{
+    if(E.es){ E.es.close(); E.es=null; }
+    const gen=++E.gen;
+    if(!E.valido()){ E.estado=E.code?'Código demasiado corto (mín. 6)':'Sin código: no enlazado'; E.pintar&&E.pintar(); return; }
+    E.estado='Conectando…'; E.pintar&&E.pintar();
+    let es; try{ es=new EventSource(BASE+E.topic()+'/sse?since=3h'); }catch(e){ E.estado='Sin conexión'; E.pintar&&E.pintar(); return; }
+    E.es=es;
+    es.onopen=()=>{ if(gen===E.gen){ E.estado='Enlazado · código '+E.code; E.pintar&&E.pintar(); } };
+    es.onerror=()=>{ if(gen===E.gen){ E.estado='Sin conexión (reintentando)'; E.pintar&&E.pintar(); } };
+    es.onmessage=(ev)=>{
+      if(gen!==E.gen) return;
+      try{
+        const m=JSON.parse(ev.data); if(m.event!=='message') return;
+        const t=+m.time||0, ult=+rd('d3d.linklast','0'); if(t<=ult) return;
+        const j=JSON.parse(m.message); wr('d3d.linklast',String(t));
+        if(j.d===E.device) return;
+        if(typeof j.la==='number'&&typeof j.lo==='number') E.alRecibir({nombre:String(j.n||'Destino'),lat:j.la,lon:j.lo});
+      }catch(e){}
+    };
+  };
+
+  /* ---- leer lo que llega de Google Maps / Waze ---- */
+  function geohash(h){ const B='0123456789bcdefghjkmnpqrstuvwxyz'; let la=[-90,90],lo=[-180,180],par=true; for(const ch of h.toLowerCase()){ const v=B.indexOf(ch); if(v<0) return null; for(let b=4;b>=0;b--){ const bit=(v>>b)&1, r=par?lo:la, m=(r[0]+r[1])/2; if(bit) r[0]=m; else r[1]=m; par=!par; } } return [(la[0]+la[1])/2,(lo[0]+lo[1])/2]; }
+  function coordenadasEn(texto){
+    let u=texto; try{ u=decodeURIComponent(texto); }catch(e){}
+    for(const re of ['!3d'+NUM+'!4d'+NUM,'@'+NUM+','+NUM,'[?&](?:q|query|ll|center|destination|daddr)='+NUM+',\\s*'+NUM,'geo:'+NUM+','+NUM,'^\\s*'+NUM+'\\s*[,; ]\\s*'+NUM+'\\s*$']){
+      const m=new RegExp(re).exec(u); if(!m) continue;
+      const la=parseFloat(m[1]), lo=parseFloat(m[2]); if(Math.abs(la)<=90&&Math.abs(lo)<=180) return [la,lo];
+    }
+    const w=/waze\.com\/ul\/h([0-9b-hjkmnp-z]{5,})/i.exec(u);       /* enlace corto de Waze: el trozo tras /ul/h es un geohash */
+    if(w){ const g=geohash(w[1]); if(g&&Math.abs(g[0])<=90) return g; }
+    return null;
+  }
+  function interpretar(raw){
+    const texto=(raw||'').trim(), url=(/(https?:\/\/\S+|geo:\S+)/i.exec(texto)||[])[0]||null;
+    const c=coordenadasEn(url||texto);
+    const lineas=texto.split(/\r?\n/).map(l=>l.trim()).filter(l=>l&&!/^https?:/i.test(l)&&!/^geo:/i.test(l)&&!/^(mira|ver|abre|open|check)\b.*(waze|maps)/i.test(l));
+    let nombre=lineas[0]||''; if(!nombre&&url&&/^geo:/i.test(url)){ let g=url; try{ g=decodeURIComponent(url).replace(/\+/g,' '); }catch(e){} const m=/\(([^)]+)\)/.exec(g); if(m) nombre=m[1]; }
+    if(!nombre&&url){ const m=/\/place\/([^/@?]+)/.exec(url); if(m){ try{ nombre=decodeURIComponent(m[1].replace(/\+/g,' ')); }catch(e){ nombre=m[1]; } } }
+    return { url, nombre, consulta:lineas.slice(0,2).join(', '), lat:c?c[0]:undefined, lon:c?c[1]:undefined };
+  }
+  E.interpretar=interpretar;
+  E.geo=async (q)=>{
+    const r=await fetch('https://api.tomtom.com/search/2/search/'+encodeURIComponent(q)+'.json?key='+TT+'&language=es-ES&countrySet=ES&limit=1');
+    const j=await r.json(); const x=j&&j.results&&j.results[0]; if(!x) return null;
+    return { lat:x.position.lat, lon:x.position.lon, dir:(x.address&&x.address.freeformAddress)||'', nombre:(x.poi&&x.poi.name)||'' };
+  };
+  E.inversa=async (la,lo)=>{
+    try{ const j=await fetch('https://api.tomtom.com/search/2/reverseGeocode/'+la.toFixed(6)+','+lo.toFixed(6)+'.json?key='+TT+'&language=es-ES').then(r=>r.json());
+      const a=j&&j.addresses&&j.addresses[0]&&j.addresses[0].address; return a&&a.freeformAddress||''; }catch(e){ return ''; }
+  };
+  E.recibirTexto=async (raw)=>{
+    const ps=interpretar(raw); let {lat,lon}=ps, dir='', nombre=ps.nombre;
+    if(lat===undefined && ps.consulta){ try{ const g=await E.geo(ps.consulta); if(g){ lat=g.lat; lon=g.lon; dir=g.dir; nombre=nombre||g.nombre||g.dir; } }catch(e){} }
+    if(lat===undefined){ alert('No he podido sacar el sitio de ese enlace (algunos enlaces cortos de Maps no traen coordenadas). Copia la dirección y pégala en el buscador.'); return false; }
+    if(!dir) dir=await E.inversa(lat,lon);
+    E.popup({nombre:nombre||dir||'Destino',dir,lat,lon},'nuevo');
+    return true;
+  };
+
+  /* ---- ventana para editar nombre y dirección, guardar en favoritos o ir ---- */
+  function panel(){ let p=document.getElementById('popupDestino'); if(!p){ p=document.createElement('div'); p.id='popupDestino'; document.body.appendChild(p); } return p; }
+  E.cerrar=()=>{ const p=document.getElementById('popupDestino'); if(p) p.classList.remove('on'); };
+  E.popup=(d,modo,idx)=>{
+    const p=panel(), esc=escapeHTML, estilo='width:100%;box-sizing:border-box;border:1px solid #c5ccd3;border-radius:10px;padding:11px;font:600 15px system-ui,sans-serif;margin-bottom:8px;background:#fff;color:#2f353b';
+    const yaFav=esFavDir(d.lat,d.lon)>=0;
+    p.innerHTML='<h3>📍 '+(modo==='fav'?'Editar favorito':'Destino')+'</h3><div class="sub" id="pdInfo">'+d.lat.toFixed(5)+', '+d.lon.toFixed(5)+'</div>'
+      +'<input id="pdNombre" type="text" maxlength="60" value="'+esc(d.nombre||'')+'" placeholder="Nombre (ej.: Casa de Juan)" style="'+estilo+'">'
+      +'<input id="pdDir" type="text" maxlength="140" value="'+esc(d.dir||'')+'" placeholder="Dirección" style="'+estilo+'">'
+      +'<div class="acc"><button id="pdCancelar">Cancelar</button><button id="pdFav">'+(modo==='fav'?'💾 Guardar':(yaFav?'⭐ Actualizar':'☆ Favorito'))+'</button><button class="ir" id="pdIr">Ir</button></div>';
+    p.classList.add('on');
+    const val=(id)=>document.getElementById(id).value.trim();
+    /* si cambió la dirección, se vuelve a buscar para actualizar las coordenadas */
+    async function resolver(){
+      let {lat,lon}=d, dir=val('pdDir'), nombre=val('pdNombre');
+      if(dir && dir!==(d.dir||'').trim()){
+        document.getElementById('pdInfo').textContent='Buscando la dirección…';
+        let g=null; try{ g=await E.geo(dir); }catch(e){}
+        if(!g){ document.getElementById('pdInfo').textContent='No encuentro esa dirección: revisa el texto'; return null; }
+        lat=g.lat; lon=g.lon; dir=g.dir||dir;
+      }
+      return { nombre:nombre||dir||'Destino', dir, lat, lon };
+    }
+    document.getElementById('pdCancelar').onclick=E.cerrar;
+    document.getElementById('pdIr').onclick=async()=>{ const r=await resolver(); if(!r) return; E.cerrar(); barraB.classList.remove('on'); sugs.classList.remove('on'); inputB.value=''; navegarA(r.lat,r.lon,r.dir||r.nombre); };
+    document.getElementById('pdFav').onclick=async()=>{
+      const r=await resolver(); if(!r) return;
+      if(modo==='fav' && favsDir[idx]) favsDir[idx]=r;
+      else { const i=esFavDir(r.lat,r.lon); if(i>=0) favsDir[i]=r; else { favsDir.unshift(r); if(favsDir.length>12) favsDir.length=12; } }
+      guardarFavsDir(); E.cerrar(); avisoEnvio('⭐ Favorito guardado: '+r.nombre); if(sugs.classList.contains('on')&&!inputB.value) pintarFavoritos();
+    };
+  };
+
+  /* ---- ajustes: código de enlace ---- */
+  const inp=document.getElementById('enlaceCodigo'), est=document.getElementById('enlaceEstado');
+  E.pintar=()=>{ if(est) est.textContent=E.estado; };
+  if(inp){
+    inp.value=E.code;
+    inp.onchange=()=>E.setCodigo(inp.value);
+    document.getElementById('enlaceGenerar').onclick=()=>{ inp.value=E.codigoAzar(); E.setCodigo(inp.value); };
+    document.getElementById('enlaceCopiar').onclick=async()=>{ try{ await navigator.clipboard.writeText(E.code); avisoEnvio('Código copiado'); }catch(e){ avisoEnvio('No se pudo copiar'); } };
+  }
+
+  /* ---- entradas: menú Compartir (PWA instalada), ?lat=&lon=&n= y enlace pegado en el buscador ---- */
+  inputB.addEventListener('input',()=>{ const q=inputB.value.trim(); if(/(https?:\/\/|geo:)/i.test(q)){ inputB.value=''; sugs.classList.remove('on'); E.recibirTexto(q); } });
+  (function(){
+    const q=new URLSearchParams(location.search);
+    const compartido=[q.get('titulo'),q.get('texto'),q.get('url')].filter(Boolean).join('\n');
+    const la=parseFloat(q.get('lat')), lo=parseFloat(q.get('lon'));
+    if(!compartido && !(Number.isFinite(la)&&Number.isFinite(lo))) return;
+    try{ history.replaceState(null,'',location.pathname); }catch(e){}
+    setTimeout(()=>{ if(compartido) E.recibirTexto(compartido); else E.popup({nombre:q.get('n')||'Destino',dir:'',lat:la,lon:lo},'nuevo'); },1200);
+  })();
+  E.iniciar();
+  return E;
+})();
+window.__enlace=Enlace;
+
+/* GPS automático al abrir: igual que hudMapa3D, la página pide la ubicación una vez y si ya está concedida arranca sola (sin tocar GPS) */
+(function(){
+  let auto=true; try{ auto=localStorage.getItem('gpsAuto')!=='0'; }catch(e){}
+  const b=document.getElementById('btnGpsAuto');
+  const txt=()=>{ if(b){ b.textContent='📍 GPS al abrir: '+(auto?'ON':'OFF'); b.classList.toggle('on',auto); } };
+  if(b) b.onclick=()=>{ auto=!auto; try{ localStorage.setItem('gpsAuto',auto?'1':'0'); }catch(e){} txt(); };
+  txt();
+  async function arrancar(){
+    if(!auto || gpsOn || simulando || !('geolocation' in navigator)) return;
+    try{ if(navigator.permissions){ const p=await navigator.permissions.query({name:'geolocation'}); if(p.state==='denied') return; } }catch(e){}
+    if(!gpsOn && !simulando) document.getElementById('btnGPS').click();
+  }
+  setTimeout(arrancar,800);
+})();
 document.getElementById('btnSeguir').onclick=function(){
   if(!gpsOn && !simulando){alert('Activa el GPS o la simulación primero.');return;}
   seguirOn=!seguirOn;
@@ -2499,7 +2680,7 @@ setInterval(()=>{
    llamaban a navegarA() y daban ReferenceError; y ultimaRutaDestino nunca se asignaba, así que ni el recálculo
    por desvío ni el periódico se ejecutaban nunca.) ---- */
 let destinoNombre='';
-async function navegarA(lat,lon,nombre){
+async function navegarA(lat,lon,nombre,origen){
   if(!lastFix){ alert('Activa el GPS o la simulación primero.'); return false; }
   if(!Number.isFinite(lat)||!Number.isFinite(lon)) return false;
   ultimaRutaDestino=[lat,lon]; destinoNombre=(nombre||'').trim();
@@ -2509,6 +2690,7 @@ async function navegarA(lat,lon,nombre){
   document.body.classList.add('modo-navegacion');
   const av=document.getElementById('avisoInicial'); if(av) av.classList.add('oculto');
   seguirOn=true; const btnSeg=document.getElementById('btnSeguir'); if(btnSeg) btnSeg.classList.add('activo');
+  if(!origen){ try{ Enlace.publicar({nombre:destinoNombre,lat,lon}); }catch(e){} }      /* lo que eliges aquí aparece en los otros dispositivos enlazados */
   return true;
 }
 
@@ -3718,7 +3900,8 @@ window.__barrio = (function(){
     ['#d8c8a6','#cbb994'],   /* 2 crema */
     ['#c8a468','#b8945a'],   /* 3 ocre */
     ['#e3dccf','#d3cbbb'],   /* 4 blanco roto */
-    ['#a7adb4','#979da5']    /* 5 gris */
+    ['#a7adb4','#979da5'],   /* 5 gris */
+    ['#b6cfe4','#a5c1da']    /* 6 azul claro (series de 3-4 bloques) */
   ];
   const BLOQUE = [2,4,5];                           /* edificios altos: crema, blanco, gris */
   const TECHOS = ['#8a9097','#7b8189','#9aa0a6','#6f757d'];   /* gris (nunca teja: el destino va en otro color) */
@@ -3737,7 +3920,10 @@ window.__barrio = (function(){
     const dom = Math.floor(h32(cx,cy,1)*5), sec = (dom + 1 + Math.floor(h32(cx,cy,2)*4)) % 5;   /* el gris no domina un barrio (con el tejado gris quedaría todo apagado): solo sale suelto */
     const r = h32(X,Y,3);
     let fam;
-    if(h>=24) fam = BLOQUE[Math.floor(h32(X,Y,4)*BLOQUE.length)];
+    if(h>=24){                                      /* bloques de viviendas: casi siempre blancos; algunas manzanas (≈140 m) son una serie azul claro */
+      const azul = h32(Math.floor(X/140),Math.floor(Y/140),11)<0.2 && h32(X,Y,12)<0.85, q=h32(X,Y,4);
+      fam = azul ? 6 : q<0.72 ? 4 : q<0.9 ? 2 : 5;
+    }
     else if(r<0.78) fam = dom; else if(r<0.92) fam = sec; else fam = Math.floor(h32(X,Y,5)*6);
     const tono = h32(X,Y,6)<0.5 ? 0 : 1;
     const mc = FAM[fam][tono];
@@ -3761,7 +3947,7 @@ window.__barrio = (function(){
   }
   function imagenes(map,noche){
     for(const [,,S,L] of TRAMOS){
-      for(let f=0;f<6;f++) for(let t=0;t<2;t++){
+      for(let f=0;f<FAM.length;f++) for(let t=0;t<2;t++){
         const p=f*2+t;
         if(!noche){ const n=L+'d'+p; if(!map.hasImage(n)) map.addImage(n,imagen(FAM[f][t],false,p+1,S)); }
         else for(let k=0;k<2;k++){ const n=L+'n'+p+'_'+k; if(!map.hasImage(n)) map.addImage(n,imagen(FAM[f][t],true,(p+1)*7+k*131+3,S)); }
@@ -3907,7 +4093,8 @@ window.__suave = (function(){
     const pal=PAL[est==null?1:est]||PAL[1], f=noche?OSC_ARB:1;
     const col=(c)=>mod(c,f);
     const cx=centro[0]*kx, cy=centro[1]*ky;
-    const blob=(x,y,r,b,h,c,sem,n)=>out.push({type:'Feature',properties:{c:col(c),b,h},geometry:{type:'Polygon',coordinates:poligono(x,y,r,sem,kx,ky,n||8)}});
+    const TS=0.68; let ox=0, oy=0;       /* escala de los árboles (0.68 = un tercio más pequeños), centrada en cada tronco */
+    const blob=(x,y,r,b,h,c,sem,n)=>out.push({type:'Feature',properties:{c:col(c),b:b*TS,h:h*TS},geometry:{type:'Polygon',coordinates:poligono(ox+(x-ox)*TS,oy+(y-oy)*TS,r*TS,sem,kx,ky,n||8)}});
     let n=0;
     for(const z of zonas){
       const ext=z.anillos[0]; let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
@@ -3924,14 +4111,14 @@ window.__suave = (function(){
         if((px-cx)*(px-cx)+(py-cy)*(py-cy)>R2) continue;
         const lo=px/kx, la=py/ky;
         if(!dentro(lo,la,z.anillos) || (bloqueo&&bloqueo(lo,la))) continue;
-        usadas.add(kc);
+        usadas.add(kc); ox=px; oy=py;
         const e=h32(gx,gy,23);
         if(e<prob){
           n++;
           const t=h32(gx,gy,24), tr=TRONCOS[Math.floor(h32(gx,gy,25)*3)];
           const conif = t < (bosque?0.34:0.12), colu = !conif && t>0.93;     /* conífera / álamo-ciprés / hoja ancha */
           /* sombra en el suelo (corre hacia el SO) */
-          const rs = conif?2.2:colu?1.6:3.4;
+          const rs = (conif?2.2:colu?1.6:3.4)*TS;
           out.push({type:'Feature',properties:{s:1},geometry:{type:'Polygon',coordinates:poligono(px-rs*0.35,py-rs*0.3,rs,sem+3,kx,ky,10)}});
           if(conif){
             const c0=CONIFERAS[Math.floor(h32(gx,gy,26)*3)], r=1.5+h32(gx,gy,27)*0.9, H=8+h32(gx,gy,28)*3.5;
@@ -3960,7 +4147,7 @@ window.__suave = (function(){
           }
         }else if(e<prob+0.12){                                            /* arbusto: dos montículos */
           const c0=elegir(pal.hoja,h32(gx,gy,34)), r=0.8+h32(gx,gy,35)*0.6;
-          out.push({type:'Feature',properties:{s:1},geometry:{type:'Polygon',coordinates:poligono(px-0.3,py-0.3,r*1.2,sem+5,kx,ky,8)}});
+          out.push({type:'Feature',properties:{s:1},geometry:{type:'Polygon',coordinates:poligono(px-0.3,py-0.3,r*1.2*TS,sem+5,kx,ky,8)}});
           const cc = pal.desnudo ? mod('#8a7b6a',1) : (h32(gx,gy,36)<0.5 ? mod(c0,0.9) : c0);
           blob(px,py,r,0,0.8+h32(gx,gy,36)*0.7,cc,sem+2,7);
           blob(px+r*0.7,py+r*0.3,r*0.7,0,0.6+h32(gx,gy,37)*0.5,mod(cc,1.08),sem+3,6);
