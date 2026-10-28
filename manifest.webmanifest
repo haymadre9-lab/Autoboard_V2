@@ -5,14 +5,41 @@
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "display_override": ["fullscreen", "standalone"],
+  "display_override": [
+    "fullscreen",
+    "standalone"
+  ],
   "orientation": "any",
   "background_color": "#0b1220",
   "theme_color": "#0b1220",
   "lang": "es",
   "icons": [
-    {"src": "autoboard-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
-    {"src": "autoboard-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
-    {"src": "autoboard-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
-  ]
+    {
+      "src": "autoboard-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "autoboard-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "autoboard-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "share_target": {
+    "action": "./autoboard-next/index.html",
+    "method": "GET",
+    "params": {
+      "title": "titulo",
+      "text": "texto",
+      "url": "url"
+    }
+  }
 }
