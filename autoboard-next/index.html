@@ -433,7 +433,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
-  <div class="seccion">Versión v164</div>
+  <div class="seccion">Versión v165</div>
 </div>
 
 <div id="diag">
@@ -2568,13 +2568,26 @@ const Enlace=(function(){
     const lineas=texto.split(/\r?\n/).map(l=>l.trim()).filter(l=>l&&!/^https?:/i.test(l)&&!/^geo:/i.test(l)&&!/^(mira|ver|abre|open|check)\b.*(waze|maps)/i.test(l));
     let nombre=lineas[0]||''; if(!nombre&&url&&/^geo:/i.test(url)){ let g=url; try{ g=decodeURIComponent(url).replace(/\+/g,' '); }catch(e){} const m=/\(([^)]+)\)/.exec(g); if(m) nombre=m[1]; }
     if(!nombre&&url){ const m=/\/place\/([^/@?]+)/.exec(url); if(m){ try{ nombre=decodeURIComponent(m[1].replace(/\+/g,' ')); }catch(e){ nombre=m[1]; } } }
-    return { url, nombre, consulta:lineas.slice(0,2).join(', '), lat:c?c[0]:undefined, lon:c?c[1]:undefined };
+    return { url, nombre, lineas, consulta:lineas.slice(0,2).join(', '), lat:c?c[0]:undefined, lon:c?c[1]:undefined };
   }
   E.interpretar=interpretar;
-  E.geo=async (q)=>{
-    const r=await fetch('https://api.tomtom.com/search/2/search/'+encodeURIComponent(q)+'.json?key='+TT+'&language=es-ES&countrySet=ES&limit=1');
-    const j=await r.json(); const x=j&&j.results&&j.results[0]; if(!x) return null;
-    return { lat:x.position.lat, lon:x.position.lon, dir:(x.address&&x.address.freeformAddress)||'', nombre:(x.poi&&x.poi.name)||'' };
+  E.geoVarios=async (q,n)=>{
+    const sesgo=(typeof lastFix!=='undefined'&&lastFix)?'&lat='+lastFix.lat.toFixed(5)+'&lon='+lastFix.lon.toFixed(5):'';
+    const r=await fetch('https://api.tomtom.com/search/2/search/'+encodeURIComponent(q)+'.json?key='+TT+'&language=es-ES&countrySet=ES&limit='+(n||5)+sesgo);
+    const j=await r.json();
+    return ((j&&j.results)||[]).map(x=>({ lat:x.position.lat, lon:x.position.lon, dir:(x.address&&x.address.freeformAddress)||'', nombre:(x.poi&&x.poi.name)||'' }));
+  };
+  E.geo=async (q)=>{ const v=await E.geoVarios(q,1); return v[0]||null; };
+  /* Un enlace corto de Maps no trae coordenadas (el navegador no puede abrirlo). Se busca por nombre + dirección y se ofrecen
+     varios candidatos (cerca de ti primero entre los que coinciden) para que elijas el bueno en vez de fiarse del primero. */
+  E.candidatos=async (ps)=>{
+    const l=ps.lineas||[], consultas=[];
+    if(l.length>=2) consultas.push(l.slice(0,2).join(', '));
+    if(l[0]) consultas.push(l[0]);
+    if(l[1]) consultas.push(l[1]);
+    const res=await Promise.all(consultas.map(q=>E.geoVarios(q,5).catch(()=>[])));
+    const out=[]; for(const lista of res) for(const c of lista){ if(!out.some(o=>Math.abs(o.lat-c.lat)<0.0004&&Math.abs(o.lon-c.lon)<0.0004)) out.push(c); }
+    return out.slice(0,6);
   };
   E.inversa=async (la,lo)=>{
     try{ const j=await fetch('https://api.tomtom.com/search/2/reverseGeocode/'+la.toFixed(6)+','+lo.toFixed(6)+'.json?key='+TT+'&language=es-ES').then(r=>r.json());
@@ -2582,10 +2595,11 @@ const Enlace=(function(){
   };
   E.recibirTexto=async (raw)=>{
     const ps=interpretar(raw); let {lat,lon}=ps, dir='', nombre=ps.nombre;
-    if(lat===undefined && ps.consulta){ try{ const g=await E.geo(ps.consulta); if(g){ lat=g.lat; lon=g.lon; dir=g.dir; nombre=nombre||g.nombre||g.dir; } }catch(e){} }
+    let cands=null;
+    if(lat===undefined && ps.consulta){ try{ cands=await E.candidatos(ps); const g=cands[0]; if(g){ lat=g.lat; lon=g.lon; dir=g.dir; nombre=nombre||g.nombre||g.dir; } }catch(e){} }
     if(lat===undefined){ alert('No he podido sacar el sitio de ese enlace (algunos enlaces cortos de Maps no traen coordenadas). Copia la dirección y pégala en el buscador.'); return false; }
     if(!dir) dir=await E.inversa(lat,lon);
-    E.popup({nombre:nombre||dir||'Destino',dir,lat,lon},'nuevo');
+    E.popup({nombre:nombre||dir||'Destino',dir,lat,lon,cands},'nuevo');
     return true;
   };
 
@@ -2596,6 +2610,7 @@ const Enlace=(function(){
     const p=panel(), esc=escapeHTML, estilo='width:100%;box-sizing:border-box;border:1px solid #c5ccd3;border-radius:10px;padding:11px;font:600 15px system-ui,sans-serif;margin-bottom:8px;background:#fff;color:#2f353b';
     const yaFav=esFavDir(d.lat,d.lon)>=0;
     p.innerHTML='<h3>📍 '+(modo==='fav'?'Editar favorito':'Destino')+'</h3><div class="sub" id="pdInfo">'+d.lat.toFixed(5)+', '+d.lon.toFixed(5)+'</div>'
+      +(d.cands&&d.cands.length>1?'<div class="sub" style="color:#c2410c">Enlace sin coordenadas: elige el sitio correcto ('+d.cands.length+' coincidencias)</div><select id="pdCand" style="'+estilo+'">'+d.cands.map((c,i)=>'<option value="'+i+'">'+esc((c.nombre?c.nombre+' · ':'')+c.dir)+(typeof lastFix!=='undefined'&&lastFix?' — '+(()=>{ const m=dist([lastFix.lat,lastFix.lon],[c.lat,c.lon]); return m>=1000?(m/1000).toFixed(1).replace('.',',')+' km':Math.round(m)+' m'; })():'')+'</option>').join('')+'</select>':'')
       +'<input id="pdNombre" type="text" maxlength="60" value="'+esc(d.nombre||'')+'" placeholder="Nombre (ej.: Casa de Juan)" style="'+estilo+'">'
       +'<input id="pdDir" type="text" maxlength="140" value="'+esc(d.dir||'')+'" placeholder="Dirección" style="'+estilo+'">'
       +'<div class="acc"><button id="pdCancelar">Cancelar</button><button id="pdFav">'+(modo==='fav'?'💾 Guardar':(yaFav?'⭐ Actualizar':'☆ Favorito'))+'</button><button class="ir" id="pdIr">Ir</button></div>';
@@ -2612,6 +2627,8 @@ const Enlace=(function(){
       }
       return { nombre:nombre||dir||'Destino', dir, lat, lon };
     }
+    const sel=document.getElementById('pdCand');
+    if(sel) sel.onchange=()=>{ const c=d.cands[+sel.value]; if(!c) return; d.lat=c.lat; d.lon=c.lon; d.dir=c.dir; document.getElementById('pdDir').value=c.dir; document.getElementById('pdInfo').textContent=c.lat.toFixed(5)+', '+c.lon.toFixed(5); };
     document.getElementById('pdCancelar').onclick=E.cerrar;
     document.getElementById('pdIr').onclick=async()=>{ const r=await resolver(); if(!r) return; E.cerrar(); barraB.classList.remove('on'); sugs.classList.remove('on'); inputB.value=''; navegarA(r.lat,r.lon,r.dir||r.nombre); };
     document.getElementById('pdFav').onclick=async()=>{
