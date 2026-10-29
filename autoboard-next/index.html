@@ -396,6 +396,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="cerrarPanel" id="btnCerrarAjustes"><svg class="xsvg" viewBox="0 0 12 12" width="1em" height="1em" aria-hidden="true"><path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></button>
   <h2>⚙️ Ajustes</h2>
   <div class="seccion">Visualización</div>
+  <button class="ajuste on" id="btnTunel">🚇 Modo túnel: ON</button>
   <button class="ajuste on" id="btnEdificios">🏢 Edificios: ON</button>
   <button class="ajuste on" id="btnHitos">🏛️ Edificios singulares: ON</button>
   <button class="ajuste on" id="btnSenales">🚦 Señales: ON</button>
@@ -460,7 +461,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="enlaceGenerar">🎲 Generar código nuevo</button>
   <button class="ajuste" id="enlaceCopiar">📋 Copiar código</button>
   <div id="enlaceEstado" style="font-size:12px;color:#8d99a5;padding:2px 4px 8px">Sin código: no enlazado</div>
-  <div class="seccion">Versión v179</div>
+  <div class="seccion">Versión v180</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -5561,7 +5562,7 @@ window.__hal=(function(){
   document.head.appendChild(st);
 
   const CATS=[['hal','🎃 Halloween'],['mapa','🗺️ Mapa y vista'],['aspecto','🎨 Aspecto del mapa'],['cielo','🌦️ Cielo y tiempo'],['sonido','🔊 Sonido y avisos'],['carg','⚡ Cargadores'],['gps','📍 GPS'],['coche','🚗 Coche'],['futbol','⚽ Fútbol'],['fiesta','🎉 Celebración'],['enlace','🔗 Enlace entre dispositivos'],['sis','⚙️ Rendimiento y versión']];
-  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnPasos',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',sis:'btnAA btnLimpiarFavs'};
+  const M={mapa:'btnTunel btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnPasos',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',sis:'btnAA btnLimpiarFavs'};
   const POR={}; for(const c in M) M[c].split(' ').forEach(id=>POR[id]=c);
   const cuerpos={}, cats={};
   const ref=panel.querySelector('h2');
@@ -5656,6 +5657,138 @@ window.__hal=(function(){
   textos();
   setInterval(()=>{ try{ if(!crear()) return; pintar(); }catch(e){} },1200);
   window.__rel={cfg:()=>cfg,estado:()=>({creado,noche})};
+})();
+</script>
+<script>
+/* ============ MODO TÚNEL (v180) ============
+   Al entrar en un túnel de carretera (calle con brunnel=tunnel de las teselas, no aparcamientos ni metro) el mapa se sustituye por una vista 3D
+   de persecución DENTRO del túnel: carriles, tu ruta azul sobre el carril derecho, paredes con luces y salida al fondo. Tu coche 3D de siempre
+   sigue encima (se coloca la cámara para que el punto del coche caiga bajo él). Las líneas y luces vienen hacia ti a la velocidad real del coche;
+   si el túnel curva, se curva. Arriba: «Túnel · quedan N m».
+   · Detección: se leen del mapa los tramos de túnel cercanos cada 0,5 s; hay que estar a ≤12 m (2 lecturas seguidas) para entrar y se sale a >30 m.
+   · Metros que quedan y curva: se sigue el túnel hacia delante uniendo tramos por sus extremos (≤4 m).
+   · Es una capa aparte (canvas propio, sin eventos). Interruptor en Ajustes; si algo falla se apaga y queda el mapa de siempre. ?tunel=0 en la URL lo anula. */
+window.__tunel=(function(){
+  const rd=(k,d)=>{ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } };
+  let on = rd('tunel_on','1')!=='0' && !/[?&]tunel=0\b/.test(location.search);
+  const FILTRO=['all',['==',['get','brunnel'],'tunnel'],['in',['get','class'],['literal',['motorway','trunk','primary','secondary','tertiary','minor','street']]]];
+  const PI=Math.PI, deg=PI/180;
+  let activo=false, entra=0, sale=0, rem=0, tot=0, bendObj=0, bend=0, vel=0, T=null, ren=null, sc=null, cam=null, cv=null, pill=null, listo=false, creando=false, raf=0, fade=0, tUlt=0, desp=0, forzado=false, ultCheck=0, lugarX=0, lugarY=0, err='';
+  const hist=[]; let hdg=null;
+  const map_=()=>window.__map;
+  /* ---------- geometría del túnel ---------- */
+  function analizar(lat,lon,hd){
+    const map=map_(); if(!map||typeof idFuenteBuildings==='undefined'||!idFuenteBuildings) return null;
+    let fs; try{ fs=map.querySourceFeatures(idFuenteBuildings,{sourceLayer:'transportation',filter:FILTRO})||[]; }catch(e){ return null; }
+    const kx=111320*Math.cos(lat*deg), ky=110540, lines=[];
+    for(const f of fs){ const g=f.geometry; if(!g) continue; const ls=g.type==='LineString'?[g.coordinates]:g.type==='MultiLineString'?g.coordinates:[]; for(const l of ls){ if(l.length>1) lines.push(l.map(p=>[(p[0]-lon)*kx,(p[1]-lat)*ky])); } }
+    let best=null;
+    for(let li=0;li<lines.length;li++){ const L=lines[li]; for(let i=0;i<L.length-1;i++){ const ax=L[i][0],ay=L[i][1],dx=L[i+1][0]-ax,dy=L[i+1][1]-ay,l2=dx*dx+dy*dy; let t=l2>0?-(ax*dx+ay*dy)/l2:0; t=Math.max(0,Math.min(1,t)); const px=ax+dx*t,py=ay+dy*t,d=Math.hypot(px,py); if(!best||d<best.d) best={li,i,t,d,px,py,dx,dy}; } }
+    if(!best) return {d:1e9,rem:0,bend:0};
+    if(best.d>40) return {d:best.d,rem:0,bend:0};
+    const hv=hd==null?[0,0]:[Math.sin(hd*deg),Math.cos(hd*deg)], sign=(hv[0]*best.dx+hv[1]*best.dy)>=0?1:-1;
+    const vis=new Set([best.li]); const L0=lines[best.li]; let path=[[best.px,best.py]];
+    if(sign>0){ for(let k=best.i+1;k<L0.length;k++) path.push(L0[k]); } else { for(let k=best.i;k>=0;k--) path.push(L0[k]); }
+    const len=p=>{ let s=0; for(let i=1;i<p.length;i++) s+=Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]); return s; };
+    for(let guard=0;guard<40&&len(path)<2500;guard++){
+      const E=path[path.length-1], P=path[path.length-2]||[0,0], hE=Math.atan2(E[0]-P[0],E[1]-P[1]); let cand=null;
+      for(let li=0;li<lines.length;li++){ if(vis.has(li)) continue; const L=lines[li]; for(const fin of [0,1]){ const q=fin?L[L.length-1]:L[0]; if(Math.hypot(q[0]-E[0],q[1]-E[1])>4) continue; const r=fin?L[L.length-2]:L[1]; const h=Math.atan2(r[0]-q[0],r[1]-q[1]); let dh=Math.abs(((h-hE+3*PI)%(2*PI))-PI); if(!cand||dh<cand.dh) cand={li,fin,dh}; } }
+      if(!cand||cand.dh>1.3) break; vis.add(cand.li); const L=lines[cand.li]; if(cand.fin){ for(let k=L.length-2;k>=0;k--) path.push(L[k]); } else { for(let k=1;k<L.length;k++) path.push(L[k]); }
+    }
+    const R=len(path);
+    const hAt=s=>{ let a=0; for(let i=1;i<path.length;i++){ const l=Math.hypot(path[i][0]-path[i-1][0],path[i][1]-path[i-1][1]); if(a+l>=s||i===path.length-1) return Math.atan2(path[i][0]-path[i-1][0],path[i][1]-path[i-1][1]); a+=l; } return 0; };
+    let b=0; if(R>45){ const s2=Math.min(110,R-5), dh=((hAt(s2)-hAt(10)+3*PI)%(2*PI))-PI; b=Math.max(-0.0025,Math.min(0.0025,(dh/(s2-10))/2)); }
+    return {d:best.d,rem:R,bend:b};
+  }
+  /* ---------- escena ---------- */
+  async function crear(){
+    if(listo||creando) return; creando=true;
+    try{
+      T=await import('three');
+      cv=document.createElement('canvas'); cv.id='tunel3D'; cv.style.cssText='position:fixed;inset:0;width:100vw;height:100vh;z-index:13;pointer-events:none;opacity:0;visibility:hidden;transition:opacity .45s'; document.body.appendChild(cv);
+      ren=new T.WebGLRenderer({canvas:cv,antialias:false,alpha:false}); ren.setPixelRatio(1);
+      sc=new T.Scene(); sc.background=new T.Color(0x05060a); sc.fog=new T.FogExp2(0x0a0b10,0.016); cam=new T.PerspectiveCamera(58,1,0.1,600);
+      const tex=(w,h,fn)=>{ const c=document.createElement('canvas'); c.width=w; c.height=h; const x=c.getContext('2d'); fn(x,w,h); const t=new T.CanvasTexture(c); t.wrapS=t.wrapT=T.RepeatWrapping; t.colorSpace=T.SRGBColorSpace; t.anisotropy=4; return t; };
+      const L=12, RW=10.4, RAD=RW/2+0.6, LX=RW/4, SEG=140;
+      const road=tex(256,512,(x,w,h)=>{ x.fillStyle='#2a2d33'; x.fillRect(0,0,w,h); for(let i=0;i<2000;i++){ x.fillStyle='rgba('+(Math.random()<.5?'255,255,255':'0,0,0')+','+Math.random()*0.06+')'; x.fillRect(Math.random()*w,Math.random()*h,2,2); } x.fillStyle='#e9e9e9'; x.fillRect(w*0.04,0,8,h); x.fillRect(w*0.96-8,0,8,h); x.fillStyle='#f4f4f4'; x.fillRect(w/2-5,h*0.08,10,h*0.34); x.fillRect(w/2-5,h*0.58,10,h*0.34); });
+      road.repeat.set(1,600/L);
+      const rd=new T.Mesh(new T.PlaneGeometry(RW,600,1,SEG),new T.MeshBasicMaterial({map:road})); rd.rotation.x=-PI/2; rd.position.set(0,0,-250); sc.add(rd);
+      const wallTex=tex(256,256,(x,w,h)=>{ const g=x.createLinearGradient(0,0,0,h); g.addColorStop(0,'#4a4e57'); g.addColorStop(1,'#30343b'); x.fillStyle=g; x.fillRect(0,0,w,h); for(let i=0;i<1500;i++){ x.fillStyle='rgba(255,255,255,'+Math.random()*0.05+')'; x.fillRect(Math.random()*w,Math.random()*h,2,2); } x.fillStyle='rgba(0,0,0,.35)'; x.fillRect(0,0,3,h); });
+      wallTex.repeat.set(1,600/L*0.5);
+      const wallMat=new T.MeshBasicMaterial({map:wallTex,side:T.BackSide});
+      const vault=new T.Mesh(new T.CylinderGeometry(RAD,RAD,600,40,SEG,true,0,PI),wallMat); vault.position.set(0,1.6,-250); vault.scale.set(1,1,0.8); vault.rotation.set(PI/2,0,0); vault.rotateZ(PI/2); sc.add(vault);
+      for(const s of [-1,1]){ const w=new T.Mesh(new T.PlaneGeometry(600,1.6,SEG,1),new T.MeshBasicMaterial({map:wallTex,side:T.DoubleSide})); w.rotation.y=PI/2; w.position.set(s*RAD,0.8,-250); sc.add(w);
+        const b=new T.Mesh(new T.BoxGeometry(0.5,0.35,600,1,1,SEG),new T.MeshBasicMaterial({color:0x8a8f97})); b.position.set(s*(RW/2+0.1),0.17,-250); sc.add(b);
+        const st=new T.Mesh(new T.BoxGeometry(0.08,0.1,600,1,1,SEG),new T.MeshBasicMaterial({color:0xffb04a})); st.position.set(s*(RAD-0.1),2.1,-250); sc.add(st); }
+      const glowTex=tex(64,64,(x)=>{ const g=x.createRadialGradient(32,32,0,32,32,32); g.addColorStop(0,'rgba(255,225,170,1)'); g.addColorStop(0.3,'rgba(255,170,70,.55)'); g.addColorStop(1,'rgba(255,140,40,0)'); x.fillStyle=g; x.fillRect(0,0,64,64); });
+      const SP=9, NL=70, lamps=new T.Group(); sc.add(lamps);
+      const lampa=(x,y,w,col)=>{ const m=new T.Mesh(new T.BoxGeometry(w,0.12,0.6),new T.MeshBasicMaterial({color:col})); m.position.set(x,y,0); const s=new T.Sprite(new T.SpriteMaterial({map:glowTex,blending:T.AdditiveBlending,depthWrite:false,transparent:true,opacity:0.3})); s.scale.set(3.4,3.4,1); m.add(s); return m; };
+      for(let i=0;i<NL;i++){ const g=new T.Group(); g.userData.z=-i*SP+4; g.add(lampa(0,5.9,1.8,0xfff1cf)); g.add(lampa(-3.2,5.2,1.1,0xffe0a8)); g.add(lampa(3.2,5.2,1.1,0xffe0a8)); g.position.z=g.userData.z; lamps.add(g); }
+      const sos=new T.Group(); sc.add(sos); for(let i=0;i<14;i++){ const s=i%2?1:-1, m=new T.Mesh(new T.BoxGeometry(0.1,1.6,1.0),new T.MeshBasicMaterial({color:0x1fe07a})); m.position.set(s*(RAD-0.15),1.1,0); m.userData.z=-i*40-10; m.position.z=m.userData.z; sos.add(m); }
+      const rutaTex=tex(64,128,(x,w,h)=>{ x.fillStyle='#2f7bff'; x.fillRect(0,0,w,h); x.fillStyle='rgba(255,255,255,.55)'; x.beginPath(); x.moveTo(8,h*0.78); x.lineTo(w/2,h*0.52); x.lineTo(w-8,h*0.78); x.lineTo(w-8,h*0.9); x.lineTo(w/2,h*0.64); x.lineTo(8,h*0.9); x.closePath(); x.fill(); });
+      rutaTex.repeat.set(1,600/6);
+      const ruta=new T.Mesh(new T.PlaneGeometry(1.5,600,1,SEG),new T.MeshBasicMaterial({map:rutaTex,transparent:true,opacity:0.95})); ruta.rotation.x=-PI/2; ruta.position.set(LX,0.03,-300); sc.add(ruta);
+      const aura=new T.Mesh(new T.PlaneGeometry(2.4,600,1,SEG),new T.MeshBasicMaterial({color:0x2f7bff,transparent:true,opacity:0.22,blending:T.AdditiveBlending,depthWrite:false})); aura.rotation.x=-PI/2; aura.position.set(LX,0.025,-300); sc.add(aura);
+      const salida=new T.Mesh(new T.PlaneGeometry(RW+1.2,8),new T.MeshBasicMaterial({color:0xeef4ff,fog:false})); salida.position.set(0,3.6,-500); sc.add(salida);
+      const halo=new T.Sprite(new T.SpriteMaterial({map:glowTex,blending:T.AdditiveBlending,depthWrite:false,transparent:true,opacity:0.8,color:0xdfeaff,fog:false})); halo.scale.set(30,20,1); halo.position.set(0,3.6,-499); sc.add(halo);
+      /* curva del mundo: desplaza en X lo que queda por delante del coche (8 m delante de la cámara) en función del cuadrado de la distancia */
+      const U={uBend:{value:0}};
+      const parchear=m=>{ m.onBeforeCompile=sh=>{ sh.uniforms.uBend=U.uBend; sh.vertexShader='uniform float uBend;\n'+sh.vertexShader; const D='{ float dz=max(-mvPosition.z-8.0,0.0); mvPosition.x += uBend*dz*dz; }';
+        if(m.isSpriteMaterial) sh.vertexShader=sh.vertexShader.replace('vec4 mvPosition = modelViewMatrix * vec4( 0.0, 0.0, 0.0, 1.0 );','vec4 mvPosition = modelViewMatrix * vec4( 0.0, 0.0, 0.0, 1.0 ); '+D);
+        else sh.vertexShader=sh.vertexShader.replace('#include <project_vertex>','vec4 mvPosition = modelViewMatrix * vec4( transformed, 1.0 ); '+D+' gl_Position = projectionMatrix * mvPosition;'); }; m.needsUpdate=true; };
+      sc.traverse(o=>{ if(o.material) parchear(o.material); });
+      sc._d={road,wallTex,rutaTex,lamps,sos,SP,NL,U,salida,halo,ruta,aura,LX};
+      pill=document.createElement('div'); pill.id='tunelPill'; pill.style.cssText='position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:16;display:none;min-width:280px;padding:9px 18px 11px;border-radius:16px;background:rgba(12,14,18,.85);border:2px solid rgba(255,170,70,.75);color:#ffd9a0;font:700 20px system-ui,sans-serif;pointer-events:none';
+      pill.innerHTML='<span id="tunelTxt">🚇 Túnel</span><i style="display:block;height:7px;border-radius:4px;background:rgba(255,255,255,.15);margin-top:7px;overflow:hidden"><b id="tunelBar" style="display:block;height:100%;width:0;background:#ff9d2e"></b></i>'; document.body.appendChild(pill);
+      redim(); addEventListener('resize',redim); listo=true;
+    }catch(e){ err=String(e&&e.message||e); try{ registrarError('tunel',err); }catch(_){} on=false; }
+    creando=false;
+  }
+  function posCoche(){ const el=document.getElementById('coche3D')||document.getElementById('cocheFijo'); let x=innerWidth/2,y=innerHeight*0.65; if(el&&el.style.left&&el.style.top){ x=parseFloat(el.style.left)||x; y=parseFloat(el.style.top)||y; } return [x,y+12]; }
+  function redim(){ if(!ren) return; const w=innerWidth,h=innerHeight; ren.setSize(w,h,false); cam.aspect=w/h; cam.updateProjectionMatrix(); ajustarCam(); }
+  function ajustarCam(){ if(!cam) return; const w=innerWidth,h=innerHeight, d=sc._d; cam.clearViewOffset(); cam.position.set(d.LX,3.9,8.2); cam.lookAt(d.LX,1.4,-14); cam.updateMatrixWorld(); cam.updateProjectionMatrix();
+    const v=new T.Vector3(d.LX,0.3,0).project(cam), sx=(v.x+1)/2*w, sy=(1-v.y)/2*h, [px,py]=posCoche(); lugarX=px; lugarY=py; cam.setViewOffset(w,h,sx-px,sy-py,w,h); }
+  function dibujar(dt){
+    const d=sc._d; desp+=vel*dt; bend+=(bendObj-bend)*Math.min(1,dt*1.8); d.U.uBend.value=bend;
+    d.road.offset.y=(desp/12)%1; d.rutaTex.offset.y=(desp/6)%1; d.wallTex.offset.y=(desp/12)%1;
+    const n1=d.SP*d.NL; for(const g of d.lamps.children){ g.position.z=g.userData.z+(desp%n1); if(g.position.z>12) g.position.z-=n1; }
+    for(const m of d.sos.children){ m.position.z=m.userData.z+(desp%560); if(m.position.z>12) m.position.z-=560; }
+    rem=Math.max(0,rem-vel*dt); const zs=-Math.max(25,Math.min(rem,520)); d.salida.position.z=zs; d.halo.position.z=zs+1; const cerca=1-Math.min(1,rem/500); d.halo.scale.set(26+30*cerca,16+14*cerca,1); d.halo.material.opacity=0.45+0.5*cerca;
+    const hay=(typeof routeCoordsLL!=='undefined')&&routeCoordsLL&&routeCoordsLL.length>1; d.ruta.visible=hay; d.aura.visible=hay;
+    const txt=document.getElementById('tunelTxt'), bar=document.getElementById('tunelBar'); if(txt) txt.textContent=rem>0?'🚇 Túnel · quedan '+Math.max(5,Math.round(rem/5)*5)+' m':'🚇 Túnel'; if(bar) bar.style.width=(tot>0?Math.max(0,Math.min(100,(1-rem/tot)*100)):0)+'%';
+    ren.render(sc,cam);
+  }
+  function bucle(now){
+    raf=requestAnimationFrame(bucle); const dt=Math.min(0.06,(now-tUlt)/1000||0.016); if(now-tUlt<28) return; tUlt=now;
+    const v=(typeof velHist!=='undefined'&&velHist&&isFinite(velHist.v))?velHist.v:((typeof speedKmh!=='undefined'?speedKmh:0)/3.6); vel=forzado?Math.max(vel,17):Math.max(0,v);
+    const p=posCoche(); if(Math.abs(p[0]-lugarX)>2||Math.abs(p[1]-lugarY)>2) ajustarCam();
+    dibujar(dt);
+  }
+  function mostrar(v){
+    if(!listo) return; if(v){ cv.style.visibility='visible'; pill.style.display='block'; requestAnimationFrame(()=>{ cv.style.opacity='1'; }); ajustarCam(); if(!raf){ tUlt=0; raf=requestAnimationFrame(bucle); } }
+    else { cv.style.opacity='0'; pill.style.display='none'; setTimeout(()=>{ if(!activo){ cv.style.visibility='hidden'; if(raf){ cancelAnimationFrame(raf); raf=0; } } },520); }
+  }
+  /* ---------- decisión de entrar / salir ---------- */
+  function comprobar(){
+    if(!on||forzado) return;
+    try{
+      const nav=document.body.classList.contains('modo-navegacion'); const map=map_(); if(!nav||!map||map.getZoom()<12.5||typeof lastFix==='undefined'||!lastFix){ if(activo&&!nav) salir(); return; }
+      /* rumbo por movimiento (los últimos ≥6 m) */
+      const pos=[lastFix.lat,lastFix.lon]; const u=hist[hist.length-1]; if(!u||Math.hypot((pos[0]-u[0])*110540,(pos[1]-u[1])*111320*Math.cos(pos[0]*deg))>6){ if(u){ hdg=(Math.atan2((pos[1]-u[1])*Math.cos(pos[0]*deg),pos[0]-u[0])/deg+360)%360; } hist.push(pos); if(hist.length>3) hist.shift(); }
+      const r=analizar(pos[0],pos[1],hdg!=null?hdg:(typeof heading!=='undefined'?heading:null)); if(!r) return;
+      const dentro=r.d<=(activo?30:12);
+      if(dentro){ sale=0; entra++; if(r.rem>0){ rem=r.rem; if(!activo) tot=r.rem; bendObj=r.bend; } if(!activo&&entra>=2) entrar(); }
+      else { entra=0; if(activo){ sale++; if(sale>=2) salir(); } }
+    }catch(e){ err=String(e&&e.message||e); }
+  }
+  async function entrar(){ if(activo) return; if(!listo){ await crear(); if(!listo) return; } activo=true; desp=0; mostrar(true); }
+  function salir(){ if(!activo) return; activo=false; entra=0; sale=0; mostrar(false); }
+  /* ---------- ajustes ---------- */
+  const btn=document.getElementById('btnTunel');
+  function texto(){ if(btn){ btn.textContent='🚇 Modo túnel: '+(on?'ON':'OFF'); btn.classList.toggle('on',on); } }
+  if(btn) btn.onclick=()=>{ on=!on; try{ localStorage.setItem('tunel_on',on?'1':'0'); }catch(e){} if(!on) salir(); texto(); };
+  texto(); setInterval(comprobar,500);
+  return { analizar, estado:()=>({on,activo,rem:Math.round(rem),tot:Math.round(tot),bend:+bendObj.toFixed(5),listo,err,hdg}), async forzar(o){ if(o===false){ forzado=false; salir(); return; } forzado=true; await crear(); if(!listo) return; rem=(o&&o.rem)||420; tot=rem; bendObj=(o&&o.bend)||0; activo=true; mostrar(true); }, fijar(o){ if(o.bend!==undefined){ bendObj=o.bend; bend=o.bend; } if(o.vel!==undefined) vel=o.vel; if(o.desp!==undefined) desp=o.desp; if(o.rem!==undefined) rem=o.rem; try{ ajustarCam(); dibujar(0); }catch(e){} } };
 })();
 </script>
 <script>
