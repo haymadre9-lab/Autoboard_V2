@@ -425,6 +425,10 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste on" id="btnCargVe">🟢 Ultrarrápidos +72 kW: ON</button>
   <div id="cargDiag" style="font-size:11px;opacity:.7;padding:2px 14px"></div>
   <button class="ajuste on" id="btnCargTe">🔴 Tesla Supercharger: ON</button>
+  <button class="ajuste" id="btnParkOn">🅿️ Parkings en el mapa: OFF</button>
+  <button class="ajuste on" id="btnParkGra">🟢 P verde: gratuitos: ON</button>
+  <button class="ajuste on" id="btnParkSub">🔵 P azul: subterráneos (privados o de pago): ON</button>
+  <div id="parkDiag" style="font-size:11px;opacity:.7;padding:2px 14px"></div>
   <div class="seccion">Fútbol</div>
   <button class="ajuste" id="btnListaCampos">⚽ Mis campos favoritos (máx. 10)</button>
   <div class="seccion">GPS</div>
@@ -445,6 +449,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste on" id="btnAspBorde">▭ Borde de edificios: ON</button>
   <button class="ajuste" id="btnAspEstacion">🍂 Estación: Auto</button>
   <button class="ajuste on" id="btnPasos">🚸 Pasos de peatones: ON</button>
+  <button class="ajuste on" id="btnFlechas">➤ Flechas en la ruta: ON</button>
   <button class="ajuste" id="btnCielo">🌅 Cielo: Auto</button>
   <button class="ajuste" id="btnTiempo">🌦️ Tiempo: Real</button>
   <button class="ajuste on" id="btnVoz">🔊 Sonido: Solo radares</button>
@@ -461,7 +466,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="enlaceGenerar">🎲 Generar código nuevo</button>
   <button class="ajuste" id="enlaceCopiar">📋 Copiar código</button>
   <div id="enlaceEstado" style="font-size:12px;color:#8d99a5;padding:2px 4px 8px">Sin código: no enlazado</div>
-  <div class="seccion">Versión v180</div>
+  <div class="seccion">Versión v182</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -5561,8 +5566,8 @@ window.__hal=(function(){
   +'#panelAjustes .infoVer{font-size:11px;opacity:.65;padding:6px 4px}';
   document.head.appendChild(st);
 
-  const CATS=[['hal','🎃 Halloween'],['mapa','🗺️ Mapa y vista'],['aspecto','🎨 Aspecto del mapa'],['cielo','🌦️ Cielo y tiempo'],['sonido','🔊 Sonido y avisos'],['carg','⚡ Cargadores'],['gps','📍 GPS'],['coche','🚗 Coche'],['futbol','⚽ Fútbol'],['fiesta','🎉 Celebración'],['enlace','🔗 Enlace entre dispositivos'],['sis','⚙️ Rendimiento y versión']];
-  const M={mapa:'btnTunel btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnPasos',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',sis:'btnAA btnLimpiarFavs'};
+  const CATS=[['hal','🎃 Halloween'],['mapa','🗺️ Mapa y vista'],['aspecto','🎨 Aspecto del mapa'],['cielo','🌦️ Cielo y tiempo'],['sonido','🔊 Sonido y avisos'],['carg','⚡ Cargadores'],['park','🅿️ Aparcamientos'],['gps','📍 GPS'],['coche','🚗 Coche'],['futbol','⚽ Fútbol'],['fiesta','🎉 Celebración'],['enlace','🔗 Enlace entre dispositivos'],['sis','⚙️ Rendimiento y versión']];
+  const M={mapa:'btnTunel btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnPasos btnFlechas',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',sis:'btnAA btnLimpiarFavs'};
   const POR={}; for(const c in M) M[c].split(' ').forEach(id=>POR[id]=c);
   const cuerpos={}, cats={};
   const ref=panel.querySelector('h2');
@@ -5789,6 +5794,160 @@ window.__tunel=(function(){
   if(btn) btn.onclick=()=>{ on=!on; try{ localStorage.setItem('tunel_on',on?'1':'0'); }catch(e){} if(!on) salir(); texto(); };
   texto(); setInterval(comprobar,500);
   return { analizar, estado:()=>({on,activo,rem:Math.round(rem),tot:Math.round(tot),bend:+bendObj.toFixed(5),listo,err,hdg}), async forzar(o){ if(o===false){ forzado=false; salir(); return; } forzado=true; await crear(); if(!listo) return; rem=(o&&o.rem)||420; tot=rem; bendObj=(o&&o.bend)||0; activo=true; mostrar(true); }, fijar(o){ if(o.bend!==undefined){ bendObj=o.bend; bend=o.bend; } if(o.vel!==undefined) vel=o.vel; if(o.desp!==undefined) desp=o.desp; if(o.rem!==undefined) rem=o.rem; try{ ajustarCam(); dibujar(0); }catch(e){} } };
+})();
+</script>
+<script>
+/* ============ APARCAMIENTOS (v182) ============
+   Datos: OpenStreetMap (amenity=parking) vía Overpass, por celdas de 0,02° y guardados en el móvil 30 días (misma técnica que los pasos de peatones).
+   P verde = gratuito (fee=no) y no privado. P azul = subterráneo (parking=underground / location=underground / layer<0) que no es gratuito (privado o de pago).
+   Todo apagado por defecto: solo se pide y se dibuja cuando lo activas en Ajustes → Aparcamientos. Si algo falla, no se dibuja nada. */
+window.__park=(function(){
+  const rd=(k,d)=>{ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } };
+  const wr=(k,v)=>{ try{ localStorage.setItem(k,v); }catch(e){} };
+  let cfg={on:false,gratis:true,sub:true}; try{ Object.assign(cfg,JSON.parse(rd('park_cfg','{}'))||{}); }catch(e){}
+  const CELDA=0.02, CK='park_cache_v1', DIAS=30*86400000, MAXC=6;
+  const EP=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
+  let cache={}; try{ cache=JSON.parse(rd(CK,'{}'))||{}; }catch(e){}
+  let fallos={}, enVuelo=false, tmr=null, ok=false, nVis=0;
+  const key=(la,lo)=>Math.floor(la/CELDA)+'_'+Math.floor(lo/CELDA);
+  function guardar(){ try{ const ks=Object.keys(cache); if(ks.length>40){ ks.sort((a,b)=>cache[a].t-cache[b].t); for(const k of ks.slice(0,ks.length-40)) delete cache[k]; } wr(CK,JSON.stringify(cache)); }catch(e){} }
+  function clasificar(t){
+    const acc=t.access||'', priv=/^(private|customers|permit|residents|no|delivery)$/.test(acc);
+    const sub=t.parking==='underground'||t.location==='underground'||(parseInt(t.layer,10)<0);
+    if(t.fee==='no'&&!priv) return 'g';
+    if(sub) return 'b';
+    return '';
+  }
+  async function pedir(la,lo){
+    const k=key(la,lo), c=cache[k]; if(c&&Date.now()-c.t<DIAS) return;
+    if(fallos[k]&&Date.now()-fallos[k]<600000) return;
+    const s=Math.floor(la/CELDA)*CELDA, w=Math.floor(lo/CELDA)*CELDA, n=s+CELDA, e=w+CELDA;
+    const q='[out:json][timeout:25];nwr["amenity"="parking"]('+s.toFixed(5)+','+w.toFixed(5)+','+n.toFixed(5)+','+e.toFixed(5)+');out center tags;';
+    for(const ep of EP){
+      try{
+        const r=await fetch(ep,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'data='+encodeURIComponent(q)});
+        if(!r.ok) continue; const j=await r.json(); if(!j||!j.elements) continue;
+        const L=[]; for(const el of j.elements){
+          const t=el.tags||{}, tp=clasificar(t); if(!tp) continue;
+          const la2=el.lat!=null?el.lat:(el.center&&el.center.lat), lo2=el.lon!=null?el.lon:(el.center&&el.center.lon); if(la2==null||lo2==null) continue;
+          L.push([+la2.toFixed(6),+lo2.toFixed(6),tp,(t.name||'').slice(0,40),parseInt(t.capacity,10)||0]);
+        }
+        cache[k]={t:Date.now(),p:L}; guardar(); return;
+      }catch(e){}
+    }
+    fallos[k]=Date.now();
+  }
+  function imagen(col){
+    const W=44,H=44,c=document.createElement('canvas'); c.width=W; c.height=H; const x=c.getContext('2d');
+    x.shadowColor='rgba(0,0,0,.4)'; x.shadowBlur=4; x.shadowOffsetY=1.5;
+    x.beginPath(); x.roundRect?x.roundRect(4,3,36,36,9):x.rect(4,3,36,36); x.fillStyle=col; x.fill(); x.shadowColor='transparent';
+    x.lineWidth=2.5; x.strokeStyle='#fff'; x.stroke();
+    x.fillStyle='#fff'; x.font='800 26px system-ui,Arial,sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText('P',22,22);
+    return x.getImageData(0,0,W,H);
+  }
+  function capa(){
+    try{
+      if(!map.hasImage('pk-g')) map.addImage('pk-g',imagen('#1f9d55'),{pixelRatio:2});
+      if(!map.hasImage('pk-b')) map.addImage('pk-b',imagen('#1565c0'),{pixelRatio:2});
+      if(!map.getSource('parking-next')) map.addSource('parking-next',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+      if(!map.getLayer('parking-next')){
+        const antes=map.getLayer('cargadores-next')?'cargadores-next':(map.getLayer('giro-pos')?'giro-pos':undefined);
+        map.addLayer({id:'parking-next',type:'symbol',source:'parking-next',minzoom:14.5,
+          layout:{'icon-image':['concat','pk-',['get','t']],'icon-size':['interpolate',['linear'],['zoom'],14.5,0.75,17,1,19,1.3],'icon-allow-overlap':false,'icon-padding':3,'icon-pitch-alignment':'viewport','icon-rotation-alignment':'viewport','symbol-sort-key':['case',['==',['get','t'],'g'],0,1]}},antes);
+      }
+      ok=true;
+    }catch(e){ ok=false; }
+    return ok;
+  }
+  function colocar(){ try{ const ls=map.getStyle().layers.map(l=>l.id), i=ls.indexOf('parking-next'), j=ls.indexOf('cargadores-next'); if(i<0) return; if(j>=0&&i!==j-1) map.moveLayer('parking-next','cargadores-next'); else if(j<0&&i!==ls.length-1) map.moveLayer('parking-next'); }catch(e){} }
+  function dibujar(){
+    if(!ok&&!capa()) return; const src=map.getSource('parking-next'); if(!src) return; colocar();
+    if(!cfg.on){ src.setData({type:'FeatureCollection',features:[]}); nVis=0; texto(); return; }
+    const b=map.getBounds(), F=[]; const s=Math.floor(b.getSouth()/CELDA), n=Math.floor(b.getNorth()/CELDA), w=Math.floor(b.getWest()/CELDA), e=Math.floor(b.getEast()/CELDA);
+    for(let i=s;i<=n;i++) for(let j=w;j<=e;j++){ const c=cache[i+'_'+j]; if(!c) continue; for(const p of c.p){ if(p[2]==='g'&&!cfg.gratis) continue; if(p[2]==='b'&&!cfg.sub) continue; F.push({type:'Feature',geometry:{type:'Point',coordinates:[p[1],p[0]]},properties:{t:p[2],n:p[3],c:p[4]}}); if(F.length>1500) break; } }
+    nVis=F.length; src.setData({type:'FeatureCollection',features:F}); texto();
+  }
+  async function refrescar(){
+    if(!cfg.on||enVuelo) return; if(map.getZoom()<14.5) { dibujar(); return; }
+    const b=map.getBounds(), cs=[]; const s=Math.floor(b.getSouth()/CELDA), n=Math.floor(b.getNorth()/CELDA), w=Math.floor(b.getWest()/CELDA), e=Math.floor(b.getEast()/CELDA);
+    const cen=map.getCenter();
+    for(let i=s;i<=n;i++) for(let j=w;j<=e;j++){ const c=cache[i+'_'+j]; if(c&&Date.now()-c.t<DIAS) continue; cs.push([i,j,Math.abs((i+.5)*CELDA-cen.lat)+Math.abs((j+.5)*CELDA-cen.lng)]); }
+    cs.sort((a,b)=>a[2]-b[2]); enVuelo=true;
+    try{ for(const c of cs.slice(0,MAXC)){ await pedir((c[0]+.5)*CELDA,(c[1]+.5)*CELDA); dibujar(); } }catch(e){}
+    enVuelo=false; dibujar();
+  }
+  function programar(){ clearTimeout(tmr); tmr=setTimeout(refrescar,700); }
+  const BTN={btnParkOn:['on','🅿️ Parkings en el mapa'],btnParkGra:['gratis','🟢 P verde: gratuitos'],btnParkSub:['sub','🔵 P azul: subterráneos (privados o de pago)']};
+  function texto(){ for(const id in BTN){ const b=document.getElementById(id); if(!b) continue; const v=!!cfg[BTN[id][0]]; b.textContent=BTN[id][1]+': '+(v?'ON':'OFF'); b.classList.toggle('on',v); }
+    const d=document.getElementById('parkDiag'); if(d) d.textContent=cfg.on?(map.getZoom()<14.5?'Acércate (zoom ≥ 14,5) para ver los parkings':(enVuelo?'Buscando parkings en la zona…':nVis+' parkings a la vista')):''; }
+  function iniciar(){
+    for(const id in BTN){ const b=document.getElementById(id); if(b) b.onclick=()=>{ const k=BTN[id][0]; cfg[k]=!cfg[k]; wr('park_cfg',JSON.stringify(cfg)); texto(); dibujar(); if(cfg.on) refrescar(); }; }
+    texto();
+    const arrancar=()=>{ capa(); dibujar(); map.on('moveend',()=>{ if(cfg.on) programar(); }); if(cfg.on) refrescar(); };
+    if(map.isStyleLoaded()) arrancar(); else map.once('idle',arrancar);
+    /* si el mapa recarga el estilo (cambio de modo), se vuelven a crear fuente y capa */
+    map.on('styledata',()=>{ try{ if(!map.getSource('parking-next')){ ok=false; capa(); dibujar(); } }catch(e){} });
+  }
+  function esperar(){ if(window.map&&map.on) iniciar(); else setTimeout(esperar,400); }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',esperar); else esperar();
+  return {cfg:()=>cfg,cache:()=>cache,refrescar,dibujar,clasificar};
+})();
+</script>
+<script>
+/* ============ FLECHAS EN LA RUTA (v182) ============
+   Cada 45 m, un chevrón blanco sobre la línea azul, fijo en el suelo (se calcula con la distancia recorrida de la ruta). Al avanzar el coche pasan hacia atrás, como en el modo túnel.
+   Solo se envían a la capa las flechas de los próximos ~450 m, y solo cuando cambian: coste casi nulo. */
+window.__flechas=(function(){
+  const rd=(k,d)=>{ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } };
+  let on=rd('flechas_on','1')!=='0', ok=false, ultimo='';
+  const PASO=45, ADEL=450;
+  function imagen(){
+    const W=48,H=48,c=document.createElement('canvas'); c.width=W; c.height=H; const x=c.getContext('2d');
+    x.lineCap='round'; x.lineJoin='round';
+    x.beginPath(); x.moveTo(11,34); x.lineTo(24,13); x.lineTo(37,34); x.lineWidth=11; x.strokeStyle='rgba(10,60,140,.55)'; x.stroke();
+    x.beginPath(); x.moveTo(11,34); x.lineTo(24,13); x.lineTo(37,34); x.lineWidth=7; x.strokeStyle='#ffffff'; x.stroke();
+    return x.getImageData(0,0,W,H);
+  }
+  function capa(){
+    try{
+      if(!map.hasImage('ruta-chev')) map.addImage('ruta-chev',imagen(),{pixelRatio:2});
+      if(!map.getSource('ruta-flechas')) map.addSource('ruta-flechas',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+      if(!map.getLayer('ruta-flechas')){
+        const ls=map.getStyle().layers.map(l=>l.id), i=ls.indexOf('ruta-3'); const antes=(i>=0&&i+1<ls.length)?ls[i+1]:undefined;
+        map.addLayer({id:'ruta-flechas',type:'symbol',source:'ruta-flechas',minzoom:14.5,layout:{'icon-image':'ruta-chev','icon-rotate':['get','b'],'icon-rotation-alignment':'map','icon-pitch-alignment':'map','icon-allow-overlap':true,'icon-ignore-placement':true,'icon-size':['interpolate',['linear'],['zoom'],14.5,0.7,17,1.25,19,1.9],'visibility':on?'visible':'none'},paint:{'icon-opacity':0.92}},antes);
+      }
+      ok=true;
+    }catch(e){ ok=false; }
+    return ok;
+  }
+  function colocar(){ try{ const ls=map.getStyle().layers.map(l=>l.id), i=ls.indexOf('ruta-flechas'), r=ls.indexOf('ruta-3'); if(i<0||r<0||i===r+1) return; map.moveLayer('ruta-flechas',ls[r+1]===('ruta-flechas')?undefined:ls[r+1]); }catch(e){} }
+  function rumbo(a,b){ const f1=a[0]*Math.PI/180,f2=b[0]*Math.PI/180,dl=(b[1]-a[1])*Math.PI/180; const y=Math.sin(dl)*Math.cos(f2), x=Math.cos(f1)*Math.sin(f2)-Math.sin(f1)*Math.cos(f2)*Math.cos(dl); return (Math.atan2(y,x)*180/Math.PI+360)%360; }
+  function actualizar(sAncla){
+    try{
+      if(!ok&&!capa()) return; const src=map.getSource('ruta-flechas'); if(!src) return;
+      const R=routeCoordsLL, D=routeCumDist;
+      if(!on||!R||R.length<2||!D||!(D[R.length-1]>0)){ if(ultimo!==''){ ultimo=''; src.setData({type:'FeatureCollection',features:[]}); } return; }
+      if(!(sAncla>=0)) sAncla=lastFix?recorridoAhora([lastFix.lat,lastFix.lon]):0;
+      const total=D[R.length-1], k0=Math.max(1,Math.ceil((sAncla+10)/PASO)), k1=Math.floor(Math.min(total-10,sAncla+ADEL)/PASO);
+      const id=k0+'_'+k1+'_'+R.length; if(id===ultimo) return; ultimo=id;
+      colocar();
+      const F=[]; let i=0;
+      for(let k=k0;k<=k1;k++){ const s=k*PASO; while(i<R.length-2&&D[i+1]<s) i++;
+        const seg=D[i+1]-D[i], t=seg>0?(s-D[i])/seg:0, A=R[i], B=R[i+1];
+        F.push({type:'Feature',geometry:{type:'Point',coordinates:[A[1]+(B[1]-A[1])*t,A[0]+(B[0]-A[0])*t]},properties:{b:rumbo(A,B)}}); }
+      src.setData({type:'FeatureCollection',features:F});
+    }catch(e){}
+  }
+  function cambiar(v){ on=v; try{ localStorage.setItem('flechas_on',v?'1':'0'); }catch(e){} try{ if(map.getLayer('ruta-flechas')) map.setLayoutProperty('ruta-flechas','visibility',on?'visible':'none'); }catch(e){} ultimo=''; actualizar(NaN); texto(); }
+  function texto(){ const b=document.getElementById('btnFlechas'); if(b){ b.textContent='➤ Flechas en la ruta: '+(on?'ON':'OFF'); b.classList.toggle('on',on); } }
+  function iniciar(){
+    const b=document.getElementById('btnFlechas'); if(b) b.onclick=()=>cambiar(!on); texto();
+    try{ const orig=window.actualizarTrimRuta; if(typeof orig==='function'&&!orig.__fl){ const nueva=function(s){ const r=orig.apply(this,arguments); actualizar(s); return r; }; nueva.__fl=true; window.actualizarTrimRuta=nueva; } }catch(e){}
+    try{ map.on('styledata',()=>{ try{ if(!map.getSource('ruta-flechas')){ ok=false; ultimo=''; capa(); } }catch(e){} }); }catch(e){}
+  }
+  function esperar(){ if(window.map&&map.on&&typeof actualizarTrimRuta==='function') iniciar(); else setTimeout(esperar,400); }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',esperar); else esperar();
+  return {actualizar,estado:()=>({on,ok,ultimo})};
 })();
 </script>
 <script>
