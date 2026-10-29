@@ -410,6 +410,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste on" id="btnCargAm">🟡 Lentos 11–22 kW: ON</button>
   <button class="ajuste on" id="btnCargAz">🔵 Rápidos 50–72 kW: ON</button>
   <button class="ajuste on" id="btnCargVe">🟢 Ultrarrápidos +72 kW: ON</button>
+  <div id="cargDiag" style="font-size:11px;opacity:.7;padding:2px 14px"></div>
   <button class="ajuste on" id="btnCargTe">🔴 Tesla Supercharger: ON</button>
   <div class="seccion">Fútbol</div>
   <button class="ajuste" id="btnListaCampos">⚽ Mis campos favoritos (máx. 10)</button>
@@ -5228,7 +5229,7 @@ window.__carg=(function(){
       const lay={'icon-image':['get','icono'],'icon-allow-overlap':true,'icon-ignore-placement':true,'icon-anchor':'bottom','icon-size':['interpolate',['linear'],['zoom'],9,0.55,14,0.8,17,1],visibility:'visible'};
       if(!map.getLayer('cargadores-next')) map.addLayer({id:'cargadores-next',type:'symbol',source:'cargadores-next',minzoom:9,filter:['==',['get','tesla'],0],layout:lay});
       /* los Supercharger llevan su propia capa: encima de las demás y se atenúan al acercarse (ahí ya se ve el modelo 3D) */
-      if(!map.getLayer('cargadores-sc')) map.addLayer({id:'cargadores-sc',type:'symbol',source:'cargadores-next',minzoom:5,filter:['==',['get','tesla'],1],layout:lay,paint:{'icon-opacity':['interpolate',['linear'],['zoom'],17,1,18.2,0.3]}});
+      if(!map.getLayer('cargadores-sc')) map.addLayer({id:'cargadores-sc',type:'symbol',source:'cargadores-next',minzoom:5,filter:['==',['get','tesla'],1],layout:lay,paint:{'icon-opacity':['interpolate',['linear'],['zoom'],17,1,18.2,0.8]}});
       capaOk=true; return true;
     }catch(e){ return false; }
   }
@@ -5239,6 +5240,7 @@ window.__carg=(function(){
       f.push({type:'Feature',properties:{icono:imagen(t,txt),i:i,tesla:t==='tesla'?1:0,orden:t==='tesla'?2:1},geometry:{type:'Point',coordinates:[p.ll[1],p.ll[0]]}}); });
     try{ map.getSource('cargadores-next').setData({type:'FeatureCollection',features:f}); }catch(e){}
     pintarBoton();
+    try{ const d=document.getElementById('cargDiag'), P=posicion(); if(d){ const te=pois.filter(esTesla); const m=P&&te.length?te.map(q=>dist(P,q.ll)).sort((a,b)=>a-b)[0]:0; d.textContent='Descargados: '+pois.length+' · Tesla: '+te.length+(te.length&&P?' · el más cercano a '+(m/1000).toFixed(1)+' km':''); } }catch(e){}
   }
   function parsear(j){
     const arr=[]; for(const poi of (j||[])){ const ai=poi.AddressInfo; if(!ai) continue; const conns=poi.Connections||[]; let kw=0; const socks=[];
