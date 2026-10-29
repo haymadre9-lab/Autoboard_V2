@@ -434,6 +434,9 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste on" id="btnLuces">💡 Luces de noche: ON</button>
   <button class="ajuste on" id="btnCarriles">🛣️ Carriles autopista: ON</button>
   <div class="seccion">Aspecto del mapa</div>
+  <button class="ajuste on" id="btnRelAgua">💧 Agua con orilla suave: ON</button>
+  <button class="ajuste on" id="btnRelVerde">🌲 Tonos de verde: ON</button>
+  <button class="ajuste on" id="btnRelPuente">🌉 Puentes con sombra: ON</button>
   <button class="ajuste on" id="btnAspBarrio">🏘️ Edificios con color: ON</button>
   <button class="ajuste on" id="btnAspVerde">🌿 Zonas verdes: ON</button>
   <button class="ajuste on" id="btnAspArboles">🌳 Árboles y arbustos: ON</button>
@@ -457,7 +460,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="enlaceGenerar">🎲 Generar código nuevo</button>
   <button class="ajuste" id="enlaceCopiar">📋 Copiar código</button>
   <div id="enlaceEstado" style="font-size:12px;color:#8d99a5;padding:2px 4px 8px">Sin código: no enlazado</div>
-  <div class="seccion">Versión v178</div>
+  <div class="seccion">Versión v179</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -877,8 +880,8 @@ function lavarMapa(){
         }
       }
       if(sl === 'water' || /water|ocean/i.test(id)){
-        try{ map.setPaintProperty(l.id,'fill-color','#d9e7f1'); }catch(e){}
-        try{ map.setPaintProperty(l.id,'fill-outline-color','#c9dbe8'); }catch(e){}
+        try{ map.setPaintProperty(l.id,'fill-color','#c6dcef'); }catch(e){}
+        try{ map.setPaintProperty(l.id,'fill-outline-color','#b3cfe6'); }catch(e){}
       }
       if(sl === 'landcover' || sl === 'landuse' || /park|grass|wood|forest|landcover/i.test(id)){
         try{ map.setPaintProperty(l.id,'fill-color','#e8ebee'); }catch(e){}
@@ -3707,7 +3710,7 @@ function __selfTest(){
    No se cambia de estilo (eso borraría las capas propias): se recolorean las capas del mapa con setPaintProperty, igual que lavarMapa(),
    y se añade body.noche para los paneles. Modos: Auto (por la altura del sol en tu posición) · Día · Noche. */
 let modoMapa=(()=>{ try{ return localStorage.getItem('modo_mapa')||'auto'; }catch(e){ return 'auto'; } })();
-const NOCHE={ bg:'#151a20', agua:'#1a2633', aguaL:'#213041', suelo:'#1b2320', edif:'#212831', via:'#313943', txt:'#9aa5b1', halo:'#151a20', extr:'#434d59' };
+const NOCHE={ bg:'#151a20', agua:'#172a3d', aguaL:'#213041', suelo:'#1b2320', edif:'#212831', via:'#313943', txt:'#9aa5b1', halo:'#151a20', extr:'#434d59' };
 const __origPaint={};
 function alturaSolar(lat,lon,d){
   const rad=Math.PI/180;
@@ -3749,7 +3752,7 @@ function pintarMapaNoche(n){
       else if(l.type==='line'){ sp(id,'line-color',n?NOCHE.via:orig(id,'line-color')); }
       else if(l.type==='fill-extrusion'){ sp(id,'fill-extrusion-color',n?NOCHE.extr:orig(id,'fill-extrusion-color')); }
     }
-    if(sl==='water' || /water|ocean/i.test(id)){ sp(id,'fill-color',n?NOCHE.agua:'#d9e7f1'); sp(id,'fill-outline-color',n?NOCHE.aguaL:'#c9dbe8'); }
+    if(sl==='water' || /water|ocean/i.test(id)){ sp(id,'fill-color',n?NOCHE.agua:'#c6dcef'); sp(id,'fill-outline-color',n?NOCHE.aguaL:'#b3cfe6'); }
     if(sl==='landcover' || sl==='landuse' || /park|grass|wood|forest|landcover/i.test(id)){ sp(id,'fill-color',n?NOCHE.suelo:'#e8ebee'); }
     if(sl==='building' && l.type!=='fill-extrusion'){ sp(id,'fill-color',n?NOCHE.edif:'#e0e3e7'); }
     if(sl==='transportation' && l.type==='line'){ sp(id,'line-color',n?NOCHE.via:'#ffffff'); }
@@ -5558,7 +5561,7 @@ window.__hal=(function(){
   document.head.appendChild(st);
 
   const CATS=[['hal','🎃 Halloween'],['mapa','🗺️ Mapa y vista'],['aspecto','🎨 Aspecto del mapa'],['cielo','🌦️ Cielo y tiempo'],['sonido','🔊 Sonido y avisos'],['carg','⚡ Cargadores'],['gps','📍 GPS'],['coche','🚗 Coche'],['futbol','⚽ Fútbol'],['fiesta','🎉 Celebración'],['enlace','🔗 Enlace entre dispositivos'],['sis','⚙️ Rendimiento y versión']];
-  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnPasos',aspecto:'btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',sis:'btnAA btnLimpiarFavs'};
+  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnPasos',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',sis:'btnAA btnLimpiarFavs'};
   const POR={}; for(const c in M) M[c].split(' ').forEach(id=>POR[id]=c);
   const cuerpos={}, cats={};
   const ref=panel.querySelector('h2');
@@ -5596,6 +5599,63 @@ window.__hal=(function(){
   let pend=false; function pasar(){ pend=false; panel.querySelectorAll('button.ajuste').forEach(decorar); }
   new MutationObserver(()=>{ if(!pend){ pend=true; Promise.resolve().then(pasar); } }).observe(panel,{childList:true,subtree:true,characterData:true});
   pasar();
+})();
+</script>
+<script>
+/* ============ RELIEVE VISUAL (v179): orilla del agua, tonos de verde y puentes con sombra ============
+   Todo son capas ligeras de las propias teselas (sin descargas ni geometría nueva):
+   · Agua: tono azul suave (más que el gris de antes) y una orilla clara difuminada.
+   · Verdes: capa translúcida que oscurece bosques y aclara praderas/parques, y un borde interior suave en los bosques. Al ser translúcida respeta la estación.
+   · Puentes (brunnel=bridge, también pasarelas de peatones): tablero con bordes y SOMBRA proyectada en el suelo; los de nivel alto (layer≥2) la proyectan más lejos.
+     No se levanta la geometría: el coche y la ruta siguen dibujados a ras de suelo, así que nunca "pasan por debajo" de su propio puente. */
+(function(){
+  const rd=(k,d)=>{ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } };
+  let cfg={agua:true,verde:true,puentes:true}; try{ Object.assign(cfg,JSON.parse(rd('rel_cfg','{}'))||{}); }catch(e){}
+  const BTN={btnRelAgua:['agua','💧 Agua con orilla suave'],btnRelVerde:['verde','🌲 Tonos de verde'],btnRelPuente:['puentes','🌉 Puentes con sombra']};
+  const KZ=z=>Math.pow(2,z)/114500;
+  const ANCHO={motorway:15,trunk:13,primary:11,secondary:9.5,tertiary:8.5,minor:7,service:5,path:2.8,rail:4.5,pedestrian:5};
+  const anchoM=(extra)=>{ const st=z=>{ const m=['match',['get','class']]; for(const k in ANCHO) m.push(k,(ANCHO[k]+extra)*KZ(z)); m.push((6+extra)*KZ(z)); return m; }; return ['interpolate',['exponential',2],['zoom'],14,st(14),22,st(22)]; };
+  const CL=['in',['get','class'],['literal',Object.keys(ANCHO)]];
+  const PUENTE=['all',['==',['get','brunnel'],'bridge'],CL];
+  const COL={dia:{orilla:'#f1f7fc',bosque:'rgba(30,80,40,.24)',prado:'rgba(255,255,255,.2)',rimBosque:'rgba(25,70,35,.5)',sombra:0.28,borde:'#8a949f',via:'#ffffff',pasarela:'#f2e9d4'},
+             noche:{orilla:'#2d4559',bosque:'rgba(0,0,0,.32)',prado:'rgba(120,160,130,.1)',rimBosque:'rgba(0,0,0,.45)',sombra:0.5,borde:'#0e1318',via:'#3b4551',pasarela:'#4a4a42'}};
+  let noche=null, creado=false;
+  const mp=()=>window.__map;
+  function antesVias(map){ try{ for(const l of map.getStyle().layers) if(l['source-layer']==='transportation' && l.type==='line') return l.id; }catch(e){} return undefined; }
+  function antesPuentes(map){ if(map.getLayer('ruta-base')) return 'ruta-base'; if(map.getLayer('3d-buildings')) return '3d-buildings'; try{ for(const l of map.getStyle().layers) if(l.type==='symbol') return l.id; }catch(e){} return undefined; }
+  function crear(){
+    const map=mp(); if(!map||!map.isStyleLoaded()||typeof idFuenteBuildings==='undefined'||!idFuenteBuildings) return false;
+    if(creado&&map.getLayer('rel-puente-calzada')&&map.getLayer('rel-agua-orilla')) return true;
+    const src=idFuenteBuildings, add=(l,a)=>{ if(!map.getLayer(l.id)) map.addLayer(l,a); };
+    const poli=['==',['geometry-type'],'Polygon'], c=COL.dia;
+    try{
+      const ab=antesVias(map);
+      add({id:'rel-agua-orilla',type:'line',source:src,'source-layer':'water',minzoom:11,filter:poli,layout:{'line-join':'round'},paint:{'line-color':c.orilla,'line-width':['interpolate',['linear'],['zoom'],11,1.5,16,5,19,9],'line-blur':['interpolate',['linear'],['zoom'],11,1,17,3],'line-opacity':0.9}},ab);
+      add({id:'rel-prado',type:'fill',source:src,'source-layer':'landcover',minzoom:12,filter:['all',poli,['in',['get','class'],['literal',['grass','meadow']]]],paint:{'fill-color':c.prado}},ab);
+      add({id:'rel-bosque',type:'fill',source:src,'source-layer':'landcover',minzoom:11,filter:['all',poli,['in',['get','class'],['literal',['wood','forest']]]],paint:{'fill-color':c.bosque}},ab);
+      add({id:'rel-bosque-rim',type:'line',source:src,'source-layer':'landcover',minzoom:13,filter:['all',poli,['in',['get','class'],['literal',['wood','forest']]]],layout:{'line-join':'round'},paint:{'line-color':c.rimBosque,'line-width':['interpolate',['linear'],['zoom'],13,3,17,10],'line-blur':['interpolate',['linear'],['zoom'],13,3,17,8],'line-opacity':0.55}},ab);
+      const ap=antesPuentes(map), tr={source:src,'source-layer':'transportation'}, lay={'line-cap':'butt','line-join':'round'};
+      const sh=(id,flt,mult)=>add(Object.assign({id,type:'line',minzoom:14,filter:flt,layout:lay,paint:{'line-color':'#000000','line-opacity':c.sombra,'line-width':anchoM(3),'line-blur':['interpolate',['linear'],['zoom'],14,1,19,4],'line-translate':['interpolate',['linear'],['zoom'],14,['literal',[1.2*mult,2*mult]],19,['literal',[8*mult,12*mult]]],'line-translate-anchor':'map'}},tr),ap);
+      sh('rel-puente-sombra',['all',PUENTE,['!',['>=',['coalesce',['get','layer'],1],2]]],1);
+      sh('rel-puente-sombra-alto',['all',PUENTE,['>=',['coalesce',['get','layer'],1],2]],2.2);
+      add(Object.assign({id:'rel-puente-borde',type:'line',minzoom:14,filter:PUENTE,layout:lay,paint:{'line-color':c.borde,'line-width':anchoM(1.6)}},tr),ap);
+      add(Object.assign({id:'rel-puente-calzada',type:'line',minzoom:14,filter:PUENTE,layout:lay,paint:{'line-color':['match',['get','class'],['path','pedestrian'],c.pasarela,c.via],'line-width':anchoM(0)}},tr),ap);
+      creado=true; noche=null; vis(); pintar(); return true;
+    }catch(e){ try{ registrarError('relieve',e.message); }catch(_){} return false; }
+  }
+  function vis(){ const map=mp(); if(!map) return; const set=(ids,v)=>ids.forEach(id=>{ try{ if(map.getLayer(id)) map.setLayoutProperty(id,'visibility',v?'visible':'none'); }catch(e){} });
+    set(['rel-agua-orilla'],cfg.agua); set(['rel-prado','rel-bosque','rel-bosque-rim'],cfg.verde); set(['rel-puente-sombra','rel-puente-sombra-alto','rel-puente-borde','rel-puente-calzada'],cfg.puentes); }
+  function pintar(){
+    const map=mp(); if(!map||!creado) return; const n=!!(typeof nocheAct!=='undefined'&&nocheAct); if(n===noche) return; noche=n; const c=n?COL.noche:COL.dia, sp=(id,p,v)=>{ try{ if(map.getLayer(id)) map.setPaintProperty(id,p,v); }catch(e){} };
+    sp('rel-agua-orilla','line-color',c.orilla); sp('rel-prado','fill-color',c.prado); sp('rel-bosque','fill-color',c.bosque); sp('rel-bosque-rim','line-color',c.rimBosque);
+    sp('rel-puente-sombra','line-opacity',c.sombra); sp('rel-puente-sombra-alto','line-opacity',c.sombra); sp('rel-puente-borde','line-color',c.borde);
+    sp('rel-puente-calzada','line-color',['match',['get','class'],['path','pedestrian'],c.pasarela,c.via]);
+  }
+  function textos(){ for(const id in BTN){ const b=document.getElementById(id); if(b){ const k=BTN[id][0]; b.textContent=BTN[id][1]+': '+(cfg[k]?'ON':'OFF'); b.classList.toggle('on',!!cfg[k]); } } }
+  for(const id in BTN){ const b=document.getElementById(id); if(b) b.onclick=()=>{ const k=BTN[id][0]; cfg[k]=!cfg[k]; try{ localStorage.setItem('rel_cfg',JSON.stringify(cfg)); }catch(e){} textos(); vis(); }; }
+  textos();
+  setInterval(()=>{ try{ if(!crear()) return; pintar(); }catch(e){} },1200);
+  window.__rel={cfg:()=>cfg,estado:()=>({creado,noche})};
 })();
 </script>
 <script>
