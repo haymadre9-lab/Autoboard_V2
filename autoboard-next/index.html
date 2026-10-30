@@ -463,6 +463,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste on" id="btnAspBorde">▭ Borde de edificios: ON</button>
   <button class="ajuste" id="btnAspEstacion">🍂 Estación: Auto</button>
   <button class="ajuste on" id="btnPasos">🚸 Pasos de peatones: ON</button>
+  <button class="ajuste on" id="btnCamDenso">🏙️ Cámara adaptable en ciudad densa: ON</button>
   <button class="ajuste on" id="btnFlechas">➤ Flechas en la ruta: ON</button>
   <button class="ajuste" id="btnCielo">🌅 Cielo: Auto</button>
   <button class="ajuste" id="btnTiempo">🌦️ Tiempo: Real</button>
@@ -481,7 +482,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="enlaceCopiar">📋 Copiar código</button>
   <div id="enlaceEstado" style="font-size:12px;color:#8d99a5;padding:2px 4px 8px">Sin código: no enlazado</div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v185</div>
+  <div class="seccion">Versión v186</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -724,6 +725,25 @@ let cocheYact = COCHE_SCREEN_Y;   /* posición vertical ACTUAL del coche en pant
    Suavizado exponencial dependiente de dt:  k = 1 - exp(-dt/tau).
    Equivalencia con un factor por frame a 60 fps:  factor = 1-exp(-(1/60)/tau)
      tau 0.45 s ≈ 0.036 | tau 0.28 s ≈ 0.058 | tau 0.55 s ≈ 0.030            */
+/* ---- v186: cámara adaptable en centro urbano denso ----
+   Con muchos edificios altos alrededor, el pitch de circulación baja de 74° a CAM_DENSO.PITCH y el zoom de maniobra se limita a CAM_DENSO.ZOOM_MAX
+   (la cámara va más alta y no se mete dentro de los edificios). Interruptor en Ajustes: apagado = pitch 74° y zoom 21,2 como antes. */
+const CAM_DENSO={ PITCH:62, ZOOM_MAX:20.0, N_MIN:5, N_MAX:14, H_MIN:15, TAU_SUBE:1.5, TAU_BAJA:3.5, CADA_MS:1000 };
+let camDensoOn=true; try{ camDensoOn=localStorage.getItem('cam_denso')!=='0'; }catch(e){}
+let fDenso=0, fDensoObj=0, nTallos=0;
+function medirDensidad(){
+  try{
+    if(!camDensoOn||typeof map==='undefined'||!map.getLayer('3d-buildings')||!map.isStyleLoaded()){ fDensoObj=0; return; }
+    const c=map.getContainer(), W=c.clientWidth, H=c.clientHeight, y=H*Math.min(0.95,(typeof cocheYact==='number'?cocheYact:0.65));
+    const fs=map.queryRenderedFeatures([[W/2-240,Math.max(0,H*0.15)],[W/2+240,Math.min(H,y+H*0.12)]],{layers:['3d-buildings']});
+    const vistos=new Set(); let n=0;
+    for(const f of fs){ const h=+(f.properties&&f.properties.render_height); if(!(h>=CAM_DENSO.H_MIN)) continue; const g=f.geometry&&f.geometry.coordinates&&f.geometry.coordinates[0]&&f.geometry.coordinates[0][0]; const k=h+'|'+(g?g[0]+','+g[1]:n); if(vistos.has(k)) continue; vistos.add(k); n++; }
+    nTallos=n; fDensoObj=Math.max(0,Math.min(1,(n-CAM_DENSO.N_MIN)/(CAM_DENSO.N_MAX-CAM_DENSO.N_MIN)));
+  }catch(e){ fDensoObj=0; }
+}
+setInterval(medirDensidad,CAM_DENSO.CADA_MS);
+window.__camDenso={estado:()=>({on:camDensoOn,f:+fDenso.toFixed(2),obj:+fDensoObj.toFixed(2),tallos:nTallos}),medir:medirDensidad};
+
 const CAM = {
   /* --- suavizado (segundos) --- */
   TAU_CENTER:0.45,        /* absorbe la CORRECCIÓN de cada fix GPS (la posición ya se extrapola, así no añade retraso) */
@@ -2459,8 +2479,11 @@ function bucleSeguimiento(ts){
      de una maniobra daba ~1.200 px/s (parece que la cámara se dispara); se limita a CAM.PX_S_MAX px/s. En ciudad (≤ ~45 km/h) no cambia nada. */
   const zTope=Math.log2(CAM.PX_S_MAX*78271.5*Math.cos(pred.lat*Math.PI/180)/Math.max(vSuave,4));
   if(zObj>zTope) zObj=Math.max(zBase+CAM.ZOOM_AUTOPISTA_EXTRA*fAut, zTope);
+  fDenso+=(fDensoObj-fDenso)*camK(fDensoObj>fDenso?CAM_DENSO.TAU_SUBE:CAM_DENSO.TAU_BAJA,dt);
+  const fDn=camDensoOn?fDenso*(1-fAut):0;   /* no en autopista/perspectiva */
+  if(fDn>0&&zObj>CAM_DENSO.ZOOM_MAX) zObj-=(zObj-CAM_DENSO.ZOOM_MAX)*fDn;   /* ciudad densa: el zoom de maniobra no pasa de ZOOM_MAX */
   window.__manPeso=mn.peso;
-  const pCiudad=PITCH_NAV_BASE+CAM.PITCH_MAN_DELTA*mn.peso;
+  const pCiudad=Math.min(PITCH_NAV_BASE+CAM.PITCH_MAN_DELTA*mn.peso, PITCH_NAV_BASE+(CAM_DENSO.PITCH-PITCH_NAV_BASE)*fDn);
   const pObj=pitchOn ? pCiudad+(CAM.PITCH_AUTOPISTA-pCiudad)*fAut : 0;   /* respeta el botón 📐 Pitch de Ajustes */
   camDiag.fAut=fAut;
   camActual.zoom  += (zObj-camActual.zoom)*camK(zObj<camActual.zoom ? CAM.TAU_ZOOM_OUT : CAM.TAU_ZOOM_IN, dt);
@@ -5594,7 +5617,7 @@ window.__hal=(function(){
   document.head.appendChild(st);
 
   const CATS=[['hal','🎃 Halloween'],['mapa','🗺️ Mapa y vista'],['aspecto','🎨 Aspecto del mapa'],['cielo','🌦️ Cielo y tiempo'],['sonido','🔊 Sonido y avisos'],['carg','⚡ Cargadores'],['park','🅿️ Aparcamientos'],['gps','📍 GPS'],['coche','🚗 Coche'],['futbol','⚽ Fútbol'],['fiesta','🎉 Celebración'],['enlace','🔗 Enlace entre dispositivos'],['sis','⚙️ Rendimiento y versión']];
-  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnPasos btnFlechas',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',sis:'btnAA btnLimpiarFavs btnWake'};
+  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnPasos btnCamDenso btnFlechas',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',sis:'btnAA btnLimpiarFavs btnWake'};
   const POR={}; for(const c in M) M[c].split(' ').forEach(id=>POR[id]=c);
   const cuerpos={}, cats={};
   const ref=panel.querySelector('h2');
@@ -6121,6 +6144,14 @@ window.__obras=(function(){
   function esperar(){ if(window.map&&map.on&&typeof recorridoAhora==='function') iniciar(); else setTimeout(esperar,400); }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',esperar); else esperar();
   return {estado:()=>({on,estadoTxt,lista:lista.map(o=>({cat:o.cat,sIni:Math.round(o.sIni),sFin:Math.round(o.sFin),desc:o.desc}))}),consultar,tick};
+})();
+</script>
+<script>
+(function(){
+  const b=document.getElementById('btnCamDenso'); if(!b) return;
+  const t=()=>{ b.textContent='🏙️ Cámara adaptable en ciudad densa: '+(camDensoOn?'ON':'OFF'); b.classList.toggle('on',camDensoOn); };
+  b.onclick=()=>{ camDensoOn=!camDensoOn; try{ localStorage.setItem('cam_denso',camDensoOn?'1':'0'); }catch(e){} if(!camDensoOn) fDensoObj=0; else medirDensidad(); t(); };
+  t();
 })();
 </script>
 <script>
