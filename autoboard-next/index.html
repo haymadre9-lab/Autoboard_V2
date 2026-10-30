@@ -467,7 +467,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="enlaceCopiar">📋 Copiar código</button>
   <div id="enlaceEstado" style="font-size:12px;color:#8d99a5;padding:2px 4px 8px">Sin código: no enlazado</div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v183</div>
+  <div class="seccion">Versión v184</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -1855,7 +1855,11 @@ function cuadrosDeStep(s,hw,tam,conCarriles){
     const n=s.lanes.length, t=Math.min(tam,Math.floor((290-(n-1)*6)/n));
     return '<div class="nbCuadros">'+s.lanes.map(l=>{
       const dirs=(l.lane&&l.lane.directions)||['straight'], act=!!(l.lane&&l.lane.active);
-      return cuadroNav('<svg viewBox="4 6 28 28">'+flechaCarrilSVG(dirs,act,c,18,4)+'</svg>',hw,t);
+      /* estilo A: carril activo = cuadro relleno con la flecha invertida; inactivo = apagado */
+      const inv=act&&!hw;   /* carretera: activo invertido (negro con flecha blanca); autopista: activo = cartel azul pleno, inactivo apagado (un cuadro blanco se perdería sobre el fondo blanco de la tarjeta) */
+      const cc={fondo:c.fondo,borde:c.borde,flecha:inv?c.fondo:c.flecha,flechaInactiva:c.flecha};
+      const svg='<svg viewBox="4 6 28 28">'+flechaCarrilSVG(dirs,true,cc,18,4,m.modifier&&act?m.modifier:null)+'</svg>';
+      return '<div class="nbCuadro'+(hw?' hw':'')+'" style="width:'+t+'px;height:'+t+'px;background:'+(inv?c.flecha:c.fondo)+';border:3px solid '+c.borde+(act?'':';opacity:.38')+'">'+svg+'</div>';
     }).join('')+'</div>';
   }
   return cuadroNav('<svg viewBox="0 0 48 48">'+flechaGiroSVG(m.modifier,c)+'</svg>',hw,tam);
@@ -3567,32 +3571,39 @@ function dibujarFlechaA(mod, colores, grosor, tamPunta){
     + '<path d="'+tri+'" fill="'+colores.flecha+'"/>';
 }
 function flechaGiroSVG(mod, colores){return dibujarFlechaA(mod||'straight', colores, 6.5, 10);}
-function flechaCarrilSVG(dirs, activo, colores, x, y){
-  const color = activo ? colores.flecha : colores.flechaInactiva;
-  const cy = y + 24;
-  const lista = Array.isArray(dirs) && dirs.length ? dirs : ['straight'];
-  let out = '';
-  lista.forEach((dir, i) => {
-    const offset = lista.length > 1 ? (i === 0 ? -5 : 5) : 0;
-    const xx = x + offset;
-    const escala = lista.length > 1 ? 0.8 : 1;
-    const g = 3.2*escala;const len = 6*escala;const hw = 4.5*escala;
-    let d = '', vx, vy, ang;
-    if(dir === 'straight'){ vx=xx; vy=y+6; ang=0; d='M'+xx+' '+cy+' L'+xx+' '+(vy+len); }
-    else if(dir === 'right'){ vx=xx+8; vy=y+6; ang=Math.PI/2; d='M'+xx+' '+cy+' L'+xx+' '+(y+14)+' Q'+xx+' '+(y+6)+' '+(vx-len)+' '+(y+6); }
-    else if(dir === 'left'){ vx=xx-8; vy=y+6; ang=-Math.PI/2; d='M'+xx+' '+cy+' L'+xx+' '+(y+14)+' Q'+xx+' '+(y+6)+' '+(vx+len)+' '+(y+6); }
-    else if(dir === 'slight right'){ vx=xx+6; vy=y+6; ang=Math.PI/4; d='M'+xx+' '+cy+' L'+xx+' '+(y+12)+' Q'+xx+' '+(y+6)+' '+(vx-len*0.7)+' '+(y+6); }
-    else if(dir === 'slight left'){ vx=xx-6; vy=y+6; ang=-Math.PI/4; d='M'+xx+' '+cy+' L'+xx+' '+(y+12)+' Q'+xx+' '+(y+6)+' '+(vx+len*0.7)+' '+(y+6); }
-    else if(dir === 'uturn'){ vx=xx+14; vy=y+14; ang=Math.PI; d='M'+xx+' '+cy+' L'+xx+' '+(y+12)+' Q'+xx+' '+(y+4)+' '+(xx+8)+' '+(y+4)+' Q'+(xx+14)+' '+(y+4)+' '+vx+' '+(vy-len); }
-    else { vx=xx; vy=y+6; ang=0; d='M'+xx+' '+cy+' L'+xx+' '+(vy+len); }
-    const tan={x:Math.sin(ang),y:-Math.cos(ang)},lat={x:Math.cos(ang),y:Math.sin(ang)};
-    const bx=vx-tan.x*len,by=vy-tan.y*len;
-    const l={x:bx+lat.x*hw,y:by+lat.y*hw},r={x:bx-lat.x*hw,y:by-lat.y*hw};
-    const tri='M'+vx.toFixed(1)+' '+vy.toFixed(1)+' L'+l.x.toFixed(1)+' '+l.y.toFixed(1)+' L'+r.x.toFixed(1)+' '+r.y.toFixed(1)+' Z';
-    out += '<path d="'+d+'" stroke="'+color+'" stroke-width="'+g+'" stroke-linecap="butt" stroke-linejoin="round" fill="none"/>'
-      + '<path d="'+tri+'" fill="'+color+'"/>';
-  });
-  return out;
+/* v184: UNA flecha por carril, grande y clara (punta grande, giro marcado). Si el carril admite varias direcciones se dibuja la de la maniobra de la ruta (si el carril está activo) o la principal.
+   Se dibuja en el espacio del cuadro (viewBox "4 6 28 28"); x,y colocan el centro igual que antes (18,4). */
+function dirCarril(dirs, activo, mod){
+  const L=(Array.isArray(dirs)&&dirs.length)?dirs:['straight'];
+  if(L.length===1) return L[0];
+  const fam=d=>/right/.test(d)?'r':/left/.test(d)?'l':/uturn/.test(d)?'u':'s';
+  if(activo && mod){ const e=L.find(d=>d===mod); if(e) return e; const f=L.find(d=>fam(d)===fam(mod)); if(f) return f; }
+  return L[0];
+}
+function flechaCarrilSVG(dirs, activo, colores, x, y, mod){
+  const col = activo ? colores.flecha : colores.flechaInactiva;
+  const dir = dirCarril(dirs, activo, mod);
+  const SW=4.4, HL=10, HW=7.6;
+  const tri=(tx,ty,dx,dy,hl,hw)=>{ const bx=tx-dx*hl, by=ty-dy*hl, px=-dy, py=dx; return '<path d="M'+tx+' '+ty+' L'+(bx+px*hw).toFixed(1)+' '+(by+py*hw).toFixed(1)+' L'+(bx-px*hw).toFixed(1)+' '+(by-py*hw).toFixed(1)+' Z" fill="'+col+'"/>'; };
+  const trazo=d=>'<path d="'+d+'" stroke="'+col+'" stroke-width="'+SW+'" fill="none" stroke-linejoin="round" stroke-linecap="butt"/>';
+  const fam = /right/.test(dir)?1 : /left/.test(dir)?-1 : 0;
+  let o='';
+  if(dir==='uturn'){
+    o = trazo('M11 32 L11 18 Q11 9 19 9 Q27 9 27 18 L27 19') + tri(27,29,0,1,9,7);
+  } else if(fam===0){
+    o = trazo('M18 32 L18 '+(8+HL-1)) + tri(18,7,0,-1,HL,HW);
+  } else {
+    const leve=/slight|bear/.test(dir);
+    if(leve){
+      const x0=12, d=Math.SQRT1_2, tx=x0+17, ty=10, bx=tx-d*HL, by=ty+d*HL;
+      o = trazo('M'+x0+' 32 L'+x0+' 25 Q'+x0+' 20 '+(x0+4)+' 17 L'+(bx-d*1.2).toFixed(1)+' '+(by+d*1.2).toFixed(1)) + tri(tx,ty,d,-d,HL,HW);
+    } else {
+      const x0=11, yt=14, R=8, xe=30.5;
+      o = trazo('M'+x0+' 32 L'+x0+' '+(yt+R)+' Q'+x0+' '+yt+' '+(x0+R)+' '+yt+' L'+(xe-HL+1)+' '+yt) + tri(xe,yt,1,0,HL,HW);
+    }
+    if(fam<0) o='<g transform="translate(36,0) scale(-1,1)">'+o+'</g>';
+  }
+  return '<g transform="translate('+(x-18)+','+(y-4)+')">'+o+'</g>';
 }
 function cartelConCarriles(lanes, mod, hw){
   const colores = colorCartel(hw);
@@ -3607,7 +3618,7 @@ function cartelConCarriles(lanes, mod, hw){
     const dirs = (carril.lane && carril.lane.directions) || ['straight'];
     const activo = !!(carril.lane && carril.lane.active);
     const cx = padding + anchoCarril*i + anchoCarril/2;
-    svg += flechaCarrilSVG(dirs, activo, colores, cx, 4);
+    svg += flechaCarrilSVG(dirs, activo, colores, cx, 4, mod);
     if(i < n-1){
       const sx = padding + anchoCarril*(i+1);
       svg += '<line x1="'+sx+'" y1="8" x2="'+sx+'" y2="'+(alto-8)+'" stroke="'+colores.flecha+'" stroke-width="1" opacity="0.25"/>';
