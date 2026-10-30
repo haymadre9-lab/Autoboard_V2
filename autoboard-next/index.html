@@ -51,6 +51,19 @@ html.noche0 #map,body.noche #map{background:#1b2128}
 #navsep{height:1px;background:#e3e7eb}
 #cartelAlt{display:none;position:relative;background:#ffffff;border-radius:16px;padding:12px 14px;box-shadow:0 6px 20px rgba(60,70,80,.25);color:#111111;box-sizing:border-box}
 #cartelAlt.on{display:block}
+#panelObras{display:none;position:relative;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 6px 20px rgba(60,70,80,.25);color:#111111;box-sizing:border-box}
+#panelObras.on{display:block}
+#panelObras .obBanda{height:12px;background:repeating-linear-gradient(-45deg,#d32f2f 0 12px,#ffffff 12px 24px)}
+#panelObras .obCuerpo{padding:9px 14px 12px}
+#panelObras .obT{display:flex;align-items:baseline;gap:8px;font:800 19px/1.15 system-ui,sans-serif;padding-right:28px}
+#panelObras #obDist{margin-left:auto;font-size:24px;white-space:nowrap}
+#panelObras #obSub{font:600 13px/1.25 system-ui,sans-serif;color:#555;margin-top:3px}
+#panelObras #obrasX{position:absolute;top:16px;right:8px;width:24px;height:24px;border-radius:50%;border:0;background:#e9ecef;color:#6b7580;font-size:13px;font-weight:800;cursor:pointer;padding:0;line-height:24px}
+body.noche #panelObras{background:#232a31;color:#e8edf2;box-shadow:0 6px 20px rgba(0,0,0,.45)}
+body.noche #panelObras #obSub{color:#9aa5b1}
+body.noche #panelObras .obBanda{background:repeating-linear-gradient(-45deg,#d32f2f 0 12px,#232a31 12px 24px)}
+body.noche #panelObras #obrasX{background:#343c45;color:#9aa5b1}
+@media(max-height:600px){#panelObras .obT{font-size:16px}#panelObras #obDist{font-size:19px}#panelObras .obCuerpo{padding:6px 12px 8px}}
 #cartelAlt .alFila{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding-right:30px}
 #cartelAlt .alTit{font:700 15px/1.2 system-ui,sans-serif;color:#111111}
 #cartelAlt .alSep{font:600 13px/1.2 system-ui,sans-serif;color:#6b7580;white-space:nowrap}
@@ -105,7 +118,7 @@ html.noche0 #map,body.noche #map{background:#1b2128}
 #panelAjustes .seccion{margin-top:16px;margin-bottom:6px;color:#8d99a5;font-size:12px;text-transform:uppercase;letter-spacing:1px}
 #minihud{position:fixed;left:14px;bottom:32px;z-index:15;display:none;background:rgba(10,13,16,.85);border:1px solid #232c33;border-radius:14px;padding:14px 18px;color:#fff;font:800 52px/1 system-ui,sans-serif;align-items:center;gap:16px;min-width:100px;justify-content:center}
 #minihud.on{display:flex}
-@media(max-height:600px){#minihud{bottom:12px;padding:8px 14px;font-size:38px;gap:10px;min-width:72px;z-index:21}#minihud .limite{width:32px;height:32px;right:-16px;font-size:14px;border-width:3px}body:has(#cartelAlt.on) #minihud{left:calc(var(--anchoPanel) + 34px)}}
+@media(max-height:600px){#minihud{bottom:12px;padding:8px 14px;font-size:38px;gap:10px;min-width:72px;z-index:21}#minihud .limite{width:32px;height:32px;right:-16px;font-size:14px;border-width:3px}body:has(#cartelAlt.on,#panelObras.on) #minihud{left:calc(var(--anchoPanel) + 34px)}}
 body.modo-navegacion #minihud{display:flex}
 #minihud .vel{color:#fff;font-weight:900;letter-spacing:-1px}
 #minihud .limite{position:absolute;right:-19px;top:50%;transform:translateY(-50%);width:38px;height:38px;box-sizing:border-box;border-radius:50%;background:#ffffff;border:4px solid #d32f2f;display:flex;align-items:center;justify-content:center;font:800 16px/1 system-ui,sans-serif;color:#000;box-shadow:0 2px 6px rgba(0,0,0,.4)}
@@ -417,6 +430,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste on" id="btnCelebracion">🎉 Celebración: ON</button>
   <div class="seccion">Avisos</div>
   <button class="ajuste on" id="btnAvisosRadares">📸 Avisos radares: ON</button>
+  <button class="ajuste on" id="btnObras">🚧 Avisos de obras y cortes: ON</button>
   <div class="seccion">Cargadores</div>
   <button class="ajuste" id="btnListaCargadores">⚡ Ver los 10 más cercanos (según filtros)</button>
   <button class="ajuste on" id="btnCargMapa">⚡ Cargadores en el mapa: ON</button>
@@ -467,7 +481,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="enlaceCopiar">📋 Copiar código</button>
   <div id="enlaceEstado" style="font-size:12px;color:#8d99a5;padding:2px 4px 8px">Sin código: no enlazado</div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v184</div>
+  <div class="seccion">Versión v185</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -533,6 +547,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div class="alMotivo" id="alMotivo"></div>
   <button class="alBtn" id="alTomar">Tomar</button>
 </div>
+<div id="panelObras"><div class="obBanda"></div><button id="obrasX" title="Descartar">✕</button><div class="obCuerpo"><div class="obT"><span id="obTit">Obras</span><span id="obDist"></span></div><div id="obSub"></div></div></div>
 </div>
 
 <div id="minihud"><span class="vel" id="hudVel">0</span><span class="limite oculto" id="hudLimite">50</span></div>
@@ -5579,7 +5594,7 @@ window.__hal=(function(){
   document.head.appendChild(st);
 
   const CATS=[['hal','🎃 Halloween'],['mapa','🗺️ Mapa y vista'],['aspecto','🎨 Aspecto del mapa'],['cielo','🌦️ Cielo y tiempo'],['sonido','🔊 Sonido y avisos'],['carg','⚡ Cargadores'],['park','🅿️ Aparcamientos'],['gps','📍 GPS'],['coche','🚗 Coche'],['futbol','⚽ Fútbol'],['fiesta','🎉 Celebración'],['enlace','🔗 Enlace entre dispositivos'],['sis','⚙️ Rendimiento y versión']];
-  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnPasos btnFlechas',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',sis:'btnAA btnLimpiarFavs btnWake'};
+  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnPasos btnFlechas',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',sis:'btnAA btnLimpiarFavs btnWake'};
   const POR={}; for(const c in M) M[c].split(' ').forEach(id=>POR[id]=c);
   const cuerpos={}, cats={};
   const ref=panel.querySelector('h2');
@@ -5932,7 +5947,7 @@ window.__flechas=(function(){
     }catch(e){ ok=false; }
     return ok;
   }
-  function colocar(){ try{ const ls=map.getStyle().layers.map(l=>l.id), i=ls.indexOf('ruta-flechas'), r=ls.indexOf('ruta-3'); if(i<0||r<0||i===r+1) return; map.moveLayer('ruta-flechas',ls[r+1]===('ruta-flechas')?undefined:ls[r+1]); }catch(e){} }
+  function colocar(){ try{ const ls=map.getStyle().layers.map(l=>l.id), i=ls.indexOf('ruta-flechas'), r=ls.indexOf('ruta-3'); if(i<0||r<0||i>r) return; map.moveLayer('ruta-flechas',ls[r+1]===('ruta-flechas')?undefined:ls[r+1]); }catch(e){} }
   function rumbo(a,b){ const f1=a[0]*Math.PI/180,f2=b[0]*Math.PI/180,dl=(b[1]-a[1])*Math.PI/180; const y=Math.sin(dl)*Math.cos(f2), x=Math.cos(f1)*Math.sin(f2)-Math.sin(f1)*Math.cos(f2)*Math.cos(dl); return (Math.atan2(y,x)*180/Math.PI+360)%360; }
   function actualizar(sAncla){
     try{
@@ -5990,6 +6005,122 @@ window.__wake=(function(){
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',iniciar); else iniciar();
   return {estado:()=>({on,activo:!!lock,estado}),pedir,soltar};
+})();
+</script>
+<script>
+/* ============ AVISO DE OBRAS Y CORTES (v185) ============
+   Datos: TomTom Traffic Incident Details v5 (cortes de carretera, cortes de carril y obras). Solo se consulta el tramo de ruta de los próximos ~30 km,
+   al cambiar la ruta, cada 2,5 min y cada 10 km recorridos. Los incidentes que coinciden con la ruta (≤ 25 m) se pintan sobre ella en rojo y blanco y
+   aparece un panel con la distancia (desde 5 km); voz una vez a ≤ 2,5 km. Si TomTom falla o no hay datos, no se muestra nada. */
+window.__obras=(function(){
+  const rd=(k,d)=>{ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } };
+  const wr=(k,v)=>{ try{ localStorage.setItem(k,v); }catch(e){} };
+  let on=rd('obras_on','1')!=='0';
+  const VENT=30000, MARGEN=0.012, CADA_MS=150000, CADA_M=10000, UMBRAL_M=25, AVISO_M=5000, VOZ_M=2500;
+  let lista=[], ref=null, ultT=0, ultS=-1e9, enVuelo=false, ok=false, descartados={}, hablados={}, panel=null, estadoTxt='';
+  const KX=la=>111320*Math.cos(la*Math.PI/180), KY=110540;
+  const $=id=>document.getElementById(id);
+  function capas(){
+    try{
+      if(!map.getSource('obras')) map.addSource('obras',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+      const W=['interpolate',['linear'],['zoom'],14,10,16,16,18,22,20,30];
+      if(!map.getLayer('obras-base')) map.addLayer({id:'obras-base',type:'line',source:'obras',layout:{'line-cap':'butt','line-join':'round'},paint:{'line-color':'#d32f2f','line-width':W,'line-opacity':1}});
+      if(!map.getLayer('obras-raya')) map.addLayer({id:'obras-raya',type:'line',source:'obras',layout:{'line-cap':'butt','line-join':'round'},paint:{'line-color':'#ffffff','line-width':W,'line-dasharray':[1.3,1.3],'line-opacity':1}});
+      ok=true;
+    }catch(e){ ok=false; }
+    return ok;
+  }
+  function colocar(){
+    try{
+      const ls=map.getStyle().layers.map(l=>l.id); let before;
+      if(ls.indexOf('ruta-flechas')>=0) before='ruta-flechas';
+      else { const r=ls.indexOf('ruta-3'); if(r>=0){ for(let i=r+1;i<ls.length;i++) if(!/^obras-/.test(ls[i])){ before=ls[i]; break; } } }
+      if(!before) return;
+      const a=ls.indexOf('obras-base'), b=ls.indexOf('obras-raya'), f=ls.indexOf(before);
+      if(a<0||b<0) return; if(a<f&&b<f&&b===a+1&&f===b+1) return;
+      map.moveLayer('obras-base',before); map.moveLayer('obras-raya',before);
+    }catch(e){}
+  }
+  function pintar(){
+    if(!ok&&!capas()) return; const src=map.getSource('obras'); if(!src) return;
+    const F=on?lista.filter(o=>!descartados[o.id]).map(o=>({type:'Feature',properties:{},geometry:{type:'LineString',coordinates:o.linea}})):[];
+    src.setData({type:'FeatureCollection',features:F}); colocar();
+  }
+  function sAhora(){ try{ return lastFix?recorridoAhora([lastFix.lat,lastFix.lon]):0; }catch(e){ return 0; } }
+  const CAT={8:'Carretera cortada',7:'Carril cortado',9:'Obras'};
+  async function consultar(){
+    if(enVuelo||!on) return; const R=routeCoordsLL, D=routeCumDist;
+    if(!R||R.length<2||!D||D.length!==R.length) return;
+    const s0=sAhora(); ultT=Date.now(); ultS=s0; ref=R;
+    let i0=0; while(i0<R.length-1&&D[i0+1]<s0) i0++;
+    let i1=i0; while(i1<R.length-1&&D[i1]-s0<VENT) i1++;
+    let mnLa=90,mxLa=-90,mnLo=180,mxLo=-180; for(let i=i0;i<=i1;i++){ const p=R[i]; if(p[0]<mnLa)mnLa=p[0]; if(p[0]>mxLa)mxLa=p[0]; if(p[1]<mnLo)mnLo=p[1]; if(p[1]>mxLo)mxLo=p[1]; }
+    mnLa-=MARGEN; mxLa+=MARGEN; mnLo-=MARGEN; mxLo+=MARGEN;
+    if((mxLa-mnLa)*110.5*(mxLo-mnLo)*KX((mnLa+mxLa)/2)/1000>9000) return;   /* TomTom admite como máximo 10 000 km² por consulta */
+    const fields='{incidents{type,geometry{type,coordinates},properties{iconCategory,events{description,iconCategory},startTime,endTime,from,to,roadNumbers}}}';
+    const url='https://api.tomtom.com/traffic/services/5/incidentDetails?key='+TT+'&bbox='+[mnLo,mnLa,mxLo,mxLa].map(v=>v.toFixed(5)).join(',')+'&fields='+encodeURIComponent(fields)+'&language=es-ES&categoryFilter=RoadClosed,LaneClosed,RoadWorks&timeValidityFilter=present';
+    enVuelo=true; let nuevos=[];
+    try{
+      const ac=new AbortController(); const to=setTimeout(()=>ac.abort(),9000);
+      const r=await fetch(url,{signal:ac.signal}); clearTimeout(to);
+      if(!r.ok){ estadoTxt='TomTom '+r.status; enVuelo=false; return; }
+      const j=await r.json(); const inc=(j&&j.incidents)||[];
+      for(const it of inc){
+        const g=it.geometry||{}, p=it.properties||{}; let pts=g.type==='Point'?[g.coordinates]:(g.coordinates||[]); if(!pts.length) continue;
+        if(Array.isArray(pts[0])&&Array.isArray(pts[0][0])) pts=pts.flat();
+        let sMin=1e18, sMax=-1;
+        for(const q of pts){ if(!q||q.length<2) continue; const la=q[1], lo=q[0], kx=KX(la);
+          let best=1e18, bs=0;
+          for(let i=i0;i<i1;i++){ const ax=(R[i][1]-lo)*kx, ay=(R[i][0]-la)*KY, bx=(R[i+1][1]-lo)*kx, by=(R[i+1][0]-la)*KY, dx=bx-ax, dy=by-ay, L2=dx*dx+dy*dy;
+            let t=L2?-(ax*dx+ay*dy)/L2:0; t=t<0?0:t>1?1:t; const px=ax+t*dx, py=ay+t*dy, d=px*px+py*py;
+            if(d<best){ best=d; bs=D[i]+t*(D[i+1]-D[i]); } }
+          if(best<=UMBRAL_M*UMBRAL_M){ if(bs<sMin) sMin=bs; if(bs>sMax) sMax=bs; } }
+        if(sMax<0) continue;
+        if(sMax-sMin<120){ const c=(sMin+sMax)/2; sMin=Math.max(D[i0],c-60); sMax=Math.min(D[i1],c+60); }   /* punto (o tramo muy corto): se pinta ±60 m */
+        const en=sx=>{ let i=i0; while(i<i1-1&&D[i+1]<sx) i++; const sg=D[i+1]-D[i], t=sg>0?(sx-D[i])/sg:0; return [R[i][1]+(R[i+1][1]-R[i][1])*t, R[i][0]+(R[i+1][0]-R[i][0])*t]; };
+        const linea=[en(sMin)]; for(let i=i0;i<=i1;i++) if(D[i]>sMin&&D[i]<sMax) linea.push([R[i][1],R[i][0]]); linea.push(en(sMax)); if(linea.length<2) continue;
+        const cat=p.iconCategory; const ev=(p.events&&p.events[0])||{};
+        let hasta=''; if(p.endTime){ const t=new Date(p.endTime); if(!isNaN(t)&&t-Date.now()<48*3600000&&t>Date.now()) hasta=t.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}); }
+        const via=(p.roadNumbers&&p.roadNumbers[0])||'';
+        nuevos.push({id:(cat||'x')+'_'+Math.round(sMin/20), cat, sIni:sMin, sFin:sMax, linea, desc:(ev.description||'').slice(0,70), via, hasta});
+      }
+      lista=nuevos.sort((a,b)=>a.sIni-b.sIni); estadoTxt=lista.length+' en ruta (de '+inc.length+')'; pintar();
+    }catch(e){ estadoTxt='sin datos'; }
+    enVuelo=false;
+  }
+  function fmt(d){ return d>=1000?(d/1000).toFixed(1).replace('.',',')+' km':(Math.max(10,Math.round(d/10)*10))+' m'; }
+  function actualizarPanel(){
+    panel=panel||$('panelObras'); if(!panel) return;
+    const R=routeCoordsLL; if(!on||!R||R.length<2||!lista.length){ panel.classList.remove('on'); return; }
+    const s=sAhora(); const o=lista.find(x=>x.sFin>s&&!descartados[x.id]);
+    if(!o||o.sIni-s>AVISO_M){ panel.classList.remove('on'); return; }
+    const ds=o.sIni-s, dentro=ds<=0;
+    $('obTit').textContent=(CAT[o.cat]||'Obras')+(o.via?' · '+o.via:'');
+    $('obDist').textContent=dentro?'ahora':fmt(ds);
+    $('obSub').textContent=[o.desc,(o.hasta?'hasta '+o.hasta:'')].filter(Boolean).join(' · ')||(dentro?'Tramo afectado: '+fmt(o.sFin-s):'En tu ruta');
+    panel.classList.add('on');
+    if(ds<=VOZ_M&&!hablados[o.id]){ hablados[o.id]=1; try{ if(window.__voz) __voz.decir('Atención, '+(CAT[o.cat]||'obras').toLowerCase()+' en '+(ds>=1000?(Math.round(ds/100)/10).toString().replace('.',',')+' kilómetros':Math.max(100,Math.round(ds/100)*100)+' metros'),false); }catch(e){} }
+  }
+  function tick(){
+    try{
+      if(!on){ return; }
+      const R=routeCoordsLL;
+      if(!R||R.length<2){ if(lista.length){ lista=[]; pintar(); } actualizarPanel(); return; }
+      if(R!==ref){ lista=[]; pintar(); descartados={}; hablados={}; consultar(); }
+      else if(Date.now()-ultT>CADA_MS||sAhora()-ultS>CADA_M) consultar();
+      actualizarPanel();
+    }catch(e){}
+  }
+  function texto(){ const b=$('btnObras'); if(b){ b.textContent='🚧 Avisos de obras y cortes: '+(on?'ON':'OFF'); b.classList.toggle('on',on); } }
+  function iniciar(){
+    const b=$('btnObras'); if(b) b.onclick=()=>{ on=!on; wr('obras_on',on?'1':'0'); if(!on){ lista=[]; pintar(); if($('panelObras')) $('panelObras').classList.remove('on'); } else { ref=null; } texto(); };
+    const x=$('obrasX'); if(x) x.onclick=()=>{ const s=sAhora(); const o=lista.find(q=>q.sFin>s); if(o) descartados[o.id]=1; pintar(); actualizarPanel(); };
+    texto(); setInterval(tick,1000);
+    try{ map.on('styledata',()=>{ try{ if(!map.getSource('obras')){ ok=false; capas(); pintar(); } }catch(e){} }); }catch(e){}
+  }
+  function esperar(){ if(window.map&&map.on&&typeof recorridoAhora==='function') iniciar(); else setTimeout(esperar,400); }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',esperar); else esperar();
+  return {estado:()=>({on,estadoTxt,lista:lista.map(o=>({cat:o.cat,sIni:Math.round(o.sIni),sFin:Math.round(o.sFin),desc:o.desc}))}),consultar,tick};
 })();
 </script>
 <script>
