@@ -103,8 +103,9 @@ html.noche0 #map,body.noche #map{background:#1b2128}
 #panelAjustes button.ajuste.peligro{background:#2a1a1a;border-color:#5a2020;color:#ff8a8a}
 #panelAjustes button.ajuste.sim{background:#1d2a3c;border-color:#2e5b8a;color:#90caf9}
 #panelAjustes .seccion{margin-top:16px;margin-bottom:6px;color:#8d99a5;font-size:12px;text-transform:uppercase;letter-spacing:1px}
-#minihud{position:fixed;left:14px;bottom:80px;z-index:15;display:none;background:rgba(10,13,16,.85);border:1px solid #232c33;border-radius:14px;padding:14px 18px;color:#fff;font:800 52px/1 system-ui,sans-serif;align-items:center;gap:16px;min-width:100px;justify-content:center}
+#minihud{position:fixed;left:14px;bottom:32px;z-index:15;display:none;background:rgba(10,13,16,.85);border:1px solid #232c33;border-radius:14px;padding:14px 18px;color:#fff;font:800 52px/1 system-ui,sans-serif;align-items:center;gap:16px;min-width:100px;justify-content:center}
 #minihud.on{display:flex}
+@media(max-height:600px){#minihud{bottom:12px;padding:8px 14px;font-size:38px;gap:10px;min-width:72px;z-index:21}#minihud .limite{width:32px;height:32px;right:-16px;font-size:14px;border-width:3px}body:has(#cartelAlt.on) #minihud{left:calc(var(--anchoPanel) + 34px)}}
 body.modo-navegacion #minihud{display:flex}
 #minihud .vel{color:#fff;font-weight:900;letter-spacing:-1px}
 #minihud .limite{position:absolute;right:-19px;top:50%;transform:translateY(-50%);width:38px;height:38px;box-sizing:border-box;border-radius:50%;background:#ffffff;border:4px solid #d32f2f;display:flex;align-items:center;justify-content:center;font:800 16px/1 system-ui,sans-serif;color:#000;box-shadow:0 2px 6px rgba(0,0,0,.4)}
@@ -396,7 +397,6 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="cerrarPanel" id="btnCerrarAjustes"><svg class="xsvg" viewBox="0 0 12 12" width="1em" height="1em" aria-hidden="true"><path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></button>
   <h2>⚙️ Ajustes</h2>
   <div class="seccion">Visualización</div>
-  <button class="ajuste on" id="btnTunel">🚇 Modo túnel: ON</button>
   <button class="ajuste on" id="btnEdificios">🏢 Edificios: ON</button>
   <button class="ajuste on" id="btnHitos">🏛️ Edificios singulares: ON</button>
   <button class="ajuste on" id="btnSenales">🚦 Señales: ON</button>
@@ -466,7 +466,8 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="enlaceGenerar">🎲 Generar código nuevo</button>
   <button class="ajuste" id="enlaceCopiar">📋 Copiar código</button>
   <div id="enlaceEstado" style="font-size:12px;color:#8d99a5;padding:2px 4px 8px">Sin código: no enlazado</div>
-  <div class="seccion">Versión v182</div>
+  <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
+  <div class="seccion">Versión v183</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -5567,7 +5568,7 @@ window.__hal=(function(){
   document.head.appendChild(st);
 
   const CATS=[['hal','🎃 Halloween'],['mapa','🗺️ Mapa y vista'],['aspecto','🎨 Aspecto del mapa'],['cielo','🌦️ Cielo y tiempo'],['sonido','🔊 Sonido y avisos'],['carg','⚡ Cargadores'],['park','🅿️ Aparcamientos'],['gps','📍 GPS'],['coche','🚗 Coche'],['futbol','⚽ Fútbol'],['fiesta','🎉 Celebración'],['enlace','🔗 Enlace entre dispositivos'],['sis','⚙️ Rendimiento y versión']];
-  const M={mapa:'btnTunel btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnPasos btnFlechas',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',sis:'btnAA btnLimpiarFavs'};
+  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnPasos btnFlechas',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',sis:'btnAA btnLimpiarFavs btnWake'};
   const POR={}; for(const c in M) M[c].split(' ').forEach(id=>POR[id]=c);
   const cuerpos={}, cats={};
   const ref=panel.querySelector('h2');
@@ -5675,7 +5676,7 @@ window.__hal=(function(){
    · Es una capa aparte (canvas propio, sin eventos). Interruptor en Ajustes; si algo falla se apaga y queda el mapa de siempre. ?tunel=0 en la URL lo anula. */
 window.__tunel=(function(){
   const rd=(k,d)=>{ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } };
-  let on = rd('tunel_on','1')!=='0' && !/[?&]tunel=0\b/.test(location.search);
+  let on = false;   /* v183: modo túnel retirado (desactivado del todo; el código queda por si se retoma) */
   const FILTRO=['all',['==',['get','brunnel'],'tunnel'],['in',['get','class'],['literal',['motorway','trunk','primary','secondary','tertiary','minor','street']]]];
   const PI=Math.PI, deg=PI/180;
   let activo=false, entra=0, sale=0, rem=0, tot=0, bendObj=0, bend=0, vel=0, T=null, ren=null, sc=null, cam=null, cv=null, pill=null, listo=false, creando=false, raf=0, fade=0, tUlt=0, desp=0, forzado=false, ultCheck=0, lugarX=0, lugarY=0, err='';
@@ -5792,7 +5793,7 @@ window.__tunel=(function(){
   const btn=document.getElementById('btnTunel');
   function texto(){ if(btn){ btn.textContent='🚇 Modo túnel: '+(on?'ON':'OFF'); btn.classList.toggle('on',on); } }
   if(btn) btn.onclick=()=>{ on=!on; try{ localStorage.setItem('tunel_on',on?'1':'0'); }catch(e){} if(!on) salir(); texto(); };
-  texto(); setInterval(comprobar,500);
+  texto();
   return { analizar, estado:()=>({on,activo,rem:Math.round(rem),tot:Math.round(tot),bend:+bendObj.toFixed(5),listo,err,hdg}), async forzar(o){ if(o===false){ forzado=false; salir(); return; } forzado=true; await crear(); if(!listo) return; rem=(o&&o.rem)||420; tot=rem; bendObj=(o&&o.bend)||0; activo=true; mostrar(true); }, fijar(o){ if(o.bend!==undefined){ bendObj=o.bend; bend=o.bend; } if(o.vel!==undefined) vel=o.vel; if(o.desp!==undefined) desp=o.desp; if(o.rem!==undefined) rem=o.rem; try{ ajustarCam(); dibujar(0); }catch(e){} } };
 })();
 </script>
@@ -5948,6 +5949,36 @@ window.__flechas=(function(){
   function esperar(){ if(window.map&&map.on&&typeof actualizarTrimRuta==='function') iniciar(); else setTimeout(esperar,400); }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',esperar); else esperar();
   return {actualizar,estado:()=>({on,ok,ultimo})};
+})();
+</script>
+<script>
+/* ============ PANTALLA SIEMPRE ENCENDIDA (v183) ============
+   Wake Lock API: mientras la página está visible, el móvil no apaga ni bloquea la pantalla. Se vuelve a pedir al volver a la app o si el sistema lo suelta.
+   Interruptor en Ajustes → Rendimiento y versión. Si el navegador no lo soporta, no hace nada (no rompe nada). */
+window.__wake=(function(){
+  const rd=(k,d)=>{ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } };
+  let on=rd('wake_on','1')!=='0', lock=null, pidiendo=false, estado='';
+  async function pedir(){
+    if(!on||pidiendo||lock||document.visibilityState!=='visible') return;
+    if(!('wakeLock' in navigator)){ estado='no soportado'; texto(); return; }
+    pidiendo=true;
+    try{ lock=await navigator.wakeLock.request('screen'); estado='activa'; lock.addEventListener('release',()=>{ lock=null; estado='soltada'; texto(); }); }
+    catch(e){ lock=null; estado='rechazada'; }
+    pidiendo=false; texto();
+  }
+  async function soltar(){ try{ if(lock) await lock.release(); }catch(e){} lock=null; estado='apagada'; texto(); }
+  function texto(){ const b=document.getElementById('btnWake'); if(b){ b.textContent='💡 Pantalla siempre encendida: '+(on?'ON':'OFF'); b.classList.toggle('on',on); } }
+  function cambiar(v){ on=v; try{ localStorage.setItem('wake_on',v?'1':'0'); }catch(e){} if(v) pedir(); else soltar(); texto(); }
+  function iniciar(){
+    const b=document.getElementById('btnWake'); if(b) b.onclick=()=>cambiar(!on); texto();
+    document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') pedir(); });
+    /* algunos navegadores solo conceden el bloqueo tras un toque: se reintenta con el primer toque y cada 20 s */
+    ['pointerdown','touchstart','click'].forEach(ev=>document.addEventListener(ev,()=>{ if(!lock) pedir(); },{passive:true}));
+    setInterval(()=>{ if(on&&!lock) pedir(); },20000);
+    pedir();
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',iniciar); else iniciar();
+  return {estado:()=>({on,activo:!!lock,estado}),pedir,soltar};
 })();
 </script>
 <script>
