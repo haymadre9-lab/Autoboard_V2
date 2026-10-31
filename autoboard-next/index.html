@@ -463,6 +463,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste on" id="btnAspBorde">▭ Borde de edificios: ON</button>
   <button class="ajuste" id="btnAspEstacion">🍂 Estación: Auto</button>
   <button class="ajuste on" id="btnPasos">🚸 Pasos de peatones: ON</button>
+  <button class="ajuste" id="btnBusqAmbito">🔎 Búsqueda: España</button>
   <button class="ajuste on" id="btnCamDenso">🏙️ Cámara adaptable en ciudad densa: ON</button>
   <button class="ajuste on" id="btnFlechas">➤ Flechas en la ruta: ON</button>
   <button class="ajuste" id="btnCielo">🌅 Cielo: Auto</button>
@@ -482,7 +483,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="enlaceCopiar">📋 Copiar código</button>
   <div id="enlaceEstado" style="font-size:12px;color:#8d99a5;padding:2px 4px 8px">Sin código: no enlazado</div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v186</div>
+  <div class="seccion">Versión v188</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -1614,12 +1615,53 @@ const inputB=document.getElementById('inputBusqueda');
 const sugs=document.getElementById('sugerencias');
 let debounceTimer=null;
 
+/* ---- v188: ámbito de búsqueda de direcciones (España / +vecinos / global) y prioridad a lo cercano ---- */
+const BUSQ_AMBITOS=[{id:'es',txt:'España',cs:'ES'},{id:'veci',txt:'España + Portugal, Francia, Andorra',cs:'ES,PT,FR,AD'},{id:'glob',txt:'Global',cs:''}];
+let busqAmbito='es'; try{ const v=localStorage.getItem('busq_ambito'); if(BUSQ_AMBITOS.some(a=>a.id===v)) busqAmbito=v; }catch(e){}
+function paisesQS(){ const a=BUSQ_AMBITOS.find(x=>x.id===busqAmbito); return a&&a.cs?'&countrySet='+a.cs:''; }
+function sesgoQS(){ return (typeof lastFix!=='undefined'&&lastFix)?'&lat='+lastFix.lat.toFixed(5)+'&lon='+lastFix.lon.toFixed(5):''; }   /* los resultados cercanos salen primero */
+/* ---- v187: destinos recientes (últimos sitios a los que has navegado) ---- */
+const REC_MAX=30;
+let recientes=[]; try{ recientes=JSON.parse(localStorage.getItem('destinos_rec')||'[]'); if(!Array.isArray(recientes)) recientes=[]; }catch(e){ recientes=[]; }
+function guardarRecientes(){ try{ localStorage.setItem('destinos_rec',JSON.stringify(recientes)); }catch(e){} }
+function distM(la1,lo1,la2,lo2){ const r=Math.PI/180; return Math.hypot((la2-la1)*r,(lo2-lo1)*r*Math.cos((la1+la2)/2*r))*6371000; }
+function anotarReciente(lat,lon,nombre){
+  try{
+    nombre=(nombre||'').trim();
+    const i=recientes.findIndex(r=>distM(r.lat,r.lon,lat,lon)<60);
+    let it={nombre:nombre||'Destino',lat,lon,t:Date.now()};
+    if(i>=0){ if(!nombre) it.nombre=recientes[i].nombre; recientes.splice(i,1); }
+    recientes.unshift(it); if(recientes.length>REC_MAX) recientes.length=REC_MAX; guardarRecientes();
+    if(!nombre){ fetch('https://api.tomtom.com/search/2/reverseGeocode/'+lat.toFixed(6)+','+lon.toFixed(6)+'.json?key='+TT+'&language=es-ES').then(r=>r.json()).then(j=>{ const a=j&&j.addresses&&j.addresses[0]&&j.addresses[0].address; if(a&&a.freeformAddress){ const r=recientes.find(x=>x.lat===lat&&x.lon===lon); if(r){ r.nombre=a.freeformAddress; guardarRecientes(); } } }).catch(()=>{}); }
+  }catch(e){}
+}
+function normTxt(t){ return (t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+function recientesFiltrados(q,max){
+  const n=normTxt(q).trim();
+  return recientes.filter(r=>esFavDir(r.lat,r.lon)<0 && (!n || normTxt(r.nombre).includes(n))).slice(0,max);
+}
+function recHTML(lista,titulo){
+  if(!lista.length) return '';
+  return (titulo?'<div class="sub" style="padding:8px 14px 2px;font-weight:700;letter-spacing:.04em">🕘 RECIENTES</div>':'')+lista.map((r,i)=>
+    '<div class="sug sugRec" data-idx="'+i+'" style="display:flex;justify-content:space-between;align-items:center;gap:10px">'
+    +'<div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🕘 '+escapeHTML(r.nombre)+'</div></div>'
+    +'<button class="quitarRec" data-idx="'+i+'" title="Quitar de recientes" style="background:transparent;border:0;color:#8d99a5;font-size:18px;cursor:pointer;padding:6px 10px;flex:0 0 auto"><svg class="xsvg" viewBox="0 0 12 12" width="1em" height="1em" aria-hidden="true"><path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></button></div>').join('');
+}
+function engancharRec(lista,repintar){
+  sugs.querySelectorAll('.sugRec').forEach(el=>{
+    el.onclick=(ev)=>{ if(ev.target.closest('.quitarRec')) return; const r=lista[Number(el.dataset.idx)]; if(!r) return; barraB.classList.remove('on');sugs.classList.remove('on');inputB.value='';navegarA(r.lat,r.lon,r.nombre); };
+  });
+  sugs.querySelectorAll('.quitarRec').forEach(b=>{
+    b.onclick=(ev)=>{ ev.stopPropagation(); const r=lista[Number(b.dataset.idx)]; const k=recientes.indexOf(r); if(k>=0){ recientes.splice(k,1); guardarRecientes(); } repintar(); };
+  });
+}
+
 function pintarFavoritos(){
-  if(!favsDir.length && !camposFavs.length){
+  if(!favsDir.length && !camposFavs.length && !recientesFiltrados('',1).length){
     sugs.innerHTML = '<div class="sug" style="color:#8d99a5;cursor:default">Sin favoritos guardados.<br>Busca una dirección y pulsa ☆ para guardarla.</div>';
     sugs.classList.add('on');return;
   }
-  const cinco = favsDir.slice(0,12);
+  const cinco = favsDir.slice(0,12); let recLista=[];
   sugs.innerHTML = cinco.map((f,i)=>{
     const dir = f.dir || '';
     return '<div class="sug sugFav" data-idx="'+i+'" style="display:flex;justify-content:space-between;align-items:center;gap:10px">'
@@ -1633,8 +1675,9 @@ function pintarFavoritos(){
       +'<div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">⚽ '+escapeHTML(c.nombre||'Campo de fútbol')+'</div>'
       +'<div class="sub">Campo de fútbol favorito</div></div>'
       +'<button class="quitarCampo" data-idx="'+i+'" title="Quitar de favoritos" style="background:transparent;border:0;color:#ffd166;font-size:20px;cursor:pointer;padding:6px 10px;flex:0 0 auto"><svg class="xsvg" viewBox="0 0 12 12" width="1em" height="1em" aria-hidden="true"><path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></button>'
-      +'</div>').join('');
+      +'</div>').join('') + recHTML(recLista=recientesFiltrados('',8),true);
   sugs.classList.add('on');
+  engancharRec(recLista,pintarFavoritos);
   sugs.querySelectorAll('.sugCampo').forEach(el=>{
     el.onclick = ()=>{ const c=camposFavs[Number(el.dataset.idx)]; if(!c) return; barraB.classList.remove('on');sugs.classList.remove('on');inputB.value='';navegarA(c.lat, c.lon, c.nombre||'Campo de fútbol'); };
   });
@@ -1667,16 +1710,20 @@ document.getElementById('btnCerrarBusqueda').onclick=()=>{barraB.classList.remov
 inputB.addEventListener('input',()=>{
   clearTimeout(debounceTimer);
   const q=inputB.value.trim();
-  if(q.length < 3){ if(q.length === 0) pintarFavoritos(); else sugs.classList.remove('on'); return; }
+  if(q.length === 0){ pintarFavoritos(); return; }
+  const rf=recientesFiltrados(q,4);
+  if(q.length < 3){ if(rf.length){ sugs.innerHTML=recHTML(rf,false); sugs.classList.add('on'); engancharRec(rf,()=>inputB.dispatchEvent(new Event('input'))); } else sugs.classList.remove('on'); return; }
+  if(rf.length){ sugs.innerHTML=recHTML(rf,false); sugs.classList.add('on'); engancharRec(rf,()=>inputB.dispatchEvent(new Event('input'))); } else sugs.classList.remove('on');
   debounceTimer=setTimeout(()=>buscarSugerencias(q),250);
 });
 async function buscarSugerencias(q){
-  const url='https://api.tomtom.com/search/2/search/'+encodeURIComponent(q)+'.json?key='+TT+'&language=es-ES&countrySet=ES&limit=8&typeahead=true';
+  const url='https://api.tomtom.com/search/2/search/'+encodeURIComponent(q)+'.json?key='+TT+'&language=es-ES'+paisesQS()+sesgoQS()+'&limit=8&typeahead=true';
   try{
     const r=await fetch(url);
     const j=await r.json();
-    if(!j.results||!j.results.length){sugs.innerHTML='<div class="sug" style="color:#8d99a5">Sin resultados</div>';sugs.classList.add('on');return;}
-    sugs.innerHTML=j.results.map((s,i)=>{
+    const rf=recientesFiltrados(q,3);
+    if(!j.results||!j.results.length){ if(rf.length){ sugs.innerHTML=recHTML(rf,false); sugs.classList.add('on'); engancharRec(rf,()=>buscarSugerencias(q)); return; } sugs.innerHTML='<div class="sug" style="color:#8d99a5">Sin resultados</div>';sugs.classList.add('on');return;}
+    sugs.innerHTML=recHTML(rf,false)+j.results.map((s,i)=>{
       const direccion=s.address?(s.address.freeformAddress||''):(s.poi?s.poi.name:'');
       const sub=s.poi&&s.poi.name?s.poi.name:'';
       const lat=s.position.lat, lon=s.position.lon;
@@ -1690,6 +1737,7 @@ async function buscarSugerencias(q){
         +'</div>';
     }).join('');
     sugs.classList.add('on');
+    engancharRec(rf,()=>buscarSugerencias(q));
     sugs.querySelectorAll('.sugRes').forEach(el=>{
       el.onclick = (ev)=>{if(ev.target.classList.contains('favBtn')) return;seleccionarSugerencia(j.results[Number(el.dataset.idx)]);};
     });
@@ -2676,7 +2724,7 @@ const Enlace=(function(){
   E.interpretar=interpretar;
   E.geoVarios=async (q,n)=>{
     const sesgo=(typeof lastFix!=='undefined'&&lastFix)?'&lat='+lastFix.lat.toFixed(5)+'&lon='+lastFix.lon.toFixed(5):'';
-    const r=await fetch('https://api.tomtom.com/search/2/search/'+encodeURIComponent(q)+'.json?key='+TT+'&language=es-ES&countrySet=ES&limit='+(n||5)+sesgo);
+    const r=await fetch('https://api.tomtom.com/search/2/search/'+encodeURIComponent(q)+'.json?key='+TT+'&language=es-ES'+paisesQS()+'&limit='+(n||5)+sesgo);
     const j=await r.json();
     return ((j&&j.results)||[]).map(x=>({ lat:x.position.lat, lon:x.position.lon, dir:(x.address&&x.address.freeformAddress)||'', nombre:(x.poi&&x.poi.name)||'' }));
   };
@@ -2810,7 +2858,7 @@ async function navegarA(lat,lon,nombre,origen){
   document.body.classList.add('modo-navegacion');
   const av=document.getElementById('avisoInicial'); if(av) av.classList.add('oculto');
   seguirOn=true; const btnSeg=document.getElementById('btnSeguir'); if(btnSeg) btnSeg.classList.add('activo');
-  if(!origen){ try{ Enlace.publicar({nombre:destinoNombre,lat,lon}); }catch(e){} }      /* lo que eliges aquí aparece en los otros dispositivos enlazados */
+  if(!origen){ anotarReciente(lat,lon,destinoNombre); try{ Enlace.publicar({nombre:destinoNombre,lat,lon}); }catch(e){} }      /* lo que eliges aquí aparece en los otros dispositivos enlazados */
   return true;
 }
 
@@ -5617,7 +5665,7 @@ window.__hal=(function(){
   document.head.appendChild(st);
 
   const CATS=[['hal','🎃 Halloween'],['mapa','🗺️ Mapa y vista'],['aspecto','🎨 Aspecto del mapa'],['cielo','🌦️ Cielo y tiempo'],['sonido','🔊 Sonido y avisos'],['carg','⚡ Cargadores'],['park','🅿️ Aparcamientos'],['gps','📍 GPS'],['coche','🚗 Coche'],['futbol','⚽ Fútbol'],['fiesta','🎉 Celebración'],['enlace','🔗 Enlace entre dispositivos'],['sis','⚙️ Rendimiento y versión']];
-  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnPasos btnCamDenso btnFlechas',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',sis:'btnAA btnLimpiarFavs btnWake'};
+  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnPasos btnBusqAmbito btnCamDenso btnFlechas',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',sis:'btnAA btnLimpiarFavs btnWake'};
   const POR={}; for(const c in M) M[c].split(' ').forEach(id=>POR[id]=c);
   const cuerpos={}, cats={};
   const ref=panel.querySelector('h2');
@@ -6151,6 +6199,14 @@ window.__obras=(function(){
   const b=document.getElementById('btnCamDenso'); if(!b) return;
   const t=()=>{ b.textContent='🏙️ Cámara adaptable en ciudad densa: '+(camDensoOn?'ON':'OFF'); b.classList.toggle('on',camDensoOn); };
   b.onclick=()=>{ camDensoOn=!camDensoOn; try{ localStorage.setItem('cam_denso',camDensoOn?'1':'0'); }catch(e){} if(!camDensoOn) fDensoObj=0; else medirDensidad(); t(); };
+  t();
+})();
+</script>
+<script>
+(function(){
+  const b=document.getElementById('btnBusqAmbito'); if(!b) return;
+  const t=()=>{ const a=BUSQ_AMBITOS.find(x=>x.id===busqAmbito); b.textContent='🔎 Búsqueda: '+a.txt; };
+  b.onclick=()=>{ const i=BUSQ_AMBITOS.findIndex(x=>x.id===busqAmbito); busqAmbito=BUSQ_AMBITOS[(i+1)%BUSQ_AMBITOS.length].id; try{ localStorage.setItem('busq_ambito',busqAmbito); }catch(e){} t(); };
   t();
 })();
 </script>
