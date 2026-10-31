@@ -483,7 +483,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="enlaceCopiar">📋 Copiar código</button>
   <div id="enlaceEstado" style="font-size:12px;color:#8d99a5;padding:2px 4px 8px">Sin código: no enlazado</div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v188</div>
+  <div class="seccion">Versión v189</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -578,7 +578,8 @@ function registrarError(tipo,mensaje){
 const map=new maplibregl.Map({
   container:'map',
   style:'https://api.maptiler.com/maps/basic-v2/style.json?key='+MAPTILER_KEY,
-  center:[-2.9387,43.2678],zoom:17.2,pitch:60,bearing:0,antialias:antialiasActivo
+  center:[-2.9387,43.2678],zoom:17.2,pitch:60,bearing:0,antialias:antialiasActivo,
+  maxTileCacheSize:256,refreshExpiredTiles:false   /* v189: más teselas en memoria → menos huecos de edificios al ir deprisa o girar */
 });
 document.getElementById('btnAA').textContent=antialiasActivo?'🪄 Antialias: ON (recargar)':'🪄 Antialias: OFF (recargar)';
 let webglOk=true;
@@ -6208,6 +6209,102 @@ window.__obras=(function(){
   const t=()=>{ const a=BUSQ_AMBITOS.find(x=>x.id===busqAmbito); b.textContent='🔎 Búsqueda: '+a.txt; };
   b.onclick=()=>{ const i=BUSQ_AMBITOS.findIndex(x=>x.id===busqAmbito); busqAmbito=BUSQ_AMBITOS[(i+1)%BUSQ_AMBITOS.length].id; try{ localStorage.setItem('busq_ambito',busqAmbito); }catch(e){} t(); };
   t();
+})();
+</script>
+<script>
+/* ============ SEMÁFOROS EN VIVO (OpenStreetMap, v189) ============
+   senales.json es estático y le faltan semáforos. Aquí se completan con OSM (Overpass, node highway=traffic_signals) en celdas de 0,02°
+   alrededor del coche y por delante en la ruta (≈10 km). Caché 45 días en localStorage, una petición cada vez, con reintento tras 10 min.
+   Se descartan los que ya están en senales.json (≤14 m). Mismo icono, tamaño y visibilidad que las señales (botón Señales). */
+window.__semOSM=(function(){
+  const CELDA=0.02, CK='semosm_cache_v1', DIAS=45*86400000, ADELANTE_M=10000, MAX_CELDAS=140;
+  const EP=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
+  const rd=(k,d)=>{ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } };
+  let cache={}; try{ cache=JSON.parse(rd(CK,'{}'))||{}; }catch(e){ cache={}; }
+  let enVuelo=false, fallos={}, listo=false, ult={la:NaN,lo:NaN,r:0,n:-1}, estaticos=null, estaticosN=-1;
+  const key=(la,lo)=>Math.floor(la/CELDA)+'_'+Math.floor(lo/CELDA);
+  const guardar=()=>{ try{ const ks=Object.keys(cache); if(ks.length>MAX_CELDAS){ ks.sort((a,b)=>cache[a].t-cache[b].t); for(const k of ks.slice(0,ks.length-MAX_CELDAS)) delete cache[k]; } localStorage.setItem(CK,JSON.stringify(cache)); }catch(e){} };
+  const mxm=la=>111320*Math.cos(la*Math.PI/180), MY=110540;
+  function asegurar(){
+    if(listo) return true;
+    if(typeof map==='undefined'||!map.isStyleLoaded()||!map.hasImage('senal-semaforo')) return false;
+    map.addSource('semosm',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+    map.addLayer({id:'semosm',type:'symbol',source:'semosm',minzoom:15,
+      layout:{'icon-image':'senal-semaforo','icon-size':['interpolate',['linear'],['zoom'],15,0.16,16,0.24,17,0.34,18,0.44,20,0.60],
+        'icon-allow-overlap':true,'icon-ignore-placement':true,'icon-pitch-alignment':'viewport','icon-rotation-alignment':'viewport'}});
+    listo=true; return true;
+  }
+  function celdasNecesarias(){
+    const out=[], vistas=new Set(); const add=(la,lo)=>{ const k=key(la,lo); if(!vistas.has(k)){ vistas.add(k); out.push([la,lo,k]); } };
+    if(typeof lastFix!=='undefined'&&lastFix){
+      for(const dy of [0,-1,1]) for(const dx of [0,-1,1]) add(lastFix.lat+dy*CELDA,lastFix.lon+dx*CELDA);
+      try{
+        const R=routeCoordsLL; if(R&&R.length>1){
+          let bi=0,bd=1e18; const st=Math.max(1,Math.floor(R.length/400));
+          for(let i=0;i<R.length;i+=st){ const d=(R[i][0]-lastFix.lat)**2+(R[i][1]-lastFix.lon)**2; if(d<bd){ bd=d; bi=i; } }
+          bi=Math.max(0,bi-st); let acc=0, prev=R[bi];
+          for(let i=bi;i<R.length&&acc<ADELANTE_M;i++){ const p=R[i]; acc+=Math.hypot((p[0]-prev[0])*MY,(p[1]-prev[1])*mxm(p[0])); prev=p; add(p[0],p[1]); }
+        }
+      }catch(e){}
+    }
+    return out;
+  }
+  async function pedir(la,lo,k){
+    const s=Math.floor(la/CELDA)*CELDA, w=Math.floor(lo/CELDA)*CELDA, n=s+CELDA, e=w+CELDA;
+    const q='[out:json][timeout:25];node["highway"="traffic_signals"]('+s.toFixed(5)+','+w.toFixed(5)+','+n.toFixed(5)+','+e.toFixed(5)+');out;';
+    enVuelo=true;
+    try{
+      for(const ep of EP){
+        try{
+          const r=await fetch(ep,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'data='+encodeURIComponent(q)});
+          if(!r.ok) continue; const j=await r.json(); if(!j||!j.elements) continue;
+          cache[k]={t:Date.now(),p:j.elements.filter(x=>Number.isFinite(x.lat)).map(x=>[+x.lat.toFixed(6),+x.lon.toFixed(6)])}; guardar(); ult.n=-1; return;
+        }catch(e){}
+      }
+      fallos[k]=Date.now();
+    } finally { enVuelo=false; }
+  }
+  function indiceEstaticos(){
+    if(typeof __senalesPts==='undefined'||!__senalesPts.length) return null;
+    if(estaticos&&estaticosN===__senalesPts.length) return estaticos;
+    estaticos=new Map(); estaticosN=__senalesPts.length;
+    for(const q of __senalesPts){ if(!/semaforo/.test(q.ic)) continue; const c=Math.floor(q.la/0.0004)+'_'+Math.floor(q.lo/0.0004); (estaticos.get(c)||estaticos.set(c,[]).get(c)).push(q); }
+    return estaticos;
+  }
+  function yaEstaba(la,lo){
+    const idx=indiceEstaticos(); if(!idx) return false; const cx=Math.floor(la/0.0004), cy=Math.floor(lo/0.0004), kx=mxm(la);
+    for(let a=-1;a<=1;a++) for(let b=-1;b<=1;b++){ const arr=idx.get((cx+a)+'_'+(cy+b)); if(!arr) continue; for(const q of arr) if(Math.hypot((q.la-la)*MY,(q.lo-lo)*kx)<=14) return true; }
+    return false;
+  }
+  function pintar(){
+    const c=map.getCenter(), z=map.getZoom(), r=z>=18?250:(z>=17?450:(z>=16?900:1800));
+    const nCeldas=Object.keys(cache).length;
+    if(Math.hypot((c.lng-ult.lo)*mxm(c.lat),(c.lat-ult.la)*MY)<r*0.15 && r===ult.r && nCeldas===ult.n) return;
+    ult={la:c.lat,lo:c.lng,r:r,n:nCeldas};
+    const kx=mxm(c.lat), fs=[], vistos=new Set();
+    for(const k of Object.keys(cache)){ for(const p of cache[k].p){
+      if(Math.abs(p[0]-c.lat)*MY>r||Math.abs(p[1]-c.lng)*kx>r) continue;
+      const id=p[0]+','+p[1]; if(vistos.has(id)||yaEstaba(p[0],p[1])) continue; vistos.add(id);
+      fs.push({type:'Feature',geometry:{type:'Point',coordinates:[p[1],p[0]]},properties:{}});
+    } }
+    try{ map.getSource('semosm').setData({type:'FeatureCollection',features:fs}); }catch(e){}
+  }
+  function tick(){
+    try{
+      if(!asegurar()) return;
+      try{ map.setLayoutProperty('semosm','visibility',(typeof senalesOn==='undefined'||senalesOn)?'visible':'none'); }catch(e){}
+      if(!enVuelo&&navigator.onLine!==false){
+        const ahora=Date.now();
+        for(const [la,lo,k] of celdasNecesarias()){
+          const c=cache[k]; if(c&&ahora-c.t<DIAS) continue; if(fallos[k]&&ahora-fallos[k]<600000) continue;
+          pedir(la,lo,k); break;
+        }
+      }
+      pintar();
+    }catch(e){}
+  }
+  setInterval(tick,1500);
+  return { estado:()=>({celdas:Object.keys(cache).length,puntos:Object.values(cache).reduce((a,c)=>a+c.p.length,0),listo,enVuelo}) };
 })();
 </script>
 <script>
