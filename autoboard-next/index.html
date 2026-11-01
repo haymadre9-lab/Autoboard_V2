@@ -96,8 +96,9 @@ body.noche #panelObras #obrasX{background:#343c45;color:#9aa5b1}
 /* botones: cuadrados redondeados, grises y pequeños, en fila abajo a la derecha */
 .botonMapa{width:44px;height:44px;border-radius:12px;border:1px solid #d5dae0;background:rgba(255,255,255,.9);color:#7b8590;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;box-shadow:0 2px 10px rgba(60,70,80,.18);transition:color .2s,background .2s,border-color .2s}
 .botonMapa svg{width:22px;height:22px;display:block}
-#halAmb{position:fixed;inset:0;z-index:11;pointer-events:none;display:none;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 38%,rgba(70,0,90,.28) 78%,rgba(20,0,30,.6) 100%);animation:halParp 5.5s infinite}
-@keyframes halParp{0%,100%{opacity:1}46%{opacity:.9}48%{opacity:.55}50%{opacity:1}52%{opacity:.7}54%{opacity:1}}
+#btnLimpio{position:fixed;right:14px;bottom:68px;z-index:20;font-size:22px;line-height:1}
+#btnLimpio.activo{color:#fff;background:#1e9e4a;border-color:#1e9e4a}
+body.modo-solomapa #btnLimpio{display:none}
 #btnCarg.activo{color:#fff;background:#1e9e4a;border-color:#1e9e4a}
 #btnCentrar.on,.botonMapa.on,#btnSeguir.activo,.botonMapa:active{transform:scale(.94)}
 #btnCasa.activo{background:#2e6b4a;border-color:#4a9e6a;color:#fff}
@@ -478,7 +479,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="enlaceCopiar">📋 Copiar código</button>
   <div id="enlaceEstado" style="font-size:12px;color:#8d99a5;padding:2px 4px 8px">Sin código: no enlazado</div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v192</div>
+  <div class="seccion">Versión v193</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -549,6 +550,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
 
 <div id="minihud"><span class="vel" id="hudVel">0</span><span class="limite oculto" id="hudLimite">50</span></div>
 
+<button class="botonMapa" id="btnLimpio" title="Modo limpio y fluido">🍃</button>
 <div id="grupoAbajoDer">
   <button class="botonMapa" id="btnCarg" title="Cargadores eléctricos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="10" height="18" rx="2"/><path d="M9.6 7l-2.1 4h3l-2.1 4"/><path d="M14 9h2.5a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 0 3 0V8.5l-2-2.5"/><path d="M3 21h12"/></svg></button>
   <button class="botonMapa" id="btnCentrar" title="Centrar en mi posición"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="1.6"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
@@ -6186,7 +6188,7 @@ window.__estetica=(function(){
   const LUZ_DIA={anchor:'map',position:[1.3,215,42],color:'#fff3e0',intensity:0.5};
   const LUZ_NOCHE={anchor:'map',position:[1.3,215,50],color:'#9db2d6',intensity:0.3};
   const LUZ_ORIG={anchor:'viewport',color:'#ffffff',intensity:0.5,position:[1.15,210,30]};
-  const AUTOV=['motorway','trunk'];
+  const AUTOV=['motorway','trunk']; const OPAC_LIMPIO=0.75;   /* 1 tapaba la ruta tras los edificios altos con la cámara inclinada */
   function sp(id,p,v){ try{ map.setPaintProperty(id,p,v); }catch(e){} }
   function capasVia(){ try{ return map.getStyle().layers.filter(l=>l.type==='line'&&l['source-layer']==='transportation'); }catch(e){ return []; } }
   function aplicar(n){
@@ -6195,7 +6197,8 @@ window.__estetica=(function(){
       n=!!n;
       try{ map.setLight(cfg.luz?(n?LUZ_NOCHE:LUZ_DIA):LUZ_ORIG); }catch(e){}
       if(map.getLayer('3d-buildings')){
-        if(cfg.luz&&!n){ sp('3d-buildings','fill-extrusion-color',RAMPA_DIA); sp('3d-buildings','fill-extrusion-opacity',0.65); }
+        if(window.__limpioOn){ sp('3d-buildings','fill-extrusion-color',n?NOCHE.extr:'#cfd5dd'); sp('3d-buildings','fill-extrusion-opacity',OPAC_LIMPIO); }   /* modo limpio: un solo gris, opacos (más baratos de dibujar) */
+        else if(cfg.luz&&!n){ sp('3d-buildings','fill-extrusion-color',RAMPA_DIA); sp('3d-buildings','fill-extrusion-opacity',0.65); }
         else { sp('3d-buildings','fill-extrusion-color',n?NOCHE.extr:'#b8c0cc'); sp('3d-buildings','fill-extrusion-opacity',n?0.7:0.5); }
       }
       if(cfg.vias){
@@ -6239,6 +6242,36 @@ window.__estetica=(function(){
   const aplicar=()=>{ CAM.PITCH_AUTOPISTA=on?NUEVO.p:ORIG.p; CAM.ZOOM_AUTOPISTA_EXTRA=on?NUEVO.z:ORIG.z; const b=document.getElementById('btnAutoVista'); if(b){ b.textContent='🎥 Vista de autopista detallada: '+(on?'ON':'OFF'); b.classList.toggle('on',on); } };
   const b=document.getElementById('btnAutoVista'); if(b) b.onclick=()=>{ on=!on; try{ localStorage.setItem('vista_auto',on?'1':'0'); }catch(e){} aplicar(); };
   aplicar(); window.__vistaAuto={ cfg:()=>({on,pitch:CAM.PITCH_AUTOPISTA,zoom:CAM.ZOOM_AUTOPISTA_EXTRA}) };
+})();
+</script>
+<script>
+/* ============ MODO LIMPIO Y FLUIDO (v193) ============
+   Botón 🍃 sobre el de Ajustes. Al activarlo apaga de golpe los adornos (edificios con color, árboles, zonas verdes, agua suave, puentes, aceras,
+   bordes, luces de noche, pasos de peatones, celebración, tiempo animado y parkings) y pinta los edificios opacos en un solo gris.
+   Se MANTIENEN: señales, semáforos, radares, obras, tráfico en ruta, flechas, carriles de autopista, cargadores y edificios singulares.
+   Antes de apagar guarda cómo estaba cada ajuste; al volver a pulsar lo restaura tal cual (no a valores de fábrica). */
+(function(){
+  const IDS=['btnAspBarrio','btnAspArboles','btnAspVerde','btnRelVerde','btnRelAgua','btnRelPuente','btnAspAceras','btnAspBorde','btnLuces','btnPasos','btnCelebracion','btnTiempo','btnParkOn'];
+  const rd=(k,d)=>{ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } };
+  const wr=(k,v)=>{ try{ localStorage.setItem(k,v); }catch(e){} };
+  const $=id=>document.getElementById(id);
+  let on=rd('limpio_on','0')==='1';
+  const apagado=(b,id)=>id==='btnTiempo'?/Sin efectos/.test(b.textContent):!/:\s*ON\b/.test(b.textContent);
+  function pintarBoton(){ const b=$('btnLimpio'); if(b){ b.classList.toggle('activo',on); b.title=on?'Modo limpio: ACTIVO (pulsa para volver a tus ajustes)':'Modo limpio y fluido'; } }
+  function estetica(){ window.__limpioOn=on; try{ window.__estetica&&window.__estetica.aplicar(typeof nocheAct!=='undefined'&&nocheAct); }catch(e){} }
+  function activar(){
+    const prev={};
+    for(const id of IDS){ const b=$(id); if(!b) continue; prev[id]=b.textContent; for(let i=0;i<8&&!apagado(b,id);i++) b.click(); }
+    wr('limpio_prev',JSON.stringify(prev)); on=true; wr('limpio_on','1'); estetica(); pintarBoton();
+  }
+  function desactivar(){
+    let prev={}; try{ prev=JSON.parse(rd('limpio_prev','{}'))||{}; }catch(e){}
+    for(const id in prev){ const b=$(id); if(!b) continue; for(let i=0;i<8&&b.textContent!==prev[id];i++) b.click(); }
+    on=false; wr('limpio_on','0'); estetica(); pintarBoton();
+  }
+  const b=$('btnLimpio'); if(b) b.onclick=()=>{ try{ on?desactivar():activar(); }catch(e){ try{ registrarError('limpio',e.message); }catch(_){} } };
+  window.__limpio={ estado:()=>({on}), activar, desactivar };
+  window.__limpioOn=on; pintarBoton();
 })();
 </script>
 <script>
