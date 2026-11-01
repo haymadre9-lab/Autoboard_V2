@@ -486,6 +486,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste on" id="btnAspBorde">▭ Borde de edificios: ON</button>
   <button class="ajuste" id="btnAspEstacion">🍂 Estación: Auto</button>
   <button class="ajuste on" id="btnPasos">🚸 Pasos de peatones: ON</button>
+  <button class="ajuste" id="btnPeajes">🚫 Evitar peajes: OFF</button>
   <button class="ajuste on" id="btnTramos">📏 Radares de tramo (media): ON</button>
   <button class="ajuste on" id="btnSugerido">🕘 Destino sugerido: ON</button>
   <button class="ajuste on" id="btnFlechaMan">➡️ Flecha de maniobra en la calzada: ON</button>
@@ -520,7 +521,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="enlaceCopiar">📋 Copiar código</button>
   <div id="enlaceEstado" style="font-size:12px;color:#8d99a5;padding:2px 4px 8px">Sin código: no enlazado</div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v202</div>
+  <div class="seccion">Versión v203</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -3329,7 +3330,7 @@ let ultimoCambioTrafico=0, evaluandoTrafico=false;
 const TRAFICO = { CHECK_MS:90000, COOLDOWN_MS:300000, GANANCIA_MIN_S:120, GANANCIA_PCT:0.10, VIA_CADA_M:1200, MAX_VIAS:8, NO_CERCA_MANIOBRA_M:400, DIFIERE_PCT:0.15, DIFIERE_M:40 };
 function nivelDeMagnitud(m){ return m>=3 ? 3 : (m===2 ? 2 : (m===1 ? 1 : 0)); }
 function urlRutaPorPuntos(pts){
-  return 'https://api.tomtom.com/routing/1/calculateRoute/'+pts.map(p=>p[0].toFixed(6)+','+p[1].toFixed(6)).join(':')+'/json?key='+TT+'&routeType=fastest&traffic=true&travelMode=car&sectionType=traffic&sectionType=speedLimit';
+  return 'https://api.tomtom.com/routing/1/calculateRoute/'+pts.map(p=>p[0].toFixed(6)+','+p[1].toFixed(6)).join(':')+'/json?key='+TT+'&routeType=fastest&traffic=true&travelMode=car&sectionType=traffic&sectionType=speedLimit'+(window.__peajes?'&avoid=tollRoads':'');
 }
 /* Metro de la ruta actual más cercano a un punto [lat,lon] (null si queda a más de 80 m) */
 function metroEnRutaActual(p){
@@ -3649,7 +3650,7 @@ function medirDurante(ms,id,mover){
 }
 function dist(a,b){const R=6371000,la1=a[0]*Math.PI/180,la2=b[0]*Math.PI/180;const dla=(b[0]-a[0])*Math.PI/180,dlo=(b[1]-a[1])*Math.PI/180;const h=Math.sin(dla/2)**2+Math.cos(la1)*Math.cos(la2)*Math.sin(dlo/2)**2;return 2*R*Math.asin(Math.sqrt(h));}
 function bearing(a,b){const la1=a[0]*Math.PI/180,la2=b[0]*Math.PI/180,dlo=(b[1]-a[1])*Math.PI/180;const y=Math.sin(dlo)*Math.cos(la2);const x=Math.cos(la1)*Math.sin(la2)-Math.sin(la1)*Math.cos(la2)*Math.cos(dlo);return ((Math.atan2(y,x)*180/Math.PI)+360)%360;}
-function urlRutaTomTom(o,d,rumbo){return 'https://api.tomtom.com/routing/1/calculateRoute/'+o[0]+','+o[1]+':'+d[0]+','+d[1]+'/json?key='+TT+'&routeType=fastest&traffic=true&travelMode=car&instructionsType=text&language=es-ES&sectionType=traffic&sectionType=speedLimit'+(Number.isFinite(rumbo)?'&vehicleHeading='+Math.round(((rumbo%360)+360)%360):'');}
+function urlRutaTomTom(o,d,rumbo){return 'https://api.tomtom.com/routing/1/calculateRoute/'+o[0]+','+o[1]+':'+d[0]+','+d[1]+'/json?key='+TT+'&routeType=fastest&traffic=true&travelMode=car&instructionsType=text&language=es-ES&sectionType=traffic&sectionType=speedLimit'+(window.__peajes?'&avoid=tollRoads':'')+(Number.isFinite(rumbo)?'&vehicleHeading='+Math.round(((rumbo%360)+360)%360):'');}
 
 function roundaboutSVG(exit, colores, modif){
   /* Circulación por la derecha: se entra por abajo-derecha y se gira en sentido antihorario.
@@ -5664,7 +5665,7 @@ window.__carg=(function(){
   document.head.appendChild(st);
 
   const CATS=[['mapa','🗺️ Mapa y vista'],['aspecto','🎨 Aspecto del mapa'],['cielo','🌦️ Cielo y tiempo'],['sonido','🔊 Sonido y avisos'],['carg','⚡ Cargadores'],['park','🅿️ Aparcamientos'],['gps','📍 GPS'],['coche','🚗 Coche'],['futbol','⚽ Fútbol'],['fiesta','🎉 Celebración'],['enlace','🔗 Enlace entre dispositivos'],['sis','⚙️ Rendimiento y versión']];
-  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnAutoAncho btnAutoVista btnPasos btnTramos btnSugerido btnFlechaMan btnEstSol btnEstLuz btnEstVias btnEstRelieve btnBusqAmbito btnCamDenso btnFlechas',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',sis:'btnAA btnTestTramo tramoDiag evFila btnEVPlan evPlanTxt btnTestEV evDiag btnLimpiarFavs btnWake'};
+  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnAutoAncho btnAutoVista btnPasos btnPeajes btnTramos btnSugerido btnFlechaMan btnEstSol btnEstLuz btnEstVias btnEstRelieve btnBusqAmbito btnCamDenso btnFlechas',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',sis:'btnAA btnTestTramo tramoDiag evFila btnEVPlan evPlanTxt btnTestEV evDiag btnLimpiarFavs btnWake'};
   const POR={}; for(const c in M) M[c].split(' ').forEach(id=>POR[id]=c);
   const cuerpos={}, cats={};
   const ref=panel.querySelector('h2');
@@ -6749,6 +6750,20 @@ window.__tramos=(function(){
   if(b) b.onclick=()=>{ on=!on; wr('tramo_on',on?'1':'0'); if(!on){ act=null; ocultar(); } try{ if(map.getLayer('tramos-pts')) map.setLayoutProperty('tramos-pts','visibility',on?'visible':'none'); }catch(e){} t(); }; t();
   window.addEventListener('load',()=>setTimeout(marcas,3000));
   return {paso,set:(l)=>{ lista=l; centro={lat:l[0]?l[0].from.lat:0,lon:l[0]?l[0].from.lon:0}; },estado:()=>({n:lista.length,act:!!act})};
+})();
+</script>
+<script>
+/* Evitar peajes (v203): añade &avoid=tollRoads a las rutas de TomTom (principal, recálculos y alternativas por tráfico, que comparten urlRutaTomTom / urlRutaPorPuntos).
+   Persistente. Al cambiarlo con una ruta activa se recalcula con el nuevo ajuste. TomTom lo trata como preferencia: si el destino solo se alcanza por peaje, la ruta lo incluirá. */
+(function(){
+  const b=document.getElementById('btnPeajes'); if(!b) return;
+  try{ window.__peajes=localStorage.getItem('evitar_peajes')==='1'; }catch(e){ window.__peajes=false; }
+  const t=()=>{ b.textContent='🚫 Evitar peajes: '+(window.__peajes?'ON':'OFF'); b.classList.toggle('on',!!window.__peajes); };
+  b.onclick=()=>{
+    window.__peajes=!window.__peajes; try{ localStorage.setItem('evitar_peajes',window.__peajes?'1':'0'); }catch(e){} t();
+    try{ if(typeof ultimaRutaDestino!=='undefined'&&ultimaRutaDestino&&typeof lastFix!=='undefined'&&lastFix) calcularRuta([lastFix.lat,lastFix.lon],ultimaRutaDestino,'recalculo'); }catch(e){}
+  };
+  t();
 })();
 </script>
 <script>
