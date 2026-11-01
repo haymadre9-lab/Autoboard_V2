@@ -27,6 +27,7 @@ html.noche0 #map,body.noche #map{background:#1b2128}
 @media(max-width:900px){#diag2.on{left:10px;top:260px}}
 #errlog{position:fixed;top:10px;right:10px;z-index:10;background:rgba(10,13,16,.88);border:1px solid #232c33;border-radius:10px;padding:8px 12px;color:#ff8a8a;font:11px/1.5 ui-monospace,monospace;max-width:280px;max-height:40vh;overflow-y:auto;display:none}
 #errlog.on{display:block}
+#errlog .ex{position:sticky;top:0;float:right;margin:-4px -6px 4px 6px;width:28px;height:28px;border:0;border-radius:8px;background:#232c33;color:#fff;font:700 15px system-ui,sans-serif;cursor:pointer;line-height:1}
 #controlesAbajo{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:8px;justify-content:center;flex-direction:column;align-items:center}
 #avisoInicial{background:rgba(20,80,50,.92);border:2px solid #2e6b4a;border-radius:12px;padding:10px 20px;color:#9ae6b4;font:700 15px system-ui,sans-serif;margin-bottom:8px;animation:avisoPulse 2s ease-in-out infinite}
 #avisoInicial.oculto{display:none}
@@ -521,7 +522,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="enlaceCopiar">📋 Copiar código</button>
   <div id="enlaceEstado" style="font-size:12px;color:#8d99a5;padding:2px 4px 8px">Sin código: no enlazado</div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v203</div>
+  <div class="seccion">Versión v204</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -611,14 +612,17 @@ const TT='zMPqeYVXNoQw4rJ1ycr8QdywkDFNx0tF';
 const antialiasActivo=new URLSearchParams(location.search).get('aa')==='1';
 const errores=[];           /* máx. 40 entradas ({tipo,mensaje,n}); el total real está en window.__errTotal */
 window.__errTotal=0;
-let __errPend=false;
+let __errPend=false, __errTmr=null;
+function __ocultarErr(){ clearTimeout(__errTmr); __errTmr=null; errores.length=0; const el=document.getElementById('errlog'); if(el){ el.classList.remove('on'); el.innerHTML=''; } }   /* el total (__errTotal) y el contador de Ajustes se conservan */
 const __escErr=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function __pintarErr(){
   __errPend=false;
   const c=document.getElementById('rErrores'); if(c) c.textContent=window.__errTotal;
   const el=document.getElementById('errlog'); if(!el) return; el.classList.add('on');
-  el.innerHTML=errores.map(e=>'<b>['+__escErr(e.tipo)+']</b> '+__escErr(e.mensaje)+(e.n>1?' <b>×'+e.n+'</b>':'')).join('<br><br>');
+  clearTimeout(__errTmr); __errTmr=setTimeout(__ocultarErr,45000);      /* se oculta solo a los 45 s sin errores nuevos */
+  el.innerHTML='<button class="ex" id="errX" aria-label="Cerrar">✕</button>'+errores.map(e=>'<b>['+__escErr(e.tipo)+']</b> '+__escErr(e.mensaje)+(e.n>1?' <b>×'+e.n+'</b>':'')).join('<br><br>');
 }
+document.addEventListener('click',ev=>{ if(ev.target&&ev.target.id==='errX') __ocultarErr(); },true);
 function registrarError(tipo,mensaje){
   window.__errTotal++;
   const u=errores[errores.length-1];
