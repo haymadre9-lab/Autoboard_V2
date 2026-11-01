@@ -110,6 +110,12 @@ body.modo-solomapa #btnLimpio{display:none}
 #evPlan .bt{display:flex;gap:10px;margin-top:10px}
 #evPlan button{flex:1;border:0;border-radius:12px;padding:12px;font:700 15px system-ui,sans-serif;cursor:pointer}
 #evPlan .go{background:#2e7d32;color:#fff} #evPlan .no{background:#e8ecef;color:#333}
+#tramoCard{position:fixed;left:50%;transform:translateX(-50%);top:84px;z-index:22;display:none;align-items:center;gap:12px;background:#fff;color:#111;border-radius:16px;padding:9px 16px;box-shadow:0 6px 20px rgba(60,70,80,.3);font:700 16px system-ui,sans-serif;white-space:nowrap}
+#tramoCard.on{display:flex}
+#tramoCard .l{background:#fff;border:4px solid #d32f2f;border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font:800 18px system-ui,sans-serif}
+#tramoCard .m{font-size:13px;color:#5f6b76;font-weight:600}
+#tramoCard.av{background:#fff3cd} #tramoCard.mal{background:#ffcdd2}
+body.modo-solomapa #tramoCard{display:none}
 #sugDestino{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:21;display:none;align-items:center;gap:12px;background:#ffffff;color:#111;border-radius:16px;padding:10px 12px 10px 14px;box-shadow:0 6px 20px rgba(60,70,80,.28);width:min(92vw,440px);box-sizing:border-box;font:600 15px system-ui,sans-serif}
 #sugDestino.on{display:flex}
 #sugDestino .tx{flex:1;min-width:0}
@@ -480,6 +486,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste on" id="btnAspBorde">▭ Borde de edificios: ON</button>
   <button class="ajuste" id="btnAspEstacion">🍂 Estación: Auto</button>
   <button class="ajuste on" id="btnPasos">🚸 Pasos de peatones: ON</button>
+  <button class="ajuste on" id="btnTramos">📏 Radares de tramo (media): ON</button>
   <button class="ajuste on" id="btnSugerido">🕘 Destino sugerido: ON</button>
   <button class="ajuste on" id="btnFlechaMan">➡️ Flecha de maniobra en la calzada: ON</button>
   <button class="ajuste on" id="btnEstSol">☀️ Sol real: ON</button>
@@ -513,7 +520,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="enlaceCopiar">📋 Copiar código</button>
   <div id="enlaceEstado" style="font-size:12px;color:#8d99a5;padding:2px 4px 8px">Sin código: no enlazado</div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v199</div>
+  <div class="seccion">Versión v200</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -585,6 +592,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
 <div id="minihud"><span class="vel" id="hudVel">0</span><span class="limite oculto" id="hudLimite">50</span></div>
 
 <button class="botonMapa" id="btnLimpio" title="Modo limpio y fluido">🍃</button>
+<div id="tramoCard"><div class="l" id="tcLim">–</div><div><div id="tcT1">Tramo</div><div class="m" id="tcT2"></div></div></div>
 <div id="sugDestino"><div class="tx"><div class="t1"></div><div class="t2"></div></div><button class="ir">Ir</button><button class="no" title="Ocultar">✕</button></div>
 <div id="grupoAbajoDer">
   <button class="botonMapa" id="btnCarg" title="Cargadores eléctricos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="10" height="18" rx="2"/><path d="M9.6 7l-2.1 4h3l-2.1 4"/><path d="M14 9h2.5a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 0 3 0V8.5l-2-2.5"/><path d="M3 21h12"/></svg></button>
@@ -5574,7 +5582,7 @@ window.__carg=(function(){
   document.head.appendChild(st);
 
   const CATS=[['mapa','🗺️ Mapa y vista'],['aspecto','🎨 Aspecto del mapa'],['cielo','🌦️ Cielo y tiempo'],['sonido','🔊 Sonido y avisos'],['carg','⚡ Cargadores'],['park','🅿️ Aparcamientos'],['gps','📍 GPS'],['coche','🚗 Coche'],['futbol','⚽ Fútbol'],['fiesta','🎉 Celebración'],['enlace','🔗 Enlace entre dispositivos'],['sis','⚙️ Rendimiento y versión']];
-  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnAutoAncho btnAutoVista btnPasos btnSugerido btnFlechaMan btnEstSol btnEstLuz btnEstVias btnEstRelieve btnBusqAmbito btnCamDenso btnFlechas',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',sis:'btnAA btnTestTramo tramoDiag evFila btnEVPlan evPlanTxt btnTestEV evDiag btnLimpiarFavs btnWake'};
+  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnAutoAncho btnAutoVista btnPasos btnTramos btnSugerido btnFlechaMan btnEstSol btnEstLuz btnEstVias btnEstRelieve btnBusqAmbito btnCamDenso btnFlechas',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',sis:'btnAA btnTestTramo tramoDiag evFila btnEVPlan evPlanTxt btnTestEV evDiag btnLimpiarFavs btnWake'};
   const POR={}; for(const c in M) M[c].split(' ').forEach(id=>POR[id]=c);
   const cuerpos={}, cats={};
   const ref=panel.querySelector('h2');
@@ -6593,6 +6601,76 @@ window.__sol=(function(){
     if(!rels.length&&!sueltos.length) txt+='Nada mapeado en OSM en esa zona.';
     d.textContent=txt;
   });
+})();
+</script>
+<script>
+/* Radares de tramo (velocidad media) desde OpenStreetMap: relaciones type=enforcement + enforcement=average_speed (members from / to).
+   Se descargan alrededor de tu posición (25 km), se guardan en el móvil y se miden con el GPS: entrada a <70 m del inicio mirando hacia el fin, media = km recorridos / tiempo, fin a <80 m del final. */
+window.__tramos=(function(){
+  const EP=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
+  const rd=(k,d)=>{ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } }, wr=(k,v)=>{ try{ localStorage.setItem(k,v); }catch(e){} };
+  let on=rd('tramo_on','1')!=='0', lista=[], centro=null, ultConsulta=0, act=null, finMostrado=0, ultFixT=0, ultReduzca=0, marcasPuestas=false;
+  try{ const c=JSON.parse(rd('tramos_cache_v1','null')); if(c&&Array.isArray(c.lista)){ lista=c.lista; centro=c.centro; } }catch(e){}
+  const card=()=>document.getElementById('tramoCard');
+  const dm=(a,b)=>distM(a.lat,a.lon,b.lat,b.lon);
+  function limiteDe(t){ if(t.lim>0) return t.lim; const rs=(typeof radaresCargados!=='undefined'&&radaresCargados)||[]; let best=null,bd=700; for(const r of rs){ if(r.t!=='tramo'&&!String(r.t).includes('tramo')) continue; const d=Math.min(dm({lat:r.lat,lon:r.lon},t.from),dm({lat:r.lat,lon:r.lon},t.to)); if(d<bd){ bd=d; best=Number(r.max)||null; } } return best; }
+  function marcas(){
+    if(typeof map==='undefined'||!map||!map.getSource) return;
+    const fc={type:'FeatureCollection',features:[]}; for(const t of lista){ fc.features.push({type:'Feature',geometry:{type:'Point',coordinates:[t.from.lon,t.from.lat]},properties:{k:'i'}},{type:'Feature',geometry:{type:'Point',coordinates:[t.to.lon,t.to.lat]},properties:{k:'f'}}); }
+    try{
+      if(map.getSource('tramos-pts')) map.getSource('tramos-pts').setData(fc);
+      else { map.addSource('tramos-pts',{type:'geojson',data:fc}); map.addLayer({id:'tramos-pts',type:'circle',source:'tramos-pts',minzoom:11,layout:{visibility:on?'visible':'none'},paint:{'circle-radius':['interpolate',['linear'],['zoom'],11,4,16,8],'circle-color':['match',['get','k'],'i','#2e7d32','#d32f2f'],'circle-stroke-width':2,'circle-stroke-color':'#fff'}}); }
+    }catch(e){}
+  }
+  async function descargar(lat,lon){
+    const now=Date.now(); if(now-ultConsulta<60000) return; ultConsulta=now;
+    const q='[out:json][timeout:50];relation(around:25000,'+lat+','+lon+')[type=enforcement][enforcement=average_speed];out body;>;out skel qt;';
+    for(const ep of EP){ try{ const r=await fetch(ep,{method:'POST',body:'data='+encodeURIComponent(q)}); if(!r.ok) continue; const j=await r.json(); procesar(j,lat,lon); return; }catch(e){} }
+  }
+  function procesar(j,lat,lon){
+    const nodes={},ways={},rels=[]; for(const e of j.elements){ if(e.type==='node') nodes[e.id]=e; else if(e.type==='way') ways[e.id]=e; else if(e.type==='relation') rels.push(e); }
+    const pos=m=>{ if(m.type==='node') return nodes[m.ref]; if(m.type==='way'&&ways[m.ref]&&ways[m.ref].nodes){ const w=ways[m.ref]; return nodes[m.role==='to'?w.nodes[w.nodes.length-1]:w.nodes[0]]; } return null; };
+    const nl=[]; for(const r of rels){ const ms=r.members||[]; const f=ms.filter(m=>m.role==='from').map(pos).find(Boolean), t=ms.filter(m=>m.role==='to').map(pos).find(Boolean); if(!f||!t) continue;
+      const lim=parseInt((r.tags&&r.tags.maxspeed)||'',10)||0;
+      nl.push({id:r.id,from:{lat:f.lat,lon:f.lon},to:{lat:t.lat,lon:t.lon},lim,len:dm(f,t)}); }
+    lista=nl; centro={lat,lon}; wr('tramos_cache_v1',JSON.stringify({lista,centro})); marcas();
+  }
+  function ocultar(){ const c=card(); if(c){ c.classList.remove('on','av','mal'); } }
+  function mostrar(lim,t1,t2,nivel){ const c=card(); if(!c) return; document.getElementById('tcLim').textContent=lim||'–'; document.getElementById('tcT1').textContent=t1; document.getElementById('tcT2').textContent=t2||''; c.classList.add('on'); c.classList.toggle('av',nivel===1); c.classList.toggle('mal',nivel===2); }
+  /* Un paso por cada fix nuevo. Devuelve el estado para poder probarlo. */
+  function paso(f,hdg,vKmh){
+    if(!on||!f) return null;
+    if(centro===null||dm(f,centro)>12000) descargar(f.lat,f.lon);
+    if(!marcasPuestas&&lista.length){ marcasPuestas=true; marcas(); }
+    const ahora=f.t||Date.now();
+    if(act){
+      const dt=(ahora-act.tPrev)/1000; if(dt>0){ act.km+=dm(act.pPrev,f)/1000; act.tPrev=ahora; act.pPrev={lat:f.lat,lon:f.lon}; }
+      const seg=(ahora-act.t0)/1000, media=seg>3?act.km/(seg/3600):vKmh, dFin=dm(f,act.t.to), lim=act.lim;
+      if(dFin<80||act.km>act.t.len/1000*2.5+1){
+        const fin=dFin<80; act.fin=true; const m=Math.round(media); const resumen=fin?('Fin de tramo · media '+m+' km/h'+(lim?(m>lim?' ⚠️':' ✓'):'')):'Tramo abandonado';
+        mostrar(lim,resumen,'',lim&&m>lim?2:0); finMostrado=ahora; const r={fin:true,media:m,ok:!lim||m<=lim}; act=null; return r;
+      }
+      const resta=Math.max(0,act.t.len*1.08/1000-act.km);
+      let nivel=0; if(lim){ if(media>lim) nivel=2; else if(media>lim-4) nivel=1; }
+      mostrar(lim,'Media '+Math.round(media)+' km/h'+(lim?' / '+lim:''),'quedan ~'+resta.toFixed(1).replace('.',',')+' km',nivel);
+      if(nivel===2&&ahora-ultReduzca>25000){ ultReduzca=ahora; if(window.__voz){ try{ __voz.radar(0,lim,true,true); }catch(e){} } }
+      return {media:Math.round(media),km:act.km,nivel};
+    }
+    if(finMostrado&&ahora-finMostrado<9000) return null;
+    if(finMostrado&&ahora-finMostrado>=9000){ finMostrado=0; ocultar(); }
+    let cerca=null,cd=Infinity;
+    for(const t of lista){ const d=dm(f,t.from); if(d>600||d>=cd) continue; const dirOk=Math.abs(((bearing([f.lat,f.lon],[t.to.lat,t.to.lon])-hdg+540)%360)-180)<70; if(!dirOk) continue; cd=d; cerca=t; }
+    if(!cerca){ ocultar(); return null; }
+    const lim=limiteDe(cerca);
+    if(cd<70&&vKmh>15){ act={t:cerca,lim,t0:ahora,tPrev:ahora,pPrev:{lat:f.lat,lon:f.lon},km:0}; mostrar(lim,'Tramo iniciado','radar de tramo',0); if(window.__voz){ try{ __voz.radar(cd,lim||0,false,false); }catch(e){} } return {inicio:true}; }
+    mostrar(lim,'Tramo en '+Math.round(cd/10)*10+' m','velocidad media controlada',0);
+    return {aprox:Math.round(cd)};
+  }
+  setInterval(()=>{ try{ if(typeof lastFix==='undefined'||!lastFix||lastFix.t===ultFixT) return; ultFixT=lastFix.t; paso(lastFix,heading,speedKmh); }catch(e){} },1000);
+  const b=document.getElementById('btnTramos'); const t=()=>{ if(b){ b.textContent='📏 Radares de tramo (media): '+(on?'ON':'OFF'); b.classList.toggle('on',on); } };
+  if(b) b.onclick=()=>{ on=!on; wr('tramo_on',on?'1':'0'); if(!on){ act=null; ocultar(); } try{ if(map.getLayer('tramos-pts')) map.setLayoutProperty('tramos-pts','visibility',on?'visible':'none'); }catch(e){} t(); }; t();
+  window.addEventListener('load',()=>setTimeout(marcas,3000));
+  return {paso,set:(l)=>{ lista=l; centro={lat:l[0]?l[0].from.lat:0,lon:l[0]?l[0].from.lon:0}; },estado:()=>({n:lista.length,act:!!act})};
 })();
 </script>
 <script>
