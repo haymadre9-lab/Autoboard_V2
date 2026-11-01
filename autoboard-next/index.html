@@ -499,7 +499,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="enlaceCopiar">📋 Copiar código</button>
   <div id="enlaceEstado" style="font-size:12px;color:#8d99a5;padding:2px 4px 8px">Sin código: no enlazado</div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v195</div>
+  <div class="seccion">Versión v196</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -6462,9 +6462,9 @@ window.__sol=(function(){
     d.textContent='Probando…'; b.disabled=true;
     const url='https://api.tomtom.com/routing/1/calculateLongDistanceEVRoute/43.263,-2.935:40.416,-3.703/json?key='+TT
       +'&vehicleEngineType=electric&currentChargeInkWh=60&minChargeAtDestinationInkWh=8&minChargeAtChargingStopsInkWh=8';
-    const body={chargingModes:[{chargingConnections:[{facilityType:'Charge_100_to_240V_1_Phase_at_16A',plugType:'IEC_62196_Type_2_Outlet'},{facilityType:'Charge_400_Volt_3_Phase_at_32A',plugType:'IEC_62196_Type_2_Outlet'}],chargingCurve:[{chargeInkWh:10,timeToChargeInSeconds:900},{chargeInkWh:40,timeToChargeInSeconds:2400},{chargeInkWh:75,timeToChargeInSeconds:5400}]}]};
+    const body={chargingModes:[{chargingConnections:[{facilityType:'Charge_Direct_Current_above_50kW',plugType:'Combo_to_IEC_62196_Type_2_Base'},{facilityType:'Charge_Direct_Current_at_50kW',plugType:'Combo_to_IEC_62196_Type_2_Base'},{facilityType:'Charge_380_to_480V_3_Phase_at_32A',plugType:'IEC_62196_Type_2_Outlet'}],chargingCurve:[{chargeInkWh:10,timeToChargeInSeconds:900},{chargeInkWh:40,timeToChargeInSeconds:2400},{chargeInkWh:75,timeToChargeInSeconds:5400}]}]};
     // parámetros mínimos de modelo de consumo (Tesla aprox.)
-    const q='&constantSpeedConsumptionInkWhPerHundredkm='+encodeURIComponent('50,8.5:90,13.5:120,19')+'&maxChargeInkWh=75&batteryCurve='+encodeURIComponent('10,200:40,130:75,60');
+    const q='&constantSpeedConsumptionInkWhPerHundredkm='+encodeURIComponent('50,8.5:90,13.5:120,19')+'&maxChargeInkWh=75';
     try{
       const r=await fetch(url+q,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       let j=null; try{ j=await r.json(); }catch(e){}
