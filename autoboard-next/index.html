@@ -101,6 +101,15 @@ body.noche #panelObras #obrasX{background:#343c45;color:#9aa5b1}
 body.modo-solomapa #btnLimpio{display:none}
 
 /* v194: tarjeta de destino sugerido */
+#evPlan{position:fixed;left:50%;top:70px;transform:translateX(-50%);z-index:40;display:none;background:#fff;color:#111;border-radius:16px;padding:12px 14px;box-shadow:0 8px 28px rgba(40,50,60,.35);width:min(94vw,460px);box-sizing:border-box;font:500 14px system-ui,sans-serif}
+#evPlan.on{display:block}
+#evPlan h4{margin:0 0 6px;font:700 16px system-ui,sans-serif}
+#evPlan .p{padding:6px 0;border-top:1px solid #e3e7eb}
+#evPlan .p b{font-weight:700}
+#evPlan .p span{color:#5f6b76;font-size:13px}
+#evPlan .bt{display:flex;gap:10px;margin-top:10px}
+#evPlan button{flex:1;border:0;border-radius:12px;padding:12px;font:700 15px system-ui,sans-serif;cursor:pointer}
+#evPlan .go{background:#2e7d32;color:#fff} #evPlan .no{background:#e8ecef;color:#333}
 #sugDestino{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:21;display:none;align-items:center;gap:12px;background:#ffffff;color:#111;border-radius:16px;padding:10px 12px 10px 14px;box-shadow:0 6px 20px rgba(60,70,80,.28);width:min(92vw,440px);box-sizing:border-box;font:600 15px system-ui,sans-serif}
 #sugDestino.on{display:flex}
 #sugDestino .tx{flex:1;min-width:0}
@@ -490,8 +499,13 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="btnTiltCoche" style="display:none">📐 Inclinación coche: 60°</button>
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
+  <div id="evFila" style="display:flex;align-items:center;gap:10px;padding:4px 14px;font-size:13px">🔋 Batería actual <input id="evPct" type="number" inputmode="numeric" min="5" max="100" value="80" style="width:64px;font-size:16px;padding:6px;border-radius:8px;border:1px solid #888;background:#fff;color:#111"> %</div>
+  <button class="ajuste" id="btnEVPlan" style="background:#1b5e20">⚡ Planificar ruta con cargas (al destino actual)</button>
+  <div id="evPlanTxt" style="font-size:11px;opacity:.85;padding:2px 14px"></div>
   <button class="ajuste peligro" id="btnTestEV" style="background:#27384a">🔋 Probar rutas eléctricas TomTom</button>
   <div id="evDiag" style="font-size:11px;opacity:.85;padding:2px 14px;white-space:pre-wrap"></div>
+  <button class="ajuste" id="btnTestTramo" style="background:#27384a">📏 Buscar radares de tramo cerca (50 km)</button>
+  <div id="tramoDiag" style="font-size:11px;opacity:.9;padding:2px 14px;white-space:pre-wrap"></div>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
   <div class="seccion">Enlace entre dispositivos</div>
   <input id="enlaceCodigo" type="text" maxlength="24" placeholder="Código (mín. 6 letras o números, igual en todas las apps)" autocomplete="off" autocapitalize="off" style="width:100%;box-sizing:border-box;border:1px solid #c5ccd3;border-radius:10px;padding:11px;font:600 15px system-ui,sans-serif;margin:2px 0 6px;background:#fff;color:#2f353b">
@@ -499,7 +513,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="enlaceCopiar">📋 Copiar código</button>
   <div id="enlaceEstado" style="font-size:12px;color:#8d99a5;padding:2px 4px 8px">Sin código: no enlazado</div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v196</div>
+  <div class="seccion">Versión v199</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -1255,7 +1269,8 @@ async function cargarSenales(){
   }
 }
 
-const RADAR_CONO_DEG=75, RADAR_RUTA_LAT_M=35;
+const RADAR_LAT_MIN_M=30, RADAR_RUTA_LAT_M=30, RADAR_REPITE_MS=120000;
+let __radUlt=null;   /* último radar avisado: no se vuelve a pitar por el mismo durante 2 min */
 /* Posición de un radar respecto a la ruta por delante: {d: distancia lateral (m), s: metros de ruta} (solo mira ~700 m hacia delante) */
 function radarEnRuta(lat,lon,sCoche){
   const n=routeCoordsLL.length; if(n<2||routeCumDist.length!==n) return null;
@@ -1290,8 +1305,12 @@ function comprobarRadaresCercanos(lat,lon,velocidadActualKmh){
       if(delante<-10||delante>RADAR_DIST_APAGADO+50) continue;
     }else{
       /* sin ruta: solo los que están dentro de un cono hacia donde miras */
-      const dif=Math.abs(((bearing([lat,lon],[rd.lat,rd.lon])-heading+540)%360)-180);
-      if(dif>RADAR_CONO_DEG) continue;
+      /* sin ruta: el radar tiene que estar en TU carril de avance. Se descompone en distancia hacia delante y desvío lateral;
+         el desvío admitido crece con la distancia (≈10°) con un mínimo de 30 m por la imprecisión del GPS.
+         Así no saltan los de una autopista paralela ni los de calles cercanas. */
+      const dif=((bearing([lat,lon],[rd.lat,rd.lon])-heading+540)%360)-180, rad=dif*Math.PI/180;
+      const delante=d*Math.cos(rad), lateral=Math.abs(d*Math.sin(rad));
+      if(delante<8||lateral>Math.max(RADAR_LAT_MIN_M,delante*0.18)) continue;
     }
     distMin=d; masCercano=rd;
   }
@@ -1301,13 +1320,15 @@ function comprobarRadaresCercanos(lat,lon,velocidadActualKmh){
   g9.textContent=Math.round(distMin)+' m · '+limRadar+' km/h';
   if(distMin<RADAR_DIST_AVISO){
     const porEncima = velocidadActualKmh > limRadar;
-    activarAlertaRadar(distMin, limRadar, porEncima);
+    const mismo=__radUlt&&__radUlt.rd===masCercano&&Date.now()-__radUlt.t<RADAR_REPITE_MS;
+    activarAlertaRadar(distMin, limRadar, porEncima, mismo);
+    __radUlt={rd:masCercano,t:Date.now()};
   }else{
     apagarAlertaRadar();
   }
 }
-function activarAlertaRadar(distancia, limite, porEncima){
-  if(window.__voz){ try{ __voz.radar(distancia,limite,porEncima,alertaRadarActiva); }catch(e){} }
+function activarAlertaRadar(distancia, limite, porEncima, yaAvisado){
+  if(window.__voz){ try{ __voz.radar(distancia,limite,porEncima,alertaRadarActiva||!!yaAvisado); }catch(e){} }
   document.getElementById('radarInfo').classList.add('on');
   document.getElementById('senalRadar').textContent=limite;
   document.getElementById('radarDist').textContent=Math.round(distancia)+' m';
@@ -5553,7 +5574,7 @@ window.__carg=(function(){
   document.head.appendChild(st);
 
   const CATS=[['mapa','🗺️ Mapa y vista'],['aspecto','🎨 Aspecto del mapa'],['cielo','🌦️ Cielo y tiempo'],['sonido','🔊 Sonido y avisos'],['carg','⚡ Cargadores'],['park','🅿️ Aparcamientos'],['gps','📍 GPS'],['coche','🚗 Coche'],['futbol','⚽ Fútbol'],['fiesta','🎉 Celebración'],['enlace','🔗 Enlace entre dispositivos'],['sis','⚙️ Rendimiento y versión']];
-  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnAutoAncho btnAutoVista btnPasos btnSugerido btnFlechaMan btnEstSol btnEstLuz btnEstVias btnEstRelieve btnBusqAmbito btnCamDenso btnFlechas',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',sis:'btnAA btnTestEV evDiag btnLimpiarFavs btnWake'};
+  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnAutoAncho btnAutoVista btnPasos btnSugerido btnFlechaMan btnEstSol btnEstLuz btnEstVias btnEstRelieve btnBusqAmbito btnCamDenso btnFlechas',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',sis:'btnAA btnTestTramo tramoDiag evFila btnEVPlan evPlanTxt btnTestEV evDiag btnLimpiarFavs btnWake'};
   const POR={}; for(const c in M) M[c].split(' ').forEach(id=>POR[id]=c);
   const cuerpos={}, cats={};
   const ref=panel.querySelector('h2');
@@ -6475,6 +6496,102 @@ window.__sol=(function(){
       else d.textContent='⚠️ HTTP '+r.status+': '+((j&&(j.error&&j.error.description||j.detailedError&&j.detailedError.message))||'respuesta sin detalle')+'. Si es 400, la clave sí llega al servicio pero faltan parámetros: avísame con este texto.';
     }catch(e){ d.textContent='⚠️ Sin respuesta ('+e.message+'). Comprueba conexión; si es CORS, avísame.'; }
     b.disabled=false;
+  });
+})();
+</script>
+<script>
+/* Ruta eléctrica con paradas de carga (TomTom Long Distance EV Routing). Navega PARADA A PARADA reutilizando navegarA: no toca el motor de rutas. */
+(function(){
+  const CAP=75, MIN_PARADA=0.10*CAP, MIN_DEST=0.05*CAP;   /* Model 3 Highland LR (≈75 kWh útiles) · margen 10 % en paradas, 5 % al llegar */
+  const el=document.createElement('div'); el.id='evPlan'; document.body.appendChild(el);
+  const btn=document.getElementById('btnEVPlan'), txt=document.getElementById('evPlanTxt'), inp=document.getElementById('evPct');
+  if(!btn||!inp) return;
+  try{ const v=localStorage.getItem('ev_pct'); if(v) inp.value=v; }catch(e){}
+  let plan=null;   /* {paradas:[{lat,lon,n,min,hasta,llega}], dest:[lat,lon], nombreDest, i} */
+  const esc=t=>String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  const mins=sg=>Math.max(1,Math.round(sg/60))+' min';
+  function cerrar(){ el.classList.remove('on'); }
+  function pintarPlan(){
+    let h='<h4>⚡ Ruta con '+plan.paradas.length+' parada'+(plan.paradas.length===1?'':'s')+' de carga</h4>';
+    plan.paradas.forEach((p,i)=>{ h+='<div class="p"><b>'+(i+1)+'. '+esc(p.n)+'</b><br><span>llegas con '+Math.round(p.llega/CAP*100)+' % · cargas '+mins(p.sg)+' hasta '+Math.round(p.hasta/CAP*100)+' %</span></div>'; });
+    h+='<div class="p"><span>Destino: '+esc(plan.nombreDest||'destino')+' · llegas con '+Math.round(plan.llegaDest/CAP*100)+' % · total en carga '+mins(plan.totalSg)+'</span></div>';
+    h+='<div class="bt"><button class="no" id="evNo">Cerrar</button><button class="go" id="evGo">Ir a la 1ª carga</button></div>';
+    el.innerHTML=h; el.classList.add('on');
+    document.getElementById('evNo').onclick=()=>{ plan=null; cerrar(); };
+    document.getElementById('evGo').onclick=()=>{ cerrar(); plan.i=0; irAParada(); };
+  }
+  function irAParada(){
+    const p=plan.paradas[plan.i];
+    navegarA(p.lat,p.lon,'⚡ '+p.n+' ('+(plan.i+1)+'/'+plan.paradas.length+')');
+  }
+  function irADestino(){ const d=plan.dest, n=plan.nombreDest; plan.fin=true; navegarA(d[0],d[1],n); }
+  async function planificar(){
+    if(!lastFix){ txt.textContent='Activa el GPS o la simulación primero.'; return; }
+    if(!ultimaRutaDestino){ txt.textContent='Primero elige un destino (búscalo y navega) y vuelve a pulsar.'; return; }
+    const pct=Math.max(5,Math.min(100,Number(inp.value)||80)); try{ localStorage.setItem('ev_pct',String(pct)); }catch(e){}
+    const dest=ultimaRutaDestino.slice(), nombreDest=destinoNombre;
+    txt.textContent='Calculando paradas…'; btn.disabled=true;
+    const url='https://api.tomtom.com/routing/1/calculateLongDistanceEVRoute/'+lastFix.lat+','+lastFix.lon+':'+dest[0]+','+dest[1]+'/json?key='+TT
+      +'&vehicleEngineType=electric&currentChargeInkWh='+(pct/100*CAP).toFixed(1)+'&maxChargeInkWh='+CAP+'&minChargeAtDestinationInkWh='+MIN_DEST.toFixed(1)+'&minChargeAtChargingStopsInkWh='+MIN_PARADA.toFixed(1)
+      +'&constantSpeedConsumptionInkWhPerHundredkm='+encodeURIComponent('50,9:90,14:120,19.5');
+    const body={chargingModes:[{chargingConnections:[{facilityType:'Charge_Direct_Current_above_50kW',plugType:'Combo_to_IEC_62196_Type_2_Base'},{facilityType:'Charge_Direct_Current_at_50kW',plugType:'Combo_to_IEC_62196_Type_2_Base'}],
+      chargingCurve:[{chargeInkWh:7.5,timeToChargeInSeconds:150},{chargeInkWh:22.5,timeToChargeInSeconds:480},{chargeInkWh:37.5,timeToChargeInSeconds:900},{chargeInkWh:52.5,timeToChargeInSeconds:1450},{chargeInkWh:60,timeToChargeInSeconds:1800},{chargeInkWh:67.5,timeToChargeInSeconds:2700},{chargeInkWh:75,timeToChargeInSeconds:4500}]}]};
+    try{
+      const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const j=await r.json().catch(()=>null);
+      if(!r.ok||!j||!j.routes||!j.routes[0]){ txt.textContent='Error TomTom '+r.status+': '+((j&&j.error&&j.error.description)||(j&&j.detailedError&&j.detailedError.message)||'sin detalle'); btn.disabled=false; return; }
+      const rt=j.routes[0], legs=rt.legs||[], paradas=[];
+      legs.forEach((lg,i)=>{ const ci=lg.summary&&lg.summary.chargingInformationAtEndOfLeg; if(!ci) return;
+        const pts=lg.points||[], u=pts[pts.length-1]; if(!u) return;
+        const nom=ci.chargingParkName||ci.chargingStopName||(ci.chargingParameters&&ci.chargingParameters.chargingParkName)||('Cargador '+(paradas.length+1));
+        paradas.push({lat:u.latitude,lon:u.longitude,n:nom,llega:Number(lg.summary.remainingChargeAtArrivalInkWh)||0,hasta:Number(ci.targetChargeInkWh)||0,sg:Number(ci.chargingTimeInSeconds)||0}); });
+      const ultimo=legs[legs.length-1], llegaDest=ultimo&&ultimo.summary?Number(ultimo.summary.remainingChargeAtArrivalInkWh)||0:0;
+      if(!paradas.length){ txt.textContent='✅ Llegas sin cargar: te quedan ~'+Math.round(llegaDest/CAP*100)+' % al llegar. Navega con normalidad.'; btn.disabled=false; return; }
+      plan={paradas,dest,nombreDest,i:0,llegaDest,totalSg:Number((rt.summary||{}).totalChargingTimeInSeconds)||paradas.reduce((a,p)=>a+p.sg,0)};
+      txt.textContent=''; pintarPlan();
+    }catch(e){ txt.textContent='Sin respuesta ('+e.message+')'; }
+    btn.disabled=false;
+  }
+  btn.addEventListener('click',planificar);
+  /* Al llegar a una parada (<80 m y casi parado) pregunta si seguir. */
+  let preguntado=-1;
+  setInterval(()=>{
+    if(!plan||plan.fin||!lastFix||el.classList.contains('on')) return;
+    const p=plan.paradas[plan.i]; if(!p) return;
+    if(distM(lastFix.lat,lastFix.lon,p.lat,p.lon)<80 && speedKmh<8 && preguntado!==plan.i){
+      preguntado=plan.i; const ult=plan.i>=plan.paradas.length-1;
+      el.innerHTML='<h4>🔌 En '+esc(p.n)+'</h4><div class="p"><span>Carga hasta ~'+Math.round(p.hasta/CAP*100)+' % ('+mins(p.sg)+') y pulsa continuar.</span></div><div class="bt"><button class="no" id="evCan">Cancelar plan</button><button class="go" id="evSig">'+(ult?'Continuar al destino':'Ir a la siguiente carga')+'</button></div>';
+      el.classList.add('on');
+      document.getElementById('evCan').onclick=()=>{ plan=null; cerrar(); };
+      document.getElementById('evSig').onclick=()=>{ cerrar(); if(ult) irADestino(); else { plan.i++; irAParada(); } };
+    }
+  },3000);
+})();
+</script>
+<script>
+/* Diagnóstico: radares de tramo en OpenStreetMap (relaciones type=enforcement + enforcement=average_speed) en 50 km */
+(function(){
+  const b=document.getElementById('btnTestTramo'), d=document.getElementById('tramoDiag'); if(!b||!d) return;
+  const EP=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
+  b.addEventListener('click',async()=>{
+    let lat,lon; if(typeof lastFix!=='undefined'&&lastFix){ lat=lastFix.lat; lon=lastFix.lon; } else { const c=map.getCenter(); lat=c.lat; lon=c.lng; }
+    d.textContent='Buscando en OpenStreetMap…'; b.disabled=true;
+    const q='[out:json][timeout:50];(relation(around:50000,'+lat+','+lon+')[type=enforcement][enforcement=average_speed];node(around:50000,'+lat+','+lon+')[enforcement=average_speed];);out body;>;out skel qt;';
+    let j=null, err='';
+    for(const ep of EP){ try{ const r=await fetch(ep,{method:'POST',body:'data='+encodeURIComponent(q)}); if(!r.ok){ err='HTTP '+r.status; continue; } j=await r.json(); break; }catch(e){ err=e.message; } }
+    b.disabled=false;
+    if(!j){ d.textContent='⚠️ Sin respuesta de Overpass ('+err+'). Reintenta en un minuto.'; return; }
+    const nodes={}, ways={}, rels=[], sueltos=[];
+    for(const e of j.elements){ if(e.type==='node'){ nodes[e.id]=e; if(e.tags&&e.tags.enforcement==='average_speed') sueltos.push(e); } else if(e.type==='way') ways[e.id]=e; else if(e.type==='relation') rels.push(e); }
+    const pos=m=>{ if(m.type==='node'&&nodes[m.ref]) return nodes[m.ref]; if(m.type==='way'&&ways[m.ref]&&ways[m.ref].nodes){ const w=ways[m.ref]; return nodes[w.nodes[0]]; } return null; };
+    const km=(a,b2)=>distM(a.lat,a.lon,b2.lat,b2.lon)/1000;
+    const filas=rels.map(r=>{ const f=(r.members||[]).filter(m=>m.role==='from').map(pos).find(Boolean), t=(r.members||[]).filter(m=>m.role==='to').map(pos).find(Boolean);
+      const ref=f||t||(r.members||[]).map(pos).find(Boolean); const dd=ref?km({lat,lon},ref):null;
+      return {n:(r.tags&&(r.tags.name||r.tags.ref))||('rel '+r.id), lim:r.tags&&(r.tags.maxspeed||''), from:!!f, to:!!t, dd, len:(f&&t)?km(f,t):null}; }).sort((a,b2)=>(a.dd??1e9)-(b2.dd??1e9));
+    let txt='Tramos (relaciones) en 50 km: '+rels.length+' · cámaras sueltas con enforcement=average_speed: '+sueltos.length+'\n';
+    filas.slice(0,8).forEach(f=>{ txt+='• '+f.n+(f.lim?' · '+f.lim+' km/h':'')+' · inicio '+(f.from?'sí':'NO')+' / fin '+(f.to?'sí':'NO')+(f.len!=null?' · '+f.len.toFixed(1)+' km':'')+(f.dd!=null?' · a '+f.dd.toFixed(0)+' km':'')+'\n'; });
+    if(!rels.length&&!sueltos.length) txt+='Nada mapeado en OSM en esa zona.';
+    d.textContent=txt;
   });
 })();
 </script>
