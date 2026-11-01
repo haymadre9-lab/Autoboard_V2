@@ -520,7 +520,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="enlaceCopiar">📋 Copiar código</button>
   <div id="enlaceEstado" style="font-size:12px;color:#8d99a5;padding:2px 4px 8px">Sin código: no enlazado</div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v201</div>
+  <div class="seccion">Versión v202</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -608,12 +608,22 @@ const MAPTILER_KEY='sG00UkBX9Ig2ifguvPgU';
 const OCM_API_KEY='c597036e-f13e-4675-ae60-fe70feb86e2a';
 const TT='zMPqeYVXNoQw4rJ1ycr8QdywkDFNx0tF';
 const antialiasActivo=new URLSearchParams(location.search).get('aa')==='1';
-const errores=[];
+const errores=[];           /* máx. 40 entradas ({tipo,mensaje,n}); el total real está en window.__errTotal */
+window.__errTotal=0;
+let __errPend=false;
+const __escErr=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function __pintarErr(){
+  __errPend=false;
+  const c=document.getElementById('rErrores'); if(c) c.textContent=window.__errTotal;
+  const el=document.getElementById('errlog'); if(!el) return; el.classList.add('on');
+  el.innerHTML=errores.map(e=>'<b>['+__escErr(e.tipo)+']</b> '+__escErr(e.mensaje)+(e.n>1?' <b>×'+e.n+'</b>':'')).join('<br><br>');
+}
 function registrarError(tipo,mensaje){
-  errores.push({tipo,mensaje});
-  document.getElementById('rErrores').textContent=errores.length;
-  const el=document.getElementById('errlog');el.classList.add('on');
-  el.innerHTML=errores.map(e=>'<b>['+e.tipo+']</b> '+e.mensaje).join('<br><br>');
+  window.__errTotal++;
+  const u=errores[errores.length-1];
+  if(u&&u.tipo===tipo&&u.mensaje===mensaje) u.n++;                       /* repetido consecutivo: se agrupa */
+  else { errores.push({tipo,mensaje,n:1}); if(errores.length>40) errores.shift(); }
+  if(!__errPend){ __errPend=true; (window.requestAnimationFrame||setTimeout)(__pintarErr); }   /* como mucho un repintado por frame */
 }
 const map=new maplibregl.Map({
   container:'map',
@@ -3632,8 +3642,8 @@ function medirDurante(ms,id,mover){
   return new Promise(resolve=>{
     const muestras=[];let lc=contadorRenders,lt=performance.now();
     const iv=setInterval(()=>{const a=performance.now(),dt=(a-lt)/1000;muestras.push(Math.round((contadorRenders-lc)/dt));lc=contadorRenders;lt=a;},250);
-    const antes=errores.length,t0=performance.now();
-    function paso(ts){const p=(ts-t0)/ms;if(p>=1){clearInterval(iv);const media=Math.round(muestras.reduce((a,b)=>a+b,0)/muestras.length);document.getElementById(id).innerHTML='<b>media '+media+'</b> fps'+(errores.length-antes?' — <span class="mal">'+(errores.length-antes)+' err</span>':'');resolve();return;}mover(p,ts);requestAnimationFrame(paso);}
+    const antes=window.__errTotal,t0=performance.now();
+    function paso(ts){const p=(ts-t0)/ms;if(p>=1){clearInterval(iv);const media=Math.round(muestras.reduce((a,b)=>a+b,0)/muestras.length);document.getElementById(id).innerHTML='<b>media '+media+'</b> fps'+(window.__errTotal-antes?' — <span class="mal">'+(window.__errTotal-antes)+' err</span>':'');resolve();return;}mover(p,ts);requestAnimationFrame(paso);}
     requestAnimationFrame(paso);
   });
 }
