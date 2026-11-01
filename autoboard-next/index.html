@@ -520,7 +520,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="enlaceCopiar">📋 Copiar código</button>
   <div id="enlaceEstado" style="font-size:12px;color:#8d99a5;padding:2px 4px 8px">Sin código: no enlazado</div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v200</div>
+  <div class="seccion">Versión v201</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -5242,6 +5242,80 @@ window.__cielo=(function(){
 })();
 </script>
 <script>
+/* ============ OVERPASS COMPARTIDO (v201) ============
+   Una sola cola para todos los módulos que piden datos a Overpass (pasos, parkings, semáforos en vivo, tramos).
+   · 2 peticiones a la vez como máximo y ≥1,2 s entre inicios: una lenta no bloquea a las demás.
+   · Timeout propio por petición (12 s; el de tramos 30 s) con AbortController; la consulta lleva el mismo timeout para que el servidor la abandone.
+   · Prioridad por cercanía al coche (las de atrás pesan el doble). Si vas rápido (>25 km/h), las celdas que ya quedaron atrás (>500 m, >110° del rumbo) se descartan: devuelve 'skip'.
+   · Sin duplicados: si una consulta con la misma clave está pedida o en vuelo, se devuelve la misma promesa.
+   · 429/504/timeout/red caída → se prueba el otro servidor; si fallan los dos, 3 rondas con espera 1,5 s y 3 s; cada servidor en fallo queda en pausa creciente (2 s, 4 s … máx. 60 s).
+   · Si todo falla devuelve null (el módulo lo apunta como fallo con reintento posterior, NO como celda vacía) y se anota en el panel de errores (máx. 1 vez cada 30 s).
+   Interfaz: window.__overpass.consultar(consulta, {k:clave, la, lo, tmo}) → Promise de JSON | 'skip' | null. */
+window.__overpass=(function(){
+  const EP=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
+  const C={PAR:2, GAP:1200, TMO:12000, RONDAS:3, COLA_MAX:60, ATRAS_M:500, ATRAS_DEG:110, VMIN:25, BACKOFF:1500};
+  let cola=[], vuelo=0, ultInicio=0, timer=null, ultLog=0; const cool=[0,0], malas=[0,0], pend=new Map();
+  const stats={ok:0,fallo:0,skip:0,reintentos:0,dup:0};
+  const dm=(a,b,c,d)=>{ const r=Math.PI/180; return Math.hypot((c-a)*r,(d-b)*r*Math.cos((a+c)/2*r))*6371000; };
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  function coche(){ try{ if(typeof lastFix!=='undefined'&&lastFix) return {la:lastFix.lat,lo:lastFix.lon,h:(typeof heading!=='undefined'?heading:0),v:(typeof speedKmh!=='undefined'?speedKmh:0)}; }catch(e){} return null; }
+  function rumboA(a,b,c,d){ const r=Math.PI/180, y=Math.sin((d-b)*r)*Math.cos(c*r), x=Math.cos(a*r)*Math.sin(c*r)-Math.sin(a*r)*Math.cos(c*r)*Math.cos((d-b)*r); return (Math.atan2(y,x)/r+360)%360; }
+  function info(it,c){ if(!c||!Number.isFinite(it.la)||!Number.isFinite(it.lo)) return {d:0,atras:false};
+    const d=dm(c.la,c.lo,it.la,it.lo); let atras=false;
+    if(c.v>C.VMIN&&d>C.ATRAS_M&&Number.isFinite(c.h)){ const df=Math.abs(((rumboA(c.la,c.lo,it.la,it.lo)-c.h+540)%360)-180); atras=df>C.ATRAS_DEG; }
+    return {d,atras}; }
+  const score=(it,c)=>{ const i=info(it,c); return i.d*(i.atras?2:1); };
+  function fin(it,v){ pend.delete(it.k); if(v==='skip') stats.skip++; it.res(v); }
+  function consultar(q,o){
+    o=o||{}; const k=o.k||q; if(pend.has(k)){ stats.dup++; return pend.get(k); }
+    let it; const p=new Promise(res=>{ it={q,k,la:o.la,lo:o.lo,tmo:o.tmo||C.TMO,res}; }); pend.set(k,p); cola.push(it);
+    if(cola.length>C.COLA_MAX){ const c=coche(); cola.sort((a,b)=>score(a,c)-score(b,c)); for(const x of cola.splice(C.COLA_MAX)) fin(x,'skip'); }
+    planificar(); return p;
+  }
+  function planificar(){ if(timer||!cola.length||vuelo>=C.PAR) return; timer=setTimeout(bombear,Math.max(0,ultInicio+C.GAP-Date.now())); }
+  function bombear(){
+    timer=null; if(vuelo>=C.PAR||!cola.length) return;
+    const c=coche();
+    cola=cola.filter(x=>{ if(info(x,c).atras){ fin(x,'skip'); return false; } return true; });
+    if(!cola.length) return;
+    let bi=0,bs=Infinity; cola.forEach((x,i)=>{ const sc=score(x,c); if(sc<bs){ bs=sc; bi=i; } });
+    const it=cola.splice(bi,1)[0]; vuelo++; ultInicio=Date.now();
+    ejecutar(it).catch(()=>fin(it,null)).finally(()=>{ vuelo--; planificar(); });
+    planificar();
+  }
+  async function intentar(i,it){
+    const ctl=new AbortController(), tm=setTimeout(()=>ctl.abort(),it.tmo);
+    const q=it.q.replace(/\[timeout:\d+\]/,'[timeout:'+Math.max(5,Math.round(it.tmo/1000)-1)+']');
+    try{
+      const r=await fetch(EP[i],{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'data='+encodeURIComponent(q),signal:ctl.signal});
+      if(!r.ok){ const e=new Error('HTTP '+r.status); e.cool=(r.status===429||r.status===504||r.status===502||r.status===503); throw e; }
+      const j=await r.json(); if(!j||!Array.isArray(j.elements)){ const e=new Error('respuesta sin datos'); e.cool=false; throw e; }
+      malas[i]=0; return j;
+    }catch(e){
+      if(e.name==='AbortError'){ e=new Error('timeout '+Math.round(it.tmo/1000)+' s'); e.cool=true; }
+      if(e.cool!==false){ malas[i]++; cool[i]=Date.now()+Math.min(60000,2000*Math.pow(2,malas[i]-1)); }
+      throw e;
+    } finally { clearTimeout(tm); }
+  }
+  async function ejecutar(it){
+    let ult='';
+    for(let ronda=0;ronda<C.RONDAS;ronda++){
+      if(ronda>0){ stats.reintentos++; await sleep(C.BACKOFF*Math.pow(2,ronda-1)); if(info(it,coche()).atras){ fin(it,'skip'); return; } }
+      const ahora=Date.now(); let orden=[0,1].sort((a,b)=>cool[a]-cool[b]);
+      const libres=orden.filter(i=>cool[i]<=ahora);
+      if(!libres.length){ await sleep(Math.min(8000,cool[orden[0]]-ahora)); } else orden=libres;
+      for(const i of orden){
+        try{ const j=await intentar(i,it); stats.ok++; fin(it,j); return; }catch(e){ ult=(i?'kumi: ':'overpass-api: ')+e.message; }
+      }
+    }
+    stats.fallo++;
+    const t=Date.now(); if(t-ultLog>30000){ ultLog=t; try{ registrarError('overpass','fallo persistente ('+ult+') · '+stats.fallo+' consultas sin datos; se reintenta más tarde'); }catch(e){} }
+    fin(it,null);
+  }
+  return {consultar,_cfg:C,_stats:stats,_reset:()=>{ cool[0]=cool[1]=0; malas[0]=malas[1]=0; },estado:()=>({cola:cola.length,vuelo,cool:cool.map(x=>Math.max(0,x-Date.now())),stats:Object.assign({},stats)})};
+})();
+</script>
+<script>
 /* ============ PASOS DE PEATONES (v176) ============
    Datos: cruces de OpenStreetMap (highway=crossing) pedidos a Overpass por celdas y guardados en el móvil (no se usan los semáforos). Cada cruce se encaja en la calzada real (tramo de calle más cercano en las teselas del mapa) y se dibuja como cebra
    (barras blancas paralelas a la calle). Solo zoom ≥ 15. Si algo falla, no se dibuja nada. */
@@ -5276,17 +5350,15 @@ window.__pasos=(function(){
 
   async function pedirCelda(la,lo){
     const k=celdaKey(la,lo), c=cache[k]; if(c && Date.now()-c.t<DIAS) return;
-    if(fallos[k] && Date.now()-fallos[k]<600000) return;
+    if(fallos[k] && Date.now()-fallos[k]<120000) return;
     const s=Math.floor(la/CELDA)*CELDA, w=Math.floor(lo/CELDA)*CELDA, n=s+CELDA, e=w+CELDA;
     const q='[out:json][timeout:25];node["highway"="crossing"]('+s.toFixed(5)+','+w.toFixed(5)+','+n.toFixed(5)+','+e.toFixed(5)+');out;';
-    for(const ep of ENDPOINTS){
-      try{
-        const r=await fetch(ep,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'data='+encodeURIComponent(q)});
-        if(!r.ok) continue; const j=await r.json(); if(!j||!j.elements) continue;
+    const j=await window.__overpass.consultar(q,{k:'pasos|'+k,la:(s+n)/2,lo:(w+e)/2});
+    if(j==='skip'){ fallos[k]=Date.now()-60000; return; }   /* descartada (quedó atrás): se reintenta en ~1 min, no es un fallo */
+    if(j&&j.elements){ try{
         const L=[]; for(const el of j.elements){ const t=el.tags||{}; if(t.crossing==='unmarked'||t['crossing:markings']==='no') continue; L.push([+el.lat.toFixed(6),+el.lon.toFixed(6)]); }
         cache[k]={t:Date.now(),p:L}; guardarCache(); return;
-      }catch(e){}
-    }
+    }catch(e){} }
     fallos[k]=Date.now();
   }
   function puntosDeCelda(la,lo){
@@ -5360,7 +5432,7 @@ window.__pasos=(function(){
       /* celdas alrededor del centro (la propia y las vecinas); pide la que falte, de una en una */
       const cel=[]; for(let i=-1;i<=1;i++) for(let j=-1;j<=1;j++) cel.push([c.lat+i*CELDA,c.lng+j*CELDA]);
       cel.sort((a,b)=>Math.hypot(a[0]-c.lat,(a[1]-c.lng))-Math.hypot(b[0]-c.lat,(b[1]-c.lng)));
-      if(!enVuelo){ const falta=cel.find(q=>{ const k=celdaKey(q[0],q[1]); return !(cache[k]&&Date.now()-cache[k].t<DIAS) && !(fallos[k]&&Date.now()-fallos[k]<600000); });
+      if(!enVuelo){ const falta=cel.find(q=>{ const k=celdaKey(q[0],q[1]); return !(cache[k]&&Date.now()-cache[k].t<DIAS) && !(fallos[k]&&Date.now()-fallos[k]<120000); });
         if(falta){ enVuelo=true; pedirCelda(falta[0],falta[1]).finally(()=>{ enVuelo=false; pendientes=true; }); } }
       for(const q of cel){ for(const pt of puntosDeCelda(q[0],q[1])){ agregar(pt[0],pt[1],'o'); } }
     }
@@ -5835,21 +5907,19 @@ window.__park=(function(){
   }
   async function pedir(la,lo){
     const k=key(la,lo), c=cache[k]; if(c&&Date.now()-c.t<DIAS) return;
-    if(fallos[k]&&Date.now()-fallos[k]<600000) return;
+    if(fallos[k]&&Date.now()-fallos[k]<120000) return;
     const s=Math.floor(la/CELDA)*CELDA, w=Math.floor(lo/CELDA)*CELDA, n=s+CELDA, e=w+CELDA;
     const q='[out:json][timeout:25];nwr["amenity"="parking"]('+s.toFixed(5)+','+w.toFixed(5)+','+n.toFixed(5)+','+e.toFixed(5)+');out center tags;';
-    for(const ep of EP){
-      try{
-        const r=await fetch(ep,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'data='+encodeURIComponent(q)});
-        if(!r.ok) continue; const j=await r.json(); if(!j||!j.elements) continue;
+    const j=await window.__overpass.consultar(q,{k:'park|'+k,la:(s+n)/2,lo:(w+e)/2});
+    if(j==='skip'){ fallos[k]=Date.now()-60000; return; }
+    if(j&&j.elements){ try{
         const L=[]; for(const el of j.elements){
           const t=el.tags||{}, tp=clasificar(t); if(!tp) continue;
           const la2=el.lat!=null?el.lat:(el.center&&el.center.lat), lo2=el.lon!=null?el.lon:(el.center&&el.center.lon); if(la2==null||lo2==null) continue;
           L.push([+la2.toFixed(6),+lo2.toFixed(6),tp,(t.name||'').slice(0,40),parseInt(t.capacity,10)||0]);
         }
         cache[k]={t:Date.now(),p:L}; guardar(); return;
-      }catch(e){}
-    }
+    }catch(e){} }
     fallos[k]=Date.now();
   }
   function imagen(col){
@@ -6170,13 +6240,11 @@ window.__semOSM=(function(){
     const q='[out:json][timeout:25];node["highway"="traffic_signals"]('+s.toFixed(5)+','+w.toFixed(5)+','+n.toFixed(5)+','+e.toFixed(5)+');out;';
     enVuelo=true;
     try{
-      for(const ep of EP){
-        try{
-          const r=await fetch(ep,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'data='+encodeURIComponent(q)});
-          if(!r.ok) continue; const j=await r.json(); if(!j||!j.elements) continue;
+      const j=await window.__overpass.consultar(q,{k:'sem|'+k,la:(s+n)/2,lo:(w+e)/2});
+      if(j==='skip'){ fallos[k]=Date.now()-60000; return; }
+      if(j&&j.elements){ try{
           cache[k]={t:Date.now(),p:j.elements.filter(x=>Number.isFinite(x.lat)).map(x=>[+x.lat.toFixed(6),+x.lon.toFixed(6)])}; guardar(); ult.n=-1; return;
-        }catch(e){}
-      }
+      }catch(e){} }
       fallos[k]=Date.now();
     } finally { enVuelo=false; }
   }
@@ -6212,7 +6280,7 @@ window.__semOSM=(function(){
       if(!enVuelo&&navigator.onLine!==false){
         const ahora=Date.now();
         for(const [la,lo,k] of celdasNecesarias()){
-          const c=cache[k]; if(c&&ahora-c.t<DIAS) continue; if(fallos[k]&&ahora-fallos[k]<600000) continue;
+          const c=cache[k]; if(c&&ahora-c.t<DIAS) continue; if(fallos[k]&&ahora-fallos[k]<120000) continue;
           pedir(la,lo,k); break;
         }
       }
@@ -6586,7 +6654,7 @@ window.__sol=(function(){
     d.textContent='Buscando en OpenStreetMap…'; b.disabled=true;
     const q='[out:json][timeout:50];(relation(around:50000,'+lat+','+lon+')[type=enforcement][enforcement=average_speed];node(around:50000,'+lat+','+lon+')[enforcement=average_speed];);out body;>;out skel qt;';
     let j=null, err='';
-    for(const ep of EP){ try{ const r=await fetch(ep,{method:'POST',body:'data='+encodeURIComponent(q)}); if(!r.ok){ err='HTTP '+r.status; continue; } j=await r.json(); break; }catch(e){ err=e.message; } }
+    j=await window.__overpass.consultar(q,{k:'tramos-diag|'+Date.now(),la:lat,lo:lon,tmo:30000}); if(!j||!j.elements){ err='sin datos tras reintentos'; j=null; }
     b.disabled=false;
     if(!j){ d.textContent='⚠️ Sin respuesta de Overpass ('+err+'). Reintenta en un minuto.'; return; }
     const nodes={}, ways={}, rels=[], sueltos=[];
@@ -6625,7 +6693,7 @@ window.__tramos=(function(){
   async function descargar(lat,lon){
     const now=Date.now(); if(now-ultConsulta<60000) return; ultConsulta=now;
     const q='[out:json][timeout:50];relation(around:25000,'+lat+','+lon+')[type=enforcement][enforcement=average_speed];out body;>;out skel qt;';
-    for(const ep of EP){ try{ const r=await fetch(ep,{method:'POST',body:'data='+encodeURIComponent(q)}); if(!r.ok) continue; const j=await r.json(); procesar(j,lat,lon); return; }catch(e){} }
+    const j=await window.__overpass.consultar(q,{k:'tramos|'+Math.round(lat*20)+'_'+Math.round(lon*20),la:lat,lo:lon,tmo:30000}); if(j&&j.elements) procesar(j,lat,lon);
   }
   function procesar(j,lat,lon){
     const nodes={},ways={},rels=[]; for(const e of j.elements){ if(e.type==='node') nodes[e.id]=e; else if(e.type==='way') ways[e.id]=e; else if(e.type==='relation') rels.push(e); }
