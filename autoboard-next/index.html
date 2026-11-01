@@ -99,6 +99,21 @@ body.noche #panelObras #obrasX{background:#343c45;color:#9aa5b1}
 #btnLimpio{position:fixed;right:14px;bottom:68px;z-index:20;font-size:22px;line-height:1}
 #btnLimpio.activo{color:#fff;background:#1e9e4a;border-color:#1e9e4a}
 body.modo-solomapa #btnLimpio{display:none}
+
+/* v194: tarjeta de destino sugerido */
+#sugDestino{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:21;display:none;align-items:center;gap:12px;background:#ffffff;color:#111;border-radius:16px;padding:10px 12px 10px 14px;box-shadow:0 6px 20px rgba(60,70,80,.28);width:min(92vw,440px);box-sizing:border-box;font:600 15px system-ui,sans-serif}
+#sugDestino.on{display:flex}
+#sugDestino .tx{flex:1;min-width:0}
+#sugDestino .t1{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#sugDestino .t2{color:#6b7580;font-size:13px;margin-top:2px;font-weight:500}
+#sugDestino .t2 .mal{color:#c62828;font-weight:700}
+#sugDestino button{border:0;cursor:pointer;font:700 15px system-ui,sans-serif;border-radius:12px}
+#sugDestino .ir{background:#1e88e5;color:#fff;padding:11px 18px}
+#sugDestino .no{background:transparent;color:#8d99a5;font-size:18px;padding:8px 10px}
+body.noche #sugDestino{background:#232a31;color:#e8edf2;box-shadow:0 6px 20px rgba(0,0,0,.5)}
+body.noche #sugDestino .t2{color:#9aa5b1}
+body.modo-navegacion #sugDestino{bottom:104px}   /* con GPS activo hay velocímetro abajo a la izquierda y botones a la derecha */
+body.modo-solomapa #sugDestino{display:none}
 #btnCarg.activo{color:#fff;background:#1e9e4a;border-color:#1e9e4a}
 #btnCentrar.on,.botonMapa.on,#btnSeguir.activo,.botonMapa:active{transform:scale(.94)}
 #btnCasa.activo{background:#2e6b4a;border-color:#4a9e6a;color:#fff}
@@ -456,6 +471,9 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste on" id="btnAspBorde">▭ Borde de edificios: ON</button>
   <button class="ajuste" id="btnAspEstacion">🍂 Estación: Auto</button>
   <button class="ajuste on" id="btnPasos">🚸 Pasos de peatones: ON</button>
+  <button class="ajuste on" id="btnSugerido">🕘 Destino sugerido: ON</button>
+  <button class="ajuste on" id="btnFlechaMan">➡️ Flecha de maniobra en la calzada: ON</button>
+  <button class="ajuste on" id="btnEstSol">☀️ Sol real: ON</button>
   <button class="ajuste on" id="btnEstLuz">✨ Luz y volumen: ON</button>
   <button class="ajuste on" id="btnEstVias">🛣️ Carreteras por jerarquía: ON</button>
   <button class="ajuste" id="btnEstRelieve">⛰️ Relieve sombreado: OFF</button>
@@ -472,6 +490,8 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="btnTiltCoche" style="display:none">📐 Inclinación coche: 60°</button>
   <div class="seccion">Rendimiento</div>
   <button class="ajuste" id="btnAA">🪄 Antialias: OFF (recargar)</button>
+  <button class="ajuste peligro" id="btnTestEV" style="background:#27384a">🔋 Probar rutas eléctricas TomTom</button>
+  <div id="evDiag" style="font-size:11px;opacity:.85;padding:2px 14px;white-space:pre-wrap"></div>
   <button class="ajuste peligro" id="btnLimpiarFavs">🗑️ Limpiar favoritos</button>
   <div class="seccion">Enlace entre dispositivos</div>
   <input id="enlaceCodigo" type="text" maxlength="24" placeholder="Código (mín. 6 letras o números, igual en todas las apps)" autocomplete="off" autocapitalize="off" style="width:100%;box-sizing:border-box;border:1px solid #c5ccd3;border-radius:10px;padding:11px;font:600 15px system-ui,sans-serif;margin:2px 0 6px;background:#fff;color:#2f353b">
@@ -479,7 +499,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="enlaceCopiar">📋 Copiar código</button>
   <div id="enlaceEstado" style="font-size:12px;color:#8d99a5;padding:2px 4px 8px">Sin código: no enlazado</div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v193</div>
+  <div class="seccion">Versión v195</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -551,6 +571,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
 <div id="minihud"><span class="vel" id="hudVel">0</span><span class="limite oculto" id="hudLimite">50</span></div>
 
 <button class="botonMapa" id="btnLimpio" title="Modo limpio y fluido">🍃</button>
+<div id="sugDestino"><div class="tx"><div class="t1"></div><div class="t2"></div></div><button class="ir">Ir</button><button class="no" title="Ocultar">✕</button></div>
 <div id="grupoAbajoDer">
   <button class="botonMapa" id="btnCarg" title="Cargadores eléctricos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="10" height="18" rx="2"/><path d="M9.6 7l-2.1 4h3l-2.1 4"/><path d="M14 9h2.5a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 0 3 0V8.5l-2-2.5"/><path d="M3 21h12"/></svg></button>
   <button class="botonMapa" id="btnCentrar" title="Centrar en mi posición"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="1.6"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
@@ -2856,7 +2877,7 @@ async function navegarA(lat,lon,nombre,origen){
   document.body.classList.add('modo-navegacion');
   const av=document.getElementById('avisoInicial'); if(av) av.classList.add('oculto');
   seguirOn=true; const btnSeg=document.getElementById('btnSeguir'); if(btnSeg) btnSeg.classList.add('activo');
-  if(!origen){ anotarReciente(lat,lon,destinoNombre); try{ Enlace.publicar({nombre:destinoNombre,lat,lon}); }catch(e){} }      /* lo que eliges aquí aparece en los otros dispositivos enlazados */
+  if(!origen){ anotarReciente(lat,lon,destinoNombre); try{ window.__sugerido&&window.__sugerido.anotar(lat,lon,destinoNombre); }catch(e){} try{ Enlace.publicar({nombre:destinoNombre,lat,lon}); }catch(e){} }      /* lo que eliges aquí aparece en los otros dispositivos enlazados */
   return true;
 }
 
@@ -5532,7 +5553,7 @@ window.__carg=(function(){
   document.head.appendChild(st);
 
   const CATS=[['mapa','🗺️ Mapa y vista'],['aspecto','🎨 Aspecto del mapa'],['cielo','🌦️ Cielo y tiempo'],['sonido','🔊 Sonido y avisos'],['carg','⚡ Cargadores'],['park','🅿️ Aparcamientos'],['gps','📍 GPS'],['coche','🚗 Coche'],['futbol','⚽ Fútbol'],['fiesta','🎉 Celebración'],['enlace','🔗 Enlace entre dispositivos'],['sis','⚙️ Rendimiento y versión']];
-  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnAutoAncho btnAutoVista btnPasos btnEstLuz btnEstVias btnEstRelieve btnBusqAmbito btnCamDenso btnFlechas',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',sis:'btnAA btnLimpiarFavs btnWake'};
+  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnAutoAncho btnAutoVista btnPasos btnSugerido btnFlechaMan btnEstSol btnEstLuz btnEstVias btnEstRelieve btnBusqAmbito btnCamDenso btnFlechas',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',sis:'btnAA btnTestEV evDiag btnLimpiarFavs btnWake'};
   const POR={}; for(const c in M) M[c].split(' ').forEach(id=>POR[id]=c);
   const cuerpos={}, cats={};
   const ref=panel.querySelector('h2');
@@ -6183,9 +6204,10 @@ window.__semOSM=(function(){
 window.__estetica=(function(){
   const rd=(k,d)=>{ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } };
   const wr=(k,v)=>{ try{ localStorage.setItem(k,v); }catch(e){} };
-  const cfg={ luz:rd('est_luz','1')!=='0', vias:rd('est_vias','1')!=='0', relieve:rd('est_relieve','0')==='1' };
+  const cfg={ sol:rd('est_sol','1')!=='0', luz:rd('est_luz','1')!=='0', vias:rd('est_vias','1')!=='0', relieve:rd('est_relieve','0')==='1' };
   const RAMPA_DIA=['interpolate',['linear'],['coalesce',['get','render_height'],8],0,'#d3d9e2',25,'#bcc5d1',60,'#a3aebd',120,'#8d9aad'];
-  const LUZ_DIA={anchor:'map',position:[1.3,215,42],color:'#fff3e0',intensity:0.5};
+  const LUZ_DIA_FIJA={anchor:'map',position:[1.3,215,42],color:'#fff3e0',intensity:0.5};
+  const luzDia=()=>{ try{ return (cfg.sol&&window.__sol&&window.__sol.luz())||LUZ_DIA_FIJA; }catch(e){ return LUZ_DIA_FIJA; } };
   const LUZ_NOCHE={anchor:'map',position:[1.3,215,50],color:'#9db2d6',intensity:0.3};
   const LUZ_ORIG={anchor:'viewport',color:'#ffffff',intensity:0.5,position:[1.15,210,30]};
   const AUTOV=['motorway','trunk']; const OPAC_LIMPIO=0.75;   /* 1 tapaba la ruta tras los edificios altos con la cámara inclinada */
@@ -6195,7 +6217,7 @@ window.__estetica=(function(){
     try{
       if(typeof map==='undefined'||!map.getStyle()) return;   /* isStyleLoaded() da false mientras cargan teselas: no se usa */
       n=!!n;
-      try{ map.setLight(cfg.luz?(n?LUZ_NOCHE:LUZ_DIA):LUZ_ORIG); }catch(e){}
+      try{ map.setLight(cfg.luz?(n?LUZ_NOCHE:luzDia()):LUZ_ORIG); }catch(e){}
       if(map.getLayer('3d-buildings')){
         if(window.__limpioOn){ sp('3d-buildings','fill-extrusion-color',n?NOCHE.extr:'#cfd5dd'); sp('3d-buildings','fill-extrusion-opacity',OPAC_LIMPIO); }   /* modo limpio: un solo gris, opacos (más baratos de dibujar) */
         else if(cfg.luz&&!n){ sp('3d-buildings','fill-extrusion-color',RAMPA_DIA); sp('3d-buildings','fill-extrusion-opacity',0.65); }
@@ -6228,7 +6250,8 @@ window.__estetica=(function(){
   setInterval(()=>{ if(hecho) return; try{ if(map&&map.getStyle()&&map.getLayer('3d-buildings')){ hecho=true; aplicar(typeof nocheAct!=='undefined'&&nocheAct); } }catch(e){} },1000);
   const bind=(id,k,txt)=>{ const b=document.getElementById(id); if(!b) return; const t=()=>{ b.textContent=txt+': '+(cfg[k]?'ON':'OFF'); b.classList.toggle('on',cfg[k]); };
     b.onclick=()=>{ cfg[k]=!cfg[k]; wr('est_'+k,cfg[k]?'1':'0'); if(!cfg[k]&&k==='vias'){ try{ _orig(typeof nocheAct!=='undefined'&&nocheAct); }catch(e){} } aplicar(typeof nocheAct!=='undefined'&&nocheAct); t(); }; t(); };
-  bind('btnEstLuz','luz','✨ Luz y volumen'); bind('btnEstVias','vias','🛣️ Carreteras por jerarquía'); bind('btnEstRelieve','relieve','⛰️ Relieve sombreado');
+  bind('btnEstSol','sol','☀️ Sol real'); bind('btnEstLuz','luz','✨ Luz y volumen');
+  setInterval(()=>{ try{ if(cfg.luz&&cfg.sol&&!(typeof nocheAct!=='undefined'&&nocheAct)) aplicar(false); }catch(e){} },120000); bind('btnEstVias','vias','🛣️ Carreteras por jerarquía'); bind('btnEstRelieve','relieve','⛰️ Relieve sombreado');
   return { cfg:()=>cfg, aplicar };
 })();
 </script>
@@ -6272,6 +6295,187 @@ window.__estetica=(function(){
   const b=$('btnLimpio'); if(b) b.onclick=()=>{ try{ on?desactivar():activar(); }catch(e){ try{ registrarError('limpio',e.message); }catch(_){} } };
   window.__limpio={ estado:()=>({on}), activar, desactivar };
   window.__limpioOn=on; pintarBoton();
+})();
+</script>
+<script>
+/* ============ FLECHA DE MANIOBRA EN LA CALZADA (v194) ============
+   Una flecha blanca con borde azul pintada sobre la propia ruta en el punto de la próxima maniobra (giro, rotonda, salida): empieza ~28 m antes y termina con la punta ~16 m
+   después, siguiendo la geometría real de la ruta. Aparece a ≤ 260 m (se funde) y desaparece al llegar encima. Solo zoom ≥ 15,8. Interruptor en Ajustes. */
+window.__flechaMan=(function(){
+  const rd=(k,d)=>{ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } };
+  let on=rd('flecha_man_on','1')!=='0', creado=false, clave='', ultVis=false;
+  const ANTES=28, DESPUES=16, CABEZA=6, HW=1.35, HW_CAB=3.3, VENT=260, MINZ=15.8;
+  const KY=110540;
+  function puntoEn(s){
+    const C=routeCumDist, R=routeCoordsLL; if(!R.length) return null;
+    if(s<=0) return R[0].slice(); if(s>=C[C.length-1]) return R[R.length-1].slice();
+    let a=0,b=C.length-1; while(b-a>1){ const m=(a+b)>>1; if(C[m]<=s) a=m; else b=m; }
+    const t=(s-C[a])/Math.max(1e-6,C[b]-C[a]); return [R[a][0]+(R[b][0]-R[a][0])*t, R[a][1]+(R[b][1]-R[a][1])*t];
+  }
+  function trozo(s0,s1){
+    const C=routeCumDist, R=routeCoordsLL, out=[puntoEn(s0)];
+    for(let i=0;i<C.length;i++){ if(C[i]>s0+0.5&&C[i]<s1-0.5) out.push(R[i].slice()); }
+    out.push(puntoEn(s1)); return out;
+  }
+  function flecha(s0,s1){
+    const A0=trozo(s0,s1-CABEZA), tip0=puntoEn(s1); if(A0.length<2||!tip0) return null;
+    const la0=A0[0][0], lo0=A0[0][1], kx=111320*Math.cos(la0*Math.PI/180);
+    const M=p=>[(p[1]-lo0)*kx,(p[0]-la0)*KY], U=m=>[la0+m[1]/KY, lo0+m[0]/kx];
+    const P=A0.map(M), tip=M(tip0), n=P.length, nor=[], dirs=[];
+    for(let i=0;i<n-1;i++){ const dx=P[i+1][0]-P[i][0], dy=P[i+1][1]-P[i][1], L=Math.hypot(dx,dy)||1; dirs.push([dx/L,dy/L]); }
+    for(let i=0;i<n;i++){
+      const a=dirs[Math.max(0,i-1)], b=dirs[Math.min(n-2,i)], px=-(a[1]+b[1]), py=(a[0]+b[0]), L=Math.hypot(px,py)||1;
+      const nx=px/L, ny=py/L, cos=Math.max(0.55, nx*(-a[1])+ny*a[0]); nor.push([nx/cos, ny/cos]);
+    }
+    const left=P.map((p,i)=>[p[0]+nor[i][0]*HW,p[1]+nor[i][1]*HW]), right=P.map((p,i)=>[p[0]-nor[i][0]*HW,p[1]-nor[i][1]*HW]);
+    const base=P[n-1], dx=tip[0]-base[0], dy=tip[1]-base[1], L=Math.hypot(dx,dy)||1, pxh=-dy/L, pyh=dx/L;
+    const ring=[...left, [base[0]+pxh*HW_CAB,base[1]+pyh*HW_CAB], tip, [base[0]-pxh*HW_CAB,base[1]-pyh*HW_CAB], ...right.reverse()];
+    ring.push(ring[0]); return ring.map(U).map(q=>[+q[1].toFixed(7),+q[0].toFixed(7)]);
+  }
+  function crear(){
+    if(creado&&map.getSource('flecha-man')) return true;
+    if(!map.getStyle()||!map.getLayer('ruta-3')) return false;
+    try{
+      map.addSource('flecha-man',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+      let antes; try{ const ls=map.getStyle().layers; let u=-1; for(let i=0;i<ls.length;i++) if(/^ruta-/.test(ls[i].id)) u=i; if(u>=0&&ls[u+1]) antes=ls[u+1].id; }catch(e){}
+      map.addLayer({id:'flecha-man-relleno',type:'fill',source:'flecha-man',paint:{'fill-color':'#ffffff','fill-opacity':['get','o'],'fill-antialias':true}},antes);
+      map.addLayer({id:'flecha-man-borde',type:'line',source:'flecha-man',layout:{'line-join':'round'},paint:{'line-color':'#1565c0','line-width':['interpolate',['linear'],['zoom'],15,0.8,18,1.6,20,2.4],'line-opacity':['get','o']}},antes);
+      creado=true; return true;
+    }catch(e){ return false; }
+  }
+  function vaciar(){ if(ultVis){ try{ map.getSource('flecha-man').setData({type:'FeatureCollection',features:[]}); }catch(e){} ultVis=false; clave=''; } }
+  function tick(){
+    try{
+      if(typeof map==='undefined'||!crear()) return;
+      if(!on||!lastFix||!steps.length||!routeCoordsLL.length||map.getZoom()<MINZ){ vaciar(); return; }
+      const st=steps[stepIdx]; if(!st||!st.maneuver||st.maneuver.type==='arrive'||(st.maneuver.type==='turn'&&st.maneuver.modifier==='straight')){ vaciar(); return; }
+      const s=recorridoAhora([lastFix.lat,lastFix.lon]), d=st.metro-s;
+      if(d>VENT||d<6){ vaciar(); return; }
+      const k=stepIdx+'|'+Math.round(d/4)+'|'+routeCoordsLL.length; if(k===clave) return; clave=k;
+      const o=Math.max(0,Math.min(1,(VENT-d)/70))*Math.min(1,(d-6)/10)*0.97;
+      const ring=flecha(Math.max(0,st.metro-ANTES), Math.min(routeCumDist[routeCumDist.length-1], st.metro+DESPUES));
+      if(!ring){ vaciar(); return; }
+      map.getSource('flecha-man').setData({type:'FeatureCollection',features:[{type:'Feature',properties:{o},geometry:{type:'Polygon',coordinates:[ring]}}]}); ultVis=true;
+    }catch(e){}
+  }
+  setInterval(tick,250);
+  const b=document.getElementById('btnFlechaMan'); const t=()=>{ if(b){ b.textContent='➡️ Flecha de maniobra en la calzada: '+(on?'ON':'OFF'); b.classList.toggle('on',on); } };
+  if(b) b.onclick=()=>{ on=!on; try{ localStorage.setItem('flecha_man_on',on?'1':'0'); }catch(e){} if(!on) vaciar(); t(); }; t();
+  return { estado:()=>({on,creado,visible:ultVis,clave}), ring:flecha };
+})();
+</script>
+<script>
+/* ============ DESTINO SUGERIDO (v194) ============
+   Guarda un registro local de tus viajes (destino, día de la semana y hora) y, cuando abres la app sin ruta, propone el destino más probable para ESTE día y ESTA hora
+   con el tiempo de viaje con tráfico (TomTom). Puntuación = Σ (peso del día × peso de la hora × peso de la antigüedad) por destino (agrupados a ≤ 80 m).
+   Día: mismo día de la semana 1,0 · mismo tipo (laborable/finde) 0,6 · otro 0. Hora: campana de 75 min. Antigüedad: media vida 45 días. Se sugiere con puntuación ≥ 1,6
+   (≈ 2 viajes parecidos). Todo queda en este dispositivo. Interruptor en Ajustes. */
+window.__sugerido=(function(){
+  const rd=(k,d)=>{ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } };
+  const wr=(k,v)=>{ try{ localStorage.setItem(k,v); }catch(e){} };
+  let on=rd('sug_on','1')!=='0', log=[]; try{ log=JSON.parse(rd('viajes_log','[]'))||[]; if(!Array.isArray(log)) log=[]; }catch(e){ log=[]; }
+  const MAX=300, UMBRAL=1.6, el=document.getElementById('sugDestino');
+  let actual=null, etaCache={}, ultEval=0, descartados=new Set();
+  const dist=(a,b,c,d)=>{ const r=Math.PI/180; return Math.hypot((c-a)*r,(d-b)*r*Math.cos((a+c)/2*r))*6371000; };
+  function anotar(la,lo,nombre){ try{ const d=new Date(); log.push({la:+la.toFixed(6),lo:+lo.toFixed(6),n:(nombre||'').trim(),t:d.getTime(),w:d.getDay(),m:d.getHours()*60+d.getMinutes()}); if(log.length>MAX) log=log.slice(-MAX); wr('viajes_log',JSON.stringify(log)); }catch(e){} }
+  function candidatos(ahora){
+    const w0=ahora.getDay(), m0=ahora.getHours()*60+ahora.getMinutes(), fin0=(w0===0||w0===6), grupos=[];
+    for(const v of log){
+      const fin=(v.w===0||v.w===6), pd=v.w===w0?1:(fin===fin0?0.6:0); if(!pd) continue;
+      let dm=Math.abs(v.m-m0); dm=Math.min(dm,1440-dm); const ph=Math.exp(-0.5*(dm/75)*(dm/75)); if(ph<0.05) continue;
+      const pr=Math.pow(0.5,Math.max(0,(ahora.getTime()-v.t)/86400000)/45), sc=pd*ph*pr;
+      let g=grupos.find(x=>dist(x.la,x.lo,v.la,v.lo)<=80); if(!g){ g={la:v.la,lo:v.lo,n:'',sc:0,nn:0}; grupos.push(g); }
+      g.sc+=sc; g.nn++; if(v.n) g.n=v.n;
+    }
+    return grupos.sort((a,b)=>b.sc-a.sc);
+  }
+  function corto(n){ n=(n||'Destino').trim(); const p=n.split(','); return (p.length>1&&p[0].length>=4)?p[0].trim():n; }
+  async function eta(g){
+    const k=g.la.toFixed(4)+','+g.lo.toFixed(4), c=etaCache[k]; if(c&&Date.now()-c.t<180000) return c;
+    if(!lastFix||navigator.onLine===false) return null;
+    try{
+      const r=await fetch('https://api.tomtom.com/routing/1/calculateRoute/'+lastFix.lat.toFixed(5)+','+lastFix.lon.toFixed(5)+':'+g.la+','+g.lo+'/json?key='+TT+'&traffic=true&travelMode=car');
+      const j=await r.json(), sm=j&&j.routes&&j.routes[0]&&j.routes[0].summary; if(!sm) return null;
+      const o={t:Date.now(),min:Math.round(sm.travelTimeInSeconds/60),km:sm.lengthInMeters/1000,retraso:Math.round((sm.trafficDelayInSeconds||0)/60)}; etaCache[k]=o; return o;
+    }catch(e){ return null; }
+  }
+  function pintar(g,e){
+    if(!el) return; el.querySelector('.t1').textContent='🕘 '+corto(g.n);
+    const t2=el.querySelector('.t2');
+    if(e){ t2.innerHTML='Sugerido · '+e.min+' min · '+e.km.toFixed(1).replace('.',',')+' km'+(e.retraso>=3?' · <span class="mal">+'+e.retraso+' min por tráfico</span>':''); } else t2.textContent='Sugerido para este día y hora';
+    el.classList.add('on');
+  }
+  function ocultar(){ if(el) el.classList.remove('on'); actual=null; }
+  async function evaluar(){
+    try{
+      ultEval=Date.now();
+      if(!on||!el||!lastFix||(typeof ultimaRutaDestino!=='undefined'&&ultimaRutaDestino)||(typeof routeCoordsLL!=='undefined'&&routeCoordsLL.length)){ ocultar(); return; }
+      const c=candidatos(new Date()).find(g=>g.sc>=UMBRAL&&!descartados.has(g.la.toFixed(4)+','+g.lo.toFixed(4))&&dist(lastFix.lat,lastFix.lon,g.la,g.lo)>300);
+      if(!c){ ocultar(); return; }
+      const mismo=actual&&dist(actual.la,actual.lo,c.la,c.lo)<80; actual=c; if(!mismo) pintar(c,null);
+      const e=await eta(c); if(actual===c) pintar(c,e);
+    }catch(e){}
+  }
+  if(el){
+    el.querySelector('.ir').onclick=()=>{ const g=actual; if(!g) return; ocultar(); navegarA(g.la,g.lo,g.n||'Destino'); };
+    el.querySelector('.no').onclick=()=>{ if(actual) descartados.add(actual.la.toFixed(4)+','+actual.lo.toFixed(4)); ocultar(); };
+  }
+  setInterval(()=>{ if(Date.now()-ultEval>20000) evaluar(); },5000);
+  const b=document.getElementById('btnSugerido'); const t=()=>{ if(b){ b.textContent='🕘 Destino sugerido: '+(on?'ON':'OFF'); b.classList.toggle('on',on); } };
+  if(b) b.onclick=()=>{ on=!on; wr('sug_on',on?'1':'0'); if(!on) ocultar(); else evaluar(); t(); }; t();
+  return { anotar, candidatos:(d)=>candidatos(d||new Date()), evaluar, log:()=>log, estado:()=>({on,actual,visible:!!(el&&el.classList.contains('on'))}) };
+})();
+</script>
+<script>
+/* ============ SOL REAL (v194) ============
+   Posición del sol (algoritmo astronómico simplificado, error < 1°) según fecha, hora y tu posición. La luz de los edificios sale de esa dirección y es más cálida y baja
+   al amanecer/atardecer. MapLibre no tiene sombras proyectadas: lo que cambia es el sombreado de las caras de los edificios. Se actualiza cada 2 min (módulo ✨ Luz y volumen). */
+window.__sol=(function(){
+  const R=Math.PI/180; let fija=null;
+  function pos(ms,lat,lon){
+    const n=ms/86400000+2440587.5-2451545.0;
+    const L=(280.460+0.9856474*n)%360, g=((357.528+0.9856003*n)%360)*R;
+    const lam=(L+1.915*Math.sin(g)+0.020*Math.sin(2*g))*R, eps=(23.439-0.0000004*n)*R;
+    const ra=Math.atan2(Math.cos(eps)*Math.sin(lam),Math.cos(lam)), dec=Math.asin(Math.sin(eps)*Math.sin(lam));
+    const gmst=((280.46061837+360.98564736629*n)%360+360)%360, H=((gmst+lon)*R-ra), la=lat*R;
+    const el=Math.asin(Math.sin(la)*Math.sin(dec)+Math.cos(la)*Math.cos(dec)*Math.cos(H));
+    const az=((Math.atan2(Math.sin(H),Math.cos(H)*Math.sin(la)-Math.tan(dec)*Math.cos(la))/R+180)%360+360)%360;
+    return {elev:el/R, az};
+  }
+  const mezcla=(a,b,t)=>a.map((v,i)=>Math.round(v+(b[i]-v)*t));
+  const hex=c=>'#'+c.map(v=>v.toString(16).padStart(2,'0')).join('');
+  function luz(){
+    let la=43.26, lo=-2.93; try{ if(typeof lastFix!=='undefined'&&lastFix){ la=lastFix.lat; lo=lastFix.lon; } else if(typeof map!=='undefined'){ const c=map.getCenter(); la=c.lat; lo=c.lng; } }catch(e){}
+    const p=pos(fija!==null?fija:Date.now(),la,lo);
+    const e=Math.max(p.elev,0), t=Math.max(0,Math.min(1,(e-4)/30));   /* 0 = sol rasante, 1 = sol alto */
+    const color=hex(mezcla([255,196,140],[255,246,232],t)), intens=0.34+0.2*t, polar=Math.max(12,Math.min(82,90-Math.max(p.elev,6)));
+    return {anchor:'map',position:[1.5,p.az,polar],color,intensity:intens};
+  }
+  return { pos, luz, fijarHora:(ms)=>{ fija=ms; try{ window.__estetica.aplicar(false); }catch(e){} } };
+})();
+</script>
+<script>
+/* Diagnóstico: ¿tu clave TomTom permite Long Distance EV Routing? (solo hace 1 petición de prueba Bilbao→Madrid) */
+(function(){
+  const b=document.getElementById('btnTestEV'), d=document.getElementById('evDiag'); if(!b||!d) return;
+  b.addEventListener('click',async()=>{
+    d.textContent='Probando…'; b.disabled=true;
+    const url='https://api.tomtom.com/routing/1/calculateLongDistanceEVRoute/43.263,-2.935:40.416,-3.703/json?key='+TT
+      +'&vehicleEngineType=electric&currentChargeInkWh=60&minChargeAtDestinationInkWh=8&minChargeAtChargingStopsInkWh=8';
+    const body={chargingModes:[{chargingConnections:[{facilityType:'Charge_100_to_240V_1_Phase_at_16A',plugType:'IEC_62196_Type_2_Outlet'},{facilityType:'Charge_400_Volt_3_Phase_at_32A',plugType:'IEC_62196_Type_2_Outlet'}],chargingCurve:[{chargeInkWh:10,timeToChargeInSeconds:900},{chargeInkWh:40,timeToChargeInSeconds:2400},{chargeInkWh:75,timeToChargeInSeconds:5400}]}]};
+    // parámetros mínimos de modelo de consumo (Tesla aprox.)
+    const q='&constantSpeedConsumptionInkWhPerHundredkm='+encodeURIComponent('50,8.5:90,13.5:120,19')+'&maxChargeInkWh=75&batteryCurve='+encodeURIComponent('10,200:40,130:75,60');
+    try{
+      const r=await fetch(url+q,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      let j=null; try{ j=await r.json(); }catch(e){}
+      if(r.ok&&j&&j.routes){ const rt=j.routes[0], sm=rt.summary||{};
+        const paradas=(rt.legs||[]).filter(l=>l.summary&&l.summary.chargingInformationAtEndOfLeg).length;
+        d.textContent='✅ SÍ: tu clave tiene EV routing. Bilbao→Madrid: '+Math.round((sm.lengthInMeters||0)/1000)+' km, '+paradas+' parada(s) de carga, carga total '+Math.round((sm.totalChargingTimeInSeconds||0)/60)+' min.'; }
+      else if(r.status===403||r.status===401) d.textContent='❌ NO: tu clave no tiene acceso a EV routing (HTTP '+r.status+'). Habría que pedirlo/activarlo en developer.tomtom.com o es de pago.';
+      else d.textContent='⚠️ HTTP '+r.status+': '+((j&&(j.error&&j.error.description||j.detailedError&&j.detailedError.message))||'respuesta sin detalle')+'. Si es 400, la clave sí llega al servicio pero faltan parámetros: avísame con este texto.';
+    }catch(e){ d.textContent='⚠️ Sin respuesta ('+e.message+'). Comprueba conexión; si es CORS, avísame.'; }
+    b.disabled=false;
+  });
 })();
 </script>
 <script>
