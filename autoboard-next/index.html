@@ -531,7 +531,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div id="incList"><span class="vacio">Sin incidencias.</span></div>
   <button class="ajuste" id="btnIncLimpiar">🧹 Borrar incidencias</button>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v213</div>
+  <div class="seccion">Versión v215</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -5028,7 +5028,7 @@ const glbDesactivado = /[?&]glb=0\b/.test(location.search);                    /
 async function cargarGLB(archivo){
   const { GLTFLoader } = await import(THREE_BASE+'/examples/jsm/loaders/GLTFLoader.js');
   const una = url => new Promise((ok,ko)=>new GLTFLoader().load(url,ok,undefined,ko));
-  try{ return await una(GLB_CFG.DIR+archivo); }catch(e){ return await una(archivo); }
+  try{ return await una(GLB_CFG.DIR+archivo); }catch(e){ try{ return await una(archivo); }catch(e2){ throw new Error('modelos/: '+((e&&e.message)||e)+' | raíz: '+((e2&&e2.message)||e2)); } }
 }
 let T=null, renderer=null, scene=null, camera=null, capaOk=false, luzH=null, luzD=null, cargando=false, ultimoNoche=null;
 const items=[];   /* {def, grupo, lat, lon, rot, esc, ajustado} */
@@ -5470,7 +5470,7 @@ window.__overpass=(function(){
     }
     stats.fallo++;
     { const n=(nf.get(it.k)||0)+1; nf.set(it.k,n); hasta.set(it.k,Date.now()+Math.min(/^tramos\|/.test(it.k)?480000:960000,120000*Math.pow(2,n-1))); }
-    const t=Date.now(); if(t-ultLog>30000){ ultLog=t; try{ registrarError('overpass','fallo persistente en «'+it.k+'» tras '+nInt+' intentos · overpass-api: '+(ult[0]||'(no probado)')+' · kumi: '+(ult[1]||'(no probado)')+' · '+stats.fallo+' consultas sin datos; se reintenta más tarde'); }catch(e){} }
+    const t=Date.now(); if(/^tramos\|/.test(it.k)&&t-ultLog>30000){ ultLog=t; try{ registrarError('overpass','fallo persistente en «'+it.k+'» tras '+nInt+' intentos · overpass-api: '+(ult[0]||'(no probado)')+' · kumi: '+(ult[1]||'(no probado)')+' · '+stats.fallo+' consultas sin datos; se reintenta más tarde'); }catch(e){} }
     fin(it,null);
   }
   return {consultar,_cfg:C,_stats:stats,_reset:()=>{ cool[0]=cool[1]=0; malas[0]=malas[1]=0; nf.clear(); hasta.clear(); },estado:()=>({cola:cola.length,vuelo,cool:cool.map(x=>Math.max(0,x-Date.now())),stats:Object.assign({},stats)})};
@@ -6848,6 +6848,11 @@ window.__tramos=(function(){
   const rd=(k,d)=>{ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } }, wr=(k,v)=>{ try{ localStorage.setItem(k,v); }catch(e){} };
   let on=rd('tramo_on','1')!=='0', lista=[], centro=null, ultConsulta=0, act=null, finMostrado=0, ultFixT=0, ultReduzca=0, marcasPuestas=false;
   try{ const c=JSON.parse(rd('tramos_cache_v1','null')); if(c&&Array.isArray(c.lista)){ lista=c.lista; centro=c.centro; } }catch(e){}
+  /* v215: lista fija radares_tramo.json (se genera con generar_tramos.html); si existe, no se consulta Overpass */
+  let estatico=false, esperando=true;
+  fetch('radares_tramo.json',{cache:'no-cache'}).then(r=>r.ok?r.json():null).then(j=>{
+    if(j&&Array.isArray(j.lista)&&j.lista.length){ lista=j.lista; estatico=true; centro={lat:0,lon:0}; marcasPuestas=false; try{ marcas(); }catch(e){} }
+  }).catch(()=>{}).finally(()=>{ esperando=false; });
   const card=()=>document.getElementById('tramoCard');
   const dm=(a,b)=>distM(a.lat,a.lon,b.lat,b.lon);
   function limiteDe(t){ if(t.lim>0) return t.lim; const rs=(typeof radaresCargados!=='undefined'&&radaresCargados)||[]; let best=null,bd=700; for(const r of rs){ if(r.t!=='tramo'&&!String(r.t).includes('tramo')) continue; const d=Math.min(dm({lat:r.lat,lon:r.lon},t.from),dm({lat:r.lat,lon:r.lon},t.to)); if(d<bd){ bd=d; best=Number(r.max)||null; } } return best; }
@@ -6877,7 +6882,7 @@ window.__tramos=(function(){
   /* Un paso por cada fix nuevo. Devuelve el estado para poder probarlo. */
   function paso(f,hdg,vKmh){
     if(!on||!f) return null;
-    if(centro===null||dm(f,centro)>12000) descargar(f.lat,f.lon);
+    if(!esperando&&!estatico&&(centro===null||dm(f,centro)>12000)) descargar(f.lat,f.lon);
     if(!marcasPuestas&&lista.length){ marcasPuestas=true; marcas(); }
     const ahora=f.t||Date.now();
     if(act){

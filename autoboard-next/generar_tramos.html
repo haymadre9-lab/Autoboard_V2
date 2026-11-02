@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Generar radares de tramo</title>
+<style>
+body{font:16px/1.45 system-ui,sans-serif;margin:0;padding:16px;background:#f3f5f8;color:#1b2430}
+h1{font-size:20px;margin:0 0 6px} p{margin:6px 0}
+select,button{font:inherit;padding:12px 14px;border-radius:10px;border:1px solid #b8c0cc;background:#fff;width:100%;box-sizing:border-box;margin:6px 0}
+button.p{background:#2563eb;color:#fff;border-color:#2563eb;font-weight:700}
+button:disabled{opacity:.5}
+#log{white-space:pre-wrap;font:13px/1.4 ui-monospace,monospace;background:#101722;color:#cfe3ff;border-radius:10px;padding:10px;min-height:120px;margin-top:8px}
+</style></head><body>
+<h1>Radares de tramo → radares_tramo.json</h1>
+<p>Descarga una sola vez los radares de tramo (velocidad media) de OpenStreetMap y los guarda en un archivo para que la app no dependa de Overpass al conducir.</p>
+<select id="reg">
+  <option value="42.0,-4.6,43.7,-0.6">Norte (Euskadi, Cantabria, Navarra, La Rioja, Burgos)</option>
+  <option value="35.9,-9.6,43.9,3.5">Toda la península</option>
+</select>
+<button class="p" id="go">Generar</button>
+<button id="dl" disabled>Descargar radares_tramo.json</button>
+<div id="log">Listo. Pulsa «Generar».</div>
+<script>
+const SERV=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter','https://overpass.private.coffee/api/interpreter'];
+const $=id=>document.getElementById(id); let salida=null;
+const log=t=>{ const l=$('log'); l.textContent+=(l.textContent?'\n':'')+t; l.scrollTop=l.scrollHeight; };
+/*CONV*/
+function dist(a,b,c,d){ const r=Math.PI/180; return Math.hypot((c-a)*r,(d-b)*r*Math.cos((a+c)/2*r))*6371000; }
+function pos(m){
+  if(m.type==='node'&&isFinite(m.lat)&&isFinite(m.lon)) return {lat:m.lat,lon:m.lon};
+  if(m.type==='way'&&Array.isArray(m.geometry)&&m.geometry.length){
+    const g=m.role==='to'?m.geometry[m.geometry.length-1]:m.geometry[0];
+    if(g&&isFinite(g.lat)&&isFinite(g.lon)) return {lat:g.lat,lon:g.lon};
+  }
+  return null;
+}
+function convertir(j){
+  const lista=[]; let descartados=0;
+  for(const e of (j&&j.elements)||[]){
+    if(e.type!=='relation') continue;
+    const ms=e.members||[];
+    const f=ms.filter(m=>m.role==='from').map(pos).find(Boolean), t=ms.filter(m=>m.role==='to').map(pos).find(Boolean);
+    if(!f||!t){ descartados++; continue; }
+    const lim=parseInt((e.tags&&e.tags.maxspeed)||'',10)||0;
+    const r6=x=>Math.round(x*1e6)/1e6;
+    lista.push({id:e.id,from:{lat:r6(f.lat),lon:r6(f.lon)},to:{lat:r6(t.lat),lon:r6(t.lon)},lim,len:Math.round(dist(f.lat,f.lon,t.lat,t.lon))});
+  }
+  return {lista,descartados};
+}
+/*FIN*/
+async function pedir(url,q,ms){
+  const ctl=new AbortController(), tm=setTimeout(()=>ctl.abort(),ms);
+  try{
+    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'data='+encodeURIComponent(q),signal:ctl.signal});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return await r.json();
+  }catch(e){ throw new Error(e.name==='AbortError'?'timeout '+Math.round(ms/1000)+' s':e.message); }
+  finally{ clearTimeout(tm); }
+}
+$('go').onclick=async()=>{
+  $('go').disabled=true; $('dl').disabled=true; salida=null; $('log').textContent='';
+  const [s,w,n,e]=$('reg').value.split(',');
+  const q='[out:json][timeout:150];relation[type=enforcement][enforcement=average_speed]('+s+','+w+','+n+','+e+');out geom;';
+  let ok=false;
+  for(let ronda=1;ronda<=3&&!ok;ronda++){
+    for(const u of SERV){
+      log('Ronda '+ronda+' · '+u.split('/')[2]+' …');
+      try{
+        const j=await pedir(u,q,170000);
+        const {lista,descartados}=convertir(j);
+        if(!lista.length) throw new Error('0 radares en la respuesta');
+        salida={generado:new Date().toISOString(),region:$('reg').selectedOptions[0].textContent,lista};
+        log('OK: '+lista.length+' radares de tramo ('+descartados+' sin origen/destino descartados).');
+        log('Ejemplo: '+JSON.stringify(lista[0]));
+        $('dl').disabled=false; ok=true; break;
+      }catch(err){ log('   falló: '+err.message); }
+    }
+    if(!ok&&ronda<3){ log('Espero 20 s y repito…'); await new Promise(r=>setTimeout(r,20000)); }
+  }
+  if(!ok) log('No se pudo. Prueba otra vez más tarde (mejor de madrugada) o desde otra red.');
+  $('go').disabled=false;
+};
+$('dl').onclick=()=>{
+  if(!salida) return;
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(salida)],{type:'application/json'}));
+  a.download='radares_tramo.json'; document.body.appendChild(a); a.click(); a.remove();
+};
+</script></body></html>
