@@ -3,6 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<link rel="preconnect" href="https://unpkg.com">
+<link rel="preconnect" href="https://api.maptiler.com" crossorigin>
+<link rel="preconnect" href="https://api.tomtom.com" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#151a20">
 <meta name="mobile-web-app-capable" content="yes">
@@ -532,7 +536,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div id="incList"><span class="vacio">Sin incidencias.</span></div>
   <button class="ajuste" id="btnIncLimpiar">🧹 Borrar incidencias</button>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v212</div>
+  <div class="seccion">Versión v214</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -4539,6 +4543,9 @@ window.__suave = (function(){
   try{ Object.assign(cfg,JSON.parse(localStorage.getItem('aspecto')||'{}')); }catch(e){}
   if(/[?&]aspecto=0\b/.test(location.search)) for(const k in cfg) cfg[k]=false;
   const B=window.__barrio, S=window.__suave;
+  const ARR={};      /* v214: tiempos de arranque (s desde que empieza a cargar la página) */
+  const marca=(k)=>{ if(ARR[k]==null) ARR[k]=+(performance.now()/1000).toFixed(1); };
+  try{ if(map.loaded&&map.loaded()) marca('mapa'); else map.once('load',()=>marca('mapa')); map.once('idle',()=>marca('teselas')); }catch(e){}
   let ult_est=-1, estSel=0, nocheCur=!!nocheAct, creado=false, ult=null, tUlt=0, pausa=2500, hayDatos=false;
   const GEN=[];   /* últimas pasadas de generar(): {t0,d} */
   const kxm=(lat)=>111320*Math.cos(lat*Math.PI/180), KY=110540;
@@ -4610,7 +4617,7 @@ window.__suave = (function(){
   let incompleto=false;
   function tick(){
     try{
-      if(!idFuenteBuildings || !crear()) return;
+      if(!idFuenteBuildings || !crear()) return; marca('capas');
       if(estSel!==ult_est){ ult_est=estSel; ult=null; }
       try{ S.estacion(map,estActual(),nocheCur); }catch(e){}
       if(!!nocheAct!==nocheCur){ nocheCur=!!nocheAct; B.noche(map,nocheCur); S.noche(map,nocheCur); ult=null; }
@@ -4641,7 +4648,7 @@ window.__suave = (function(){
         const ta=performance.now(); const fa=S.arboles(zonasVerdes(),[c.lng,c.lat],Math.min(R,400),nocheCur,bloqueo,900,estActual()); tArbG=performance.now()-ta; nArb=fa.length;
         const ts=performance.now(); S.ponerArboles(map,fa); tArbS=performance.now()-ts;
       }else S.ponerArboles(map,[]);
-      hayDatos=true; incompleto=!teselasOk;
+      hayDatos=true; incompleto=!teselasOk; marca('pasada1'); if(items.length>0) marca('edificios'); if(nArb>0) marca('arboles');
       const dur=performance.now()-t0; pausa=Math.max(2500,dur*30);
       ult={lat:c.lat,lon:c.lng,z,noche:nocheCur,b:qBarrio,a:qArb}; tUlt=performance.now();
       window.__aspecto.estado={edificios:items.length,R:Math.round(R),ms:Math.round(dur),gen:Math.round(tGen),barrio:Math.round(tBar),arbGen:Math.round(tArbG),arbSet:Math.round(tArbS),nArb,feats:nArb};
@@ -4667,7 +4674,7 @@ window.__suave = (function(){
   const bM=document.getElementById('btnAspMedir'), dM=document.getElementById('aspDiag');
   if(bM) bM.onclick=()=>{ const m=medir(), e=m.estado||{}; if(dM) dM.textContent=(m.estado?
     'edificios '+e.edificios+' · radio '+e.R+' m\ngenerar() '+e.ms+' ms (consulta teselas '+e.gen+' · setData barrio '+e.barrio+' · árboles: crear '+e.arbGen+' + setData '+e.arbSet+', '+e.nArb+' features)\nmediana '+m.generar.mediana+' ms · máx '+m.generar.max+' ms en '+m.generar.n+' pasadas':'Aún no se ha generado nada (acércate: zoom ≥ 15,5).')
-    +'\ntareas largas (>50 ms) en el último minuto: '+m.tareasLargas60s.n+' · máx '+m.tareasLargas60s.max+' ms · p95 '+m.tareasLargas60s.p95+' ms · coinciden con generar(): '+m.tareasLargas60s.deGenerar; };
+    +'\ntareas largas (>50 ms) en el último minuto: '+m.tareasLargas60s.n+' · máx '+m.tareasLargas60s.max+' ms · p95 '+m.tareasLargas60s.p95+' ms · coinciden con generar(): '+m.tareasLargas60s.deGenerar+'\narranque (s desde que carga la página): mapa '+(ARR.mapa??'—')+' · teselas listas '+(ARR.teselas??'—')+' · capas creadas '+(ARR.capas??'—')+' · 1.ª pasada '+(ARR.pasada1??'—')+' · con edificios '+(ARR.edificios??'—')+' · con árboles '+(ARR.arboles??'—'); };
   window.__aspecto={cfg,tick,estado:null,medir,vis:()=>{ aplicarVis(); ult=null; tUlt=0; pausa=0; tick(); }};
   setInterval(tick,1000);
 })();
@@ -5418,7 +5425,7 @@ window.__overpass=(function(){
   function fin(it,v){ pend.delete(it.k); if(v==='skip') stats.skip++; it.res(v); }
   function consultar(q,o){
     o=o||{}; const k=o.k||q; if(pend.has(k)){ stats.dup++; return pend.get(k); }
-    let it; const p=new Promise(res=>{ it={q,k,la:o.la,lo:o.lo,tmo:o.tmo||C.TMO,res}; }); pend.set(k,p); cola.push(it);
+    let it; const p=new Promise(res=>{ it={q,k,la:o.la,lo:o.lo,tmo:o.tmo||C.TMO,silencio:!!o.silencio,res}; }); pend.set(k,p); cola.push(it);
     if(cola.length>C.COLA_MAX){ const c=coche(); cola.sort((a,b)=>score(a,c)-score(b,c)); for(const x of cola.splice(C.COLA_MAX)) fin(x,'skip'); }
     planificar(); return p;
   }
@@ -5459,7 +5466,7 @@ window.__overpass=(function(){
       }
     }
     stats.fallo++;
-    const t=Date.now(); if(t-ultLog>30000){ ultLog=t; try{ registrarError('overpass','fallo persistente en «'+it.k+'» tras '+nInt+' intentos · overpass-api: '+(ult[0]||'(no probado)')+' · kumi: '+(ult[1]||'(no probado)')+' · '+stats.fallo+' consultas sin datos; se reintenta más tarde'); }catch(e){} }
+    const t=Date.now(); if(!it.silencio&&t-ultLog>30000){ ultLog=t; try{ registrarError('overpass','fallo persistente en «'+it.k+'» tras '+nInt+' intentos · overpass-api: '+(ult[0]||'(no probado)')+' · kumi: '+(ult[1]||'(no probado)')+' · '+stats.fallo+' consultas sin datos; se reintenta más tarde'); }catch(e){} }
     fin(it,null);
   }
   return {consultar,_cfg:C,_stats:stats,_reset:()=>{ cool[0]=cool[1]=0; malas[0]=malas[1]=0; },estado:()=>({cola:cola.length,vuelo,cool:cool.map(x=>Math.max(0,x-Date.now())),stats:Object.assign({},stats)})};
@@ -5502,7 +5509,7 @@ window.__pasos=(function(){
     const k=celdaKey(la,lo), c=cache[k]; if(c && Date.now()-c.t<DIAS) return;
     if(fallos[k] && Date.now()-fallos[k]<120000) return;
     const s=Math.floor(la/CELDA)*CELDA, w=Math.floor(lo/CELDA)*CELDA, n=s+CELDA, e=w+CELDA;
-    const q='[out:json][timeout:25];node["highway"="crossing"]('+s.toFixed(5)+','+w.toFixed(5)+','+n.toFixed(5)+','+e.toFixed(5)+');out;';
+    const q='[out:json][timeout:25];node["highway"="crossing"]["crossing"!="unmarked"]["crossing:markings"!="no"]('+s.toFixed(5)+','+w.toFixed(5)+','+n.toFixed(5)+','+e.toFixed(5)+');out skel;';   /* v213: el servidor ya descarta los «sin marcar» y solo devuelve coordenadas (respuesta mucho menor en el centro de la ciudad) */
     const j=await window.__overpass.consultar(q,{k:'pasos|'+k,la:(s+n)/2,lo:(w+e)/2});
     if(j==='skip'){ fallos[k]=Date.now()-60000; return; }   /* descartada (quedó atrás): se reintenta en ~1 min, no es un fallo */
     if(j&&j.elements){ try{
@@ -6890,7 +6897,7 @@ window.__sol=(function(){
 window.__tramos=(function(){
   const EP=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
   const rd=(k,d)=>{ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } }, wr=(k,v)=>{ try{ localStorage.setItem(k,v); }catch(e){} };
-  let on=rd('tramo_on','1')!=='0', lista=[], centro=null, ultConsulta=0, act=null, finMostrado=0, ultFixT=0, ultReduzca=0, marcasPuestas=false;
+  let on=rd('tramo_on','1')!=='0', lista=[], centro=null, ultConsulta=0, fallaT=0, radioT=25000, ultAviso=0, act=null, finMostrado=0, ultFixT=0, ultReduzca=0, marcasPuestas=false;
   try{ const c=JSON.parse(rd('tramos_cache_v1','null')); if(c&&Array.isArray(c.lista)){ lista=c.lista; centro=c.centro; } }catch(e){}
   const card=()=>document.getElementById('tramoCard');
   const dm=(a,b)=>distM(a.lat,a.lon,b.lat,b.lon);
@@ -6904,9 +6911,13 @@ window.__tramos=(function(){
     }catch(e){}
   }
   async function descargar(lat,lon){
-    const now=Date.now(); if(now-ultConsulta<60000) return; ultConsulta=now;
-    const q='[out:json][timeout:50];relation(around:25000,'+lat+','+lon+')[type=enforcement][enforcement=average_speed];out body;>;out skel qt;';
-    const j=await window.__overpass.consultar(q,{k:'tramos|'+Math.round(lat*20)+'_'+Math.round(lon*20),la:lat,lo:lon,tmo:30000}); if(j&&j.elements) procesar(j,lat,lon);
+    const now=Date.now(); if(now-ultConsulta<(fallaT?15*60000:60000)) return; ultConsulta=now;      /* v213: tras un fallo se espera 15 min en vez de 1 */
+    const q='[out:json][timeout:50];relation(around:'+radioT+','+lat+','+lon+')[type=enforcement][enforcement=average_speed];out body;>;out skel qt;';
+    const j=await window.__overpass.consultar(q,{k:'tramos|'+Math.round(lat*20)+'_'+Math.round(lon*20),la:lat,lo:lon,tmo:30000,silencio:true});
+    if(j&&j.elements){ fallaT=0; radioT=25000; procesar(j,lat,lon); return; }
+    if(j==='skip'){ ultConsulta=now-50000; return; }
+    fallaT=now; radioT=14000;      /* siguiente intento con un radio menor (consulta más ligera) */
+    if(now-ultAviso>2*3600000){ ultAviso=now; try{ registrarError('tramos','sin datos de radares de tramo en esta zona (Overpass no responde); se reintenta cada 15 min con un radio menor'); }catch(e){} }
   }
   function procesar(j,lat,lon){
     const nodes={},ways={},rels=[]; for(const e of j.elements){ if(e.type==='node') nodes[e.id]=e; else if(e.type==='way') ways[e.id]=e; else if(e.type==='relation') rels.push(e); }
@@ -6921,7 +6932,7 @@ window.__tramos=(function(){
   /* Un paso por cada fix nuevo. Devuelve el estado para poder probarlo. */
   function paso(f,hdg,vKmh){
     if(!on||!f) return null;
-    if(centro===null||dm(f,centro)>12000) descargar(f.lat,f.lon);
+    if(centro===null||dm(f,centro)>radioT*0.48) descargar(f.lat,f.lon);
     if(!marcasPuestas&&lista.length){ marcasPuestas=true; marcas(); }
     const ahora=f.t||Date.now();
     if(act){
