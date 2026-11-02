@@ -43,7 +43,7 @@ html.noche0 #map,body.noche #map{background:#1b2128}
 @keyframes avisoPulse{0%,100%{opacity:1}50%{opacity:.6}}
 /* Panel de indicaciones arriba a la izquierda (tamaño tipo codriver): barra de búsqueda gris arriba y carteles debajo */
 :root{--anchoPanel:clamp(300px,27vw,380px)}
-#colIzq{position:fixed;left:14px;top:62px;z-index:20;width:var(--anchoPanel);display:flex;flex-direction:column;gap:10px;pointer-events:none}
+#colIzq{position:fixed;left:14px;top:max(8px,env(safe-area-inset-top));z-index:20;width:var(--anchoPanel);display:flex;flex-direction:column;gap:10px;pointer-events:none}
 #colIzq>*{pointer-events:auto}
 #navbanner{position:relative;display:none;flex-direction:column;gap:10px;width:100%;box-sizing:border-box;background:#ffffff;border-radius:16px;padding:12px 14px;box-shadow:0 6px 20px rgba(60,70,80,.25);color:#111111}
 #navprincipal,#navFila2{display:flex;align-items:center;gap:14px;min-width:0}
@@ -85,19 +85,22 @@ body.noche #panelObras #obrasX{background:#343c45;color:#9aa5b1}
 #cartelAlt .alX{position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;border:0;background:#e9ecef;color:#6b7580;font-size:14px;font-weight:800;cursor:pointer;padding:0}
 #navbanner #btnPararRuta{position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;border:0;background:#e9ecef;color:#6b7580;font-size:14px;font-weight:800;cursor:pointer;display:none;align-items:center;justify-content:center;padding:0}
 #navbanner #btnPararRuta.on{display:flex}
-#grupoArribaDer{position:fixed;top:14px;left:14px;right:auto;z-index:25;display:flex;align-items:center;gap:10px}
-#barraBusqueda{display:flex !important;align-items:center;background:#e3e7eb;border:0;border-radius:12px;padding:0 6px 0 4px;height:38px;width:var(--anchoPanel);min-width:0;max-width:none;box-sizing:border-box}
+#grupoArribaDer{position:fixed;top:max(8px,env(safe-area-inset-top));right:max(12px,env(safe-area-inset-right));left:auto;z-index:25;display:flex;align-items:center;justify-content:flex-end;gap:10px}
+#barraBusqueda{display:none;align-items:center;background:#e3e7eb;border:0;border-radius:12px;padding:0 6px 0 4px;height:38px;width:var(--anchoPanel);min-width:0;max-width:none;box-sizing:border-box}
 #barraBusqueda.on{display:flex}
 #inputBusqueda{flex:1;min-width:0;background:transparent;border:0;color:#3f474f;font:600 14px system-ui,sans-serif;outline:none;padding:0 10px;height:100%}
 #inputBusqueda::placeholder{color:#8b949e}
-#btnLupa,#btnCasa{display:none !important}
+#btnCasa{display:none !important}
+#btnLupa{touch-action:none;will-change:transform;width:44px;height:44px;padding:0}
+#btnLupa svg{width:22px;height:22px}
+#barraBusqueda.on ~ #btnLupa{display:none}   /* v217: la barra de búsqueda va plegada en una lupa arriba a la derecha */
 #barraBusqueda{touch-action:none;will-change:transform}
-#barraBusqueda.suelta{transition:transform .18s ease}
-#hintCasa{position:fixed;left:14px;top:100px;width:var(--anchoPanel);box-sizing:border-box;z-index:24;display:none;background:#1e88e5;color:#fff;border-radius:12px;padding:11px 14px;font:700 15px system-ui,sans-serif;box-shadow:0 6px 20px rgba(30,136,229,.35)}
+#barraBusqueda.suelta,#btnLupa.suelta{transition:transform .18s ease}
+#hintCasa{position:fixed;right:12px;left:auto;top:60px;width:var(--anchoPanel);box-sizing:border-box;z-index:24;display:none;background:#1e88e5;color:#fff;border-radius:12px;padding:11px 14px;font:700 15px system-ui,sans-serif;box-shadow:0 6px 20px rgba(30,136,229,.35)}
 #hintCasa.on{display:block}
 #hintCasa.listo{background:#2e9b5f;box-shadow:0 6px 20px rgba(46,155,95,.4)}
 #btnCerrarBusqueda{background:transparent;border:0;color:#8b949e;font-size:17px;cursor:pointer;padding:0 8px}
-#sugerencias{position:fixed;top:58px;left:14px;right:auto;z-index:26;background:#ffffff;border:0;border-radius:14px;box-shadow:0 6px 20px rgba(60,70,80,.28);width:var(--anchoPanel);min-width:0;max-width:none;max-height:60vh;overflow-y:auto;display:none}
+#sugerencias{position:fixed;top:max(56px,calc(env(safe-area-inset-top) + 48px));right:12px;left:auto;z-index:26;background:#ffffff;border:0;border-radius:14px;box-shadow:0 6px 20px rgba(60,70,80,.28);width:var(--anchoPanel);min-width:0;max-width:calc(100vw - 24px);max-height:60vh;overflow-y:auto;display:none}
 #sugerencias.on{display:block}
 #sugerencias .sug{padding:11px 14px;color:#111111;font:600 15px system-ui,sans-serif;cursor:pointer;border-bottom:1px solid #eef1f4}
 #sugerencias .sug:last-child{border-bottom:0}
@@ -536,7 +539,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div id="incList"><span class="vacio">Sin incidencias.</span></div>
   <button class="ajuste" id="btnIncLimpiar">🧹 Borrar incidencias</button>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v216</div>
+  <div class="seccion">Versión v217</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -583,7 +586,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
     <button id="btnCerrarBusqueda"><svg class="xsvg" viewBox="0 0 12 12" width="1em" height="1em" aria-hidden="true"><path d="M2 2L10 10M10 2L2 10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></button>
   </div>
   <button class="botonMapa" id="btnCasa" title="Ir a casa">🏠</button>
-  <button class="botonMapa" id="btnLupa" title="Buscar destino">🔍</button>
+  <button class="botonMapa" id="btnLupa" title="Buscar destino"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button>
 </div>
 <div id="sugerencias"></div>
 <div id="hintCasa"></div>
@@ -1886,27 +1889,31 @@ function irACasa(){
 }
 function cambiarCasa(){
   if(!casa) return;
-  if(confirm('¿Cambiar dirección de casa?\n\nActual: '+casa.nombre)){ casa=null; localStorage.removeItem('casa_destino'); actualizarBotonCasa(); alert('Arrastra la barra hacia abajo para definir la nueva dirección.'); }
+  if(confirm('¿Cambiar dirección de casa?\n\nActual: '+casa.nombre)){ casa=null; localStorage.removeItem('casa_destino'); actualizarBotonCasa(); alert('Arrastra la lupa hacia abajo para definir la nueva dirección.'); }
 }
-barraB.addEventListener('pointerdown',(e)=>{
+const btnLupaEl=document.getElementById('btnLupa');
+const arrEl=()=>barraB.classList.contains('on')?barraB:btnLupaEl;
+function arrPointerDown(e){
   if(e.target.closest && e.target.closest('#btnCerrarBusqueda')) return;
   __arr={ y0:e.clientY, x0:e.clientX, activo:false, id:e.pointerId };
   clearTimeout(__timerLarga);
   if(!inputB.value) __timerLarga=setTimeout(()=>{ if(__arr && !__arr.activo){ __arr=null; cambiarCasa(); } },CASA_ARRASTRE.LARGA_MS);
-});
+}
+barraB.addEventListener('pointerdown',arrPointerDown);
+btnLupaEl.addEventListener('pointerdown',arrPointerDown);
 window.addEventListener('pointermove',(e)=>{
   if(!__arr) return;
   const dy=e.clientY-__arr.y0, dx=e.clientX-__arr.x0;
   if(Math.hypot(dx,dy)>8) clearTimeout(__timerLarga);
   if(!__arr.activo){
-    if(dy>CASA_ARRASTRE.ACTIVA && dy>Math.abs(dx)*1.2){ __arr.activo=true; barraB.classList.remove('suelta'); inputB.blur(); sugs.classList.remove('on'); }
+    if(dy>CASA_ARRASTRE.ACTIVA && dy>Math.abs(dx)*1.2){ __arr.activo=true; arrEl().classList.remove('suelta'); inputB.blur(); sugs.classList.remove('on'); }
     else return;
   }
   const t=Math.max(0,Math.min(dy,CASA_ARRASTRE.MAX));
-  barraB.style.transform='translateY('+t+'px)';
+  arrEl().style.transform='translateY('+t+'px)';
   const listo=dy>=CASA_ARRASTRE.UMBRAL;
   hintCasa.textContent = listo ? '🏠 Suelta para ir a casa'+(casa?' · '+casa.nombre:'') : '↓ Sigue bajando para ir a casa';
-  hintCasa.style.top=(58+t)+'px';
+  hintCasa.style.top=(60+t)+'px';
   hintCasa.classList.add('on'); hintCasa.classList.toggle('listo',listo);
 });
 function terminarArrastre(e,cancelado){
@@ -1915,7 +1922,7 @@ function terminarArrastre(e,cancelado){
   const a=__arr; __arr=null;
   if(!a.activo) return;
   const dy=(e&&Number.isFinite(e.clientY))?e.clientY-a.y0:0;
-  barraB.classList.add('suelta'); barraB.style.transform='';
+  for(const el of [barraB,btnLupaEl]){ el.classList.add('suelta'); el.style.transform=''; }
   hintCasa.classList.remove('on','listo');
   if(!cancelado && dy>=CASA_ARRASTRE.UMBRAL) irACasa();
 }
