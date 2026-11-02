@@ -536,7 +536,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div id="incList"><span class="vacio">Sin incidencias.</span></div>
   <button class="ajuste" id="btnIncLimpiar">🧹 Borrar incidencias</button>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v214</div>
+  <div class="seccion">Versión v215</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -4546,6 +4546,7 @@ window.__suave = (function(){
   const ARR={};      /* v214: tiempos de arranque (s desde que empieza a cargar la página) */
   const marca=(k)=>{ if(ARR[k]==null) ARR[k]=+(performance.now()/1000).toFixed(1); };
   try{ if(map.loaded&&map.loaded()) marca('mapa'); else map.once('load',()=>marca('mapa')); map.once('idle',()=>marca('teselas')); }catch(e){}
+  let DG={tot:0,forma:0,lejos:0,rep:0,ocultos:0};
   let ult_est=-1, estSel=0, nocheCur=!!nocheAct, creado=false, ult=null, tUlt=0, pausa=2500, hayDatos=false;
   const GEN=[];   /* últimas pasadas de generar(): {t0,d} */
   const kxm=(lat)=>111320*Math.cos(lat*Math.PI/180), KY=110540;
@@ -4559,7 +4560,7 @@ window.__suave = (function(){
     if(!(cfg.barrio && eds)){ window.__filtroBarrio=null; try{ window.__reaplicarFiltroBase&&window.__reaplicarFiltroBase(); }catch(e){} }
   }
   function crear(){
-    if(!idFuenteBuildings || !map.isStyleLoaded()) return false;
+    if(!idFuenteBuildings || !map.getStyle()) return false;      /* v215: ya no espera a isStyleLoaded() (que tarda hasta que TODAS las fuentes, también las de relieve y tráfico, terminan de cargar) */
     if(creado && map.getSource('barrio') && map.getSource('suave-arboles') && map.getLayer('suave-acera')) return true;
     try{
       const antesEd = map.getLayer('3d-buildings') ? '3d-buildings' : primerSimb();
@@ -4580,18 +4581,18 @@ window.__suave = (function(){
     const kx=kxm(c.lat), eds=(typeof edificiosOn==='undefined')?true:edificiosOn;
     let R = z>=17?450 : z>=16?650 : 850;
     const feats=map.querySourceFeatures(idFuenteBuildings,{sourceLayer:sourceLayerBuildings})||[];
-    const ocultos=window.__puntosOcultos||[], vistos=new Set(), items=[];
+    const ocultos=window.__puntosOcultos||[], vistos=new Set(), items=[]; DG={tot:feats.length,forma:0,lejos:0,rep:0,ocultos:0};
     for(const f of feats){
-      const g=f.geometry; if(!g||(g.type!=='Polygon'&&g.type!=='MultiPolygon')) continue;
-      const pl=poligonos(g); const r0=pl[0]&&pl[0][0]; if(!r0||r0.length<4) continue;
+      const g=f.geometry; if(!g||(g.type!=='Polygon'&&g.type!=='MultiPolygon')){ DG.forma++; continue; }
+      const pl=poligonos(g); const r0=pl[0]&&pl[0][0]; if(!r0||r0.length<4){ DG.forma++; continue; }
       let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9; for(const q of r0){ if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1]; }
       const lo=(x0+x1)/2, la=(y0+y1)/2, dx=(lo-c.lng)*kx, dy=(la-c.lat)*KY;
-      if(dx*dx+dy*dy>(R+90)*(R+90)) continue;
+      if(dx*dx+dy*dy>(R+90)*(R+90)){ DG.lejos++; continue; }
       const p=f.properties||{}; let h=Number(p.render_height); if(!(h>0)) h=8; let mh=Number(p.render_min_height)||0; if(mh>=h) mh=0;
-      const key=Math.round(lo*kx)+','+Math.round(la*KY)+','+Math.round(h); if(vistos.has(key)) continue; vistos.add(key);
-      const d=distAPoligonoM(c.lat,c.lng,g); if(d>R) continue;
+      const key=Math.round(lo*kx)+','+Math.round(la*KY)+','+Math.round(h); if(vistos.has(key)){ DG.rep++; continue; } vistos.add(key);
+      const d=distAPoligonoM(c.lat,c.lng,g); if(d>R){ DG.lejos++; continue; }
       let oculto=false; for(const pt of ocultos){ if(distAPoligonoM(pt[1],pt[0],g)<=(pt[2]||1)){ oculto=true; break; } }
-      if(oculto) continue;
+      if(oculto){ DG.ocultos++; continue; }
       items.push({geometry:g,h,mh,lon:lo,lat:la,d,x0,x1,y0,y1});
     }
     if(items.length>3500){ items.sort((a,b)=>a.d-b.d); items.length=3500; R=Math.max(150,items[3499].d); }
@@ -4634,7 +4635,7 @@ window.__suave = (function(){
       const {items,R}=generar(c,z); const tGen=performance.now()-t0; let tBar=0, tArbG=0, tArbS=0, nArb=0;
       if(qBarrio){
         const tb=performance.now(); B.datos(map,items); tBar=performance.now()-tb;
-        window.__filtroBarrio=['>',['distance',{type:'Point',coordinates:[c.lng,c.lat]}],R];
+        window.__filtroBarrio=items.length?['>',['distance',{type:'Point',coordinates:[c.lng,c.lat]}],R]:null;      /* v215: sin edificios de color no se oculta el gris de la base (antes desaparecían los edificios cercanos) */
       }else{ B.datos(map,[]); window.__filtroBarrio=null; }
       try{ window.__reaplicarFiltroBase&&window.__reaplicarFiltroBase(); }catch(e){}
       if(qArb){
@@ -4651,7 +4652,7 @@ window.__suave = (function(){
       hayDatos=true; incompleto=!teselasOk; marca('pasada1'); if(items.length>0) marca('edificios'); if(nArb>0) marca('arboles');
       const dur=performance.now()-t0; pausa=Math.max(2500,dur*30);
       ult={lat:c.lat,lon:c.lng,z,noche:nocheCur,b:qBarrio,a:qArb}; tUlt=performance.now();
-      window.__aspecto.estado={edificios:items.length,R:Math.round(R),ms:Math.round(dur),gen:Math.round(tGen),barrio:Math.round(tBar),arbGen:Math.round(tArbG),arbSet:Math.round(tArbS),nArb,feats:nArb};
+      window.__aspecto.estado={dg:DG,edificios:items.length,R:Math.round(R),ms:Math.round(dur),gen:Math.round(tGen),barrio:Math.round(tBar),arbGen:Math.round(tArbG),arbSet:Math.round(tArbS),nArb,feats:nArb};
       GEN.push({t0:t0,d:dur}); if(GEN.length>60) GEN.shift();
     }catch(e){ registrarError('aspecto',e.message); }
   }
@@ -4674,9 +4675,10 @@ window.__suave = (function(){
   const bM=document.getElementById('btnAspMedir'), dM=document.getElementById('aspDiag');
   if(bM) bM.onclick=()=>{ const m=medir(), e=m.estado||{}; if(dM) dM.textContent=(m.estado?
     'edificios '+e.edificios+' · radio '+e.R+' m\ngenerar() '+e.ms+' ms (consulta teselas '+e.gen+' · setData barrio '+e.barrio+' · árboles: crear '+e.arbGen+' + setData '+e.arbSet+', '+e.nArb+' features)\nmediana '+m.generar.mediana+' ms · máx '+m.generar.max+' ms en '+m.generar.n+' pasadas':'Aún no se ha generado nada (acércate: zoom ≥ 15,5).')
-    +'\ntareas largas (>50 ms) en el último minuto: '+m.tareasLargas60s.n+' · máx '+m.tareasLargas60s.max+' ms · p95 '+m.tareasLargas60s.p95+' ms · coinciden con generar(): '+m.tareasLargas60s.deGenerar+'\narranque (s desde que carga la página): mapa '+(ARR.mapa??'—')+' · teselas listas '+(ARR.teselas??'—')+' · capas creadas '+(ARR.capas??'—')+' · 1.ª pasada '+(ARR.pasada1??'—')+' · con edificios '+(ARR.edificios??'—')+' · con árboles '+(ARR.arboles??'—'); };
+    +'\ntareas largas (>50 ms) en el último minuto: '+m.tareasLargas60s.n+' · máx '+m.tareasLargas60s.max+' ms · p95 '+m.tareasLargas60s.p95+' ms · coinciden con generar(): '+m.tareasLargas60s.deGenerar+'\nedificios en las teselas: '+((m.estado&&m.estado.dg)?m.estado.dg.tot+' · descartados: forma '+m.estado.dg.forma+', lejos '+m.estado.dg.lejos+', repetidos '+m.estado.dg.rep+', ocultos por modelos 3D '+m.estado.dg.ocultos:'—')+'\narranque (s desde que carga la página): mapa '+(ARR.mapa??'—')+' · teselas listas '+(ARR.teselas??'—')+' · capas creadas '+(ARR.capas??'—')+' · 1.ª pasada '+(ARR.pasada1??'—')+' · con edificios '+(ARR.edificios??'—')+' · con árboles '+(ARR.arboles??'—'); };
   window.__aspecto={cfg,tick,estado:null,medir,vis:()=>{ aplicarVis(); ult=null; tUlt=0; pausa=0; tick(); }};
   setInterval(tick,1000);
+  try{ map.once('idle',tick); }catch(e){}      /* v215: primera pasada en cuanto el mapa termina de cargar, sin esperar al siguiente segundo */
 })();
 
 try{ window.__map=map; }catch(e){ registrarError('mapa',e.message); }
