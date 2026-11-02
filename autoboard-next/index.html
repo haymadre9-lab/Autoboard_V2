@@ -531,7 +531,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div id="incList"><span class="vacio">Sin incidencias.</span></div>
   <button class="ajuste" id="btnIncLimpiar">🧹 Borrar incidencias</button>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v211</div>
+  <div class="seccion">Versión v212</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -5404,6 +5404,7 @@ window.__overpass=(function(){
   const C={PAR:2, GAP:1200, TMO:12000, RONDAS:3, COLA_MAX:60, ATRAS_M:500, ATRAS_DEG:110, VMIN:25, BACKOFF:1500};
   let cola=[], vuelo=0, ultInicio=0, timer=null, ultLog=0; const cool=[0,0], malas=[0,0], pend=new Map();
   const stats={ok:0,fallo:0,skip:0,reintentos:0,dup:0};
+  const nf=new Map(), hasta=new Map();   /* v212: fallos seguidos y pausa creciente por clave (2→4→8→16 min; tramos máx. 8) */
   const dm=(a,b,c,d)=>{ const r=Math.PI/180; return Math.hypot((c-a)*r,(d-b)*r*Math.cos((a+c)/2*r))*6371000; };
   const sleep=ms=>new Promise(r=>setTimeout(r,ms));
   function coche(){ try{ if(typeof lastFix!=='undefined'&&lastFix) return {la:lastFix.lat,lo:lastFix.lon,h:(typeof heading!=='undefined'?heading:0),v:(typeof speedKmh!=='undefined'?speedKmh:0)}; }catch(e){} return null; }
@@ -5416,6 +5417,7 @@ window.__overpass=(function(){
   function fin(it,v){ pend.delete(it.k); if(v==='skip') stats.skip++; it.res(v); }
   function consultar(q,o){
     o=o||{}; const k=o.k||q; if(pend.has(k)){ stats.dup++; return pend.get(k); }
+    { const h=hasta.get(k); if(h&&Date.now()<h) return Promise.resolve(null); }   /* en pausa: no se molesta a los servidores */
     let it; const p=new Promise(res=>{ it={q,k,la:o.la,lo:o.lo,tmo:o.tmo||C.TMO,res}; }); pend.set(k,p); cola.push(it);
     if(cola.length>C.COLA_MAX){ const c=coche(); cola.sort((a,b)=>score(a,c)-score(b,c)); for(const x of cola.splice(C.COLA_MAX)) fin(x,'skip'); }
     planificar(); return p;
@@ -5453,14 +5455,15 @@ window.__overpass=(function(){
       const libres=orden.filter(i=>cool[i]<=ahora);
       if(!libres.length){ await sleep(Math.min(8000,cool[orden[0]]-ahora)); } else orden=libres;
       for(const i of orden){
-        try{ nInt++; const j=await intentar(i,it); stats.ok++; fin(it,j); return; }catch(e){ ult[i]=e.message; }
+        try{ nInt++; const j=await intentar(i,it); stats.ok++; nf.delete(it.k); hasta.delete(it.k); fin(it,j); return; }catch(e){ ult[i]=e.message; }
       }
     }
     stats.fallo++;
+    { const n=(nf.get(it.k)||0)+1; nf.set(it.k,n); hasta.set(it.k,Date.now()+Math.min(/^tramos\|/.test(it.k)?480000:960000,120000*Math.pow(2,n-1))); }
     const t=Date.now(); if(t-ultLog>30000){ ultLog=t; try{ registrarError('overpass','fallo persistente en «'+it.k+'» tras '+nInt+' intentos · overpass-api: '+(ult[0]||'(no probado)')+' · kumi: '+(ult[1]||'(no probado)')+' · '+stats.fallo+' consultas sin datos; se reintenta más tarde'); }catch(e){} }
     fin(it,null);
   }
-  return {consultar,_cfg:C,_stats:stats,_reset:()=>{ cool[0]=cool[1]=0; malas[0]=malas[1]=0; },estado:()=>({cola:cola.length,vuelo,cool:cool.map(x=>Math.max(0,x-Date.now())),stats:Object.assign({},stats)})};
+  return {consultar,_cfg:C,_stats:stats,_reset:()=>{ cool[0]=cool[1]=0; malas[0]=malas[1]=0; nf.clear(); hasta.clear(); },estado:()=>({cola:cola.length,vuelo,cool:cool.map(x=>Math.max(0,x-Date.now())),stats:Object.assign({},stats)})};
 })();
 </script>
 <script>
@@ -6848,7 +6851,7 @@ window.__tramos=(function(){
   }
   async function descargar(lat,lon){
     const now=Date.now(); if(now-ultConsulta<60000) return; ultConsulta=now;
-    const q='[out:json][timeout:50];relation(around:25000,'+lat+','+lon+')[type=enforcement][enforcement=average_speed];out body;>;out skel qt;';
+    const q='[out:json][timeout:50];relation(around:15000,'+lat+','+lon+')[type=enforcement][enforcement=average_speed];out body;>;out skel qt;';
     const j=await window.__overpass.consultar(q,{k:'tramos|'+Math.round(lat*20)+'_'+Math.round(lon*20),la:lat,lo:lon,tmo:30000}); if(j&&j.elements) procesar(j,lat,lon);
   }
   function procesar(j,lat,lon){
