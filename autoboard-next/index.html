@@ -536,7 +536,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div id="incList"><span class="vacio">Sin incidencias.</span></div>
   <button class="ajuste" id="btnIncLimpiar">🧹 Borrar incidencias</button>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v215</div>
+  <div class="seccion">Versión v216</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -4622,7 +4622,10 @@ window.__suave = (function(){
       if(estSel!==ult_est){ ult_est=estSel; ult=null; }
       try{ S.estacion(map,estActual(),nocheCur); }catch(e){}
       if(!!nocheAct!==nocheCur){ nocheCur=!!nocheAct; B.noche(map,nocheCur); S.noche(map,nocheCur); ult=null; }
-      const z=map.getZoom(), c=map.getCenter();
+      const z=map.getZoom(), cMapa=map.getCenter();
+      /* v216: la generación se centra en el COCHE (si hay GPS reciente y está a menos de 1,5 km del centro del mapa). Con la cámara muy inclinada el centro de la pantalla cae a cientos de metros por delante y el radio de 450 m no llegaba a los edificios cercanos. */
+      let c=cMapa, dcc=0;
+      try{ if(lastFix && Date.now()-lastFix.t<180000){ dcc=dist([lastFix.lat,lastFix.lon],[cMapa.lat,cMapa.lng]); if(dcc<=1500) c={lat:lastFix.lat,lng:lastFix.lon}; } }catch(e){}
       const eds=(typeof edificiosOn==='undefined')?true:edificiosOn;
       const qBarrio=cfg.barrio && eds && z>=15.5, qArb=cfg.arboles && z>=16.3;
       if(!qBarrio && !qArb){ vaciar(); return; }
@@ -4652,7 +4655,7 @@ window.__suave = (function(){
       hayDatos=true; incompleto=!teselasOk; marca('pasada1'); if(items.length>0) marca('edificios'); if(nArb>0) marca('arboles');
       const dur=performance.now()-t0; pausa=Math.max(2500,dur*30);
       ult={lat:c.lat,lon:c.lng,z,noche:nocheCur,b:qBarrio,a:qArb}; tUlt=performance.now();
-      window.__aspecto.estado={dg:DG,edificios:items.length,R:Math.round(R),ms:Math.round(dur),gen:Math.round(tGen),barrio:Math.round(tBar),arbGen:Math.round(tArbG),arbSet:Math.round(tArbS),nArb,feats:nArb};
+      window.__aspecto.estado={dg:DG,dcc:Math.round(dcc),enCoche:c!==cMapa,edificios:items.length,R:Math.round(R),ms:Math.round(dur),gen:Math.round(tGen),barrio:Math.round(tBar),arbGen:Math.round(tArbG),arbSet:Math.round(tArbS),nArb,feats:nArb};
       GEN.push({t0:t0,d:dur}); if(GEN.length>60) GEN.shift();
     }catch(e){ registrarError('aspecto',e.message); }
   }
@@ -4675,7 +4678,7 @@ window.__suave = (function(){
   const bM=document.getElementById('btnAspMedir'), dM=document.getElementById('aspDiag');
   if(bM) bM.onclick=()=>{ const m=medir(), e=m.estado||{}; if(dM) dM.textContent=(m.estado?
     'edificios '+e.edificios+' · radio '+e.R+' m\ngenerar() '+e.ms+' ms (consulta teselas '+e.gen+' · setData barrio '+e.barrio+' · árboles: crear '+e.arbGen+' + setData '+e.arbSet+', '+e.nArb+' features)\nmediana '+m.generar.mediana+' ms · máx '+m.generar.max+' ms en '+m.generar.n+' pasadas':'Aún no se ha generado nada (acércate: zoom ≥ 15,5).')
-    +'\ntareas largas (>50 ms) en el último minuto: '+m.tareasLargas60s.n+' · máx '+m.tareasLargas60s.max+' ms · p95 '+m.tareasLargas60s.p95+' ms · coinciden con generar(): '+m.tareasLargas60s.deGenerar+'\nedificios en las teselas: '+((m.estado&&m.estado.dg)?m.estado.dg.tot+' · descartados: forma '+m.estado.dg.forma+', lejos '+m.estado.dg.lejos+', repetidos '+m.estado.dg.rep+', ocultos por modelos 3D '+m.estado.dg.ocultos:'—')+'\narranque (s desde que carga la página): mapa '+(ARR.mapa??'—')+' · teselas listas '+(ARR.teselas??'—')+' · capas creadas '+(ARR.capas??'—')+' · 1.ª pasada '+(ARR.pasada1??'—')+' · con edificios '+(ARR.edificios??'—')+' · con árboles '+(ARR.arboles??'—'); };
+    +'\ntareas largas (>50 ms) en el último minuto: '+m.tareasLargas60s.n+' · máx '+m.tareasLargas60s.max+' ms · p95 '+m.tareasLargas60s.p95+' ms · coinciden con generar(): '+m.tareasLargas60s.deGenerar+'\ncentro del mapa a '+((m.estado&&m.estado.dcc)||0)+' m del coche · generando '+((m.estado&&m.estado.enCoche)?'alrededor del coche':'alrededor del centro del mapa')+'\nedificios en las teselas: '+((m.estado&&m.estado.dg)?m.estado.dg.tot+' · descartados: forma '+m.estado.dg.forma+', lejos '+m.estado.dg.lejos+', repetidos '+m.estado.dg.rep+', ocultos por modelos 3D '+m.estado.dg.ocultos:'—')+'\narranque (s desde que carga la página): mapa '+(ARR.mapa??'—')+' · teselas listas '+(ARR.teselas??'—')+' · capas creadas '+(ARR.capas??'—')+' · 1.ª pasada '+(ARR.pasada1??'—')+' · con edificios '+(ARR.edificios??'—')+' · con árboles '+(ARR.arboles??'—'); };
   window.__aspecto={cfg,tick,estado:null,medir,vis:()=>{ aplicarVis(); ult=null; tUlt=0; pausa=0; tick(); }};
   setInterval(tick,1000);
   try{ map.once('idle',tick); }catch(e){}      /* v215: primera pasada en cuanto el mapa termina de cargar, sin esperar al siguiente segundo */
@@ -6149,6 +6152,7 @@ window.__park=(function(){
   }
   /* ---- lista de los más cercanos (v212): usa el mismo panel que los cargadores ---- */
   const corto=p=>{ const x=p[5]||{}; return x.ch?x.ch.slice(0,18):(x.f==='no'||p[2]==='g'?'Gratis':(x.f==='yes'?'De pago':'—')); };
+  const celdasDe=(pos)=>{ const ci=Math.floor(pos[0]/CELDA), cj=Math.floor(pos[1]/CELDA), L=[]; for(let i=-1;i<=1;i++) for(let j=-1;j<=1;j++) L.push([ci+i,cj+j,Math.abs(i)+Math.abs(j)]); L.sort((x,y)=>x[2]-y[2]); return L; };
   async function asegurar(pos){
     const ci=Math.floor(pos[0]/CELDA), cj=Math.floor(pos[1]/CELDA), L=[];
     for(let i=-1;i<=1;i++) for(let j=-1;j<=1;j++){ const c=cache[(ci+i)+'_'+(cj+j)]; if(c&&Date.now()-c.t<DIAS) continue; L.push([ci+i,cj+j,Math.abs(i)+Math.abs(j)]); }
@@ -6165,17 +6169,23 @@ window.__park=(function(){
     const pos=[lastFix.lat,lastFix.lon], panel=document.getElementById('listaCargadores'), cont=document.getElementById('listaCargadoresItems'); if(!panel||!cont) return;
     try{ panel.querySelector('h2').textContent='🅿️ Parkings'; }catch(e){}
     panel.classList.add('on'); document.getElementById('panelAjustes').classList.remove('on');
-    cont.innerHTML='<div style="color:#8d99a5;padding:14px;text-align:center;font-size:11px">Buscando…</div>';
-    await asegurar(pos);
-    const lst=cercanos(pos,10);
-    if(!lst.length){ cont.innerHTML='<div style="color:#ff8a8a;padding:14px;text-align:center;font-size:11px">Sin parkings cerca con los filtros actuales (Ajustes → Aparcamientos).</div>'; return; }
-    cont.innerHTML=lst.map(({p,d},k)=>{
-      const g=p[2]==='g', col=g?'#1f9d55':'#1565c0', x=p[5]||{}, dt=d<1000?Math.round(d)+' m':(d/1000).toFixed(1).replace('.',',')+' km';
-      const det=[p[4]?p[4]+' plazas':'', g?'': 'subterráneo', x.h?x.h.slice(0,22):''].filter(Boolean).join(' · ');
-      return '<div class="cargadorItem" data-k="'+k+'" style="border-left-color:'+col+'"><div class="fila1"><div class="titulo">'+esc(p[3]||(g?'Parking gratuito':'Parking subterráneo'))+'</div><div class="kw" style="background:'+col+'">'+esc(corto(p))+'</div></div>'
-        +'<div class="fila2"><div class="operador" style="color:'+col+'">'+esc(det||(g?'Gratuito':'Subterráneo'))+'</div><div class="dist">📍 '+dt+'</div></div></div>';
-    }).join('');
-    cont.querySelectorAll('.cargadorItem').forEach(el=>{ el.onclick=()=>{ const q=lst[+el.dataset.k].p; panel.classList.remove('on'); ficha(q); }; });
+    const falta=celdasDe(pos).filter(c=>{ const k=cache[c[0]+'_'+c[1]]; return !(k&&Date.now()-k.t<DIAS); }).slice(0,4);
+    let pend=falta.length, lst=[];
+    function pintar(){
+      lst=cercanos(pos,10);
+      const nota=pend>0?'<div style="color:#8d99a5;padding:8px;text-align:center;font-size:10px">⏳ buscando parkings en '+pend+' zona'+(pend>1?'s':'')+' más…</div>'
+        :(falta.some(c=>fallos[c[0]+'_'+c[1]])?'<div style="color:#ffb454;padding:8px;text-align:center;font-size:10px">Overpass no responde en alguna zona: solo se muestran los parkings ya guardados.</div>':'');
+      if(!lst.length){ cont.innerHTML=pend>0?'<div style="color:#8d99a5;padding:14px;text-align:center;font-size:11px">Buscando…</div>':'<div style="color:#ff8a8a;padding:14px;text-align:center;font-size:11px">Sin parkings cerca con los filtros actuales (Ajustes → Aparcamientos).</div>'+nota; return; }
+      cont.innerHTML=lst.map(({p,d},k)=>{
+        const g=p[2]==='g', col=g?'#1f9d55':'#1565c0', x=p[5]||{}, dt=d<1000?Math.round(d)+' m':(d/1000).toFixed(1).replace('.',',')+' km';
+        const det=[p[4]?p[4]+' plazas':'', g?'': 'subterráneo', x.h?x.h.slice(0,22):''].filter(Boolean).join(' · ');
+        return '<div class="cargadorItem" data-k="'+k+'" style="border-left-color:'+col+'"><div class="fila1"><div class="titulo">'+esc(p[3]||(g?'Parking gratuito':'Parking subterráneo'))+'</div><div class="kw" style="background:'+col+'">'+esc(corto(p))+'</div></div>'
+          +'<div class="fila2"><div class="operador" style="color:'+col+'">'+esc(det||(g?'Gratuito':'Subterráneo'))+'</div><div class="dist">📍 '+dt+'</div></div></div>';
+      }).join('')+nota;
+      cont.querySelectorAll('.cargadorItem').forEach(el=>{ el.onclick=()=>{ const q=lst[+el.dataset.k].p; panel.classList.remove('on'); ficha(q); }; });
+    }
+    pintar();      /* v216: se muestra YA lo guardado y la lista se rellena según llegan las zonas (antes esperaba a todas y con Overpass lento se quedaba en «Buscando…») */
+    for(const c of falta){ pedir((c[0]+.5)*CELDA,(c[1]+.5)*CELDA).catch(()=>{}).then(()=>{ pend--; try{ dibujar(); }catch(e){} if(panel.classList.contains('on')&&document.getElementById('listaCargadoresItems')===cont&&/Parkings/.test((panel.querySelector('h2')||{}).textContent||'')) pintar(); }); }
   }
   function iniciar(){
     const bl=document.getElementById('btnListaParking'); if(bl) bl.onclick=lista;
