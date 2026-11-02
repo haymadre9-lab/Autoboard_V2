@@ -514,6 +514,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste on" id="btnCamDenso">🏙️ Cámara adaptable en ciudad densa: ON</button>
   <button class="ajuste on" id="btnFlechas">➤ Flechas en la ruta: ON</button>
   <button class="ajuste" id="btnCielo">🌅 Cielo: Auto</button>
+  <button class="ajuste" id="btnPantCompleta">⛶ Pantalla completa: No</button>
   <button class="ajuste" id="btnTiempo">🌦️ Tiempo: Real</button>
   <button class="ajuste on" id="btnVoz">🔊 Sonido: Solo radares</button>
   <button class="ajuste" id="btnVozVol">🔉 Volumen avisos: 100 %</button>
@@ -539,7 +540,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div id="incList"><span class="vacio">Sin incidencias.</span></div>
   <button class="ajuste" id="btnIncLimpiar">🧹 Borrar incidencias</button>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v217</div>
+  <div class="seccion">Versión v218</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -5433,11 +5434,11 @@ window.__overpass=(function(){
     const d=dm(c.la,c.lo,it.la,it.lo); let atras=false;
     if(c.v>C.VMIN&&d>C.ATRAS_M&&Number.isFinite(c.h)){ const df=Math.abs(((rumboA(c.la,c.lo,it.la,it.lo)-c.h+540)%360)-180); atras=df>C.ATRAS_DEG; }
     return {d,atras}; }
-  const score=(it,c)=>{ const i=info(it,c); return i.d*(i.atras?2:1); };
+  const score=(it,c)=>{ if(it.prio) return -1; const i=info(it,c); return i.d*(i.atras?2:1); };
   function fin(it,v){ pend.delete(it.k); if(v==='skip') stats.skip++; it.res(v); }
   function consultar(q,o){
-    o=o||{}; const k=o.k||q; if(pend.has(k)){ stats.dup++; return pend.get(k); }
-    let it; const p=new Promise(res=>{ it={q,k,la:o.la,lo:o.lo,tmo:o.tmo||C.TMO,silencio:!!o.silencio,res}; }); pend.set(k,p); cola.push(it);
+    o=o||{}; const k=o.k||q; if(pend.has(k)){ stats.dup++; if(o.prio){ const x=cola.find(y=>y.k===k); if(x) x.prio=true; } return pend.get(k); }
+    let it; const p=new Promise(res=>{ it={q,k,la:o.la,lo:o.lo,tmo:o.tmo||C.TMO,silencio:!!o.silencio,prio:!!o.prio,res}; }); pend.set(k,p); cola.push(it);
     if(cola.length>C.COLA_MAX){ const c=coche(); cola.sort((a,b)=>score(a,c)-score(b,c)); for(const x of cola.splice(C.COLA_MAX)) fin(x,'skip'); }
     planificar(); return p;
   }
@@ -5445,7 +5446,7 @@ window.__overpass=(function(){
   function bombear(){
     timer=null; if(vuelo>=C.PAR||!cola.length) return;
     const c=coche();
-    cola=cola.filter(x=>{ if(info(x,c).atras){ fin(x,'skip'); return false; } return true; });
+    cola=cola.filter(x=>{ if(!x.prio&&info(x,c).atras){ fin(x,'skip'); return false; } return true; });
     if(!cola.length) return;
     let bi=0,bs=Infinity; cola.forEach((x,i)=>{ const sc=score(x,c); if(sc<bs){ bs=sc; bi=i; } });
     const it=cola.splice(bi,1)[0]; vuelo++; ultInicio=Date.now();
@@ -5469,7 +5470,7 @@ window.__overpass=(function(){
   async function ejecutar(it){
     const ult=['','']; let nInt=0;   /* último error de cada servidor */
     for(let ronda=0;ronda<C.RONDAS;ronda++){
-      if(ronda>0){ stats.reintentos++; await sleep(C.BACKOFF*Math.pow(2,ronda-1)); if(info(it,coche()).atras){ fin(it,'skip'); return; } }
+      if(ronda>0){ stats.reintentos++; await sleep(C.BACKOFF*Math.pow(2,ronda-1)); if(!it.prio&&info(it,coche()).atras){ fin(it,'skip'); return; } }
       const ahora=Date.now(); let orden=[0,1].sort((a,b)=>cool[a]-cool[b]);
       const libres=orden.filter(i=>cool[i]<=ahora);
       if(!libres.length){ await sleep(Math.min(8000,cool[orden[0]]-ahora)); } else orden=libres;
@@ -5823,7 +5824,7 @@ window.__carg=(function(){
   document.head.appendChild(st);
 
   const CATS=[['mapa','🗺️ Mapa y vista'],['aspecto','🎨 Aspecto del mapa'],['cielo','🌦️ Cielo y tiempo'],['sonido','🔊 Sonido y avisos'],['carg','⚡ Cargadores'],['park','🅿️ Aparcamientos'],['gps','📍 GPS'],['coche','🚗 Coche'],['futbol','⚽ Fútbol'],['fiesta','🎉 Celebración'],['enlace','🔗 Enlace entre dispositivos'],['inc','⚠️ Incidencias'],['sis','⚙️ Rendimiento y versión']];
-  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnAutoAncho btnAutoVista btnPasos btnPeajes btnTramos btnSugerido btnFlechaMan btnEstSol btnEstLuz btnEstVias btnEstRelieve btnBusqAmbito btnCamDenso btnFlechas',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspMedir aspDiag btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub btnListaParking parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',inc:'incList btnIncLimpiar',sis:'btnAA btnTestTramo tramoDiag evFila btnEVPlan evPlanTxt btnTestEV evDiag btnLimpiarFavs btnWake'};
+  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnAutoAncho btnAutoVista btnPasos btnPeajes btnTramos btnSugerido btnFlechaMan btnEstSol btnEstLuz btnEstVias btnEstRelieve btnBusqAmbito btnCamDenso btnFlechas btnPantCompleta',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspMedir aspDiag btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub btnListaParking parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',inc:'incList btnIncLimpiar',sis:'btnAA btnTestTramo tramoDiag evFila btnEVPlan evPlanTxt btnTestEV evDiag btnLimpiarFavs btnWake'};
   const POR={}; for(const c in M) M[c].split(' ').forEach(id=>POR[id]=c);
   const cuerpos={}, cats={};
   const ref=panel.querySelector('h2');
@@ -6074,12 +6075,12 @@ window.__park=(function(){
     if(sub) return 'b';
     return '';
   }
-  async function pedir(la,lo){
+  async function pedir(la,lo,prio){
     const k=key(la,lo), c=cache[k]; if(c&&Date.now()-c.t<DIAS) return;
     if(fallos[k]&&Date.now()-fallos[k]<120000) return;
     const s=Math.floor(la/CELDA)*CELDA, w=Math.floor(lo/CELDA)*CELDA, n=s+CELDA, e=w+CELDA;
     const q='[out:json][timeout:25];nwr["amenity"="parking"]('+s.toFixed(5)+','+w.toFixed(5)+','+n.toFixed(5)+','+e.toFixed(5)+');out center tags;';
-    const j=await window.__overpass.consultar(q,{k:'park|'+k,la:(s+n)/2,lo:(w+e)/2});
+    const j=await window.__overpass.consultar(q,{k:'park|'+k,la:(s+n)/2,lo:(w+e)/2,prio:!!prio});
     if(j==='skip'){ fallos[k]=Date.now()-60000; return; }
     if(j&&j.elements){ try{
         const L=[]; for(const el of j.elements){
@@ -6177,10 +6178,10 @@ window.__park=(function(){
     try{ panel.querySelector('h2').textContent='🅿️ Parkings'; }catch(e){}
     panel.classList.add('on'); document.getElementById('panelAjustes').classList.remove('on');
     const falta=celdasDe(pos).filter(c=>{ const k=cache[c[0]+'_'+c[1]]; return !(k&&Date.now()-k.t<DIAS); }).slice(0,4);
-    let pend=falta.length, lst=[];
+    let pend=falta.length, lst=[]; const t0=Date.now();
     function pintar(){
       lst=cercanos(pos,10);
-      const nota=pend>0?'<div style="color:#8d99a5;padding:8px;text-align:center;font-size:10px">⏳ buscando parkings en '+pend+' zona'+(pend>1?'s':'')+' más…</div>'
+      const nota=pend>0?'<div style="color:#8d99a5;padding:8px;text-align:center;font-size:10px">⏳ buscando parkings en '+pend+' zona'+(pend>1?'s':'')+' más…'+(Date.now()-t0>15000?' Overpass va muy lento ahora (puede tardar más de un minuto); sigue intentándolo.':'')+'</div>'
         :(falta.some(c=>fallos[c[0]+'_'+c[1]])?'<div style="color:#ffb454;padding:8px;text-align:center;font-size:10px">Overpass no responde en alguna zona: solo se muestran los parkings ya guardados.</div>':'');
       if(!lst.length){ cont.innerHTML=pend>0?'<div style="color:#8d99a5;padding:14px;text-align:center;font-size:11px">Buscando…</div>':'<div style="color:#ff8a8a;padding:14px;text-align:center;font-size:11px">Sin parkings cerca con los filtros actuales (Ajustes → Aparcamientos).</div>'+nota; return; }
       cont.innerHTML=lst.map(({p,d},k)=>{
@@ -6191,8 +6192,9 @@ window.__park=(function(){
       }).join('')+nota;
       cont.querySelectorAll('.cargadorItem').forEach(el=>{ el.onclick=()=>{ const q=lst[+el.dataset.k].p; panel.classList.remove('on'); ficha(q); }; });
     }
+    const tk=setInterval(()=>{ if(pend<=0||!panel.classList.contains('on')){ clearInterval(tk); return; } pintar(); },5000);   /* v218: refresca el aviso de espera */
     pintar();      /* v216: se muestra YA lo guardado y la lista se rellena según llegan las zonas (antes esperaba a todas y con Overpass lento se quedaba en «Buscando…») */
-    for(const c of falta){ pedir((c[0]+.5)*CELDA,(c[1]+.5)*CELDA).catch(()=>{}).then(()=>{ pend--; try{ dibujar(); }catch(e){} if(panel.classList.contains('on')&&document.getElementById('listaCargadoresItems')===cont&&/Parkings/.test((panel.querySelector('h2')||{}).textContent||'')) pintar(); }); }
+    for(const c of falta){ pedir((c[0]+.5)*CELDA,(c[1]+.5)*CELDA,true).catch(()=>{}).then(()=>{ pend--; try{ dibujar(); }catch(e){} if(panel.classList.contains('on')&&document.getElementById('listaCargadoresItems')===cont&&/Parkings/.test((panel.querySelector('h2')||{}).textContent||'')) pintar(); }); }
   }
   function iniciar(){
     const bl=document.getElementById('btnListaParking'); if(bl) bl.onclick=lista;
@@ -7180,6 +7182,29 @@ window.__CLIPS_VOZ.radar='SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAA
   if(br) br.onclick=()=>{ rmodo=(rmodo+1)%5; try{ localStorage.setItem('voz_radar3',String(rmodo)); }catch(e){} desbloquear(); ui(); if(rmodo>0) pitidoRadar(); };
   if(v) v.onclick=()=>{ vi=(vi+1)%VOLS.length; try{ localStorage.setItem('voz_vol',String(vi)); }catch(e){} desbloquear(); ui(); pitidoAviso(); decir('Volumen',true,['vol']); };
   ui(); setTimeout(ui,1500);
+})();
+</script>
+<script>
+/* ============ PANTALLA COMPLETA (v218) ============
+   Oculta la barra de estado y la de navegación del móvil (Fullscreen API); al arrastrar desde el borde de la pantalla aparecen un momento.
+   El navegador exige un toque del usuario para entrar: si está activada, se entra con el primer toque tras abrir la app. No funciona en iPhone/iPad. */
+(function(){
+  const rd=(k,d)=>{ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } };
+  const wr=(k,v)=>{ try{ localStorage.setItem(k,v); }catch(e){} };
+  const de=document.documentElement; let quiere=rd('pantalla_completa','0')==='1';
+  const puede=!!(de.requestFullscreen||de.webkitRequestFullscreen);
+  const activa=()=>!!(document.fullscreenElement||document.webkitFullscreenElement);
+  async function entrar(){ if(activa()||!puede) return; try{ await (de.requestFullscreen?de.requestFullscreen({navigationUI:'hide'}):de.webkitRequestFullscreen()); }catch(e){} }
+  async function salir(){ try{ if(!activa()) return; if(document.exitFullscreen) await document.exitFullscreen(); else if(document.webkitExitFullscreen) document.webkitExitFullscreen(); }catch(e){} }
+  function texto(){ const b=document.getElementById('btnPantCompleta'); if(!b) return; b.textContent=puede?('⛶ Pantalla completa: '+(quiere?'Sí':'No')):'⛶ Pantalla completa: no disponible aquí'; b.classList.toggle('on',quiere&&puede); }
+  function iniciar(){
+    const b=document.getElementById('btnPantCompleta'); if(b) b.onclick=()=>{ if(!puede) return; quiere=!quiere; wr('pantalla_completa',quiere?'1':'0'); texto(); if(quiere) entrar(); else salir(); };
+    texto();
+    /* el navegador solo deja entrar tras un gesto: primer toque; si el usuario sale arrastrando/atrás, no se vuelve a forzar hasta el siguiente toque */
+    const gesto=()=>{ if(quiere&&!activa()) entrar(); };
+    document.addEventListener('pointerup',gesto,true);
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',iniciar); else iniciar();
 })();
 </script>
 </body>
