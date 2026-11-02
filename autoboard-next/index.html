@@ -531,7 +531,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div id="incList"><span class="vacio">Sin incidencias.</span></div>
   <button class="ajuste" id="btnIncLimpiar">🧹 Borrar incidencias</button>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v212</div>
+  <div class="seccion">Versión v213</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -4662,10 +4662,20 @@ window.__suave = (function(){
     return {estado:window.__aspecto.estado, generar:{n:GEN.length,mediana:gms.length?Math.round(gms[gms.length>>1]):0,max:gms.length?Math.round(gms[gms.length-1]):0},
       tareasLargas60s:{n:u.length,max:ds.length?Math.round(ds[ds.length-1]):0,p95:ds.length?Math.round(ds[Math.min(ds.length-1,Math.floor(ds.length*0.95))]):0,deGenerar:deGen}};
   }
+  /* v213: ¿faltan datos de zonas verdes o no se dibujan? */
+  function diagVerde(){
+    try{
+      const z=map.getZoom(); let pol=0; try{ pol=zonasVerdes().length; }catch(e){}
+      const ids=['suave-verde','suave-verde-park','suave-verde-landuse'].filter(i=>map.getLayer(i));
+      const vis=ids.map(i=>map.getLayoutProperty(i,'visibility')||'visible').join('/')||'sin capa';
+      let ren=-1; try{ ren=ids.length?map.queryRenderedFeatures({layers:ids}).length:0; }catch(e){}
+      return 'verde: zoom '+z.toFixed(1)+' · polígonos en teselas '+pol+' · dibujados '+ren+' · capas '+ids.length+' ('+vis+') · teselas '+(map.areTilesLoaded()?'completas':'a medias')+' · color '+(ids[0]?map.getPaintProperty(ids[0],'fill-color'):'-');
+    }catch(e){ return 'verde: error '+e.message; }
+  }
   const bM=document.getElementById('btnAspMedir'), dM=document.getElementById('aspDiag');
   if(bM) bM.onclick=()=>{ const m=medir(), e=m.estado||{}; if(dM) dM.textContent=(m.estado?
     'edificios '+e.edificios+' · radio '+e.R+' m\ngenerar() '+e.ms+' ms (consulta teselas '+e.gen+' · setData barrio '+e.barrio+' · árboles: crear '+e.arbGen+' + setData '+e.arbSet+', '+e.nArb+' features)\nmediana '+m.generar.mediana+' ms · máx '+m.generar.max+' ms en '+m.generar.n+' pasadas':'Aún no se ha generado nada (acércate: zoom ≥ 15,5).')
-    +'\ntareas largas (>50 ms) en el último minuto: '+m.tareasLargas60s.n+' · máx '+m.tareasLargas60s.max+' ms · p95 '+m.tareasLargas60s.p95+' ms · coinciden con generar(): '+m.tareasLargas60s.deGenerar; };
+    +'\n'+diagVerde()+'\ntareas largas (>50 ms) en el último minuto: '+m.tareasLargas60s.n+' · máx '+m.tareasLargas60s.max+' ms · p95 '+m.tareasLargas60s.p95+' ms · coinciden con generar(): '+m.tareasLargas60s.deGenerar; };
   window.__aspecto={cfg,tick,estado:null,medir,vis:()=>{ aplicarVis(); ult=null; tUlt=0; pausa=0; tick(); }};
   setInterval(tick,1000);
 })();
