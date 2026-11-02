@@ -524,7 +524,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="enlaceCopiar">📋 Copiar código</button>
   <div id="enlaceEstado" style="font-size:12px;color:#8d99a5;padding:2px 4px 8px">Sin código: no enlazado</div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v206</div>
+  <div class="seccion">Versión v207</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -4145,13 +4145,17 @@ window.__barrio = (function(){
   ];
   const BLOQUE = [2,4,5];                           /* edificios altos: crema, blanco, gris */
   const TECHOS = ['#8a9097','#7b8189','#9aa0a6','#6f757d'];   /* gris (nunca teja: el destino va en otro color) */
-  const OSC = 0.42, OSC_T = 0.5;                    /* oscurecido de noche (fachada / tejado) */
+  const OSC = 0.42, OSC_T = 0.5;                    /* (antes) oscurecido uniforme de noche: se conserva por si se necesita */
+  /* v207: oscurecido de noche POR CANAL (R,G,B): tono azulado de luz de luna, destacan más las ventanas cálidas.
+     Una sola definición para muros (mn), tejados (rn), imágenes de ventanas y árboles: así no hay saltos de color entre muro liso y ventanas (zoom 17,5) ni árboles de otro tono que los edificios. */
+  const OSC_C = [0.38,0.42,0.52], OSC_TC = [0.46,0.50,0.60];
   const CEL = 250;                                  /* tamaño del barrio (m) */
   const kx = 111320 * Math.cos(43.2 * Math.PI/180), ky = 110540;
 
   function h32(a,b,c){ let h=(a*374761393 + b*668265263 + c*2147483647)|0; h=(h^(h>>>13))*1274126177|0; h^=h>>>16; return (h>>>0)/4294967296; }
   function hex2rgb(x){ return [parseInt(x.slice(1,3),16),parseInt(x.slice(3,5),16),parseInt(x.slice(5,7),16)]; }
   function oscurecer(x,f){ const c=hex2rgb(x).map(v=>Math.round(v*f)); return '#'+c.map(v=>v.toString(16).padStart(2,'0')).join(''); }
+  function oscurecerC(x,f){ const c=hex2rgb(x).map((v,i)=>Math.round(v*f[i])); return '#'+c.map(v=>v.toString(16).padStart(2,'0')).join(''); }
 
   /* atributos de un edificio a partir de su posición (lon,lat) y altura h */
   function atributos(lon,lat,h){
@@ -4168,7 +4172,11 @@ window.__barrio = (function(){
     const tono = h32(X,Y,6)<0.5 ? 0 : 1;
     const mc = FAM[fam][tono];
     const rc = TECHOS[Math.floor(h32(X,Y,7)*TECHOS.length)];
-    return { p: fam*2+tono, k: h32(X,Y,8)<0.5?0:1, mc, mn:oscurecer(mc,OSC), rc, rn:oscurecer(rc,OSC_T) };
+    /* variante nocturna k: 0 «tranquilo» · 1 «animado». Bloques altos tiran a k=1; el resto según la zona (celda de 250 m): ~35 % de las zonas son «animadas» */
+    let k;
+    if(h>=24) k = h32(X,Y,8)<0.8 ? 1 : 0;
+    else { const zona = h32(cx,cy,9)<0.35; k = h32(X,Y,8)<(zona?0.7:0.2) ? 1 : 0; }
+    return { p: fam*2+tono, k, mc, mn:oscurecerC(mc,OSC_C), rc, rn:oscurecerC(rc,OSC_TC) };
   }
 
   /* ---- imágenes de ventanas ---- */
@@ -4185,14 +4193,85 @@ window.__barrio = (function(){
     }
     return g.getImageData(0,0,S,S);
   }
+  /* ---- imágenes de ventanas (v207): estilo por familia + variantes nocturnas ---- */
+  const ESTILO=[0,0,1,1,2,2,3];      /* 0-1 casa · 2-3 clásico · 4-5 bloque · 6 muro cortina */
+  const LUCES_C=['#ffd27a','#ffc46b','#ffe3a8','#ffb86a'], LUCES_F=['#e8f1ff','#d6e6ff'], TV='#8fb4ff';
+  function imagenNueva(fam,tono,noche,k,S){
+    const color=FAM[fam][tono], est=ESTILO[fam], seed=(fam*2+tono+1)*7+k*131+(noche?3:0), det=S>=82;   /* los detalles finos solo desde 82 px (a 41 px serían ruido) */
+    const c=document.createElement('canvas'); c.width=c.height=S; const g=c.getContext('2d'), u=S/64;
+    let s=seed>>>0; const rnd=()=>{ s=(Math.imul(s,1664525)+1013904223)>>>0; return s/4294967296; };
+    g.fillStyle=noche?oscurecerC(color,OSC_C):color; g.fillRect(0,0,S,S);
+    const pEnc=k?0.55:0.18;
+    const plantaOficina=[0,0,0,0]; if(noche&&(est===3||(est===2&&k))) for(let r=0;r<4;r++) plantaOficina[r]=rnd()<(k?0.35:0.15)?1:0;   /* plantas enteras encendidas (oficinas) */
+    const luz=()=>{ const q=rnd(); return q<0.05?TV:(est>=2&&q<0.30?LUCES_F[(rnd()*2)|0]:LUCES_C[(rnd()*4)|0]); };
+    for(let r=0;r<4;r++){
+      if(det&&est===2){ g.fillStyle=noche?'rgba(0,0,0,.28)':'rgba(0,0,0,.10)'; g.fillRect(0,(r*16+14.5)*u,S,2*u); }   /* forjado */
+      for(let kk=0;kk<4;kk++){
+        const X=kk*16, Y=r*16; let x,y,w,h;
+        if(est===0){ x=(X+4.5)*u; y=(Y+3)*u; w=7*u; h=9*u; }
+        else if(est===1){ x=(X+4.5)*u; y=(Y+2)*u; w=7*u; h=11*u; }
+        else if(est===2){ x=(X+2)*u; y=(Y+4)*u; w=12*u; h=8*u; }
+        else { x=(X+0.5)*u; y=(Y+1)*u; w=15*u; h=13*u; }
+        const enc=noche&&(plantaOficina[r]?rnd()<0.9:rnd()<pEnc);
+        if(est<=1){ g.fillStyle=noche?'rgba(0,0,0,.35)':'rgba(255,255,255,.35)'; g.fillRect(x-1.2*u,y-1.2*u,w+2.4*u,h+2.4*u); }
+        else if(est===2){ g.fillStyle='rgba(0,0,0,.22)'; g.fillRect(x-u,y-u,w+2*u,h+2*u); }
+        if(noche){
+          if(enc){ g.fillStyle=luz(); g.fillRect(x,y,w,h);
+            if(det&&est<=1&&rnd()<0.45){ g.fillStyle='rgba(20,15,10,.55)'; g.fillRect(x,y,w,h*(0.25+rnd()*0.3)); }   /* persiana a medio bajar */
+            g.fillStyle='rgba(255,230,170,.16)'; g.fillRect(x-1.5*u,y-1.5*u,w+3*u,h+3*u); }
+          else { g.fillStyle=est===3?'#222c3b':'#1a212b'; g.fillRect(x,y,w,h); }
+        }else{
+          g.fillStyle=est===3?'#7d97b5':'#5f7388'; g.fillRect(x,y,w,h);
+          if(det&&rnd()<0.15&&est<=1){ g.fillStyle='rgba(235,230,215,.75)'; g.fillRect(x,y,w,h*0.55); }
+          else { g.fillStyle='rgba(255,255,255,.18)'; g.fillRect(x,y,w,h*0.3); }
+          if(det&&est===3){ g.fillStyle='rgba(255,255,255,.12)'; g.beginPath(); g.moveTo(x,y+h); g.lineTo(x+w*0.6,y); g.lineTo(x+w,y); g.lineTo(x+w*0.4,y+h); g.fill(); }
+        }
+        if(det){
+          if(est===0){ g.fillStyle=noche?'rgba(0,0,0,.4)':'rgba(240,235,225,.9)'; g.fillRect(x-1.5*u,y+h+0.5*u,w+3*u,1.4*u);                 /* alféizar */
+            if(!noche&&rnd()<0.35){ g.fillStyle='#4a5a3f'; g.fillRect(x-2.5*u,y,2*u,h); g.fillRect(x+w+0.5*u,y,2*u,h); } }             /* contraventanas */
+          if(est===1){ g.fillStyle=noche?'rgba(0,0,0,.5)':'rgba(40,40,45,.8)'; g.fillRect(x-2*u,y+h+0.8*u,w+4*u,1.1*u); }                 /* barandilla */
+          if(est===2&&!noche&&rnd()<0.12){ g.fillStyle='#9aa0a6'; g.fillRect(x+w-4*u,y+h+1.2*u,4*u,2.4*u); }                              /* aire acondicionado */
+          if(est===3){ g.fillStyle=noche?'rgba(0,0,0,.35)':'rgba(30,45,60,.35)'; g.fillRect(x+w-0.4*u,y,0.8*u,h); }                       /* montantes */
+        }
+      }
+    }
+    return g.getImageData(0,0,S,S);
+  }
+  /* Imágenes de noche: las de 41 y 82 px se crean ya; las de 164 y 200 (solo a zoom ≥ 19,5) se crean en reposo (requestIdleCallback) para no dar un tirón al anochecer.
+     Si MapLibre pide una imagen que aún no existe (styleimagemissing) se crea en ese momento: nunca queda un edificio sin ventanas ni avisos de imagen faltante. */
+  function estilosPorLetra(L){ for(const t of TRAMOS) if(t[3]===L) return t[2]; return 41; }
+  function ponerImagen(map,n){
+    if(map.hasImage(n)) return;
+    const m=/^([abcd])([dn])(\d+)(?:_(\d))?$/.exec(n); if(!m) return;
+    const S=estilosPorLetra(m[1]), p=+m[3], f=p>>1, t=p&1, noche=m[2]==='n';
+    if(f>=FAM.length) return;
+    try{ map.addImage(n,imagenNueva(f,t,noche,noche?(+m[4]||0):0,S)); }catch(e){}
+  }
+  let diferidasOn=false;
+  function procesarDiferidas(map,lista){
+    if(diferidasOn) return; diferidasOn=true;
+    const idle=window.requestIdleCallback?(f=>window.requestIdleCallback(f,{timeout:5000})):(f=>setTimeout(()=>f(null),400));
+    const paso=(dl)=>{
+      let hechas=0;
+      while(lista.length && (!dl || dl.timeRemaining()>8 || dl.didTimeout) && hechas<3){ ponerImagen(map,lista.shift()); hechas++; if(!dl) break; }
+      if(lista.length) idle(paso); else diferidasOn=false;
+    };
+    idle(paso);
+  }
+  const DIFERIDAS=[];
   function imagenes(map,noche){
+    if(!map.__simFalta){ map.__simFalta=true; map.on('styleimagemissing',e=>{ ponerImagen(map,e.id); }); }
     for(const [,,S,L] of TRAMOS){
       for(let f=0;f<FAM.length;f++) for(let t=0;t<2;t++){
         const p=f*2+t;
-        if(!noche){ const n=L+'d'+p; if(!map.hasImage(n)) map.addImage(n,imagen(FAM[f][t],false,p+1,S)); }
-        else for(let k=0;k<2;k++){ const n=L+'n'+p+'_'+k; if(!map.hasImage(n)) map.addImage(n,imagen(FAM[f][t],true,(p+1)*7+k*131+3,S)); }
+        if(!noche){ const n=L+'d'+p; if(!map.hasImage(n)) map.addImage(n,imagenNueva(f,t,false,0,S)); }
+        else for(let k=0;k<2;k++){
+          const n=L+'n'+p+'_'+k; if(map.hasImage(n)) continue;
+          if(S<=82) map.addImage(n,imagenNueva(f,t,true,k,S)); else DIFERIDAS.push(n);
+        }
       }
     }
+    if(noche&&DIFERIDAS.length) procesarDiferidas(map,DIFERIDAS);
   }
   function expPatron(noche){
     const nombre = L => noche ? ['concat',L,'n',['get','p'],'_',['get','k']] : ['concat',L,'d',['get','p']];
@@ -4231,7 +4310,7 @@ window.__barrio = (function(){
     });
     map.getSource('barrio').setData({type:'FeatureCollection',features:fs});
   }
-  return { atributos, capas, noche, visible, datos, imagenes, ZV, IDS };
+  return { atributos, capas, noche, visible, datos, imagenes, ZV, IDS, OSC_C, OSC_TC, oscurecerC };
 })();
 
 /* ============ ASPECTO SUAVE DEL MAPA: zonas verdes, borde de edificios, aceras ============
@@ -4307,9 +4386,9 @@ window.__suave = (function(){
   };
   const CONIFERAS = ['#3f6b46','#35603f','#4a7650'];
   const TRONCOS = ['#6b5239','#5b4430','#7a6044'];
-  const OSC_ARB = 0.4;
+  const OSC_ARB = (window.__barrio&&window.__barrio.OSC_C) || [0.4,0.4,0.4];   /* v207: el mismo oscurecido por canal que los edificios */
   function h32(a,b,c){ let h=(a*374761393 + b*668265263 + c*2147483647)|0; h=(h^(h>>>13))*1274126177|0; h^=h>>>16; return (h>>>0)/4294967296; }
-  function mod(x,f){ const c=[1,3,5].map(i=>Math.min(255,Math.round(parseInt(x.slice(i,i+2),16)*f))); return '#'+c.map(v=>v.toString(16).padStart(2,'0')).join(''); }
+  function mod(x,f){ const fa=Array.isArray(f)?f:[f,f,f]; const c=[1,3,5].map((i,j)=>Math.min(255,Math.round(parseInt(x.slice(i,i+2),16)*fa[j]))); return '#'+c.map(v=>v.toString(16).padStart(2,'0')).join(''); }
   function elegir(lista,r){ let t=0; for(const [,w] of lista) t+=w; let a=r*t; for(const [c,w] of lista){ a-=w; if(a<=0) return c; } return lista[0][0]; }
   function dentro(lo,la,anillos){
     let c=false;
@@ -4333,6 +4412,16 @@ window.__suave = (function(){
     const pal=PAL[est==null?1:est]||PAL[1], f=noche?OSC_ARB:1;
     const col=(c)=>mod(c,f);
     const cx=centro[0]*kx, cy=centro[1]*ky;
+    /* v207 · especies por manchas: con prob. 0,7 el árbol toma su especie de una retícula de 40 m (se elige una de las 4 esquinas con probabilidad según su posición → bordes suaves, sin parches cuadrados); con 0,3 es al azar como antes.
+       La retícula usa un factor fijo de metros (no el del centro del mapa) para que las manchas no se desplacen al regenerar. */
+    const KXF=111320*Math.cos(43.2*Math.PI/180);
+    const rEspecie=(gx,gy,px,py,ps)=>{
+      if(h32(gx,gy,45)>=0.7) return h32(gx,gy,ps);
+      const fx=(px/kx*KXF)/40, fy=(py)/40, ix=Math.floor(fx), iy=Math.floor(fy), tx=fx-ix, ty=fy-iy, sx=tx*tx*(3-2*tx), sy=ty*ty*(3-2*ty);
+      const jx=h32(gx,gy,42)<sx?ix+1:ix, jy=h32(gx,gy,43)<sy?iy+1:iy;
+      return h32(jx,jy,44);
+    };
+    const LOD2=150*150;
     const TS=0.68; let ox=0, oy=0;       /* escala de los árboles (0.68 = un tercio más pequeños), centrada en cada tronco */
     const blob=(x,y,r,b,h,c,sem,n)=>out.push({type:'Feature',properties:{c:col(c),b:b*TS,h:h*TS},geometry:{type:'Polygon',coordinates:poligono(ox+(x-ox)*TS,oy+(y-oy)*TS,r*TS,sem,kx,ky,n||8)}});
     let n=0;
@@ -4352,6 +4441,7 @@ window.__suave = (function(){
         const lo=px/kx, la=py/ky;
         if(!dentro(lo,la,z.anillos) || (bloqueo&&bloqueo(lo,la))) continue;
         usadas.add(kc); ox=px; oy=py;
+        const lejos = (px-cx)*(px-cx)+(py-cy)*(py-cy) > LOD2;      /* a más de ~150 m: 1 copa, sin tronco ni sombra */
         const e=h32(gx,gy,23);
         if(e<prob){
           n++;
@@ -4359,20 +4449,25 @@ window.__suave = (function(){
           const conif = t < (bosque?0.34:0.12), colu = !conif && t>0.93;     /* conífera / álamo-ciprés / hoja ancha */
           /* sombra en el suelo (corre hacia el SO) */
           const rs = (conif?2.2:colu?1.6:3.4)*TS;
-          out.push({type:'Feature',properties:{s:1},geometry:{type:'Polygon',coordinates:poligono(px-rs*0.35,py-rs*0.3,rs,sem+3,kx,ky,10)}});
-          if(conif){
+          if(!lejos) out.push({type:'Feature',properties:{s:1},geometry:{type:'Polygon',coordinates:poligono(px-rs*0.35,py-rs*0.3,rs,sem+3,kx,ky,10)}});
+          if(lejos){
+            if(conif){ const c0=CONIFERAS[Math.floor(h32(gx,gy,26)*3)], r=1.5+h32(gx,gy,27)*0.9, H=8+h32(gx,gy,28)*3.5; blob(px,py,r*0.85,0.5,1.0+H*0.9,c0,sem+11,6); }
+            else if(colu){ const c0=elegir(pal.hoja,rEspecie(gx,gy,px,py,29)), H=9+h32(gx,gy,30)*3; blob(px,py,1.0,0.5,1.6+H,pal.desnudo?mod(c0,0.95):c0,sem+11,6); }
+            else { const c0=elegir(pal.hoja,rEspecie(gx,gy,px,py,29)), r=2.2+h32(gx,gy,28)*1.3, Hc=3.6+h32(gx,gy,30)*1.8, b=2.4+h32(gx,gy,31)*0.8;
+                   if(pal.desnudo) blob(px,py,r*0.55,0.5,b+Hc*0.75,c0,sem+11,6); else blob(px,py,r*0.95,0.5,b+Hc*0.9,mod(c0,0.95),sem+11,7); }
+          }else if(conif){
             const c0=CONIFERAS[Math.floor(h32(gx,gy,26)*3)], r=1.5+h32(gx,gy,27)*0.9, H=8+h32(gx,gy,28)*3.5;
             blob(px,py,0.3,0,1.6,tr,sem+1,4);
             blob(px,py,r,1.0,1.0+H*0.42,mod(c0,0.92),sem+11,7);
             blob(px,py,r*0.74,1.0+H*0.30,1.0+H*0.72,c0,sem+12,7);
             blob(px,py,r*0.45,1.0+H*0.58,1.0+H,mod(c0,1.1),sem+13,6);
           }else if(colu){
-            const c0=elegir(pal.hoja,h32(gx,gy,29)), H=9+h32(gx,gy,30)*3;
+            const c0=elegir(pal.hoja,rEspecie(gx,gy,px,py,29)), H=9+h32(gx,gy,30)*3;
             blob(px,py,0.3,0,2.2,tr,sem+1,4);
             blob(px,py,1.1,1.6,1.6+H*0.7,pal.desnudo?mod(c0,0.95):c0,sem+11,6);
             blob(px,py,0.75,1.6+H*0.5,1.6+H,mod(c0,1.08),sem+12,6);
           }else{
-            const c0=elegir(pal.hoja,h32(gx,gy,29)), r=2.2+h32(gx,gy,28)*1.3, Hc=3.6+h32(gx,gy,30)*1.8, b=2.4+h32(gx,gy,31)*0.8;
+            const c0=elegir(pal.hoja,rEspecie(gx,gy,px,py,29)), r=2.2+h32(gx,gy,28)*1.3, Hc=3.6+h32(gx,gy,30)*1.8, b=2.4+h32(gx,gy,31)*0.8;
             blob(px,py,0.32,0,b+1.4,tr,sem+1,4);                         /* tronco */
             if(pal.desnudo){                                              /* invierno: copa rala, ramas */
               blob(px,py,r*0.55,b+Hc*0.2,b+Hc*0.75,c0,sem+11,6);
@@ -4386,11 +4481,11 @@ window.__suave = (function(){
             }
           }
         }else if(e<prob+0.12){                                            /* arbusto: dos montículos */
-          const c0=elegir(pal.hoja,h32(gx,gy,34)), r=0.8+h32(gx,gy,35)*0.6;
-          out.push({type:'Feature',properties:{s:1},geometry:{type:'Polygon',coordinates:poligono(px-0.3,py-0.3,r*1.2*TS,sem+5,kx,ky,8)}});
+          const c0=elegir(pal.hoja,rEspecie(gx,gy,px,py,34)), r=0.8+h32(gx,gy,35)*0.6;
+          if(!lejos) out.push({type:'Feature',properties:{s:1},geometry:{type:'Polygon',coordinates:poligono(px-0.3,py-0.3,r*1.2*TS,sem+5,kx,ky,8)}});
           const cc = pal.desnudo ? mod('#8a7b6a',1) : (h32(gx,gy,36)<0.5 ? mod(c0,0.9) : c0);
           blob(px,py,r,0,0.8+h32(gx,gy,36)*0.7,cc,sem+2,7);
-          blob(px+r*0.7,py+r*0.3,r*0.7,0,0.6+h32(gx,gy,37)*0.5,mod(cc,1.08),sem+3,6);
+          if(!lejos) blob(px+r*0.7,py+r*0.3,r*0.7,0,0.6+h32(gx,gy,37)*0.5,mod(cc,1.08),sem+3,6);
         }
       }
     }
