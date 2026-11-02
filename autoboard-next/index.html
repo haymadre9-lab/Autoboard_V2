@@ -27,6 +27,11 @@ html.noche0 #map,body.noche #map{background:#1b2128}
 @media(max-width:900px){#diag2.on{left:10px;top:260px}}
 #errlog{position:fixed;top:10px;right:10px;z-index:10;background:rgba(10,13,16,.88);border:1px solid #232c33;border-radius:10px;padding:8px 12px;color:#ff8a8a;font:11px/1.5 ui-monospace,monospace;max-width:280px;max-height:40vh;overflow-y:auto;display:none}
 #errlog.on{display:block}
+#btnAjustes{position:relative}
+#btnAjustes.inc::after{content:attr(data-n);position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;padding:0 4px;box-sizing:border-box;border-radius:9px;background:#e5484d;color:#fff;font:700 11px/18px system-ui,sans-serif;text-align:center}
+#incList{font:11px/1.45 ui-monospace,monospace;color:#b3261e;padding:6px 8px;white-space:normal;word-break:break-word}
+#incList .it{margin:0 0 8px}
+#incList .vacio{color:#7b8590}
 #errlog .ex{position:sticky;top:0;float:right;margin:-4px -6px 4px 6px;width:28px;height:28px;border:0;border-radius:8px;background:#232c33;color:#fff;font:700 15px system-ui,sans-serif;cursor:pointer;line-height:1}
 #controlesAbajo{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:8px;justify-content:center;flex-direction:column;align-items:center}
 #avisoInicial{background:rgba(20,80,50,.92);border:2px solid #2e6b4a;border-radius:12px;padding:10px 20px;color:#9ae6b4;font:700 15px system-ui,sans-serif;margin-bottom:8px;animation:avisoPulse 2s ease-in-out infinite}
@@ -523,8 +528,10 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="enlaceGenerar">🎲 Generar código nuevo</button>
   <button class="ajuste" id="enlaceCopiar">📋 Copiar código</button>
   <div id="enlaceEstado" style="font-size:12px;color:#8d99a5;padding:2px 4px 8px">Sin código: no enlazado</div>
+  <div id="incList"><span class="vacio">Sin incidencias.</span></div>
+  <button class="ajuste" id="btnIncLimpiar">🧹 Borrar incidencias</button>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v208</div>
+  <div class="seccion">Versión v209</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -615,21 +622,31 @@ const antialiasActivo=new URLSearchParams(location.search).get('aa')==='1';
 const errores=[];           /* máx. 40 entradas ({tipo,mensaje,n}); el total real está en window.__errTotal */
 window.__errTotal=0;
 let __errPend=false, __errTmr=null;
-function __ocultarErr(){ clearTimeout(__errTmr); __errTmr=null; errores.length=0; const el=document.getElementById('errlog'); if(el){ el.classList.remove('on'); el.innerHTML=''; } }   /* el total (__errTotal) y el contador de Ajustes se conservan */
+let __incVistos=0;
+function __ocultarErr(){ const el=document.getElementById('errlog'); if(el){ el.classList.remove('on'); el.innerHTML=''; } }   /* el aviso flotante ya no se usa: las incidencias van a Ajustes → Incidencias */
 const __escErr=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function __hora(t){ const d=new Date(t), p=n=>(n<10?'0':'')+n; return p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds()); }
 function __pintarErr(){
   __errPend=false;
   const c=document.getElementById('rErrores'); if(c) c.textContent=window.__errTotal;
-  const el=document.getElementById('errlog'); if(!el) return; el.classList.add('on');
-  clearTimeout(__errTmr); __errTmr=setTimeout(__ocultarErr,45000);      /* se oculta solo a los 45 s sin errores nuevos */
-  el.innerHTML='<button class="ex" id="errX" aria-label="Cerrar">✕</button>'+errores.map(e=>'<b>['+__escErr(e.tipo)+']</b> '+__escErr(e.mensaje)+(e.n>1?' <b>×'+e.n+'</b>':'')).join('<br><br>');
+  const nuevas=Math.max(0,window.__errTotal-__incVistos);
+  const bt=document.getElementById('btnAjustes'); if(bt){ if(nuevas>0){ bt.classList.add('inc'); bt.setAttribute('data-n',nuevas>99?'99+':String(nuevas)); } else { bt.classList.remove('inc'); bt.removeAttribute('data-n'); } }
+  const li=document.getElementById('incList');
+  if(li){
+    li.innerHTML = errores.length ? errores.slice().reverse().map(e=>'<div class="it"><b>'+__hora(e.t)+' ['+__escErr(e.tipo)+']</b> '+__escErr(e.mensaje)+(e.n>1?' <b>×'+e.n+'</b>':'')+'</div>').join('') : '<span class="vacio">Sin incidencias.</span>';
+    const h=li.closest('.cat'); const sp=h&&h.querySelector('.catH>span'); if(sp) sp.textContent='⚠️ Incidencias'+(window.__errTotal?' ('+window.__errTotal+')':'');
+  }
 }
-document.addEventListener('click',ev=>{ if(ev.target&&ev.target.id==='errX') __ocultarErr(); },true);
+document.addEventListener('click',ev=>{
+  const t=ev.target; if(!t||!t.closest) return;
+  if(t.closest('#btnIncLimpiar')){ errores.length=0; __incVistos=window.__errTotal; __pintarErr(); return; }
+  const h=t.closest('.catH'); if(h&&/Incidencias/.test(h.textContent)){ __incVistos=window.__errTotal; __pintarErr(); }
+},true);
 function registrarError(tipo,mensaje){
   window.__errTotal++;
   const u=errores[errores.length-1];
-  if(u&&u.tipo===tipo&&u.mensaje===mensaje) u.n++;                       /* repetido consecutivo: se agrupa */
-  else { errores.push({tipo,mensaje,n:1}); if(errores.length>40) errores.shift(); }
+  if(u&&u.tipo===tipo&&u.mensaje===mensaje){ u.n++; u.t=Date.now(); }       /* repetido consecutivo: se agrupa */
+  else { errores.push({tipo,mensaje,n:1,t:Date.now()}); if(errores.length>40) errores.shift(); }
   if(!__errPend){ __errPend=true; (window.requestAnimationFrame||setTimeout)(__pintarErr); }   /* como mucho un repintado por frame */
 }
 const map=new maplibregl.Map({
@@ -5781,8 +5798,8 @@ window.__carg=(function(){
   +'#panelAjustes .infoVer{font-size:11px;opacity:.65;padding:6px 4px}';
   document.head.appendChild(st);
 
-  const CATS=[['mapa','🗺️ Mapa y vista'],['aspecto','🎨 Aspecto del mapa'],['cielo','🌦️ Cielo y tiempo'],['sonido','🔊 Sonido y avisos'],['carg','⚡ Cargadores'],['park','🅿️ Aparcamientos'],['gps','📍 GPS'],['coche','🚗 Coche'],['futbol','⚽ Fútbol'],['fiesta','🎉 Celebración'],['enlace','🔗 Enlace entre dispositivos'],['sis','⚙️ Rendimiento y versión']];
-  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnAutoAncho btnAutoVista btnPasos btnPeajes btnTramos btnSugerido btnFlechaMan btnEstSol btnEstLuz btnEstVias btnEstRelieve btnBusqAmbito btnCamDenso btnFlechas',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspMedir aspDiag btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',sis:'btnAA btnTestTramo tramoDiag evFila btnEVPlan evPlanTxt btnTestEV evDiag btnLimpiarFavs btnWake'};
+  const CATS=[['mapa','🗺️ Mapa y vista'],['aspecto','🎨 Aspecto del mapa'],['cielo','🌦️ Cielo y tiempo'],['sonido','🔊 Sonido y avisos'],['carg','⚡ Cargadores'],['park','🅿️ Aparcamientos'],['gps','📍 GPS'],['coche','🚗 Coche'],['futbol','⚽ Fútbol'],['fiesta','🎉 Celebración'],['enlace','🔗 Enlace entre dispositivos'],['inc','⚠️ Incidencias'],['sis','⚙️ Rendimiento y versión']];
+  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnAutoAncho btnAutoVista btnPasos btnPeajes btnTramos btnSugerido btnFlechaMan btnEstSol btnEstLuz btnEstVias btnEstRelieve btnBusqAmbito btnCamDenso btnFlechas',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspMedir aspDiag btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',inc:'incList btnIncLimpiar',sis:'btnAA btnTestTramo tramoDiag evFila btnEVPlan evPlanTxt btnTestEV evDiag btnLimpiarFavs btnWake'};
   const POR={}; for(const c in M) M[c].split(' ').forEach(id=>POR[id]=c);
   const cuerpos={}, cats={};
   const ref=panel.querySelector('h2');
