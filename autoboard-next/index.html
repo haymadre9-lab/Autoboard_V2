@@ -524,7 +524,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="enlaceCopiar">📋 Copiar código</button>
   <div id="enlaceEstado" style="font-size:12px;color:#8d99a5;padding:2px 4px 8px">Sin código: no enlazado</div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v207</div>
+  <div class="seccion">Versión v208</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -5426,18 +5426,18 @@ window.__overpass=(function(){
     } finally { clearTimeout(tm); }
   }
   async function ejecutar(it){
-    let ult='';
+    const ult=['','']; let nInt=0;   /* último error de cada servidor */
     for(let ronda=0;ronda<C.RONDAS;ronda++){
       if(ronda>0){ stats.reintentos++; await sleep(C.BACKOFF*Math.pow(2,ronda-1)); if(info(it,coche()).atras){ fin(it,'skip'); return; } }
       const ahora=Date.now(); let orden=[0,1].sort((a,b)=>cool[a]-cool[b]);
       const libres=orden.filter(i=>cool[i]<=ahora);
       if(!libres.length){ await sleep(Math.min(8000,cool[orden[0]]-ahora)); } else orden=libres;
       for(const i of orden){
-        try{ const j=await intentar(i,it); stats.ok++; fin(it,j); return; }catch(e){ ult=(i?'kumi: ':'overpass-api: ')+e.message; }
+        try{ nInt++; const j=await intentar(i,it); stats.ok++; fin(it,j); return; }catch(e){ ult[i]=e.message; }
       }
     }
     stats.fallo++;
-    const t=Date.now(); if(t-ultLog>30000){ ultLog=t; try{ registrarError('overpass','fallo persistente ('+ult+') · '+stats.fallo+' consultas sin datos; se reintenta más tarde'); }catch(e){} }
+    const t=Date.now(); if(t-ultLog>30000){ ultLog=t; try{ registrarError('overpass','fallo persistente en «'+it.k+'» tras '+nInt+' intentos · overpass-api: '+(ult[0]||'(no probado)')+' · kumi: '+(ult[1]||'(no probado)')+' · '+stats.fallo+' consultas sin datos; se reintenta más tarde'); }catch(e){} }
     fin(it,null);
   }
   return {consultar,_cfg:C,_stats:stats,_reset:()=>{ cool[0]=cool[1]=0; malas[0]=malas[1]=0; },estado:()=>({cola:cola.length,vuelo,cool:cool.map(x=>Math.max(0,x-Date.now())),stats:Object.assign({},stats)})};
