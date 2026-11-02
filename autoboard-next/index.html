@@ -485,6 +485,8 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste on" id="btnAspArboles">🌳 Árboles y arbustos: ON</button>
   <button class="ajuste on" id="btnAspAceras">🚶 Aceras (crema): ON</button>
   <button class="ajuste on" id="btnAspBorde">▭ Borde de edificios: ON</button>
+  <button class="ajuste" id="btnAspMedir" style="background:#27384a">📊 Medir aspecto (generar, tirones)</button>
+  <div id="aspDiag" style="font-size:11px;opacity:.9;padding:2px 14px;white-space:pre-wrap"></div>
   <button class="ajuste" id="btnAspEstacion">🍂 Estación: Auto</button>
   <button class="ajuste on" id="btnPasos">🚸 Pasos de peatones: ON</button>
   <button class="ajuste" id="btnPeajes">🚫 Evitar peajes: OFF</button>
@@ -522,7 +524,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="enlaceCopiar">📋 Copiar código</button>
   <div id="enlaceEstado" style="font-size:12px;color:#8d99a5;padding:2px 4px 8px">Sin código: no enlazado</div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v204</div>
+  <div class="seccion">Versión v206</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -4422,6 +4424,7 @@ window.__suave = (function(){
   if(/[?&]aspecto=0\b/.test(location.search)) for(const k in cfg) cfg[k]=false;
   const B=window.__barrio, S=window.__suave;
   let ult_est=-1, estSel=0, nocheCur=!!nocheAct, creado=false, ult=null, tUlt=0, pausa=2500, hayDatos=false;
+  const GEN=[];   /* últimas pasadas de generar(): {t0,d} */
   const kxm=(lat)=>111320*Math.cos(lat*Math.PI/180), KY=110540;
   const F=n=>({source:idFuenteBuildings,'source-layer':n==='building'?sourceLayerBuildings:n});
   function primerSimb(){ try{ for(const l of map.getStyle().layers) if(l.type==='symbol') return l.id; }catch(e){} return undefined; }
@@ -4504,9 +4507,9 @@ window.__suave = (function(){
       if(ahora-tUlt<pausa) return;
       if(!cambio && !map.areTilesLoaded()) return;
       const t0=performance.now();
-      const {items,R}=generar(c,z);
+      const {items,R}=generar(c,z); const tGen=performance.now()-t0; let tBar=0, tArbG=0, tArbS=0, nArb=0;
       if(qBarrio){
-        B.datos(map,items);
+        const tb=performance.now(); B.datos(map,items); tBar=performance.now()-tb;
         window.__filtroBarrio=['>',['distance',{type:'Point',coordinates:[c.lng,c.lat]}],R];
       }else{ B.datos(map,[]); window.__filtroBarrio=null; }
       try{ window.__reaplicarFiltroBase&&window.__reaplicarFiltroBase(); }catch(e){}
@@ -4518,12 +4521,14 @@ window.__suave = (function(){
           for(let i=-1;i<=1;i++) for(let j=-1;j<=1;j++){ const a=grid.get((gx+i)+','+(gy+j)); if(!a) continue; for(const b of a) if(lo>=b.x0&&lo<=b.x1&&la>=b.y0&&la<=b.y1) return true; }
           return false;
         };
-        S.ponerArboles(map,S.arboles(zonasVerdes(),[c.lng,c.lat],Math.min(R,400),nocheCur,bloqueo,900,estActual()));
+        const ta=performance.now(); const fa=S.arboles(zonasVerdes(),[c.lng,c.lat],Math.min(R,400),nocheCur,bloqueo,900,estActual()); tArbG=performance.now()-ta; nArb=fa.length;
+        const ts=performance.now(); S.ponerArboles(map,fa); tArbS=performance.now()-ts;
       }else S.ponerArboles(map,[]);
       hayDatos=true;
       const dur=performance.now()-t0; pausa=Math.max(2500,dur*30);
       ult={lat:c.lat,lon:c.lng,z,noche:nocheCur,b:qBarrio,a:qArb}; tUlt=performance.now();
-      window.__aspecto.estado={edificios:items.length,R:Math.round(R),ms:Math.round(dur)};
+      window.__aspecto.estado={edificios:items.length,R:Math.round(R),ms:Math.round(dur),gen:Math.round(tGen),barrio:Math.round(tBar),arbGen:Math.round(tArbG),arbSet:Math.round(tArbS),nArb,feats:nArb};
+      GEN.push({t0:t0,d:dur}); if(GEN.length>60) GEN.shift();
     }catch(e){ registrarError('aspecto',e.message); }
   }
   const BTN={barrio:['btnAspBarrio','🏘️ Edificios con color'],verde:['btnAspVerde','🌿 Zonas verdes'],arboles:['btnAspArboles','🌳 Árboles y arbustos'],aceras:['btnAspAceras','🚶 Aceras (crema)'],borde:['btnAspBorde','▭ Borde de edificios']};
@@ -4533,7 +4538,20 @@ window.__suave = (function(){
   function textoE(){ if(bE){ bE.textContent='🍂 Estación: '+EST_N[estSel]+(estSel===0?' ('+EST_N[S.estacionAuto()+1]+')':''); bE.classList.toggle('on',estSel>0); } }
   if(bE) bE.onclick=()=>{ estSel=(estSel+1)%5; try{ localStorage.setItem('aspEstacion',String(estSel)); }catch(e){} textoE(); ult=null; tUlt=0; pausa=0; tick(); };
   textoE(); textos();
-  window.__aspecto={cfg,tick,estado:null,vis:()=>{ aplicarVis(); ult=null; tUlt=0; pausa=0; tick(); }};
+  /* ---- medición (v206): tiempos de generar() y tareas largas del hilo principal (PerformanceObserver 'longtask', >50 ms) ---- */
+  const LT=[]; try{ new PerformanceObserver(l=>{ for(const e of l.getEntries()){ LT.push({t:e.startTime,d:e.duration}); if(LT.length>300) LT.shift(); } }).observe({entryTypes:['longtask']}); }catch(e){}
+  function medir(){
+    const ahora=performance.now(), u=LT.filter(x=>ahora-x.t<60000), ds=u.map(x=>x.d).sort((a,b)=>a-b);
+    const deGen=u.filter(x=>GEN.some(g=>x.t<g.t0+g.d+60&&x.t+x.d>g.t0-60)).length;
+    const gms=GEN.map(g=>g.d).sort((a,b)=>a-b);
+    return {estado:window.__aspecto.estado, generar:{n:GEN.length,mediana:gms.length?Math.round(gms[gms.length>>1]):0,max:gms.length?Math.round(gms[gms.length-1]):0},
+      tareasLargas60s:{n:u.length,max:ds.length?Math.round(ds[ds.length-1]):0,p95:ds.length?Math.round(ds[Math.min(ds.length-1,Math.floor(ds.length*0.95))]):0,deGenerar:deGen}};
+  }
+  const bM=document.getElementById('btnAspMedir'), dM=document.getElementById('aspDiag');
+  if(bM) bM.onclick=()=>{ const m=medir(), e=m.estado||{}; if(dM) dM.textContent=(m.estado?
+    'edificios '+e.edificios+' · radio '+e.R+' m\ngenerar() '+e.ms+' ms (consulta teselas '+e.gen+' · setData barrio '+e.barrio+' · árboles: crear '+e.arbGen+' + setData '+e.arbSet+', '+e.nArb+' features)\nmediana '+m.generar.mediana+' ms · máx '+m.generar.max+' ms en '+m.generar.n+' pasadas':'Aún no se ha generado nada (acércate: zoom ≥ 15,5).')
+    +'\ntareas largas (>50 ms) en el último minuto: '+m.tareasLargas60s.n+' · máx '+m.tareasLargas60s.max+' ms · p95 '+m.tareasLargas60s.p95+' ms · coinciden con generar(): '+m.tareasLargas60s.deGenerar; };
+  window.__aspecto={cfg,tick,estado:null,medir,vis:()=>{ aplicarVis(); ult=null; tUlt=0; pausa=0; tick(); }};
   setInterval(tick,1000);
 })();
 
@@ -5669,7 +5687,7 @@ window.__carg=(function(){
   document.head.appendChild(st);
 
   const CATS=[['mapa','🗺️ Mapa y vista'],['aspecto','🎨 Aspecto del mapa'],['cielo','🌦️ Cielo y tiempo'],['sonido','🔊 Sonido y avisos'],['carg','⚡ Cargadores'],['park','🅿️ Aparcamientos'],['gps','📍 GPS'],['coche','🚗 Coche'],['futbol','⚽ Fútbol'],['fiesta','🎉 Celebración'],['enlace','🔗 Enlace entre dispositivos'],['sis','⚙️ Rendimiento y versión']];
-  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnAutoAncho btnAutoVista btnPasos btnPeajes btnTramos btnSugerido btnFlechaMan btnEstSol btnEstLuz btnEstVias btnEstRelieve btnBusqAmbito btnCamDenso btnFlechas',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',sis:'btnAA btnTestTramo tramoDiag evFila btnEVPlan evPlanTxt btnTestEV evDiag btnLimpiarFavs btnWake'};
+  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnAutoAncho btnAutoVista btnPasos btnPeajes btnTramos btnSugerido btnFlechaMan btnEstSol btnEstLuz btnEstVias btnEstRelieve btnBusqAmbito btnCamDenso btnFlechas',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspMedir aspDiag btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',sis:'btnAA btnTestTramo tramoDiag evFila btnEVPlan evPlanTxt btnTestEV evDiag btnLimpiarFavs btnWake'};
   const POR={}; for(const c in M) M[c].split(' ').forEach(id=>POR[id]=c);
   const cuerpos={}, cats={};
   const ref=panel.querySelector('h2');
@@ -6503,10 +6521,10 @@ window.__sugerido=(function(){
   }
   function corto(n){ n=(n||'Destino').trim(); const p=n.split(','); return (p.length>1&&p[0].length>=4)?p[0].trim():n; }
   async function eta(g){
-    const k=g.la.toFixed(4)+','+g.lo.toFixed(4), c=etaCache[k]; if(c&&Date.now()-c.t<180000) return c;
+    const k=g.la.toFixed(4)+','+g.lo.toFixed(4)+(window.__peajes?'|sp':''), c=etaCache[k];   /* la clave distingue «evitar peajes» */ if(c&&Date.now()-c.t<180000) return c;
     if(!lastFix||navigator.onLine===false) return null;
     try{
-      const r=await fetch('https://api.tomtom.com/routing/1/calculateRoute/'+lastFix.lat.toFixed(5)+','+lastFix.lon.toFixed(5)+':'+g.la+','+g.lo+'/json?key='+TT+'&traffic=true&travelMode=car');
+      const r=await fetch('https://api.tomtom.com/routing/1/calculateRoute/'+lastFix.lat.toFixed(5)+','+lastFix.lon.toFixed(5)+':'+g.la+','+g.lo+'/json?key='+TT+'&traffic=true&travelMode=car'+(window.__peajes?'&avoid=tollRoads':''));
       const j=await r.json(), sm=j&&j.routes&&j.routes[0]&&j.routes[0].summary; if(!sm) return null;
       const o={t:Date.now(),min:Math.round(sm.travelTimeInSeconds/60),km:sm.lengthInMeters/1000,retraso:Math.round((sm.trafficDelayInSeconds||0)/60)}; etaCache[k]=o; return o;
     }catch(e){ return null; }
