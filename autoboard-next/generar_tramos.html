@@ -12,7 +12,8 @@ button:disabled{opacity:.5}
 <h1>Radares de tramo → radares_tramo.json</h1>
 <p>Descarga una sola vez los radares de tramo (velocidad media) de OpenStreetMap y los guarda en un archivo para que la app no dependa de Overpass al conducir.</p>
 <select id="reg">
-  <option value="42.0,-4.6,43.7,-0.6">Norte (Euskadi, Cantabria, Navarra, La Rioja, Burgos)</option>
+  <option value="42.0,-4.6,43.7,-0.6;40.2,-4.6,42.1,-2.8;39.2,-6.8,40.6,-3.3;39.8,-6.8,42.1,-4.5">Mis rutas: Bilbao – Madrid – Cáceres (4 zonas, incluye A-1, A-5 y Salamanca)</option>
+  <option value="42.0,-4.6,43.7,-0.6">Solo norte (Euskadi, Cantabria, Navarra, La Rioja, Burgos)</option>
   <option value="35.9,-9.6,43.9,3.5">Toda la península</option>
 </select>
 <button class="p" id="go">Generar</button>
@@ -57,25 +58,32 @@ async function pedir(url,q,ms){
 }
 $('go').onclick=async()=>{
   $('go').disabled=true; $('dl').disabled=true; salida=null; $('log').textContent='';
-  const [s,w,n,e]=$('reg').value.split(',');
-  const q='[out:json][timeout:150];relation[type=enforcement][enforcement=average_speed]('+s+','+w+','+n+','+e+');out geom;';
-  let ok=false;
-  for(let ronda=1;ronda<=3&&!ok;ronda++){
-    for(const u of SERV){
-      log('Ronda '+ronda+' · '+u.split('/')[2]+' …');
-      try{
-        const j=await pedir(u,q,170000);
-        const {lista,descartados}=convertir(j);
-        if(!lista.length) throw new Error('0 radares en la respuesta');
-        salida={generado:new Date().toISOString(),region:$('reg').selectedOptions[0].textContent,lista};
-        log('OK: '+lista.length+' radares de tramo ('+descartados+' sin origen/destino descartados).');
-        log('Ejemplo: '+JSON.stringify(lista[0]));
-        $('dl').disabled=false; ok=true; break;
-      }catch(err){ log('   falló: '+err.message); }
+  const cajas=$('reg').value.split(';'), porId=new Map(), falladas=[];
+  for(let ci=0;ci<cajas.length;ci++){
+    const [s,w,n,e]=cajas[ci].split(',');
+    const q='[out:json][timeout:150];relation[type=enforcement][enforcement=average_speed]('+s+','+w+','+n+','+e+');out geom;';
+    let ok=false;
+    for(let ronda=1;ronda<=3&&!ok;ronda++){
+      for(const u of SERV){
+        log('Zona '+(ci+1)+'/'+cajas.length+' · ronda '+ronda+' · '+u.split('/')[2]+' …');
+        try{
+          const j=await pedir(u,q,170000);
+          const {lista}=convertir(j);   /* 0 radares en una zona es válido */
+          for(const r of lista) porId.set(r.id,r);
+          log('   OK: '+lista.length+' en esta zona'); ok=true; break;
+        }catch(err){ log('   falló: '+err.message); }
+      }
+      if(!ok&&ronda<3){ log('Espero 20 s y repito…'); await new Promise(r=>setTimeout(r,20000)); }
     }
-    if(!ok&&ronda<3){ log('Espero 20 s y repito…'); await new Promise(r=>setTimeout(r,20000)); }
+    if(!ok) falladas.push(ci+1);
   }
-  if(!ok) log('No se pudo. Prueba otra vez más tarde (mejor de madrugada) o desde otra red.');
+  const lista=[...porId.values()];
+  if(lista.length){
+    salida={generado:new Date().toISOString(),region:$('reg').selectedOptions[0].textContent,lista};
+    log('TOTAL: '+lista.length+' radares de tramo.'); log('Ejemplo: '+JSON.stringify(lista[0]));
+    if(falladas.length) log('⚠️ Zonas que no se pudieron descargar: '+falladas.join(', ')+'. Vuelve a generar más tarde antes de subir el archivo.');
+    $('dl').disabled=false;
+  }else log('No se obtuvo ningún radar'+(falladas.length?' (zonas fallidas: '+falladas.join(', ')+')':'')+'. Prueba más tarde, mejor de madrugada.');
   $('go').disabled=false;
 };
 $('dl').onclick=()=>{
