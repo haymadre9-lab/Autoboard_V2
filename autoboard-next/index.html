@@ -539,8 +539,10 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div id="enlaceEstado" style="font-size:12px;color:#8d99a5;padding:2px 4px 8px">Sin código: no enlazado</div>
   <div id="incList"><span class="vacio">Sin incidencias.</span></div>
   <button class="ajuste" id="btnIncLimpiar">🧹 Borrar incidencias</button>
+  <button class="ajuste" id="btnFluidez" style="background:#27384a">📊 Medir fluidez al conducir (60 s)</button>
+  <div id="fluDiag" style="font-size:11px;opacity:.9;padding:2px 14px;white-space:pre-wrap"></div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v218</div>
+  <div class="seccion">Versión v219</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -2451,6 +2453,7 @@ function alimentarEstimador(posCoche,v,snap){
     if(m>CAM.SNAP_JUMP_M){ ol=0; oa=0; }   /* GPS recuperado tras un corte largo → salto directo */
   }
   est.offLon=ol; est.offLat=oa;
+  if(window.__flu&&window.__flu.on) window.__flu.fix(ol,oa,posCoche[1],v);
   est.fixOk=true; est.fixT=ahora;
   est.lon=posCoche[0]; est.lat=posCoche[1]; est.v=v; est.hdg=heading;
   est.onRoute=!!snap && routeCoordsLL.length>1;
@@ -2562,6 +2565,7 @@ function bucleSeguimiento(ts){
   if(!__ultimoTs){ __ultimoTs=ts; return; }
   let dt=(ts-__ultimoTs)/1000; __ultimoTs=ts;
   if(!(dt>0)) return;
+  if(window.__flu&&window.__flu.on) window.__flu.frame(dt);
   if(CAM.DIAG) medirFrame(dt);
   if(dt>0.1) dt=0.1;   /* pestaña en segundo plano / frame atascado: no integrar saltos enormes */
   if(!(seguirOn && !camaraLibre && !seguirBloqueado && camActual.inited && est.fixOk)) return;
@@ -2607,7 +2611,7 @@ function bucleSeguimiento(ts){
   rotarFlecha(camClamp(dif,-CAM.FLECHA_MAX_DEG,CAM.FLECHA_MAX_DEG));
 
   /* azul de la ruta: recorte fino anclado a la flecha (no al último fix) */
-  if(pred.enRuta && ts-__trimT>=CAM.TRIM_MS && Math.abs(pred.s-__trimS)>=0.5){ __trimT=ts; __trimS=pred.s; actualizarTrimRuta(pred.s); }
+  if(pred.enRuta && ts-__trimT>=CAM.TRIM_MS && Math.abs(pred.s-__trimS)>=0.5){ __trimT=ts; __trimS=pred.s; if(window.__flu&&window.__flu.on){ const t0=performance.now(); actualizarTrimRuta(pred.s); window.__flu.trim(performance.now()-t0,routeCoordsLL.length); } else actualizarTrimRuta(pred.s); }
 
   /* zoom y pitch: base por velocidad + extra de maniobra */
   const zBase=zoomPorVelocidad(vZoom*3.6);
@@ -2639,6 +2643,7 @@ function bucleSeguimiento(ts){
   camObjetivo.center[0]=pred.lon; camObjetivo.center[1]=pred.lat;
   camObjetivo.bearing=rumboObj; camObjetivo.zoom=zObj; camObjetivo.pitch=pObj;
 
+  if(window.__flu&&window.__flu.on) window.__flu.cam(camActual.bearing,camActual.zoom,camActual.pitch);
   aplicarCamara(cx,cy,camActual.bearing,camActual.zoom,camActual.pitch,camCocheY);
 }
 iniciarBucleSeguimiento();
@@ -5824,7 +5829,7 @@ window.__carg=(function(){
   document.head.appendChild(st);
 
   const CATS=[['mapa','🗺️ Mapa y vista'],['aspecto','🎨 Aspecto del mapa'],['cielo','🌦️ Cielo y tiempo'],['sonido','🔊 Sonido y avisos'],['carg','⚡ Cargadores'],['park','🅿️ Aparcamientos'],['gps','📍 GPS'],['coche','🚗 Coche'],['futbol','⚽ Fútbol'],['fiesta','🎉 Celebración'],['enlace','🔗 Enlace entre dispositivos'],['inc','⚠️ Incidencias'],['sis','⚙️ Rendimiento y versión']];
-  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnAutoAncho btnAutoVista btnPasos btnPeajes btnTramos btnSugerido btnFlechaMan btnEstSol btnEstLuz btnEstVias btnEstRelieve btnBusqAmbito btnCamDenso btnFlechas btnPantCompleta',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspMedir aspDiag btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub btnListaParking parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',inc:'incList btnIncLimpiar',sis:'btnAA btnTestTramo tramoDiag evFila btnEVPlan evPlanTxt btnTestEV evDiag btnLimpiarFavs btnWake'};
+  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnAutoAncho btnAutoVista btnPasos btnPeajes btnTramos btnSugerido btnFlechaMan btnEstSol btnEstLuz btnEstVias btnEstRelieve btnBusqAmbito btnCamDenso btnFlechas btnPantCompleta',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspMedir aspDiag btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub btnListaParking parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',inc:'incList btnIncLimpiar btnFluidez fluDiag',sis:'btnAA btnTestTramo tramoDiag evFila btnEVPlan evPlanTxt btnTestEV evDiag btnLimpiarFavs btnWake'};
   const POR={}; for(const c in M) M[c].split(' ').forEach(id=>POR[id]=c);
   const cuerpos={}, cats={};
   const ref=panel.querySelector('h2');
@@ -6468,17 +6473,20 @@ window.__semOSM=(function(){
     }
     return out;
   }
+  let nFallosSem=0, ultAvisoSem=0;
   async function pedir(la,lo,k){
     const s=Math.floor(la/CELDA)*CELDA, w=Math.floor(lo/CELDA)*CELDA, n=s+CELDA, e=w+CELDA;
     const q='[out:json][timeout:25];node["highway"="traffic_signals"]('+s.toFixed(5)+','+w.toFixed(5)+','+n.toFixed(5)+','+e.toFixed(5)+');out;';
     enVuelo=true;
     try{
-      const j=await window.__overpass.consultar(q,{k:'sem|'+k,la:(s+n)/2,lo:(w+e)/2});
+      const j=await window.__overpass.consultar(q,{k:'sem|'+k,la:(s+n)/2,lo:(w+e)/2,silencio:true});
       if(j==='skip'){ fallos[k]=Date.now()-60000; return; }
       if(j&&j.elements){ try{
           cache[k]={t:Date.now(),p:j.elements.filter(x=>Number.isFinite(x.lat)).map(x=>[+x.lat.toFixed(6),+x.lon.toFixed(6)])}; guardar(); ult.n=-1; return;
       }catch(e){} }
       fallos[k]=Date.now();
+      /* v219: fallo silencioso (hay semáforos fijos propios); un solo aviso resumido cada 2 h */
+      nFallosSem++; const ahora=Date.now(); if(ahora-ultAvisoSem>2*3600000){ ultAvisoSem=ahora; try{ registrarError('semáforos','Overpass no responde para los semáforos extra ('+nFallosSem+' zonas sin datos hasta ahora); se usan los semáforos fijos y se reintenta solo. Próximo aviso en 2 h.'); }catch(e){} }
     } finally { enVuelo=false; }
   }
   function indiceEstaticos(){
@@ -7205,6 +7213,44 @@ window.__CLIPS_VOZ.radar='SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAA
     document.addEventListener('pointerup',gesto,true);
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',iniciar); else iniciar();
+})();
+</script>
+<script>
+/* ============ MEDIR FLUIDEZ (v219) ============
+   Mide 60 s mientras conduces con ruta: tiempo entre frames de la cámara, saltos de rumbo, correcciones de cada fix GPS,
+   coste de recortar el azul de la ruta (setData) y teselas que se recargan. Solo registra mientras está activo (sin coste fuera). */
+(function(){
+  const q=(a,p)=>a.length?a[Math.min(a.length-1,Math.floor(a.length*p))]:0, f=(x,d)=>(+x).toFixed(d===undefined?0:d);
+  const F={on:false,t0:0,dts:[],bj:[],corr:[],fixT:[],fixN:0,_trim:[],trimPts:0,lt:[],src:{},vs:[],ult:null,zoom:[],tickId:0};
+  function reset(){ F.dts=[];F.bj=[];F.corr=[];F.fixT=[];F.fixN=0;F._trim=[];F.trimPts=0;F.lt=[];F.src={};F.vs=[];F.ult=null;F.zoom=[]; }
+  F.frame=dt=>{ F.dts.push(dt*1000); };
+  F.cam=(b,z,p)=>{ if(F.ult){ let d=Math.abs(((b-F.ult.b+540)%360)-180); F.bj.push(d); F.zoom.push(Math.abs(z-F.ult.z)); } F.ult={b,z,p}; };
+  F.fix=(ol,oa,lat,v)=>{ F.fixN++; F.fixT.push(performance.now()); F.vs.push(v*3.6); F.corr.push(Math.hypot(ol*111320*Math.cos(lat*Math.PI/180),oa*110540)); };
+  F.trimFn=(ms,n)=>{ F._trim.push(ms); F.trimPts=n; };
+  const hook=window.__flu={ get on(){ return F.on; }, frame:F.frame, cam:F.cam, fix:F.fix, trim:F.trimFn };
+  try{ new PerformanceObserver(l=>{ if(!F.on) return; for(const e of l.getEntries()) F.lt.push(e.duration); }).observe({entryTypes:['longtask']}); }catch(e){}
+  function fuente(e){ if(!F.on||!e.sourceId) return; if(e.isSourceLoaded===false||e.tile) F.src[e.sourceId]=(F.src[e.sourceId]||0)+1; }
+  try{ map.on('sourcedata',fuente); }catch(e){}
+  function informe(){
+    const s=(performance.now()-F.t0)/1000, d=F.dts.slice().sort((a,b)=>a-b), bj=F.bj.slice().sort((a,b)=>a-b), co=F.corr.slice().sort((a,b)=>a-b), tr=F._trim.slice().sort((a,b)=>a-b), lt=F.lt.slice().sort((a,b)=>a-b);
+    const iv=[]; for(let i=1;i<F.fixT.length;i++) iv.push((F.fixT[i]-F.fixT[i-1])/1000); iv.sort((a,b)=>a-b);
+    const n=d.length, l25=d.filter(x=>x>25).length, l33=d.filter(x=>x>33).length, l50=d.filter(x=>x>50).length, l100=d.filter(x=>x>100).length;
+    const vm=F.vs.length?F.vs.reduce((a,b)=>a+b,0)/F.vs.length:0;
+    const top=Object.entries(F.src).sort((a,b)=>b[1]-a[1]).slice(0,3).map(x=>x[0]+' '+f(x[1]/s,1)+'/s').join(' · ')||'—';
+    return 'medido '+f(s)+' s · velocidad media '+f(vm)+' km/h · ruta '+F.trimPts+' puntos\n'
+      +'FRAMES de la cámara: '+n+' ('+f(n/s)+'/s) · mediana '+f(q(d,.5),1)+' ms · p95 '+f(q(d,.95),1)+' ms · máx '+f(d[d.length-1]||0)+' ms\n'
+      +'   frames >25 ms: '+l25+' ('+f(100*l25/Math.max(1,n),1)+' %) · >33 ms: '+l33+' · >50 ms: '+l50+' · >100 ms: '+l100+'\n'
+      +'RUMBO: paso máx '+f(bj[bj.length-1]||0,2)+'°/frame · p95 '+f(q(bj,.95),2)+'°/frame\n'
+      +'GPS: '+F.fixN+' fixes · intervalo mediano '+f(q(iv,.5),2)+' s · máx '+f(iv[iv.length-1]||0,2)+' s · corrección por fix: mediana '+f(q(co,.5),1)+' m · p95 '+f(q(co,.95),1)+' m · máx '+f(co[co.length-1]||0,1)+' m\n'
+      +'RECORTE DEL AZUL: '+tr.length+' ('+f(tr.length/s,1)+'/s) · medio '+f(tr.length?tr.reduce((a,b)=>a+b,0)/tr.length:0,1)+' ms · p95 '+f(q(tr,.95),1)+' ms · máx '+f(tr[tr.length-1]||0,1)+' ms\n'
+      +'TAREAS LARGAS (>50 ms): '+lt.length+' · máx '+f(lt[lt.length-1]||0)+' ms · p95 '+f(q(lt,.95))+' ms\n'
+      +'TESELAS/FUENTES recargadas: '+top;
+  }
+  const b=document.getElementById('btnFluidez'), out=document.getElementById('fluDiag');
+  function fin(){ F.on=false; clearInterval(F.tickId); if(b){ b.textContent='📊 Medir fluidez al conducir (60 s)'; b.disabled=false; } if(out) out.textContent=informe(); try{ localStorage.setItem('fluidez_ult',informe()); }catch(e){} }
+  if(b) b.onclick=()=>{ if(F.on) return; reset(); F.on=true; F.t0=performance.now(); b.disabled=true;
+    F.tickId=setInterval(()=>{ const r=Math.max(0,60-Math.round((performance.now()-F.t0)/1000)); b.textContent='⏺ midiendo… '+r+' s (conduce con ruta activa)'; if(r<=0) fin(); },500); };
+  try{ const u=localStorage.getItem('fluidez_ult'); if(u&&out) out.textContent='(última medición)\n'+u; }catch(e){}
 })();
 </script>
 </body>
