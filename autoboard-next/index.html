@@ -542,7 +542,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="btnFluidez" style="background:#27384a">📊 Medir fluidez al conducir (60 s)</button>
   <div id="fluDiag" style="font-size:11px;opacity:.9;padding:2px 14px;white-space:pre-wrap"></div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v220</div>
+  <div class="seccion">Versión v222</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -854,7 +854,7 @@ const CAM = {
   LATERAL_GPS:true, LATERAL_MAX_M:6, LATERAL_PESO:0, LATERAL_ACC_M:9, TAU_LATERAL:2.5,   /* v107: casi centrado en la ruta (antes 14 m × 0,8). v109: 0 = sobre la ruta, exacto */
   LOOKAHEAD_S:0, LOOKAHEAD_MIN_M:4, LOOKAHEAD_MAX_M:4,   /* mirada corta: la ruta no se desvía del coche en las curvas */
   TAU_FLECHA:0.25, GIRO_T:0.22, GIRO_ADEL_MIN:1.5, GIRO_ADEL_MAX:9, FLECHA_MAX_DEG:55, FLECHA_TILT:52, TANGENTE_M:4,       /* flecha del coche: sigue la tangente de la ruta bajo el coche */
-  RUTA_COLA_M:4, RUTA_HORIZONTE_M:5000, TRIM_MS:120,      /* azul: empieza justo bajo la flecha, se recorta cada ~120 ms */
+  RUTA_COLA_M:4, RUTA_HORIZONTE_M:5000, TRIM_MS:250,      /* azul: empieza justo bajo la flecha, se recorta cada ~250 ms (v221: antes 120; cada recorte recarga las teselas de la ruta y hacía perder frames) */
   /* --- rumbo GPS filtrado: ventana por TIEMPO, no por nº de fixes --- */
   HEADING_WINDOW_MS:3500, HEADING_MAX_MUESTRAS:16,
   /* --- zoom de maniobra --- */
@@ -4377,19 +4377,31 @@ window.__suave = (function(){
     return ['interpolate',['exponential',2],['zoom'],14,stops(14),22,stops(22)];
   }
   /* f(nombre) → {source, 'source-layer'?} para landcover, park, landuse, transportation, building */
+  function antesVerde(map,antes){
+    try{
+      const L=map.getStyle().layers; let ult=-1, lim=L.length;
+      if(antes){ const i=L.findIndex(l=>l.id===antes); if(i>=0) lim=i; }
+      for(let i=0;i<lim;i++){ const l=L[i], sl=l['source-layer']||''; if(l.type==='fill' && /^(landcover|landuse|park)$/.test(sl) && !/^(suave-|rel-|barrio-)/.test(l.id)) ult=i; }
+      if(ult>=0 && ult+1<lim) return L[ult+1].id;
+    }catch(e){}
+    return antes;
+  }
   function capas(map, f, antes){
-    const add=(l)=>{ if(!map.getLayer(l.id)) map.addLayer(l,antes); };
+    const add=(l,a)=>{ if(!map.getLayer(l.id)) map.addLayer(l,a===undefined?antes:a); };
     const verdeFiltro=['in',['get','class'],['literal',CLASES_VERDE]];
     const poli=['==',['geometry-type'],'Polygon'];
+    /* v222: el verde se coloca justo ENCIMA del último relleno base de landcover/landuse/park (y debajo de las vías). Antes iba "antes de la primera vía":
+       si el estilo base tiene algún relleno de parque/uso del suelo por encima, el lavado (gris al 50 %) lo tapaba y solo se veía el borde. */
+    const antesV=antesVerde(map,antes);
     for(const nom of ['landcover','park','landuse']){
       const s=f(nom); if(!s) continue;
       const id=(nom==='landcover'?'':nom+'-');
       add(Object.assign({id:'suave-verde'+(nom==='landcover'?'':'-'+nom),type:'fill',minzoom:11,
         filter: nom==='park' ? poli : ['all',poli,verdeFiltro],
-        paint:{'fill-color':COL.dia.verde,'fill-opacity':OP.dia.verde,'fill-antialias':true}},s));
+        paint:{'fill-color':COL.dia.verde,'fill-opacity':OP.dia.verde,'fill-antialias':true}},s),antesV);
       add(Object.assign({id:'suave-verde-borde'+(nom==='landcover'?'':'-'+nom),type:'line',minzoom:13,
         filter: nom==='park' ? poli : ['all',poli,verdeFiltro],
-        paint:{'line-color':COL.dia.verdeL,'line-width':['interpolate',['linear'],['zoom'],13,0.6,17,1.6],'line-opacity':0.9}},s));
+        paint:{'line-color':COL.dia.verdeL,'line-width':['interpolate',['linear'],['zoom'],13,0.6,17,1.6],'line-opacity':0.9}},s),antesV);
     }
     const t=f('transportation');
     if(t) add(Object.assign({id:'suave-acera',type:'line',minzoom:15.5,
@@ -4692,10 +4704,20 @@ window.__suave = (function(){
     return {estado:window.__aspecto.estado, generar:{n:GEN.length,mediana:gms.length?Math.round(gms[gms.length>>1]):0,max:gms.length?Math.round(gms[gms.length-1]):0},
       tareasLargas60s:{n:u.length,max:ds.length?Math.round(ds[ds.length-1]):0,p95:ds.length?Math.round(ds[Math.min(ds.length-1,Math.floor(ds.length*0.95))]):0,deGenerar:deGen}};
   }
+  function diagVerde(){
+    try{
+      const L=map.getStyle().layers, ids=L.filter(l=>/^suave-verde/.test(l.id)&&l.type==='fill').map(l=>l.id), out=[];
+      for(const id of ids){ const i=L.findIndex(l=>l.id===id), g=(p)=>{ try{ return map.getPaintProperty(id,p); }catch(e){ return '?'; } };
+        const encima=L.slice(i+1).filter(l=>l.type==='fill'&&!/^(suave-|barrio-)/.test(l.id)&&/^(landcover|landuse|park)$/.test(l['source-layer']||'')).map(l=>l.id).slice(0,6);
+        let nf=-1; try{ nf=map.queryRenderedFeatures({layers:[id]}).length; }catch(e){}
+        out.push(id+' #'+i+' '+(map.getLayoutProperty(id,'visibility')||'visible')+' '+g('fill-color')+' op '+g('fill-opacity')+' dibujados '+nf+(encima.length?' · ENCIMA: '+encima.join(','):'')); }
+      return '\nVERDE: '+(out.join('\n       ')||'sin capas');
+    }catch(e){ return '\nVERDE: error '+e.message; }
+  }
   const bM=document.getElementById('btnAspMedir'), dM=document.getElementById('aspDiag');
   if(bM) bM.onclick=()=>{ const m=medir(), e=m.estado||{}; if(dM) dM.textContent=(m.estado?
     'edificios '+e.edificios+' · radio '+e.R+' m\ngenerar() '+e.ms+' ms (consulta teselas '+e.gen+' · setData barrio '+e.barrio+' · árboles: crear '+e.arbGen+' + setData '+e.arbSet+', '+e.nArb+' features)\nmediana '+m.generar.mediana+' ms · máx '+m.generar.max+' ms en '+m.generar.n+' pasadas':'Aún no se ha generado nada (acércate: zoom ≥ 15,5).')
-    +'\ntareas largas (>50 ms) en el último minuto: '+m.tareasLargas60s.n+' · máx '+m.tareasLargas60s.max+' ms · p95 '+m.tareasLargas60s.p95+' ms · coinciden con generar(): '+m.tareasLargas60s.deGenerar+'\ncentro del mapa a '+((m.estado&&m.estado.dcc)||0)+' m del coche · generando '+((m.estado&&m.estado.enCoche)?'alrededor del coche':'alrededor del centro del mapa')+'\nedificios en las teselas: '+((m.estado&&m.estado.dg)?m.estado.dg.tot+' · descartados: forma '+m.estado.dg.forma+', lejos '+m.estado.dg.lejos+', repetidos '+m.estado.dg.rep+', ocultos por modelos 3D '+m.estado.dg.ocultos:'—')+'\narranque (s desde que carga la página): mapa '+(ARR.mapa??'—')+' · teselas listas '+(ARR.teselas??'—')+' · capas creadas '+(ARR.capas??'—')+' · 1.ª pasada '+(ARR.pasada1??'—')+' · con edificios '+(ARR.edificios??'—')+' · con árboles '+(ARR.arboles??'—'); };
+    +'\ntareas largas (>50 ms) en el último minuto: '+m.tareasLargas60s.n+' · máx '+m.tareasLargas60s.max+' ms · p95 '+m.tareasLargas60s.p95+' ms · coinciden con generar(): '+m.tareasLargas60s.deGenerar+'\ncentro del mapa a '+((m.estado&&m.estado.dcc)||0)+' m del coche · generando '+((m.estado&&m.estado.enCoche)?'alrededor del coche':'alrededor del centro del mapa')+'\nedificios en las teselas: '+((m.estado&&m.estado.dg)?m.estado.dg.tot+' · descartados: forma '+m.estado.dg.forma+', lejos '+m.estado.dg.lejos+', repetidos '+m.estado.dg.rep+', ocultos por modelos 3D '+m.estado.dg.ocultos:'—')+'\narranque (s desde que carga la página): mapa '+(ARR.mapa??'—')+' · teselas listas '+(ARR.teselas??'—')+' · capas creadas '+(ARR.capas??'—')+' · 1.ª pasada '+(ARR.pasada1??'—')+' · con edificios '+(ARR.edificios??'—')+' · con árboles '+(ARR.arboles??'—')+diagVerde(); };
   window.__aspecto={cfg,tick,estado:null,medir,vis:()=>{ aplicarVis(); ult=null; tUlt=0; pausa=0; tick(); }};
   setInterval(tick,1000);
   try{ map.once('idle',tick); }catch(e){}      /* v215: primera pasada en cuanto el mapa termina de cargar, sin esperar al siguiente segundo */
