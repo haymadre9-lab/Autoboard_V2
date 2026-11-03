@@ -542,7 +542,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="btnFluidez" style="background:#27384a">📊 Medir fluidez al conducir (60 s)</button>
   <div id="fluDiag" style="font-size:11px;opacity:.9;padding:2px 14px;white-space:pre-wrap"></div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v222</div>
+  <div class="seccion">Versión v223</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -5904,7 +5904,9 @@ window.__carg=(function(){
      No se levanta la geometría: el coche y la ruta siguen dibujados a ras de suelo, así que nunca "pasan por debajo" de su propio puente. */
 (function(){
   const rd=(k,d)=>{ try{ const v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } };
-  let cfg={agua:true,verde:true,puentes:true}; try{ Object.assign(cfg,JSON.parse(rd('rel_cfg','{}'))||{}); }catch(e){}
+  let cfg={agua:true,verde:false,puentes:true}; try{ Object.assign(cfg,JSON.parse(rd('rel_cfg','{}'))||{}); }catch(e){}
+  /* v223: «Tonos de verde» pasa a APAGADO por defecto (tapaba el verde de los parques). Una sola vez se apaga también donde estaba guardado como ON; después manda lo que elijas. */
+  try{ if(localStorage.getItem('rel_verde_off_v223')!=='1'){ cfg.verde=false; localStorage.setItem('rel_cfg',JSON.stringify(cfg)); localStorage.setItem('rel_verde_off_v223','1'); } }catch(e){}
   const BTN={btnRelAgua:['agua','💧 Agua con orilla suave'],btnRelVerde:['verde','🌲 Tonos de verde'],btnRelPuente:['puentes','🌉 Puentes con sombra']};
   const KZ=z=>Math.pow(2,z)/114500;
   const ANCHO={motorway:15,trunk:13,primary:11,secondary:9.5,tertiary:8.5,minor:7,service:5,path:2.8,rail:4.5,pedestrian:5};
