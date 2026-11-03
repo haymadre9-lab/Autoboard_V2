@@ -497,7 +497,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste on" id="btnAspVerde">🌿 Zonas verdes: ON</button>
   <button class="ajuste on" id="btnAspArboles">🌳 Árboles y arbustos: ON</button>
   <button class="ajuste on" id="btnAspAceras">🚶 Aceras (crema): ON</button>
-  <button class="ajuste on" id="btnAspBorde">▭ Borde de edificios: ON</button>
+  <button class="ajuste on" id="btnAspBorde">🔲 Borde de edificios: ON</button>
   <button class="ajuste" id="btnAspMedir" style="background:#27384a">📊 Medir aspecto (generar, tirones)</button>
   <div id="aspDiag" style="font-size:11px;opacity:.9;padding:2px 14px;white-space:pre-wrap"></div>
   <button class="ajuste" id="btnAspEstacion">🍂 Estación: Auto</button>
@@ -541,10 +541,8 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="btnIncLimpiar">🧹 Borrar incidencias</button>
   <button class="ajuste" id="btnFluidez" style="background:#27384a">📊 Medir fluidez al conducir (60 s)</button>
   <div id="fluDiag" style="font-size:11px;opacity:.9;padding:2px 14px;white-space:pre-wrap"></div>
-  <button class="ajuste" id="btnDGT" style="background:#27384a">🚧 Probar incidencias oficiales (DGT / Tráfico Euskadi)</button>
-  <div id="dgtDiag" style="font-size:11px;opacity:.9;padding:2px 14px;white-space:pre-wrap"></div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v225</div>
+  <div class="seccion">Versión v226</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -1458,6 +1456,8 @@ function escapeHTML(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':
 const panelA=document.getElementById('panelAjustes');
 document.getElementById('btnAjustes').onclick=()=>panelA.classList.add('on');
 document.getElementById('btnCerrarAjustes').onclick=()=>panelA.classList.remove('on');
+/* v226: tocar el mapa (fuera del panel) cierra Ajustes, para no buscar la X conduciendo */
+document.addEventListener('pointerdown',ev=>{ if(!panelA.classList.contains('on')) return; const t=ev.target; if(t&&t.closest&&(t.closest('#panelAjustes')||t.closest('#btnAjustes'))) return; panelA.classList.remove('on'); },true);
 document.getElementById('btnEdificios').onclick=function(){edificiosOn=!edificiosOn;if(map.getLayer('3d-buildings')) map.setLayoutProperty('3d-buildings','visibility',edificiosOn?'visible':'none');this.textContent='🏢 Edificios: '+(edificiosOn?'ON':'OFF');this.classList.toggle('on',edificiosOn);if(window.__aspecto) window.__aspecto.vis();};
 document.getElementById('btnHitos').onclick=function(){ HITOS_CFG.ON=!HITOS_CFG.ON; try{ localStorage.setItem('hitos_on',HITOS_CFG.ON?'1':'0'); }catch(e){} if(typeof ocultarHitos==='function') ocultarHitos(!HITOS_CFG.ON); this.textContent='🏛️ Edificios singulares: '+(HITOS_CFG.ON?'ON':'OFF'); this.classList.toggle('on',HITOS_CFG.ON); };
 document.getElementById('btnSenales').onclick=function(){senalesOn=!senalesOn;if(map.getLayer('senales')) map.setLayoutProperty('senales','visibility',senalesOn?'visible':'none');this.textContent='🚦 Señales: '+(senalesOn?'ON':'OFF');this.classList.toggle('on',senalesOn);};
@@ -4690,7 +4690,7 @@ window.__suave = (function(){
       GEN.push({t0:t0,d:dur}); if(GEN.length>60) GEN.shift();
     }catch(e){ registrarError('aspecto',e.message); }
   }
-  const BTN={barrio:['btnAspBarrio','🏘️ Edificios con color'],verde:['btnAspVerde','🌿 Zonas verdes'],arboles:['btnAspArboles','🌳 Árboles y arbustos'],aceras:['btnAspAceras','🚶 Aceras (crema)'],borde:['btnAspBorde','▭ Borde de edificios']};
+  const BTN={barrio:['btnAspBarrio','🏘️ Edificios con color'],verde:['btnAspVerde','🌿 Zonas verdes'],arboles:['btnAspArboles','🌳 Árboles y arbustos'],aceras:['btnAspAceras','🚶 Aceras (crema)'],borde:['btnAspBorde','🔲 Borde de edificios']};
   function textos(){ for(const k in BTN){ const b=document.getElementById(BTN[k][0]); if(b){ b.textContent=BTN[k][1]+': '+(cfg[k]?'ON':'OFF'); b.classList.toggle('on',!!cfg[k]); } } }
   for(const k in BTN){ const b=document.getElementById(BTN[k][0]); if(b) b.onclick=()=>{ cfg[k]=!cfg[k]; try{ localStorage.setItem('aspecto',JSON.stringify(cfg)); }catch(e){} textos(); aplicarVis(); ult=null; tUlt=0; pausa=0; tick(); }; }
   const bE=document.getElementById('btnAspEstacion');
@@ -5512,7 +5512,7 @@ window.__overpass=(function(){
       }
     }
     stats.fallo++;
-    const t=Date.now(); if(!it.silencio&&t-ultLog>30000){ ultLog=t; try{ registrarError('overpass','fallo persistente en «'+it.k+'» tras '+nInt+' intentos · overpass-api: '+(ult[0]||'(no probado)')+' · kumi: '+(ult[1]||'(no probado)')+' · '+stats.fallo+' consultas sin datos; se reintenta más tarde'); }catch(e){} }
+    const t=Date.now(); /* v226: sin avisos de Overpass en Incidencias */
     fin(it,null);
   }
   return {consultar,_cfg:C,_stats:stats,_reset:()=>{ cool[0]=cool[1]=0; malas[0]=malas[1]=0; },estado:()=>({cola:cola.length,vuelo,cool:cool.map(x=>Math.max(0,x-Date.now())),stats:Object.assign({},stats)})};
@@ -5842,8 +5842,8 @@ window.__carg=(function(){
   const st=document.createElement('style'); st.textContent=
    '#panelAjustes .cat{margin:0 0 8px}'
   +'#panelAjustes .catH{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 16px;border-radius:12px;background:rgba(127,127,127,.08);border:2px solid rgba(127,127,127,.35);font-size:17px;font-weight:800;cursor:pointer;user-select:none;-webkit-user-select:none}'
-  +'#panelAjustes .catH .chev{font-size:18px;transition:transform .15s;opacity:.8}'
-  +'#panelAjustes .cat.abierta>.catH{background:#2563eb;border-color:#1d4ed8;color:#fff;box-shadow:0 2px 10px rgba(37,99,235,.45)}#panelAjustes .cat.abierta>.catH .chev{transform:rotate(90deg);opacity:1}'
+  +'#panelAjustes .catH .chev{width:9px;height:9px;border-right:3px solid currentColor;border-bottom:3px solid currentColor;transform:rotate(-45deg);transition:transform .15s;opacity:.8;margin-right:4px}'
+  +'#panelAjustes .cat.abierta>.catH{background:#2563eb;border-color:#1d4ed8;color:#fff;box-shadow:0 2px 10px rgba(37,99,235,.45)}#panelAjustes .cat.abierta>.catH .chev{transform:rotate(45deg);opacity:1}'
   +'#panelAjustes .catB{display:none;padding:10px 0 6px 10px;margin:4px 0 0 6px;border-left:4px solid #2563eb}#panelAjustes .cat.abierta>.catB{display:block}'
   +'#panelAjustes button.ajuste.fila{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:16px;padding:13px 14px}'
   +'#panelAjustes button.ajuste.fila .lbl{flex:1;min-width:0}#panelAjustes button.ajuste.fila .orig{display:none}#panelAjustes button.ajuste.fila small{display:block;font-size:11px;font-weight:600;opacity:.65}'
@@ -5857,14 +5857,14 @@ window.__carg=(function(){
   document.head.appendChild(st);
 
   const CATS=[['mapa','🗺️ Mapa y vista'],['aspecto','🎨 Aspecto del mapa'],['cielo','🌦️ Cielo y tiempo'],['sonido','🔊 Sonido y avisos'],['carg','⚡ Cargadores'],['park','🅿️ Aparcamientos'],['gps','📍 GPS'],['coche','🚗 Coche'],['futbol','⚽ Fútbol'],['fiesta','🎉 Celebración'],['enlace','🔗 Enlace entre dispositivos'],['inc','⚠️ Incidencias'],['sis','⚙️ Rendimiento y versión']];
-  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnAutoAncho btnAutoVista btnPasos btnPeajes btnTramos btnSugerido btnFlechaMan btnEstSol btnEstLuz btnEstVias btnEstRelieve btnBusqAmbito btnCamDenso btnFlechas btnPantCompleta',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspMedir aspDiag btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub btnListaParking parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',inc:'incList btnIncLimpiar btnFluidez fluDiag btnDGT dgtDiag',sis:'btnAA btnTestTramo tramoDiag evFila btnEVPlan evPlanTxt btnTestEV evDiag btnLimpiarFavs btnWake'};
+  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnAutoAncho btnAutoVista btnPasos btnPeajes btnTramos btnSugerido btnFlechaMan btnEstSol btnEstLuz btnEstVias btnEstRelieve btnBusqAmbito btnCamDenso btnFlechas btnPantCompleta',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspMedir aspDiag btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub btnListaParking parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',inc:'incList btnIncLimpiar btnFluidez fluDiag',sis:'btnAA btnTestTramo tramoDiag evFila btnEVPlan evPlanTxt btnTestEV evDiag btnLimpiarFavs btnWake'};
   const POR={}; for(const c in M) M[c].split(' ').forEach(id=>POR[id]=c);
   const cuerpos={}, cats={};
   const ref=panel.querySelector('h2');
   const hijos=Array.from(panel.children).filter(e=>e!==ref&&!e.classList.contains('cerrarPanel'));
   let cur='sis';
   for(const [k,tit] of CATS){
-    const c=document.createElement('div'); c.className='cat'; const h=document.createElement('div'); h.className='catH'; h.setAttribute('role','button'); h.tabIndex=0; h.innerHTML='<span>'+tit+'</span><span class="chev">▸</span>';
+    const c=document.createElement('div'); c.className='cat'; const h=document.createElement('div'); h.className='catH'; h.setAttribute('role','button'); h.tabIndex=0; h.innerHTML='<span>'+tit+'</span><span class="chev"></span>';
     const b=document.createElement('div'); b.className='catB'; c.appendChild(h); c.appendChild(b); cuerpos[k]=b; cats[k]=c;
     h.onclick=()=>{ const abrir=!c.classList.contains('abierta'); for(const x in cats) cats[x].classList.remove('abierta'); if(abrir){ c.classList.add('abierta'); setTimeout(()=>{ try{ c.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(e){} },30); } };
     h.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); h.onclick(); } };
@@ -5949,7 +5949,7 @@ window.__carg=(function(){
     sp('rel-puente-sombra','line-opacity',c.sombra); sp('rel-puente-sombra-alto','line-opacity',c.sombra); sp('rel-puente-borde','line-color',c.borde);
     sp('rel-puente-calzada','line-color',['match',['get','class'],['path','pedestrian'],c.pasarela,c.via]);
   }
-  function textos(){ for(const id in BTN){ const b=document.getElementById(id); if(b){ const k=BTN[id][0], v=(id==='btnRelVerde')?!cfg[k]:!!cfg[k]; /* v225: este interruptor va al revés: ON = parques verdes (los tonos que los tapaban, apagados) */ b.textContent=BTN[id][1]+': '+(v?'ON':'OFF'); b.classList.toggle('on',v); } } }
+  function textos(){ for(const id in BTN){ const b=document.getElementById(id); if(b){ const k=BTN[id][0], v=(id==='btnRelVerde')?!cfg[k]:!!cfg[k]; /* v226: este interruptor va al revés: ON = parques verdes (los tonos que los tapaban, apagados) */ b.textContent=BTN[id][1]+': '+(v?'ON':'OFF'); b.classList.toggle('on',v); } } }
   for(const id in BTN){ const b=document.getElementById(id); if(b) b.onclick=()=>{ const k=BTN[id][0]; cfg[k]=!cfg[k]; try{ localStorage.setItem('rel_cfg',JSON.stringify(cfg)); }catch(e){} textos(); vis(); }; }
   textos();
   setInterval(()=>{ try{ if(!crear()) return; pintar(); }catch(e){} },1200);
@@ -6516,7 +6516,7 @@ window.__semOSM=(function(){
       }catch(e){} }
       fallos[k]=Date.now();
       /* v219: fallo silencioso (hay semáforos fijos propios); un solo aviso resumido cada 2 h */
-      nFallosSem++; const ahora=Date.now(); if(ahora-ultAvisoSem>2*3600000){ ultAvisoSem=ahora; try{ registrarError('semáforos','Overpass no responde para los semáforos extra ('+nFallosSem+' zonas sin datos hasta ahora); se usan los semáforos fijos y se reintenta solo. Próximo aviso en 2 h.'); }catch(e){} }
+      nFallosSem++; const ahora=Date.now(); /* v226: sin aviso en Incidencias */
     } finally { enVuelo=false; }
   }
   function indiceEstaticos(){
@@ -7281,49 +7281,6 @@ window.__CLIPS_VOZ.radar='SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAA
   if(b) b.onclick=()=>{ if(F.on) return; reset(); F.on=true; F.t0=performance.now(); b.disabled=true;
     F.tickId=setInterval(()=>{ const r=Math.max(0,60-Math.round((performance.now()-F.t0)/1000)); b.textContent='⏺ midiendo… '+r+' s (conduce con ruta activa)'; if(r<=0) fin(); },500); };
   try{ const u=localStorage.getItem('fluidez_ult'); if(u&&out) out.textContent='(última medición)\n'+u; }catch(e){}
-})();
-</script>
-<script>
-/* ============ PRUEBA: INCIDENCIAS OFICIALES (v224) ============
-   Solo comprueba si el navegador deja leer directamente los feeds DATEX II del Punto de Acceso Nacional (DGT) y cuántas incidencias hay cerca.
-   No se usa para nada más: no pinta ni avisa. Si el navegador lo bloquea (CORS) se deja como está. */
-(function(){
-  const FEEDS=[['Euskadi (DT-GV)','https://nap.dgt.es/datex2/dt-gv/SituationPublication/all/content.xml'],['DGT resto de España (v3.7)','https://nap.dgt.es/datex2/v3/dgt/SituationPublication/datex2_v37.xml']];
-  const XSI='http://www.w3.org/2001/XMLSchema-instance';
-  const b=document.getElementById('btnDGT'), out=document.getElementById('dgtDiag'); if(!b||!out) return;
-  const km=m=>m<1000?Math.round(m)+' m':(m/1000).toFixed(1).replace('.',',')+' km';
-  async function uno(nombre,url,ref){
-    const t0=performance.now(); let r, txt;
-    try{
-      const ctl=new AbortController(), tm=setTimeout(()=>ctl.abort(),25000);
-      r=await fetch(url,{cache:'no-store',signal:ctl.signal}); txt=await r.text(); clearTimeout(tm);
-    }catch(e){ return nombre+': NO ENTRA DIRECTO → '+(e&&e.name==='AbortError'?'tiempo agotado (25 s)':'el navegador lo bloquea (CORS) o no hay red: '+(e&&e.message))+'\n'; }
-    const ms=Math.round(performance.now()-t0);
-    if(!r.ok) return nombre+': HTTP '+r.status+' · '+Math.round(txt.length/1024)+' KB · '+ms+' ms\n';
-    let res=nombre+': ENTRA DIRECTO ✔ · HTTP '+r.status+' · '+Math.round(txt.length/1024)+' KB · '+ms+' ms';
-    if(txt.length>15e6) return res+' · (demasiado grande para analizarlo aquí)\n';
-    try{
-      const t1=performance.now(), doc=new DOMParser().parseFromString(txt,'application/xml');
-      if(doc.getElementsByTagName('parsererror').length) return res+' · XML no válido\n';
-      const sit=Array.from(doc.getElementsByTagNameNS('*','situation')), tipos={}, lst=[];
-      for(const s of sit){
-        const rec=s.getElementsByTagNameNS('*','situationRecord')[0]; const tp=rec?((rec.getAttributeNS(XSI,'type')||rec.getAttribute('xsi:type')||'?').replace(/^.*:/,'')):'?'; tipos[tp]=(tipos[tp]||0)+1;
-        const la=s.getElementsByTagNameNS('*','latitude')[0], lo=s.getElementsByTagNameNS('*','longitude')[0]; if(!la||!lo) continue;
-        const a=parseFloat(la.textContent), o=parseFloat(lo.textContent); if(!isFinite(a)||!isFinite(o)) continue;
-        const via=s.getElementsByTagNameNS('*','roadNumber')[0], pk=s.getElementsByTagNameNS('*','referencePointDistance')[0];
-        lst.push({d:ref?dist(ref,[a,o]):0,tp,via:via?via.textContent:'',pk:pk?Math.round(parseFloat(pk.textContent)/1000):null});
-      }
-      lst.sort((x,y)=>x.d-y.d);
-      res+=' · analizado en '+Math.round(performance.now()-t1)+' ms\n   '+sit.length+' incidencias · tipos: '+(Object.entries(tipos).map(x=>x[0]+' '+x[1]).join(', ')||'—');
-      if(ref) res+='\n   a <25 km de ti: '+lst.filter(x=>x.d<25000).length+' · a <5 km: '+lst.filter(x=>x.d<5000).length+(lst.length?'\n   más cercanas: '+lst.slice(0,4).map(x=>km(x.d)+' '+x.tp+' '+x.via+(x.pk!=null?' pk '+x.pk:'')).join(' · '):'');
-    }catch(e){ res+=' · error al analizar: '+e.message; }
-    return res+'\n';
-  }
-  b.onclick=async()=>{
-    b.disabled=true; out.textContent='Probando…'; let ref=null; try{ if(lastFix) ref=[lastFix.lat,lastFix.lon]; else { const c=map.getCenter(); ref=[c.lat,c.lng]; } }catch(e){}
-    let t=''; for(const [n,u] of FEEDS){ t+=await uno(n,u,ref); out.textContent=t+'…'; }
-    out.textContent=t+'(prueba a las '+new Date().toLocaleTimeString('es-ES')+')'; b.disabled=false;
-  };
 })();
 </script>
 </body>
