@@ -542,7 +542,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="btnFluidez" style="background:#27384a">📊 Medir fluidez al conducir (60 s)</button>
   <div id="fluDiag" style="font-size:11px;opacity:.9;padding:2px 14px;white-space:pre-wrap"></div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v219</div>
+  <div class="seccion">Versión v220</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -1999,9 +1999,13 @@ function actualizarTrimRuta(sAncla){
   map.getSource('ruta').setData({type:'FeatureCollection',features:features});
   document.getElementById('rTrim').textContent=Math.round(fraccion*100)+'%';
 }
+let __giroClave='';
 function actualizarChevronGiro(){
-  const src=map.getSource('giro-pos');
-  if(!src) return;
+  const srcR=map.getSource('giro-pos');
+  if(!srcR) return;
+  /* v220: se llama en CADA fix GPS (≈7/s en el Tesla) y antes hacía setData siempre, incluso vacío→vacío: cada setData recarga todas las teselas de la fuente.
+     Ahora solo se escribe cuando cambia lo que se dibuja. */
+  const src={ setData:(d)=>{ const k=(d&&d.type==='Feature')?('p|'+d.geometry.coordinates[0]+'|'+d.geometry.coordinates[1]+'|'+d.properties.bearing):'v'; if(k===__giroClave) return; __giroClave=k; srcR.setData(d); } };
   const s=steps[stepIdx];
   if(!s||!s.maneuver||s.maneuver.type==='arrive'||s.maneuver.type==='depart'||!routeCoordsLL.length){src.setData({type:'FeatureCollection',features:[]});return;}
   const ref=lastFix?[lastFix.lat,lastFix.lon]:routeCoordsLL[routeProgIdx];
@@ -2296,7 +2300,7 @@ function onFix(pos){
     const recorrido=recorridoAhora(ll);
     avanzarPaso(recorrido);
     const d=renderStep();
-    actualizarTrimRuta();
+    { const t=performance.now(); if(t-Math.max(__trimT,__trimFixT)>350){ __trimFixT=t; actualizarTrimRuta(); } }   /* v220: el bucle de cámara ya recorta el azul; aquí solo si lleva >350 ms sin hacerlo */
     const s=steps[stepIdx];
     if(s && s.maneuver && s.maneuver.type==='arrive' && d<50){ dispararCelebracion(); }
     /* El zoom de maniobra ya no se decide aquí (un solo umbral binario a 180 m, sin histéresis):
@@ -2552,7 +2556,7 @@ function aplicarCamara(lon,lat,b,z,p,cy){
 }
 
 /* ---- bucle: se inicia UNA vez (iniciarBucleSeguimiento es idempotente) ---- */
-let __trimT=0, __trimS=-1e9;
+let __trimT=0, __trimS=-1e9, __trimFixT=0;
 let __bucleId=null, __bucleInstancias=0, __ultimoTs=0;
 function iniciarBucleSeguimiento(){
   if(__bucleId!==null) return false;
@@ -3669,7 +3673,7 @@ function detenerRuta(){
   const srcRuta=map.getSource('ruta');if(srcRuta) srcRuta.setData({type:'FeatureCollection',features:[]});
   sincronizarRutaHecha(); limpiarDestacado();
   rutaResumen=null; altAlerta=false; limpiarAlternativas(); limpiarOferta(); cerrarPanelAlt(); actualizarBarraRuta();
-  const srcGiro=map.getSource('giro-pos');if(srcGiro) srcGiro.setData({type:'FeatureCollection',features:[]});
+  const srcGiro=map.getSource('giro-pos');if(srcGiro){ srcGiro.setData({type:'FeatureCollection',features:[]}); __giroClave='v'; }
   document.getElementById('navbanner').style.display='none';
   document.getElementById('btnPararRuta').classList.remove('on');
   document.getElementById('g5').textContent='sin destino';
