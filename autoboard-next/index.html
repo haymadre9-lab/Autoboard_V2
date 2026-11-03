@@ -544,7 +544,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="btnFluidez" style="background:#27384a">📊 Medir fluidez al conducir (60 s)</button>
   <div id="fluDiag" style="font-size:11px;opacity:.9;padding:2px 14px;white-space:pre-wrap"></div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v227</div>
+  <div class="seccion">Versión v229</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -1458,7 +1458,7 @@ function escapeHTML(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':
 const panelA=document.getElementById('panelAjustes');
 document.getElementById('btnAjustes').onclick=()=>panelA.classList.add('on');
 document.getElementById('btnCerrarAjustes').onclick=()=>panelA.classList.remove('on');
-/* v227: tocar el mapa (fuera del panel) cierra Ajustes, para no buscar la X conduciendo */
+/* v229: tocar el mapa (fuera del panel) cierra Ajustes, para no buscar la X conduciendo */
 document.addEventListener('pointerdown',ev=>{ if(!panelA.classList.contains('on')) return; const t=ev.target; if(t&&t.closest&&(t.closest('#panelAjustes')||t.closest('#btnAjustes'))) return; panelA.classList.remove('on'); },true);
 document.getElementById('btnEdificios').onclick=function(){edificiosOn=!edificiosOn;if(map.getLayer('3d-buildings')) map.setLayoutProperty('3d-buildings','visibility',edificiosOn?'visible':'none');this.textContent='🏢 Edificios: '+(edificiosOn?'ON':'OFF');this.classList.toggle('on',edificiosOn);if(window.__aspecto) window.__aspecto.vis();};
 document.getElementById('btnHitos').onclick=function(){ HITOS_CFG.ON=!HITOS_CFG.ON; try{ localStorage.setItem('hitos_on',HITOS_CFG.ON?'1':'0'); }catch(e){} if(typeof ocultarHitos==='function') ocultarHitos(!HITOS_CFG.ON); this.textContent='🏛️ Edificios singulares: '+(HITOS_CFG.ON?'ON':'OFF'); this.classList.toggle('on',HITOS_CFG.ON); };
@@ -2167,13 +2167,14 @@ async function calcularRuta(origen,destino,modo='normal',rutaPre=null){
     routeCumDist=[0];
     for(let i=1;i<routeCoordsLL.length;i++) routeCumDist.push(routeCumDist[i-1]+dist(routeCoordsLL[i-1],routeCoordsLL[i]));
     routeLimites=limRaw.map(q=>({s0:routeCumDist[Math.min(q.a0,routeCumDist.length-1)]||0, s1:routeCumDist[Math.min(q.b0,routeCumDist.length-1)]||0, kmh:q.kmh}));
+    const __lanesFn=carrilesPorManiobra(ruta);
     steps=(ruta.guidance&&ruta.guidance.instructions||[]).map(it=>{
       const off=it.routeOffsetInMeters,pi=it.pointIndex;
       const porIndice=Number.isInteger(pi)&&pi>=0&&pi<routeCumDist.length?routeCumDist[pi]:null;
       const metroFinal=porIndice!==null&&(off==null||Math.abs(porIndice-off)<=Math.max(300,off*.1))?porIndice:(off||0);
       const limiteKmh=(typeof it.speedLimitInKilometersPerHour==='number')?it.speedLimitInKilometersPerHour:0;
-      const lanes=Array.isArray(it.lanes)?it.lanes:[];
-      return {metro:metroFinal,calle:it.street||'',msg:it.message||'',maneuver:ttMan(it),hw:/autopista|autov[ií]a|\b(a|ap)-?\d/i.test(it.street||''),limiteKmh:limiteKmh,lanes:lanes};
+      const man=ttMan(it); let lanes=Array.isArray(it.lanes)?it.lanes:[]; if(!lanes.length){ try{ lanes=__lanesFn(pi,man); }catch(e){ lanes=[]; } }
+      return {metro:metroFinal,calle:it.street||'',msg:it.message||'',maneuver:man,hw:/autopista|autov[ií]a|\b(a|ap)-?\d/i.test(it.street||''),limiteKmh:limiteKmh,lanes:lanes};
     });
     stepIdx=0;routeProgIdx=0;ultimoStepPintado='';__divCount=0;
     if(modo==='recalculo'){ const t=performance.now(); recalcSeguidos=(t-rutaNuevaT<25000)?recalcSeguidos+1:1; rutaNuevaT=t; }
@@ -3380,7 +3381,7 @@ let ultimoCambioTrafico=0, evaluandoTrafico=false;
 const TRAFICO = { CHECK_MS:90000, COOLDOWN_MS:300000, GANANCIA_MIN_S:120, GANANCIA_PCT:0.10, VIA_CADA_M:1200, MAX_VIAS:8, NO_CERCA_MANIOBRA_M:400, DIFIERE_PCT:0.15, DIFIERE_M:40 };
 function nivelDeMagnitud(m){ return m>=3 ? 3 : (m===2 ? 2 : (m===1 ? 1 : 0)); }
 function urlRutaPorPuntos(pts){
-  return 'https://api.tomtom.com/routing/1/calculateRoute/'+pts.map(p=>p[0].toFixed(6)+','+p[1].toFixed(6)).join(':')+'/json?key='+TT+'&routeType=fastest&traffic=true&travelMode=car&sectionType=traffic&sectionType=speedLimit'+(window.__peajes?'&avoid=tollRoads':'');
+  return 'https://api.tomtom.com/routing/1/calculateRoute/'+pts.map(p=>p[0].toFixed(6)+','+p[1].toFixed(6)).join(':')+'/json?key='+TT+'&routeType=fastest&traffic=true&travelMode=car&sectionType=traffic&sectionType=speedLimit&sectionType=lanes'+(window.__peajes?'&avoid=tollRoads':'');
 }
 /* Metro de la ruta actual más cercano a un punto [lat,lon] (null si queda a más de 80 m) */
 function metroEnRutaActual(p){
@@ -3700,7 +3701,7 @@ function medirDurante(ms,id,mover){
 }
 function dist(a,b){const R=6371000,la1=a[0]*Math.PI/180,la2=b[0]*Math.PI/180;const dla=(b[0]-a[0])*Math.PI/180,dlo=(b[1]-a[1])*Math.PI/180;const h=Math.sin(dla/2)**2+Math.cos(la1)*Math.cos(la2)*Math.sin(dlo/2)**2;return 2*R*Math.asin(Math.sqrt(h));}
 function bearing(a,b){const la1=a[0]*Math.PI/180,la2=b[0]*Math.PI/180,dlo=(b[1]-a[1])*Math.PI/180;const y=Math.sin(dlo)*Math.cos(la2);const x=Math.cos(la1)*Math.sin(la2)-Math.sin(la1)*Math.cos(la2)*Math.cos(dlo);return ((Math.atan2(y,x)*180/Math.PI)+360)%360;}
-function urlRutaTomTom(o,d,rumbo){return 'https://api.tomtom.com/routing/1/calculateRoute/'+o[0]+','+o[1]+':'+d[0]+','+d[1]+'/json?key='+TT+'&routeType=fastest&traffic=true&travelMode=car&instructionsType=text&language=es-ES&sectionType=traffic&sectionType=speedLimit'+(window.__peajes?'&avoid=tollRoads':'')+(Number.isFinite(rumbo)?'&vehicleHeading='+Math.round(((rumbo%360)+360)%360):'');}
+function urlRutaTomTom(o,d,rumbo){return 'https://api.tomtom.com/routing/1/calculateRoute/'+o[0]+','+o[1]+':'+d[0]+','+d[1]+'/json?key='+TT+'&routeType=fastest&traffic=true&travelMode=car&instructionsType=text&language=es-ES&sectionType=traffic&sectionType=speedLimit&sectionType=lanes'+(window.__peajes?'&avoid=tollRoads':'')+(Number.isFinite(rumbo)?'&vehicleHeading='+Math.round(((rumbo%360)+360)%360):'');}
 
 function roundaboutSVG(exit, colores, modif){
   /* Circulación por la derecha: se entra por abajo-derecha y se gira en sentido antihorario.
@@ -3725,6 +3726,26 @@ function roundaboutSVG(exit, colores, modif){
   s+=head(x2.toFixed(1),y2.toFixed(1),e.ux,e.uy,8,6);
   s+='<text x="'+cx+'" y="'+(cy+4)+'" text-anchor="middle" font-size="11" font-weight="900" fill="'+col+'" font-family="system-ui,sans-serif">'+exitReal+'</text>';
   return s+'</svg>';
+}
+/* v229: carriles. TomTom no los pone en cada instrucción: vienen en secciones aparte (sectionType=lanes) con startPointIndex/endPointIndex,
+   lanes[{directions,follow}]. Se cruzan con la maniobra por pointIndex. Carril activo = el que TomTom recomienda (follow); si no hay, el que admite el giro
+   (solo si unos carriles sí y otros no; si todos valen o ninguno, no se enseña nada). */
+function carrilesPorManiobra(ruta){
+  const secs=((ruta&&ruta.sections)||[]).filter(x=>String(x.sectionType||'').toUpperCase()==='LANES'&&Array.isArray(x.lanes)&&x.lanes.length>=2);
+  if(!secs.length) return ()=>[];
+  const dirN=d=>{ const u=String(d||'').toUpperCase(); if(/U_?TURN/.test(u)) return 'uturn'; return u.toLowerCase().replace(/_/g,' '); };
+  const fam=d=>/right/.test(d)?'r':/left/.test(d)?'l':/uturn/.test(d)?'u':'s';
+  return (pi,man)=>{
+    if(!Number.isInteger(pi)||!man||man.type!=='turn') return [];
+    let best=null,bd=1e9;
+    for(const sc of secs){ const a=sc.startPointIndex||0,b=Number.isInteger(sc.endPointIndex)?sc.endPointIndex:a; const d=(pi>=a&&pi<=b)?Math.abs(b-pi):(pi<a?a-pi:pi-b); if(d<bd){ bd=d; best=sc; } }
+    if(!best||bd>6) return [];
+    const L=best.lanes.map(l=>({dirs:(l.directions||[]).map(dirN),follow:!!l.follow}));
+    let act=L.map(l=>l.follow);
+    if(!act.some(Boolean)){ const m=man.modifier||'straight'; act=L.map(l=>l.dirs.includes(m)||l.dirs.some(d=>fam(d)===fam(m))); }
+    const n=act.filter(Boolean).length; if(n===0||n===L.length) return [];
+    return L.map((l,i)=>({lane:{directions:l.dirs.length?l.dirs:['straight'],active:act[i]}}));
+  };
 }
 function ttMan(it){
   const m=(it.maneuver||it.instructionType||'').toString().toUpperCase();
@@ -5514,7 +5535,7 @@ window.__overpass=(function(){
       }
     }
     stats.fallo++;
-    const t=Date.now(); /* v227: sin avisos de Overpass en Incidencias */
+    const t=Date.now(); /* v229: sin avisos de Overpass en Incidencias */
     fin(it,null);
   }
   return {consultar,_cfg:C,_stats:stats,_reset:()=>{ cool[0]=cool[1]=0; malas[0]=malas[1]=0; },estado:()=>({cola:cola.length,vuelo,cool:cool.map(x=>Math.max(0,x-Date.now())),stats:Object.assign({},stats)})};
@@ -5951,7 +5972,7 @@ window.__carg=(function(){
     sp('rel-puente-sombra','line-opacity',c.sombra); sp('rel-puente-sombra-alto','line-opacity',c.sombra); sp('rel-puente-borde','line-color',c.borde);
     sp('rel-puente-calzada','line-color',['match',['get','class'],['path','pedestrian'],c.pasarela,c.via]);
   }
-  function textos(){ for(const id in BTN){ const b=document.getElementById(id); if(b){ const k=BTN[id][0], v=(id==='btnRelVerde')?!cfg[k]:!!cfg[k]; /* v227: este interruptor va al revés: ON = parques verdes (los tonos que los tapaban, apagados) */ b.textContent=BTN[id][1]+': '+(v?'ON':'OFF'); b.classList.toggle('on',v); } } }
+  function textos(){ for(const id in BTN){ const b=document.getElementById(id); if(b){ const k=BTN[id][0], v=(id==='btnRelVerde')?!cfg[k]:!!cfg[k]; /* v229: este interruptor va al revés: ON = parques verdes (los tonos que los tapaban, apagados) */ b.textContent=BTN[id][1]+': '+(v?'ON':'OFF'); b.classList.toggle('on',v); } } }
   for(const id in BTN){ const b=document.getElementById(id); if(b) b.onclick=()=>{ const k=BTN[id][0]; cfg[k]=!cfg[k]; try{ localStorage.setItem('rel_cfg',JSON.stringify(cfg)); }catch(e){} textos(); vis(); }; }
   textos();
   setInterval(()=>{ try{ if(!crear()) return; pintar(); }catch(e){} },1200);
@@ -6518,7 +6539,7 @@ window.__semOSM=(function(){
       }catch(e){} }
       fallos[k]=Date.now();
       /* v219: fallo silencioso (hay semáforos fijos propios); un solo aviso resumido cada 2 h */
-      nFallosSem++; const ahora=Date.now(); /* v227: sin aviso en Incidencias */
+      nFallosSem++; const ahora=Date.now(); /* v229: sin aviso en Incidencias */
     } finally { enVuelo=false; }
   }
   function indiceEstaticos(){
@@ -7286,7 +7307,7 @@ window.__CLIPS_VOZ.radar='SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAA
 })();
 </script>
 <script>
-/* ============ BANCO DE PRUEBAS DE CAPAS (v227) ============
+/* ============ BANCO DE PRUEBAS DE CAPAS (v229) ============
    Con el coche parado en casa: arranca la simulación (fixes a 10 Hz como el Tesla), mide fps y tareas largas 12 s con todo como lo tienes,
    y luego apaga UNA capa cada vez (12 s), la vuelve a encender y compara. Al final deja todo como estaba y repite la base para ver la deriva. */
 (function(){
