@@ -539,10 +539,12 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <div id="enlaceEstado" style="font-size:12px;color:#8d99a5;padding:2px 4px 8px">Sin código: no enlazado</div>
   <div id="incList"><span class="vacio">Sin incidencias.</span></div>
   <button class="ajuste" id="btnIncLimpiar">🧹 Borrar incidencias</button>
+  <button class="ajuste" id="btnBanco" style="background:#27384a">🧪 Banco de pruebas de capas (~3 min, simulación)</button>
+  <div id="bancoDiag" style="font-size:11px;opacity:.9;padding:2px 14px;white-space:pre-wrap"></div>
   <button class="ajuste" id="btnFluidez" style="background:#27384a">📊 Medir fluidez al conducir (60 s)</button>
   <div id="fluDiag" style="font-size:11px;opacity:.9;padding:2px 14px;white-space:pre-wrap"></div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v226</div>
+  <div class="seccion">Versión v227</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -1456,7 +1458,7 @@ function escapeHTML(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':
 const panelA=document.getElementById('panelAjustes');
 document.getElementById('btnAjustes').onclick=()=>panelA.classList.add('on');
 document.getElementById('btnCerrarAjustes').onclick=()=>panelA.classList.remove('on');
-/* v226: tocar el mapa (fuera del panel) cierra Ajustes, para no buscar la X conduciendo */
+/* v227: tocar el mapa (fuera del panel) cierra Ajustes, para no buscar la X conduciendo */
 document.addEventListener('pointerdown',ev=>{ if(!panelA.classList.contains('on')) return; const t=ev.target; if(t&&t.closest&&(t.closest('#panelAjustes')||t.closest('#btnAjustes'))) return; panelA.classList.remove('on'); },true);
 document.getElementById('btnEdificios').onclick=function(){edificiosOn=!edificiosOn;if(map.getLayer('3d-buildings')) map.setLayoutProperty('3d-buildings','visibility',edificiosOn?'visible':'none');this.textContent='🏢 Edificios: '+(edificiosOn?'ON':'OFF');this.classList.toggle('on',edificiosOn);if(window.__aspecto) window.__aspecto.vis();};
 document.getElementById('btnHitos').onclick=function(){ HITOS_CFG.ON=!HITOS_CFG.ON; try{ localStorage.setItem('hitos_on',HITOS_CFG.ON?'1':'0'); }catch(e){} if(typeof ocultarHitos==='function') ocultarHitos(!HITOS_CFG.ON); this.textContent='🏛️ Edificios singulares: '+(HITOS_CFG.ON?'ON':'OFF'); this.classList.toggle('on',HITOS_CFG.ON); };
@@ -1578,7 +1580,7 @@ async function iniciarSimulacionInt(preset){
     /* Simulación a velocidad REAL: avanza por metros recorridos (no por vértices) e interpola la posición,
        y emite un fix cada SIM_FIX_MS como un GPS de verdad (antes saltaba un vértice entero cada 100 ms:
        a "60 km/h" iba a cientos de km/h con las polilíneas de TomTom). */
-    const SIM_FIX_MS = 1000;
+    const SIM_FIX_MS = window.__SIM_FIX_MS||1000;
     const total = routeCumDist[routeCumDist.length-1];
     const posEn = (m)=>{
       if(m<=0) return routeCoordsLL[0];
@@ -5512,7 +5514,7 @@ window.__overpass=(function(){
       }
     }
     stats.fallo++;
-    const t=Date.now(); /* v226: sin avisos de Overpass en Incidencias */
+    const t=Date.now(); /* v227: sin avisos de Overpass en Incidencias */
     fin(it,null);
   }
   return {consultar,_cfg:C,_stats:stats,_reset:()=>{ cool[0]=cool[1]=0; malas[0]=malas[1]=0; },estado:()=>({cola:cola.length,vuelo,cool:cool.map(x=>Math.max(0,x-Date.now())),stats:Object.assign({},stats)})};
@@ -5857,7 +5859,7 @@ window.__carg=(function(){
   document.head.appendChild(st);
 
   const CATS=[['mapa','🗺️ Mapa y vista'],['aspecto','🎨 Aspecto del mapa'],['cielo','🌦️ Cielo y tiempo'],['sonido','🔊 Sonido y avisos'],['carg','⚡ Cargadores'],['park','🅿️ Aparcamientos'],['gps','📍 GPS'],['coche','🚗 Coche'],['futbol','⚽ Fútbol'],['fiesta','🎉 Celebración'],['enlace','🔗 Enlace entre dispositivos'],['inc','⚠️ Incidencias'],['sis','⚙️ Rendimiento y versión']];
-  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnAutoAncho btnAutoVista btnPasos btnPeajes btnTramos btnSugerido btnFlechaMan btnEstSol btnEstLuz btnEstVias btnEstRelieve btnBusqAmbito btnCamDenso btnFlechas btnPantCompleta',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspMedir aspDiag btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub btnListaParking parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',inc:'incList btnIncLimpiar btnFluidez fluDiag',sis:'btnAA btnTestTramo tramoDiag evFila btnEVPlan evPlanTxt btnTestEV evDiag btnLimpiarFavs btnWake'};
+  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnAutoAncho btnAutoVista btnPasos btnPeajes btnTramos btnSugerido btnFlechaMan btnEstSol btnEstLuz btnEstVias btnEstRelieve btnBusqAmbito btnCamDenso btnFlechas btnPantCompleta',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspMedir aspDiag btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub btnListaParking parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',inc:'incList btnIncLimpiar btnBanco bancoDiag btnFluidez fluDiag',sis:'btnAA btnTestTramo tramoDiag evFila btnEVPlan evPlanTxt btnTestEV evDiag btnLimpiarFavs btnWake'};
   const POR={}; for(const c in M) M[c].split(' ').forEach(id=>POR[id]=c);
   const cuerpos={}, cats={};
   const ref=panel.querySelector('h2');
@@ -5949,7 +5951,7 @@ window.__carg=(function(){
     sp('rel-puente-sombra','line-opacity',c.sombra); sp('rel-puente-sombra-alto','line-opacity',c.sombra); sp('rel-puente-borde','line-color',c.borde);
     sp('rel-puente-calzada','line-color',['match',['get','class'],['path','pedestrian'],c.pasarela,c.via]);
   }
-  function textos(){ for(const id in BTN){ const b=document.getElementById(id); if(b){ const k=BTN[id][0], v=(id==='btnRelVerde')?!cfg[k]:!!cfg[k]; /* v226: este interruptor va al revés: ON = parques verdes (los tonos que los tapaban, apagados) */ b.textContent=BTN[id][1]+': '+(v?'ON':'OFF'); b.classList.toggle('on',v); } } }
+  function textos(){ for(const id in BTN){ const b=document.getElementById(id); if(b){ const k=BTN[id][0], v=(id==='btnRelVerde')?!cfg[k]:!!cfg[k]; /* v227: este interruptor va al revés: ON = parques verdes (los tonos que los tapaban, apagados) */ b.textContent=BTN[id][1]+': '+(v?'ON':'OFF'); b.classList.toggle('on',v); } } }
   for(const id in BTN){ const b=document.getElementById(id); if(b) b.onclick=()=>{ const k=BTN[id][0]; cfg[k]=!cfg[k]; try{ localStorage.setItem('rel_cfg',JSON.stringify(cfg)); }catch(e){} textos(); vis(); }; }
   textos();
   setInterval(()=>{ try{ if(!crear()) return; pintar(); }catch(e){} },1200);
@@ -6516,7 +6518,7 @@ window.__semOSM=(function(){
       }catch(e){} }
       fallos[k]=Date.now();
       /* v219: fallo silencioso (hay semáforos fijos propios); un solo aviso resumido cada 2 h */
-      nFallosSem++; const ahora=Date.now(); /* v226: sin aviso en Incidencias */
+      nFallosSem++; const ahora=Date.now(); /* v227: sin aviso en Incidencias */
     } finally { enVuelo=false; }
   }
   function indiceEstaticos(){
@@ -7281,6 +7283,45 @@ window.__CLIPS_VOZ.radar='SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAA
   if(b) b.onclick=()=>{ if(F.on) return; reset(); F.on=true; F.t0=performance.now(); b.disabled=true;
     F.tickId=setInterval(()=>{ const r=Math.max(0,60-Math.round((performance.now()-F.t0)/1000)); b.textContent='⏺ midiendo… '+r+' s (conduce con ruta activa)'; if(r<=0) fin(); },500); };
   try{ const u=localStorage.getItem('fluidez_ult'); if(u&&out) out.textContent='(última medición)\n'+u; }catch(e){}
+})();
+</script>
+<script>
+/* ============ BANCO DE PRUEBAS DE CAPAS (v227) ============
+   Con el coche parado en casa: arranca la simulación (fixes a 10 Hz como el Tesla), mide fps y tareas largas 12 s con todo como lo tienes,
+   y luego apaga UNA capa cada vez (12 s), la vuelve a encender y compara. Al final deja todo como estaba y repite la base para ver la deriva. */
+(function(){
+  const IDS=['btnEdificios','btnHitos','btnSenales','btnTrafico','btnPasos','btnCarriles','btnAspBarrio','btnAspArboles','btnAspVerde','btnRelAgua','btnRelPuente','btnAspBorde','btnLuces'];
+  const b=document.getElementById('btnBanco'), out=document.getElementById('bancoDiag'); if(!b||!out) return;
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms)), q=(a,p)=>a.length?a[Math.min(a.length-1,Math.floor(a.length*p))]:0;
+  let corriendo=false;
+  function medir(ms){ return new Promise(res=>{ const dts=[], lt=[]; let ult=performance.now(), fin=ult+ms, po=null;
+    try{ po=new PerformanceObserver(l=>{ for(const e of l.getEntries()) lt.push(e.duration); }); po.observe({entryTypes:['longtask']}); }catch(e){}
+    (function f(t){ dts.push(t-ult); ult=t; if(t<fin) requestAnimationFrame(f); else { try{ po&&po.disconnect(); }catch(e){} const d=dts.slice(1).sort((x,y)=>x-y), n=d.length;
+      res({fps:n/(ms/1000), p50:q(d,.5), p95:q(d,.95), l33:100*d.filter(x=>x>33).length/Math.max(1,n), lt:lt.length, ltms:lt.reduce((a,c)=>a+c,0)}); } })(ult); }); }
+  const lin=(n,r)=>(n+'                        ').slice(0,24)+' '+r.fps.toFixed(0).padStart(3)+' fps · mediana '+r.p50.toFixed(1)+' ms · p95 '+r.p95.toFixed(0)+' ms · >33ms '+r.l33.toFixed(0)+'% · tareas largas '+r.lt+' ('+Math.round(r.ltms)+' ms)';
+  b.onclick=async()=>{
+    if(corriendo) return; corriendo=true; b.disabled=true;
+    const cambiados=[]; let arranque=false; const filas=[]; const MS=12000;
+    try{
+      document.getElementById('panelAjustes').classList.remove('on');
+      if(!simulando){ window.__SIM_FIX_MS=100; simVelocidad=40; arranque=true; await iniciarSimulacion(SIM_PRESETS.prueba); await sleep(6000); }
+      const pre=[]; for(const id of IDS){ const e=document.getElementById(id); if(e) pre.push([id,e]); }
+      b.textContent='🧪 base…'; const base=await medir(MS); filas.push(lin('BASE (todo como está)',base));
+      let k=0;
+      for(const [id,e] of pre){
+        k++; const etiqueta=(e.textContent||id).replace(/:.*$/,'').replace(/^[^\wÁÉÍÓÚÑáéíóúñ]+/,'').trim();
+        const estabaOn=e.classList.contains('on'); if(!estabaOn){ filas.push((etiqueta+'                        ').slice(0,24)+' (ya estaba apagada, se omite)'); continue; }
+        b.textContent='🧪 sin «'+etiqueta+'» ('+k+'/'+pre.length+')'; e.click(); cambiados.push(e); await sleep(2500);
+        const r=await medir(MS); filas.push(lin('SIN '+etiqueta,r)+'  Δ'+(r.fps-base.fps>=0?'+':'')+(r.fps-base.fps).toFixed(0)+' fps');
+        e.click(); cambiados.pop(); await sleep(1500);
+      }
+      b.textContent='🧪 base final…'; const b2=await medir(MS); filas.push(lin('BASE otra vez',b2));
+      out.textContent='(fps del dibujado; Δ = diferencia con la base. Si BASE y BASE otra vez difieren mucho, la deriva tapa diferencias pequeñas)\n'+filas.join('\n');
+      try{ localStorage.setItem('banco_ult',out.textContent); }catch(e){}
+    }catch(err){ out.textContent='error: '+err.message+'\n'+filas.join('\n'); }
+    finally{ for(const e of cambiados){ try{ e.click(); }catch(_){} } if(arranque){ try{ detenerSimulacion(); }catch(_){} window.__SIM_FIX_MS=undefined; } b.textContent='🧪 Banco de pruebas de capas (~3 min, simulación)'; b.disabled=false; corriendo=false; }
+  };
+  try{ const u=localStorage.getItem('banco_ult'); if(u) out.textContent='(último banco)\n'+u; }catch(e){}
 })();
 </script>
 </body>
