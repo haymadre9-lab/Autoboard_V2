@@ -544,7 +544,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="btnFluidez" style="background:#27384a">📊 Medir fluidez al conducir (60 s)</button>
   <div id="fluDiag" style="font-size:11px;opacity:.9;padding:2px 14px;white-space:pre-wrap"></div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v229</div>
+  <div class="seccion">Versión v230</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -1458,7 +1458,7 @@ function escapeHTML(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':
 const panelA=document.getElementById('panelAjustes');
 document.getElementById('btnAjustes').onclick=()=>panelA.classList.add('on');
 document.getElementById('btnCerrarAjustes').onclick=()=>panelA.classList.remove('on');
-/* v229: tocar el mapa (fuera del panel) cierra Ajustes, para no buscar la X conduciendo */
+/* v230: tocar el mapa (fuera del panel) cierra Ajustes, para no buscar la X conduciendo */
 document.addEventListener('pointerdown',ev=>{ if(!panelA.classList.contains('on')) return; const t=ev.target; if(t&&t.closest&&(t.closest('#panelAjustes')||t.closest('#btnAjustes'))) return; panelA.classList.remove('on'); },true);
 document.getElementById('btnEdificios').onclick=function(){edificiosOn=!edificiosOn;if(map.getLayer('3d-buildings')) map.setLayoutProperty('3d-buildings','visibility',edificiosOn?'visible':'none');this.textContent='🏢 Edificios: '+(edificiosOn?'ON':'OFF');this.classList.toggle('on',edificiosOn);if(window.__aspecto) window.__aspecto.vis();};
 document.getElementById('btnHitos').onclick=function(){ HITOS_CFG.ON=!HITOS_CFG.ON; try{ localStorage.setItem('hitos_on',HITOS_CFG.ON?'1':'0'); }catch(e){} if(typeof ocultarHitos==='function') ocultarHitos(!HITOS_CFG.ON); this.textContent='🏛️ Edificios singulares: '+(HITOS_CFG.ON?'ON':'OFF'); this.classList.toggle('on',HITOS_CFG.ON); };
@@ -2336,8 +2336,8 @@ function actualizarHUD(){
   if(vel) vel.textContent=Math.round(speedKmh);
   const lim=document.getElementById('hudLimite');
   if(!lim) return;
-  if(limiteVelocidadVia>0){lim.textContent=limiteVelocidadVia;lim.classList.remove('oculto');}
-  else lim.classList.add('oculto');
+  /* v230: la señal se ve siempre; sin dato, dos guiones. Color fijo (rojo y blanco), solo informativa */
+  lim.textContent=limiteVelocidadVia>0?String(limiteVelocidadVia):'--';lim.classList.remove('oculto');
 }
 function ocultarHUD(){const vel=document.getElementById('hudVel');if(vel) vel.textContent='0';const lim=document.getElementById('hudLimite');if(lim) lim.classList.add('oculto');}
 
@@ -3727,7 +3727,7 @@ function roundaboutSVG(exit, colores, modif){
   s+='<text x="'+cx+'" y="'+(cy+4)+'" text-anchor="middle" font-size="11" font-weight="900" fill="'+col+'" font-family="system-ui,sans-serif">'+exitReal+'</text>';
   return s+'</svg>';
 }
-/* v229: carriles. TomTom no los pone en cada instrucción: vienen en secciones aparte (sectionType=lanes) con startPointIndex/endPointIndex,
+/* v230: carriles. TomTom no los pone en cada instrucción: vienen en secciones aparte (sectionType=lanes) con startPointIndex/endPointIndex,
    lanes[{directions,follow}]. Se cruzan con la maniobra por pointIndex. Carril activo = el que TomTom recomienda (follow); si no hay, el que admite el giro
    (solo si unos carriles sí y otros no; si todos valen o ninguno, no se enseña nada). */
 function carrilesPorManiobra(ruta){
@@ -4460,7 +4460,7 @@ window.__suave = (function(){
   const PAL = {
     0: { hoja:[['#93c46b',5],['#82b862',5],['#a2cf78',3],['#7fb35f',3],['#efc3d0',1.2],['#f4dde4',0.8]], suelo:'#cfe9c0', desnudo:false },
     1: { hoja:[['#5f8d4f',5],['#6c9a58',5],['#527d45',4],['#7ea560',3],['#8fb06a',2],['#a3a65a',1]], suelo:'#cfe4c4', desnudo:false },
-    2: { hoja:[['#7ea560',2],['#d9b44a',4],['#d38a3c',3.5],['#b9573b',2.5],['#9b6a3a',2],['#c49a4a',3]], suelo:'#e1e2b6', desnudo:false },
+    2: { hoja:[['#7ea560',2],['#d9b44a',4],['#d38a3c',3.5],['#b9573b',2.5],['#9b6a3a',2],['#c49a4a',3]], suelo:'#d6e0b2', desnudo:false },
     3: { hoja:[['#9a8a7a',3],['#857566',3],['#a39382',2],['#7c6c5d',2]], suelo:'#dde7d6', desnudo:true }
   };
   const CONIFERAS = ['#3f6b46','#35603f','#4a7650'];
@@ -5535,7 +5535,7 @@ window.__overpass=(function(){
       }
     }
     stats.fallo++;
-    const t=Date.now(); /* v229: sin avisos de Overpass en Incidencias */
+    const t=Date.now(); /* v230: sin avisos de Overpass en Incidencias */
     fin(it,null);
   }
   return {consultar,_cfg:C,_stats:stats,_reset:()=>{ cool[0]=cool[1]=0; malas[0]=malas[1]=0; },estado:()=>({cola:cola.length,vuelo,cool:cool.map(x=>Math.max(0,x-Date.now())),stats:Object.assign({},stats)})};
@@ -5972,7 +5972,7 @@ window.__carg=(function(){
     sp('rel-puente-sombra','line-opacity',c.sombra); sp('rel-puente-sombra-alto','line-opacity',c.sombra); sp('rel-puente-borde','line-color',c.borde);
     sp('rel-puente-calzada','line-color',['match',['get','class'],['path','pedestrian'],c.pasarela,c.via]);
   }
-  function textos(){ for(const id in BTN){ const b=document.getElementById(id); if(b){ const k=BTN[id][0], v=(id==='btnRelVerde')?!cfg[k]:!!cfg[k]; /* v229: este interruptor va al revés: ON = parques verdes (los tonos que los tapaban, apagados) */ b.textContent=BTN[id][1]+': '+(v?'ON':'OFF'); b.classList.toggle('on',v); } } }
+  function textos(){ for(const id in BTN){ const b=document.getElementById(id); if(b){ const k=BTN[id][0], v=(id==='btnRelVerde')?!cfg[k]:!!cfg[k]; /* v230: este interruptor va al revés: ON = parques verdes (los tonos que los tapaban, apagados) */ b.textContent=BTN[id][1]+': '+(v?'ON':'OFF'); b.classList.toggle('on',v); } } }
   for(const id in BTN){ const b=document.getElementById(id); if(b) b.onclick=()=>{ const k=BTN[id][0]; cfg[k]=!cfg[k]; try{ localStorage.setItem('rel_cfg',JSON.stringify(cfg)); }catch(e){} textos(); vis(); }; }
   textos();
   setInterval(()=>{ try{ if(!crear()) return; pintar(); }catch(e){} },1200);
@@ -6539,7 +6539,7 @@ window.__semOSM=(function(){
       }catch(e){} }
       fallos[k]=Date.now();
       /* v219: fallo silencioso (hay semáforos fijos propios); un solo aviso resumido cada 2 h */
-      nFallosSem++; const ahora=Date.now(); /* v229: sin aviso en Incidencias */
+      nFallosSem++; const ahora=Date.now(); /* v230: sin aviso en Incidencias */
     } finally { enVuelo=false; }
   }
   function indiceEstaticos(){
@@ -7307,7 +7307,7 @@ window.__CLIPS_VOZ.radar='SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAA
 })();
 </script>
 <script>
-/* ============ BANCO DE PRUEBAS DE CAPAS (v229) ============
+/* ============ BANCO DE PRUEBAS DE CAPAS (v230) ============
    Con el coche parado en casa: arranca la simulación (fixes a 10 Hz como el Tesla), mide fps y tareas largas 12 s con todo como lo tienes,
    y luego apaga UNA capa cada vez (12 s), la vuelve a encender y compara. Al final deja todo como estaba y repite la base para ver la deriva. */
 (function(){
