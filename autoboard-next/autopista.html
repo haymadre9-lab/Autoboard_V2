@@ -541,6 +541,8 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="btnIncLimpiar">🧹 Borrar incidencias</button>
   <button class="ajuste" id="btnGuardarRuta" style="background:#27384a">💾 Guardar ruta para pruebas (autopista)</button>
   <div id="guardarRutaDiag" style="font-size:11px;opacity:.9;padding:2px 14px;white-space:pre-wrap"></div>
+  <button class="ajuste" id="btnAutopista" style="background:#27384a">🛣️ Modo autopista</button>
+  <div id="autopistaDiag" style="font-size:11px;opacity:.9;padding:2px 14px;white-space:pre-wrap"></div>
   <button class="ajuste" id="btnBanco" style="background:#27384a">🧪 Banco de pruebas de capas (~3 min, simulación)</button>
   <div id="bancoDiag" style="font-size:11px;opacity:.9;padding:2px 14px;white-space:pre-wrap"></div>
   <button class="ajuste" id="btnFluidez" style="background:#27384a">📊 Medir fluidez al conducir (60 s)</button>
@@ -5882,7 +5884,7 @@ window.__carg=(function(){
   document.head.appendChild(st);
 
   const CATS=[['mapa','🗺️ Mapa y vista'],['aspecto','🎨 Aspecto del mapa'],['cielo','🌦️ Cielo y tiempo'],['sonido','🔊 Sonido y avisos'],['carg','⚡ Cargadores'],['park','🅿️ Aparcamientos'],['gps','📍 GPS'],['coche','🚗 Coche'],['futbol','⚽ Fútbol'],['fiesta','🎉 Celebración'],['enlace','🔗 Enlace entre dispositivos'],['inc','⚠️ Incidencias'],['sis','⚙️ Rendimiento y versión']];
-  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnAutoAncho btnAutoVista btnPasos btnPeajes btnTramos btnSugerido btnFlechaMan btnEstSol btnEstLuz btnEstVias btnEstRelieve btnBusqAmbito btnCamDenso btnFlechas btnPantCompleta',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspMedir aspDiag btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub btnListaParking parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',inc:'incList btnIncLimpiar btnGuardarRuta guardarRutaDiag btnBanco bancoDiag btnFluidez fluDiag',sis:'btnAA btnTestTramo tramoDiag evFila btnEVPlan evPlanTxt btnTestEV evDiag btnLimpiarFavs btnWake'};
+  const M={mapa:'btnEdificios btnHitos btnSenales btnPitch btnTrafico btnTraficoCalles btnModoMapa btnLuces btnCarriles btnAutoAncho btnAutoVista btnPasos btnPeajes btnTramos btnSugerido btnFlechaMan btnEstSol btnEstLuz btnEstVias btnEstRelieve btnBusqAmbito btnCamDenso btnFlechas btnPantCompleta',aspecto:'btnRelAgua btnRelVerde btnRelPuente btnAspBarrio btnAspVerde btnAspArboles btnAspAceras btnAspBorde btnAspMedir aspDiag btnAspEstacion',cielo:'btnSky btnCielo btnTiempo',sonido:'btnAvisosRadares btnObras btnVoz btnVozVol',carg:'btnListaCargadores btnCargMapa btnCargAm btnCargAz btnCargVe cargDiag btnCargTe',park:'btnParkOn btnParkGra btnParkSub btnListaParking parkDiag',gps:'btnGpsMan btnGpsAuto',coche:'btnCoche filaColorCoche btnTiltCoche',futbol:'btnListaCampos',fiesta:'btnCelebracion',enlace:'enlaceCodigo enlaceGenerar enlaceCopiar enlaceEstado',inc:'incList btnIncLimpiar btnGuardarRuta guardarRutaDiag btnAutopista autopistaDiag btnBanco bancoDiag btnFluidez fluDiag',sis:'btnAA btnTestTramo tramoDiag evFila btnEVPlan evPlanTxt btnTestEV evDiag btnLimpiarFavs btnWake'};
   const POR={}; for(const c in M) M[c].split(' ').forEach(id=>POR[id]=c);
   const cuerpos={}, cats={};
   const ref=panel.querySelector('h2');
@@ -7369,6 +7371,353 @@ window.__CLIPS_VOZ.radar='SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAA
     }catch(e){ out.textContent='Error al guardar: '+e.message; }
   };
 })();
+</script>
+<script type="module">
+/* ============ MODO AUTOPISTA (provisional) ============
+   Al circular por autopista/autovía: se ocultan edificios y árboles del mapa y se dibuja encima una carretera 3D
+   (asfalto, carriles, flechas, calzada de vuelta con mediana, barreras, farolas, señales de límite y pórticos con el texto de TomTom).
+   Datos: carriles → TomTom (sections LANES, solo en cruces/salidas) → si no hay, 2 carriles. Límites → TomTom speedLimit.
+   Interruptor: botón en Ajustes (se guarda) · emergencia: ?ap=0 en la URL. No toca nada del resto de la app si falla. */
+import * as T from 'three';
+
+const KILL = typeof location!=='undefined' && /[?&]ap=0\b/.test(location.search);
+const CFG = { LANE:3.5, ATRAS:100, ADELANTE:620, PASO:2, REBUILD_M:35, ANTICIPO:250, SALIDA:30, N_DEF:2, N_VUELTA:2, MEDIANA:4.6, MINZOOM:13.5, GAP_OCULTAR:1200 };
+const G = (typeof window!=='undefined') ? window : globalThis;
+let ON = true; try{ ON = localStorage.getItem('apModo')!=='0'; }catch(e){}
+
+/* ---------- 1. detectar tramos de autopista en la ruta ---------- */
+const FIN_RE = /TAKE_EXIT|MOTORWAY_EXIT|TURN|ROUNDABOUT|ARRIVE|WAYPOINT|SHARP/;
+function metroDe(it, cum){
+  const pi = it.pointIndex, off = it.routeOffsetInMeters;
+  const porIdx = (Number.isInteger(pi) && pi>=0 && pi<cum.length) ? cum[pi] : null;
+  return (porIdx!==null && (off==null || Math.abs(porIdx-off) <= Math.max(300,off*0.1))) ? porIdx : (off||0);
+}
+export function detectarTramos(ruta, cum){
+  const ins = (ruta && ruta.guidance && ruta.guidance.instructions) || [];
+  const out = []; let ini = null;
+  for(const it of ins){
+    const m = String(it.maneuver||'').toUpperCase(); const s = metroDe(it,cum);
+    if(ini===null){ if(m==='ENTER_MOTORWAY') ini = s; }
+    else if(FIN_RE.test(m)){ out.push({s0:ini,s1:s}); ini = null; }
+  }
+  if(ini!==null && cum.length) out.push({s0:ini,s1:cum[cum.length-1]});
+  return out;
+}
+function fusionar(tr, gap){
+  const o = [];
+  for(const t of tr){ const u = o[o.length-1]; if(u && t.s0-u.s1<=gap) u.s1 = Math.max(u.s1,t.s1); else o.push({s0:t.s0,s1:t.s1}); }
+  return o;
+}
+
+/* ---------- 2. datos de la ruta: carriles, límites, carteles ---------- */
+export function datosRuta(ruta, cum){
+  const secs = (ruta && ruta.sections) || [];
+  const idx = i => cum[Math.max(0,Math.min(cum.length-1,i))] || 0;
+  const lanes = []; const lim = [];
+  for(const s of secs){
+    if(s.sectionType==='LANES' && Array.isArray(s.lanes) && s.lanes.length){
+      lanes.push({ s0:idx(s.startPointIndex), s1:idx(s.endPointIndex), n:s.lanes.length, lanes:s.lanes, seps:Array.isArray(s.laneSeparators)?s.laneSeparators:[] });
+    }else if(s.sectionType==='SPEED_LIMIT' && s.maxSpeedLimitInKmh>0){
+      lim.push({ s0:idx(s.startPointIndex), s1:idx(s.endPointIndex), kmh:s.maxSpeedLimitInKmh });
+    }
+  }
+  const cart = [];
+  for(const it of ((ruta&&ruta.guidance&&ruta.guidance.instructions)||[])){
+    const txt = it.signpostText || ''; const rn = (it.roadNumbers||[]).join(' · ');
+    const m = String(it.maneuver||'').toUpperCase();
+    if(!txt && !/EXIT/.test(m)) continue;
+    cart.push({ s:metroDe(it,cum), txt, rn });
+  }
+  return { lanes, lim, cart };
+}
+const laneEn = (D,m) => { for(const q of D.lanes) if(m>=q.s0-1 && m<=q.s1+1) return q; return null; };
+
+/* ---------- 3. geometría ---------- */
+const KY = 110540;
+function ctxLocal(lat0,lon0){ const KX = 111320*Math.cos(lat0*Math.PI/180); return { lat0, lon0, KX, xz:p=>new T.Vector3((p[1]-lon0)*KX,0,-(p[0]-lat0)*KY) }; }
+const left = t => new T.Vector3(t.z,0,-t.x);
+const mkCanvas = (w,h) => { if(typeof document==='undefined') return null; const c=document.createElement('canvas'); c.width=w; c.height=h; return c; };
+const texCache = new Map();
+function texCanvas(key, w, h, dibuja){
+  if(texCache.has(key)) return texCache.get(key);
+  const c = mkCanvas(w,h); if(!c) return null; dibuja(c.getContext('2d'));
+  const t = new T.CanvasTexture(c); t.anisotropy = 4; texCache.set(key,t); return t;
+}
+function cartelTex(rn, txt){
+  return texCanvas('c|'+rn+'|'+txt, 1024, 300, x=>{
+    x.fillStyle='#0b4a9c'; x.fillRect(0,0,1024,300); x.strokeStyle='#fff'; x.lineWidth=10; x.strokeRect(10,10,1004,280);
+    x.fillStyle='#fff'; x.textAlign='center';
+    x.font='bold 120px Arial'; x.fillText(rn||'',512,txt?130:190);
+    if(txt){ x.font='bold 78px Arial'; let t=txt; while(x.measureText(t).width>940 && t.length>6) t=t.slice(0,-2); x.fillText(t,512,248); }
+  });
+}
+function limiteTex(v){
+  return texCanvas('l|'+v, 256, 256, x=>{
+    x.fillStyle='#fff'; x.beginPath(); x.arc(128,128,124,0,7); x.fill();
+    x.strokeStyle='#d71920'; x.lineWidth=26; x.beginPath(); x.arc(128,128,108,0,7); x.stroke();
+    x.fillStyle='#111'; x.font='bold 120px Arial'; x.textAlign='center'; x.fillText(String(v),128,166);
+  });
+}
+function flechaTex(act){
+  return texCanvas('f|'+(act?1:0), 128, 256, x=>{
+    x.fillStyle = act?'#ffffff':'#8d9199'; x.translate(64,150);
+    x.fillRect(-9,-20,18,110); x.beginPath(); x.moveTo(-34,-20); x.lineTo(34,-20); x.lineTo(0,-95); x.fill();
+  });
+}
+
+/* Muestrea la ruta entre m0 y m1 (metros de ruta) con curva suavizada, cada CFG.PASO metros.
+   Devuelve { S:[{p,t,m}], lat0, lon0, ctx } con p en metros locales (x este, z sur). */
+export function muestrear(coords, cum, m0, m1){
+  let i0 = 0; while(i0<cum.length-2 && cum[i0+1]<m0) i0++;
+  let i1 = i0; while(i1<cum.length-1 && cum[i1]<m1) i1++;
+  i0 = Math.max(0,i0-1); i1 = Math.min(coords.length-1,i1+1);
+  if(i1-i0<1) return null;
+  const c0 = coords[i0], ctx = ctxLocal(c0[0],c0[1]);
+  const pts = []; for(let i=i0;i<=i1;i++) pts.push(ctx.xz(coords[i]));
+  const curve = new T.CatmullRomCurve3(pts,false,'centripetal');
+  const L = curve.getLength(); if(!(L>CFG.PASO*2)) return null;
+  const n = Math.max(2,Math.round(L/CFG.PASO)), S = [];
+  for(let i=0;i<=n;i++){ const u=i/n; const p=curve.getPointAt(u), t=curve.getTangentAt(u); t.y=0; t.normalize(); S.push({p,t,m:cum[i0]+u*L}); }
+  return { S, ctx, i0, L };
+}
+
+/* Construye toda la escena local. Devuelve { grupo, origen:{lat,lon}, info } */
+export function construir(ruta, cum, coords, D, m0, m1, tramos){
+  const M = muestrear(coords,cum,m0,m1); if(!M) return null;
+  const { S, ctx } = M; const N = S.length;
+  const LANE = CFG.LANE;
+  /* carriles por muestra: n y ancho suavizado */
+  const nS = new Array(N), lq = new Array(N), Wraw = new Array(N), W = new Array(N);
+  for(let i=0;i<N;i++){ const q = laneEn(D,S[i].m); lq[i]=q; nS[i]=q?q.n:CFG.N_DEF; Wraw[i]=nS[i]*LANE; }
+  const R = 18;   /* ±36 m de suavizado del ancho */
+  for(let i=0;i<N;i++){ let a=0,c=0; for(let j=Math.max(0,i-R);j<=Math.min(N-1,i+R);j++){ a+=Wraw[j]; c++; } W[i]=a/c; }
+  /* ¿esta muestra es calzada de autopista (no rampa)? → solo ahí hay calzada de vuelta */
+  const enTramo = m => tramos.some(t=>m>=t.s0 && m<=t.s1);
+
+  const grupo = new T.Group();
+  const colores = {
+    asf:0x4a4e55, ars:0x6b6f6a, lin:0xf4f4ee, ret:0x5a5e66, linRet:0xd5d5cf, rail:0xaab0b8, poste:0x6a717c, lamp:0xdddddd
+  };
+  const nocheOn = (typeof nocheAct!=='undefined') && !!nocheAct;
+  if(nocheOn){ colores.asf=0x2a2d33; colores.ars=0x3a3d42; colores.lin=0xcfcfc8; colores.ret=0x1d2026; colores.linRet=0x8a8a86; colores.rail=0x7a8088; colores.lamp=0xfff0c0; }
+
+  const Y = { ars:0.20, asf:0.24, lin:0.30, flecha:0.33 };
+  /* acumuladores de geometría por material */
+  const acc = {}; const A = k => acc[k] || (acc[k]={pos:[],idx:[]});
+  function tira(k, offA, offB, y, i0=0, i1=N-1){   /* offA/offB: (i)=>desplazamiento lateral (+ = izquierda) */
+    const a = A(k), base = a.pos.length/3;
+    for(let i=i0;i<=i1;i++){ const {p,t}=S[i], l=left(t); const oa=offA(i), ob=offB(i);
+      a.pos.push(p.x+l.x*oa,y,p.z+l.z*oa, p.x+l.x*ob,y,p.z+l.z*ob); }
+    for(let i=0;i<i1-i0;i++){ const b=base+i*2; a.idx.push(b,b+1,b+2,b+1,b+3,b+2); }
+  }
+  const linea = (k, off, kind, y) => {
+    const w=0.15, oa=i=>off(i)+w, ob=i=>off(i)-w;
+    if(kind==='SOLID'){ tira(k,oa,ob,y); return; }
+    const on = kind==='SHORT' ? 1 : 2, tot = kind==='SHORT' ? 3 : 6;   /* en muestras de 2 m: largo 4/12 m, corto 2/6 m */
+    for(let i=0;i+on<N;i+=tot) tira(k,oa,ob,y,i,Math.min(N-1,i+on));
+  };
+
+  /* calzada propia + arcenes + bordes */
+  tira('asf', i=>W[i]/2+1.2, i=>-W[i]/2-1.2, Y.asf);
+  tira('ars', i=>W[i]/2+1.2, i=>W[i]/2+3.2, Y.ars); tira('ars', i=>-W[i]/2-1.2, i=>-W[i]/2-3.2, Y.ars);
+  linea('lin', i=>W[i]/2, 'SOLID', Y.lin); linea('lin', i=>-W[i]/2, 'SOLID', Y.lin);
+  /* separadores interiores: TomTom si hay, si no discontinua larga */
+  const maxN = Math.max(...nS);
+  for(let k=1;k<maxN;k++){
+    /* tipo por tramos contiguos de muestras */
+    let i=0; while(i<N){
+      if(k>=nS[i]){ i++; continue; }
+      const q = lq[i]; const tipo = q && q.seps[k] ? String(q.seps[k]).toUpperCase() : 'LONG_DASHED';
+      let j=i; while(j+1<N && k<nS[j+1] && lq[j+1]===q) j++;
+      const off = ii => W[ii]/2 - k*LANE;
+      const kind = /NO_|NONE/.test(tipo) ? null : (/SHORT/.test(tipo)?'SHORT':(/DASH/.test(tipo)?'LARGO':'SOLID'));
+      if(kind){
+        if(kind==='SOLID') tira('lin',ii=>off(ii)+0.15,ii=>off(ii)-0.15,Y.lin,i,j);
+        else { const on=kind==='SHORT'?1:2, tot=kind==='SHORT'?3:6; for(let s=i;s+on<=j;s+=tot) tira('lin',ii=>off(ii)+0.15,ii=>off(ii)-0.15,Y.lin,s,Math.min(j,s+on)); }
+      }
+      i=j+1;
+    }
+  }
+  /* calzada de vuelta (solo en tramo de autopista): a la izquierda, tras la mediana */
+  const NV = CFG.N_VUELTA, WV = NV*LANE;
+  const vuelta = i => enTramo(S[i].m);
+  { let i=0; while(i<N){
+      if(!vuelta(i)){ i++; continue; } let j=i; while(j+1<N && vuelta(j+1)) j++;
+      if(j-i>=2){
+        const o0 = ii => W[ii]/2+3.2+CFG.MEDIANA*0.5, o1 = ii => o0(ii)+WV;
+        tira('ret', ii=>o0(ii)-1.2, ii=>o1(ii)+1.2, Y.asf-0.01, i, j);
+        tira('linRet', ii=>o0(ii)+0.12, ii=>o0(ii)-0.12, Y.lin-0.01, i, j); tira('linRet', ii=>o1(ii)+0.12, ii=>o1(ii)-0.12, Y.lin-0.01, i, j);
+        for(let s=i;s+2<=j;s+=6) tira('linRet', ii=>o0(ii)+LANE+0.12, ii=>o0(ii)+LANE-0.12, Y.lin-0.01, s, Math.min(j,s+2));
+      }
+      i=j+1; } }
+
+  const mats = {
+    asf:new T.MeshBasicMaterial({color:colores.asf,side:T.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}),
+    ars:new T.MeshBasicMaterial({color:colores.ars,side:T.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}),
+    lin:new T.MeshBasicMaterial({color:colores.lin,side:T.DoubleSide,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4}),
+    ret:new T.MeshBasicMaterial({color:colores.ret,side:T.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}),
+    linRet:new T.MeshBasicMaterial({color:colores.linRet,side:T.DoubleSide,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4})
+  };
+  let tri = 0;
+  for(const k of Object.keys(acc)){
+    const a = acc[k]; if(!a.idx.length) continue;
+    const g = new T.BufferGeometry(); g.setAttribute('position',new T.Float32BufferAttribute(a.pos,3)); g.setIndex(a.idx);
+    const m = new T.Mesh(g,mats[k]); m.frustumCulled=false; grupo.add(m); tri += a.idx.length/3;
+  }
+
+  /* barreras (instanciadas): mediana (izq) y exterior (der) */
+  const railMat = new T.MeshBasicMaterial({color:colores.rail});
+  const railG = new T.BoxGeometry(0.14,0.55,2.2);
+  const posR = []; for(let i=0;i<N;i+=1){ const {p,t}=S[i], l=left(t), w=W[i];
+    posR.push([p,t,l,w/2+3.4], [p,t,l,-w/2-3.4]); }
+  const rails = new T.InstancedMesh(railG,railMat,posR.length); rails.frustumCulled=false;
+  { const m4=new T.Matrix4(), q=new T.Quaternion(), e=new T.Euler(), sc=new T.Vector3(1,1,1);
+    posR.forEach(([p,t,l,off],k)=>{ e.set(0,Math.atan2(t.x,t.z),0); q.setFromEuler(e); m4.compose(new T.Vector3(p.x+l.x*off,0.65,p.z+l.z*off),q,sc); rails.setMatrixAt(k,m4); }); }
+  grupo.add(rails);
+
+  /* farolas cada 40 m a ambos lados (postes + cabezal) */
+  const idxL=[]; for(let i=5;i<N;i+=20) idxL.push(i);
+  const postG = new T.CylinderGeometry(0.13,0.17,9,6), headG = new T.BoxGeometry(0.55,0.16,1.0);
+  const postes = new T.InstancedMesh(postG,new T.MeshBasicMaterial({color:colores.poste}),idxL.length*2);
+  const heads  = new T.InstancedMesh(headG,new T.MeshBasicMaterial({color:colores.lamp}),idxL.length*2);
+  postes.frustumCulled = heads.frustumCulled = false;
+  { const m4=new T.Matrix4(), q=new T.Quaternion(), e=new T.Euler(), sc=new T.Vector3(1,1,1); let k=0;
+    for(const i of idxL){ const {p,t}=S[i], l=left(t); for(const side of [1,-1]){
+      const off = side*(W[i]/2+3.9); e.set(0,Math.atan2(t.x,t.z),0); q.setFromEuler(e);
+      m4.compose(new T.Vector3(p.x+l.x*off,4.5,p.z+l.z*off),q,sc); postes.setMatrixAt(k,m4);
+      m4.compose(new T.Vector3(p.x+l.x*off,9,p.z+l.z*off),q,sc); heads.setMatrixAt(k,m4); k++; } } }
+  grupo.add(postes); grupo.add(heads);
+
+  const meshSimple = (geom, tex, color) => { const mt = new T.MeshBasicMaterial(tex?{map:tex,side:T.DoubleSide,transparent:true}:{color,side:T.DoubleSide}); const m=new T.Mesh(geom,mt); m.frustumCulled=false; return m; };
+  const muestraDe = m => { let b=0,bd=1e9; for(let i=0;i<N;i++){ const d=Math.abs(S[i].m-m); if(d<bd){bd=d;b=i;} } return bd<20?b:-1; };
+
+  /* flechas de carril (solo donde TomTom da carriles): 2 repeticiones por sección */
+  for(const q of D.lanes){
+    if(q.s1<m0||q.s0>m1||!q.lanes.length) continue;
+    const pos = [q.s1-14, q.s1-34].filter(m=>m>q.s0);
+    for(const mm of pos){ const i = muestraDe(mm); if(i<0) continue; const {p,t}=S[i], l=left(t);
+      q.lanes.forEach((ln,k)=>{ const act = !!ln.follow; const off = W[i]/2 - (k+0.5)*LANE;
+        const m = meshSimple(new T.PlaneGeometry(1.5,3),flechaTex(act));
+        m.position.set(p.x+l.x*off,Y.flecha,p.z+l.z*off);
+        const yaw = new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),Math.atan2(t.x,t.z)+Math.PI);
+        const qq = new T.Quaternion().setFromEuler(new T.Euler(-Math.PI/2,0,0)); m.quaternion.copy(yaw.multiply(qq)); grupo.add(m); }); } }
+
+  /* señales de límite (a la derecha, donde cambia) */
+  let prev = null;
+  for(const q of D.lim){
+    if(q.s0<m0||q.s0>m1){ prev=q.kmh; continue; }
+    if(q.kmh!==prev){ const i = muestraDe(q.s0); if(i>=0){ const {p,t}=S[i], l=left(t); const off=-(W[i]/2+4.4);
+      const m = meshSimple(new T.CircleGeometry(0.8,24),limiteTex(q.kmh)); const st = meshSimple(new T.CylinderGeometry(0.06,0.06,3,6),null,colores.poste);
+      const g = new T.Group(); st.position.y=1.5; m.position.set(0,3.3,0.08); g.add(st); g.add(m);
+      g.position.set(p.x+l.x*off,0,p.z+l.z*off); g.rotation.y=Math.atan2(t.x,t.z)+Math.PI; grupo.add(g); } }
+    prev = q.kmh;
+  }
+
+  /* pórticos con cartel azul (salidas / destinos) a 350 m antes de la maniobra, dentro de tramo */
+  for(const c of D.cart){
+    const mm = c.s-350; if(mm<m0||mm>m1||!enTramo(c.s)) continue; const i = muestraDe(Math.max(mm,m0+20)); if(i<0) continue;
+    const {p,t}=S[i], Wg=W[i]+7; const g = new T.Group();
+    for(const s of [1,-1]){ const col=meshSimple(new T.BoxGeometry(0.4,7,0.4),null,colores.poste); col.position.set(s*Wg/2,3.5,0); g.add(col); }
+    const beam = meshSimple(new T.BoxGeometry(Wg,0.5,0.5),null,colores.poste); beam.position.y=6.9; g.add(beam);
+    const sg = meshSimple(new T.PlaneGeometry(Math.min(W[i],9),2.4),cartelTex(c.rn,c.txt)); sg.position.set(0,5.4,0.3); sg.rotation.y=Math.PI; g.add(sg);
+    g.position.copy(p); g.rotation.y=Math.atan2(t.x,t.z); grupo.add(g);
+  }
+
+  return { grupo, lat0:ctx.lat0, lon0:ctx.lon0, info:{ muestras:N, tri, m0, m1, nMax:maxN } };
+}
+
+/* ---------- 4. integración con el mapa (solo en el navegador) ---------- */
+function integrar(){
+  if(KILL) return;
+  const st = { activo:false, ocultas:new Map(), tramos:[], ocultar:[], D:null, rutaRef:null, ultMetro:-1e9, build:null, ms:0, frames:0, error:'' };
+  G.__autopista = st;
+  const log = (m)=>{ try{ registrarError('autopista',m); }catch(e){} };
+  let renderer=null, scene=null, camera=null, layerOk=false, actual=null, buildKey='';
+
+  function recalcular(){
+    const ruta = G.__rutaCruda; if(!ruta || !routeCoordsLL.length){ st.tramos=[]; st.ocultar=[]; st.D=null; st.rutaRef=null; return; }
+    if(st.rutaRef===ruta && st.cumLen===routeCumDist.length) return;
+    st.rutaRef = ruta; st.cumLen = routeCumDist.length;
+    st.tramos = detectarTramos(ruta,routeCumDist); st.ocultar = fusionar(st.tramos,CFG.GAP_OCULTAR);
+    st.D = datosRuta(ruta,routeCumDist); st.ultMetro=-1e9; if(actual){ vaciar(); }
+  }
+  function vaciar(){ if(actual && scene){ scene.remove(actual.grupo); actual.grupo.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); } actual=null; }
+
+  const capa = {
+    id:'autopista-via', type:'custom', renderingMode:'3d',
+    onAdd(map_, gl){
+      renderer = new T.WebGLRenderer({ canvas:map_.getCanvas(), context:gl, antialias:true }); renderer.autoClear=false;
+      scene = new T.Scene(); camera = new T.Camera(); layerOk=true;
+    },
+    render(gl, matrix){
+      if(!st.activo || !actual || !layerOk) return;
+      const t0 = performance.now();
+      try{
+        const mm = (matrix && matrix.defaultProjectionData) ? matrix.defaultProjectionData.mainMatrix : matrix;
+        const proy = new T.Matrix4().fromArray(mm);
+        const o = maplibregl.MercatorCoordinate.fromLngLat([actual.lon0,actual.lat0],0), s = o.meterInMercatorCoordinateUnits();
+        const l = new T.Matrix4().makeTranslation(o.x,o.y,o.z).scale(new T.Vector3(s,-s,s)).multiply(new T.Matrix4().makeRotationX(Math.PI/2));
+        camera.projectionMatrix = proy.multiply(l);
+        renderer.resetState(); renderer.render(scene,camera); renderer.resetState();
+      }catch(e){ st.error=e.message; }
+      st.ms += (performance.now()-t0); st.frames++;
+    }
+  };
+
+  function ocultarCapas(v){
+    try{
+      const ids = map.getStyle().layers.map(l=>l.id).filter(id=>/building|^suave-(verde|arboles|sombras|acera)|^barrio|arbol|tree/i.test(id) && id!=='autopista-via');
+      for(const id of ids){
+        if(v){ if(!st.ocultas.has(id)){ st.ocultas.set(id,map.getLayoutProperty(id,'visibility')||'visible'); } if(map.getLayoutProperty(id,'visibility')!=='none') map.setLayoutProperty(id,'visibility','none'); }
+      }
+      if(!v){ for(const [id,vis] of st.ocultas){ try{ if(map.getLayer(id)) map.setLayoutProperty(id,'visibility',vis); }catch(e){} } st.ocultas.clear(); }
+    }catch(e){ st.error=e.message; }
+  }
+
+  let ocultoAhora=false, viaAhora=false, ultOcultar=0;
+  function tick(){
+    try{
+      if(!ON || typeof map==='undefined' || !map.getStyle || !lastFix){ if(st.activo){ st.activo=false; ocultarCapas(false); vaciar(); } return; }
+      recalcular();
+      if(!layerOk && map.isStyleLoaded() && !map.getLayer('autopista-via')){
+        const antes = map.getLayer('ruta-halo')?'ruta-halo':(map.getLayer('ruta-base')?'ruta-base':undefined);
+        map.addLayer(capa, antes);
+      }
+      const s = routeCoordsLL.length ? recorridoAhora([lastFix.lat,lastFix.lon]) : 0;
+      const dentroOcultar = st.ocultar.some(t=>s>=t.s0-CFG.ANTICIPO && s<=t.s1+CFG.SALIDA);
+      const dentroVia = st.tramos.some(t=>s>=t.s0-CFG.ANTICIPO && s<=t.s1+CFG.SALIDA);
+      const act = dentroOcultar && map.getZoom()>=CFG.MINZOOM;
+      if(act!==ocultoAhora){ ocultoAhora=act; ocultarCapas(act); ultOcultar=performance.now(); }
+      else if(act && performance.now()-ultOcultar>2000){ ocultarCapas(true); ultOcultar=performance.now(); }
+      st.activo = act && dentroVia;
+      if(!st.activo){ if(actual) vaciar(); return; }
+      if(!actual || Math.abs(s-st.ultMetro)>=CFG.REBUILD_M){
+        const t0=performance.now();
+        const m0 = Math.max(0,s-CFG.ATRAS), m1 = Math.min(routeCumDist[routeCumDist.length-1], s+CFG.ADELANTE);
+        const r = construir(G.__rutaCruda,routeCumDist,routeCoordsLL,st.D,m0,m1,st.tramos);
+        vaciar(); if(r){ actual=r; scene.add(r.grupo); st.build=Object.assign({ms:Math.round(performance.now()-t0)},r.info); }
+        st.ultMetro=s; map.triggerRepaint();
+      }
+    }catch(e){ st.error=e.message; log('tick: '+e.message); }
+  }
+  setInterval(tick,350);
+
+  /* botón en Ajustes */
+  const b = document.getElementById('btnAutopista'), d = document.getElementById('autopistaDiag');
+  if(b){
+    const pinta = ()=>{ b.textContent = '🛣️ Modo autopista: '+(ON?'ACTIVADO':'DESACTIVADO'); };
+    pinta();
+    b.onclick = ()=>{ ON=!ON; try{ localStorage.setItem('apModo',ON?'1':'0'); }catch(e){} pinta(); tick(); };
+    if(d) setInterval(()=>{
+      const x=G.__autopista; if(!x) return;
+      d.textContent = (x.activo?'DIBUJANDO':'inactivo')+' · tramos '+x.tramos.length+(x.build?(' · '+x.build.muestras+' muestras, '+x.build.tri+' tri, build '+x.build.ms+' ms'):'')+(x.frames?(' · dibujo '+(x.ms/x.frames).toFixed(2)+' ms/frame'):'')+(x.error?(' · ERROR '+x.error):'');
+    },1000);
+  }
+}
+{
+  if(typeof document!=='undefined'){ const esperar=setInterval(()=>{ if(typeof map!=='undefined' && map && typeof routeCoordsLL!=='undefined'){ clearInterval(esperar); try{ integrar(); }catch(e){ try{ registrarError('autopista',e.message); }catch(_){} } } },500); }
+}
+
 </script>
 </body>
 </html>
