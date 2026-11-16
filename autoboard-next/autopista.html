@@ -548,7 +548,7 @@ body.noche #listaCargadores .cargadorItem .titulo{color:#e8edf2}
   <button class="ajuste" id="btnFluidez" style="background:#27384a">📊 Medir fluidez al conducir (60 s)</button>
   <div id="fluDiag" style="font-size:11px;opacity:.9;padding:2px 14px;white-space:pre-wrap"></div>
   <button class="ajuste on" id="btnWake">💡 Pantalla siempre encendida: ON</button>
-  <div class="seccion">Versión v232</div>
+  <div class="seccion">Versión v233</div>
   <div class="info" style="font-size:10px;opacity:.6;padding:2px 14px 8px">Modelo 3D Tesla Supercharger: «Tesla Charging Station» de Sketcher (Sketchfab), licencia CC BY 4.0.</div>
 </div>
 
@@ -2049,7 +2049,7 @@ function cuadrosDeStep(s,hw,tam,conCarriles){
     return '<div class="nbCuadros">'+s.lanes.map(l=>{
       const dirs=(l.lane&&l.lane.directions)||['straight'], act=!!(l.lane&&l.lane.active);
       /* estilo A: carril activo = cuadro relleno con la flecha invertida; inactivo = apagado */
-      const inv=act&&!hw;   /* carretera: activo invertido (negro con flecha blanca); autopista: activo = cartel azul pleno, inactivo apagado (un cuadro blanco se perdería sobre el fondo blanco de la tarjeta) */
+      const inv=act&&!hw&&!document.body.classList.contains('noche');   /* v233: de noche el activo NO se invierte (negro sobre tarjeta oscura se pierde): activo = blanco con flecha negra, inactivo = atenuado */ /* carretera: activo invertido (negro con flecha blanca); autopista: activo = cartel azul pleno, inactivo apagado (un cuadro blanco se perdería sobre el fondo blanco de la tarjeta) */
       const cc={fondo:c.fondo,borde:c.borde,flecha:inv?c.fondo:c.flecha,flechaInactiva:c.flecha};
       const svg='<svg viewBox="4 6 28 28">'+flechaCarrilSVG(dirs,true,cc,18,4,m.modifier&&act?m.modifier:null)+'</svg>';
       return '<div class="nbCuadro'+(hw?' hw':'')+'" style="width:'+t+'px;height:'+t+'px;background:'+(inv?c.flecha:c.fondo)+';border:3px solid '+c.borde+(act?'':';opacity:.38')+'">'+svg+'</div>';
@@ -4002,7 +4002,7 @@ function textoBotonModo(){ const b=document.getElementById('btnModoMapa'); if(b)
 function aplicarModoMapa(forzar){
   let n=false; try{ n=esNocheAhora(); }catch(e){ registrarError('noche',e.message); }
   if(n===nocheAct && !forzar){ textoBotonModo(); return; }
-  nocheAct=n; document.body.classList.toggle('noche',n);
+  nocheAct=n; document.body.classList.toggle('noche',n); try{ ultimoStepPintado=''; }catch(e){}
   try{ map.getContainer().style.background=n?'#232a33':'#e9ecef'; }catch(e){}
   try{ pintarMapaNoche(n); aplicarSky(); aplicarFog(); }catch(e){ registrarError('noche-pintar',e.message); }
   textoBotonModo();
